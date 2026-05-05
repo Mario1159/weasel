@@ -110,20 +110,22 @@ CPMAddPackage(
     SYSTEM ON
 )
 
-set(SLANG_BUILD_DIR "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-2026.7.1-linux-x86_64")
-
-if(SLANG_BUILD_DIR)
-    find_library(SLANG_COMPILER_LIBRARY
-        NAMES "slang-compiler"
-        PATHS "${SLANG_BUILD_DIR}/lib"
-    )
-
-    if(SLANG_COMPILER_LIBRARY)
-        add_library(slang::slang SHARED IMPORTED)
-        set_target_properties(slang::slang PROPERTIES
-            IMPORTED_LOCATION "${SLANG_COMPILER_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${SLANG_BUILD_DIR}/include"
+if(NOT TARGET slang::slang)
+    file(GLOB SLANG_BUILD_DIRS "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-*")
+    if(SLANG_BUILD_DIRS)
+        list(GET SLANG_BUILD_DIRS 0 SLANG_BUILD_DIR)
+        find_library(SLANG_COMPILER_LIBRARY
+            NAMES "slang-compiler"
+            PATHS "${SLANG_BUILD_DIR}/lib"
         )
+
+        if(SLANG_COMPILER_LIBRARY)
+            add_library(slang::slang SHARED IMPORTED)
+            set_target_properties(slang::slang PROPERTIES
+                IMPORTED_LOCATION "${SLANG_COMPILER_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${SLANG_BUILD_DIR}/include"
+            )
+        endif()
     endif()
 endif()
 

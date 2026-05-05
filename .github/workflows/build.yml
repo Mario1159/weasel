@@ -6,55 +6,111 @@ on:
   pull_request:
     branches: [main, master, dev]
 
+env:
+  # Enable vcpkg binary caching via GitHub Actions cache
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
+  build:
     strategy:
       matrix:
-        build_type: [Release, Debug]
+        include:
+          - os: ubuntu-latest
+            name: linux
+            container: archlinux:latest
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
       fail-fast: false
 
-    steps:
-      - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm \
-            base-devel git cmake ninja \
-            llvm20 llvm21 clang20 clang21 lld \
-            sdl3 libarchive glm pkgconf \
-            opus opusfile libvorbis flac libgme mpg123 fluidsynth wavpack \
-            brotli zlib freetype2 openssl protobuf libsodium \
-            libavif libtiff libwebp libpng libjpeg-turbo \
-            abseil-cpp re2 gtest nlohmann-json python \
-            boost boost-libs doxygen nodejs
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
 
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Configure
+      - name: Install dependencies (Linux)
+        if: matrix.name == 'linux'
         run: |
-          export PATH="/usr/lib/llvm21/bin:$PATH"
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm \
+            base-devel git cmake ninja \
+            sdl3 libarchive glm pkgconf \
+            opus opusfile libvorbis flac libgme mpg123 fluidsynth wavpack \
+            brotli zlib freetype2 openssl protobuf libsodium \
+            libavif libtiff libwebp libpng libjpeg-turbo \
+            abseil-cpp re2 gtest nlohmann-json
+
+      - name: Configure (Linux)
+        if: matrix.name == 'linux'
+        run: |
           cmake -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_C_COMPILER=/usr/lib/llvm21/bin/clang \
-            -DCMAKE_CXX_COMPILER=/usr/lib/llvm21/bin/clang++ \
-            -DCMAKE_LINKER=/usr/lib/llvm21/bin/ld.lld \
-            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DWEASEL_ENABLE_INTERPRETER=OFF \
             -G Ninja
 
-      - name: Build
-        run: cmake --build build --parallel $(nproc)
+      - name: Install dependencies (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium --triplet x64-windows
+
+      - name: Configure (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DWEASEL_ENABLE_INTERPRETER=OFF `
+            -G "Visual Studio 17 2022"
+
+      - name: Install dependencies (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          brew update
+          brew install sdl3 libarchive glm pkg-config \
+            opus opusfile libvorbis flac game-music-emu mpg123 fluid-synth wavpack \
+            jpeg-turbo libpng libtiff libwebp libavif \
+            brotli zlib freetype openssl protobuf libsodium \
+            abseil re2 gtest nlohmann-json \
+            cmake ninja
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix libarchive)" >> $GITHUB_ENV
+
+      - name: Configure (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH;$(brew --prefix)" \
+            -DWEASEL_ENABLE_INTERPRETER=OFF \
+            -G Ninja
+
+      - name: Build (Linux / macOS)
+        if: matrix.name != 'windows'
+        run: cmake --build build
+
+      - name: Build (Windows)
+        if: matrix.name == 'windows'
+        run: cmake --build build --config Release
+
+      - name: Ensure install directories exist
+        shell: bash
+        run: |
+          mkdir -p build/compiled_shaders build/otf build/rml build/icons
+
+      - name: Install (Linux / macOS)
+        if: matrix.name != 'windows'
+        run: cmake --install build --prefix install
+
+      - name: Install (Windows)
+        if: matrix.name == 'windows'
+        run: cmake --install build --prefix install --config Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: weasel-${{ matrix.build_type }}-linux-x86_64
-          path: |
-            build/weasel
-            build/*.so
-          if-no-files-found: warn
+          name: weasel-release-${{ matrix.name }}
+          path: install/**

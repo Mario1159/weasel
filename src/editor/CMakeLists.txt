@@ -34,7 +34,6 @@ target_link_libraries(weasel PRIVATE
     imguitextselect
     imsearch
     imviewguizmo::imviewguizmo
-    weasel_clang_repl
     ImGuiColorTextEdit::imguicolortextedit
     glm_dep
     slang::slang
@@ -42,6 +41,10 @@ target_link_libraries(weasel PRIVATE
     ai::sdk
     ${CMAKE_DL_LIBS}
 )
+
+if(TARGET weasel_clang_repl)
+    target_link_libraries(weasel PRIVATE weasel_clang_repl)
+endif()
 
 if(TARGET imgui)
     target_link_libraries(weasel PRIVATE imgui)
