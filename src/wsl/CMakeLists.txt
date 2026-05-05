@@ -9,6 +9,7 @@ list(APPEND WSL_SOURCES
     "${CMAKE_SOURCE_DIR}/src/editor/renderer_imgui.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/editor_context_hooks.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/physics_debug_drawer.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/physics_debug_renderer.cpp"
 )
 
 add_library(wsl SHARED ${WSL_SOURCES})

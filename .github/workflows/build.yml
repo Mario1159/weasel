@@ -95,21 +95,39 @@ jobs:
         if: matrix.name == 'windows'
         run: cmake --build build --config Release
 
-      - name: Ensure install directories exist
+      - name: Collect artifacts (Linux)
+        if: matrix.name == 'linux'
         shell: bash
         run: |
-          mkdir -p build/compiled_shaders build/otf build/rml build/icons
+          mkdir -p artifacts/bin artifacts/lib
+          cp build/weasel build/weasel-cli artifacts/bin/
+          cp build/libwsl.so artifacts/lib/
+          cp -L build/*.so artifacts/lib/ 2>/dev/null || true
+          cp -r build/compiled_shaders build/otf build/rml build/icons artifacts/ 2>/dev/null || true
 
-      - name: Install (Linux / macOS)
-        if: matrix.name != 'windows'
-        run: cmake --install build --prefix install
+      - name: Collect artifacts (macOS)
+        if: matrix.name == 'macos'
+        shell: bash
+        run: |
+          mkdir -p artifacts/bin artifacts/lib
+          cp build/weasel build/weasel-cli artifacts/bin/
+          cp build/libwsl.dylib artifacts/lib/ 2>/dev/null || true
+          cp -L build/*.dylib artifacts/lib/ 2>/dev/null || true
+          cp -r build/compiled_shaders build/otf build/rml build/icons artifacts/ 2>/dev/null || true
 
-      - name: Install (Windows)
+      - name: Collect artifacts (Windows)
         if: matrix.name == 'windows'
-        run: cmake --install build --prefix install --config Release
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts\bin, artifacts\lib | Out-Null
+          Copy-Item build\Release\weasel.exe artifacts\bin\ -ErrorAction SilentlyContinue
+          Copy-Item build\Release\weasel-cli.exe artifacts\bin\ -ErrorAction SilentlyContinue
+          Copy-Item build\Release\wsl.dll artifacts\lib\ -ErrorAction SilentlyContinue
+          Copy-Item build\Release\*.dll artifacts\lib\ -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Force build\compiled_shaders, build\otf, build\rml, build\icons artifacts\ -ErrorAction SilentlyContinue
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: weasel-release-${{ matrix.name }}
-          path: install/**
+          path: artifacts/**
