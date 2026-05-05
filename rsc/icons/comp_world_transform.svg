@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="33.649178mm"
+   height="34.310143mm"
+   viewBox="0 0 33.649178 34.310143"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <marker
+       style="overflow:visible"
+       id="Triangle"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       markerWidth="1"
+       markerHeight="1"
+       viewBox="0 0 1 1"
+       preserveAspectRatio="xMidYMid">
+      <path
+         transform="scale(0.5)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path135" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Triangle-4"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       markerWidth="1"
+       markerHeight="1"
+       viewBox="0 0 1 1"
+       preserveAspectRatio="xMidYMid">
+      <path
+         transform="scale(0.5)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path135-7" />
+    </marker>
+  </defs>
+  <g
+     id="layer1"
+     transform="translate(-5.4999999,-7.845245)">
+    <rect
+       style="fill:none;fill-opacity:0;stroke:#ffffff;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1"
+       id="rect9"
+       width="7.6898732"
+       height="7.6898732"
+       x="24.449368"
+       y="15.952532" />
+    <rect
+       style="fill:none;fill-opacity:0;stroke:#ffffff;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1"
+       id="rect9-0"
+       width="7.6898732"
+       height="7.6898732"
+       x="24.449368"
+       y="25.952532" />
+    <rect
+       style="fill:none;fill-opacity:0;stroke:#ffffff;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1"
+       id="rect9-9"
+       width="7.6898732"
+       height="7.6898732"
+       x="14.449368"
+       y="25.952532" />
+    <rect
+       style="fill:none;fill-opacity:0;stroke:#ffffff;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1"
+       id="rect9-93"
+       width="7.6898732"
+       height="7.6898732"
+       x="14.449368"
+       y="15.952532" />
+    <text
+       xml:space="preserve"
+       style="font-weight:bold;font-size:8.46667px;font-family:'Fira code';-inkscape-font-specification:'Fira code Bold';writing-mode:lr-tb;direction:ltr;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.2;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1"
+       x="17.952299"
+       y="13.619943"
+       id="text10"><tspan
+         id="tspan10"
+         style="font-size:8.46667px;stroke-width:0.2"
+         x="17.952299"
+         y="13.619943">wt</tspan></text>
+    <path
+       style="fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Triangle)"
+       d="M 8.5776925,39.149176 V 11.551075"
+       id="path10" />
+    <path
+       style="fill:#ffffff;fill-opacity:1;stroke:#ffffff;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Triangle-4)"
+       d="M 8,39.077692 H 35.598101"
+       id="path10-5" />
+  </g>
+</svg>

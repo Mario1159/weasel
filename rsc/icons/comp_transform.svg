@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="11.384773mm"
+   height="9.9125338mm"
+   viewBox="0 0 11.384773 9.9125338"
+   version="1.1"
+   id="svg1"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#141414"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:export-bgcolor="#2a2a2a00">
+    <inkscape:page
+       x="0"
+       y="0"
+       width="11.384773"
+       height="9.9125338"
+       id="page2"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Capa 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-4.2516047,-3.3443654)">
+    <rect
+       style="fill:#00ff00;stroke-width:0.301258"
+       id="rect1"
+       width="1"
+       height="6"
+       x="9.5"
+       y="4.5" />
+    <rect
+       style="fill:#ff0000;stroke-width:0.301258"
+       id="rect1-3"
+       width="1"
+       height="6"
+       x="12.804431"
+       y="-4.4370818"
+       transform="rotate(61.421494)" />
+    <rect
+       style="fill:#0000ff;stroke-width:0.301258"
+       id="rect2"
+       width="1"
+       height="6"
+       x="2.5411725"
+       y="-19.311033"
+       transform="rotate(121.50078)" />
+    <circle
+       style="fill:#ffffff;stroke-width:0.273704"
+       id="path1"
+       cx="10"
+       cy="10"
+       r="2" />
+    <path
+       sodipodi:type="star"
+       style="fill:#0000ff;stroke-width:0.264583"
+       id="path2"
+       inkscape:flatsided="true"
+       sodipodi:sides="3"
+       sodipodi:cx="6.1732597"
+       sodipodi:cy="3.5245254"
+       sodipodi:r1="0.97420055"
+       sodipodi:r2="0.48710027"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.8325957"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="M 6.8621236,4.2133892 5.2322543,3.7766671 6.4254014,2.5835199 Z"
+       inkscape:transform-center-y="-0.33239254"
+       transform="matrix(1.1452676,-0.35236683,0.30537393,1.3215087,6.4907514,10.106853)"
+       inkscape:transform-center-x="0.00070581162" />
+    <path
+       sodipodi:type="star"
+       style="fill:#ff0000;stroke-width:0.264583"
+       id="path2-1"
+       inkscape:flatsided="true"
+       sodipodi:sides="3"
+       sodipodi:cx="6.1732597"
+       sodipodi:cy="3.5245254"
+       sodipodi:r1="0.97420055"
+       sodipodi:r2="0.48710027"
+       sodipodi:arg1="0.78539816"
+       sodipodi:arg2="1.8325957"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="M 6.8621236,4.2133892 5.2322543,3.7766671 6.4254014,2.5835199 Z"
+       inkscape:transform-center-y="-0.33239254"
+       transform="matrix(1.1452676,-0.35236683,0.30537393,1.3215087,-2.8940224,9.8433767)"
+       inkscape:transform-center-x="0.00070581162" />
+    <path
+       sodipodi:type="star"
+       style="fill:#00ff00;stroke-width:0.264583"
+       id="path3"
+       inkscape:flatsided="true"
+       sodipodi:sides="3"
+       sodipodi:cx="8.6724682"
+       sodipodi:cy="2.7768986"
+       sodipodi:r1="1.5550869"
+       sodipodi:r2="0.77754337"
+       sodipodi:arg1="0.52359878"
+       sodipodi:arg2="1.5707963"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="m 10.019213,3.5544421 -2.6934895,-1e-7 1.3467447,-2.3326302 z"
+       inkscape:transform-center-y="-0.38877169"
+       transform="translate(1.3357259,2.1225535)" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:4.23333px;font-family:'Fira code';-inkscape-font-specification:'Fira code Bold';writing-mode:lr-tb;direction:ltr;fill:#000000;stroke-width:0.264583"
+       x="8.6663389"
+       y="11.394928"
+       id="text3"><tspan
+         sodipodi:role="line"
+         id="tspan3"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:4.23333px;font-family:'Fira code';-inkscape-font-specification:'Fira code Bold';fill:#000000;stroke-width:0.264583"
+         x="8.6663389"
+         y="11.394928">t</tspan></text>
+  </g>
+</svg>

@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+    branches: [main, master, dev]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+      fail-fast: false
+
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm \
+            base-devel git cmake ninja \
+            llvm20 llvm21 clang20 clang21 lld \
+            sdl3 libarchive glm pkgconf \
+            opus opusfile libvorbis flac libgme mpg123 fluidsynth wavpack \
+            brotli zlib freetype2 openssl protobuf libsodium \
+            libavif libtiff libwebp libpng libjpeg-turbo \
+            abseil-cpp re2 gtest nlohmann-json python \
+            boost boost-libs doxygen nodejs
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: |
+          export PATH="/usr/lib/llvm21/bin:$PATH"
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=/usr/lib/llvm21/bin/clang \
+            -DCMAKE_CXX_COMPILER=/usr/lib/llvm21/bin/clang++ \
+            -DCMAKE_LINKER=/usr/lib/llvm21/bin/ld.lld \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weasel-${{ matrix.build_type }}-linux-x86_64
+          path: |
+            build/weasel
+            build/*.so
+          if-no-files-found: warn

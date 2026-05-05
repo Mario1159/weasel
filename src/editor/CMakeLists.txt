@@ -1,0 +1,66 @@
+file(GLOB_RECURSE EDITOR_SOURCES
+    "*.cpp"
+)
+
+# Ensure new files are picked up if glob fails to update
+list(APPEND EDITOR_SOURCES
+    "console.cpp"
+    "logger.cpp"
+)
+list(REMOVE_DUPLICATES EDITOR_SOURCES)
+
+add_executable(weasel ${EDITOR_SOURCES})
+
+set_target_properties(weasel PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
+target_link_libraries(weasel PRIVATE
+    wsl
+    cli
+    SDL3::SDL3
+    SDL3_image::SDL3_image
+    SDL3_mixer::SDL3_mixer
+    GameNetworkingSockets
+    RmlUi::RmlUi
+    Jolt
+    fastgltf
+    EnTT::EnTT
+    TracyClient
+    imguizmo
+    spdlog
+    cereal
+    LibArchive::LibArchive
+    imguitextselect
+    imsearch
+    imviewguizmo::imviewguizmo
+    weasel_clang_repl
+    ImGuiColorTextEdit::imguicolortextedit
+    glm_dep
+    slang::slang
+    CLI11::CLI11
+    ai::sdk
+    ${CMAKE_DL_LIBS}
+)
+
+if(TARGET imgui)
+    target_link_libraries(weasel PRIVATE imgui)
+endif()
+
+target_compile_definitions(weasel PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED WEASEL_BUILD_EDITOR)
+target_compile_definitions(weasel PRIVATE
+    WEASEL_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\"
+    WEASEL_BUILD_DIR=\"${CMAKE_BINARY_DIR}\"
+)
+
+set_target_properties(weasel PROPERTIES ENABLE_EXPORTS ON)
+
+target_include_directories(weasel PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
+if(MSVC)
+    target_compile_options(weasel PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(weasel PRIVATE -Wall -Wextra -Wpedantic -rdynamic)
+endif()
+
+add_dependencies(weasel compile_shaders copy_otf copy_icons)

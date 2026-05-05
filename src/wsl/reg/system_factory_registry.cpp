@@ -1,0 +1,224 @@
+#include "system_factory_registry.hpp"
+#include "sig/signal_hub.hpp"
+#include "../rsc/scene.hpp"
+#include "../sys/system.hpp"
+
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+
+namespace wsl
+{
+
+namespace reg
+{
+
+void
+system_factory_registry::register_system_factory (
+    system_factory_fn factory, const system_registration_options &options)
+{
+  system_descriptor desc{};
+  desc.display_name = std::string (options.display_name);
+  desc.runtime_registered = options.runtime_registered;
+  desc.factory = std::move (factory);
+
+  // We don't have a type_id for custom factories unless they are registered
+  // through register_system_type. For custom factories, we use the display
+  // name as the primary identity.
+  m_factories[desc.display_name] = std::move (desc);
+}
+
+const system_factory_registry::system_descriptor *
+system_factory_registry::find_system (std::string_view display_name) const
+{
+  if (std::unordered_map<std::string, system_descriptor>::const_iterator const it
+      = m_factories.find (std::string (display_name));
+      it != m_factories.end ()) {
+    return &it->second;
+  }
+
+  return nullptr;
+}
+
+const system_factory_registry::system_descriptor *
+system_factory_registry::find_system (entt::id_type type_id) const
+{
+  if (std::unordered_map<entt::id_type, std::string>::const_iterator const it
+      = m_type_to_name.find (type_id);
+      it != m_type_to_name.end ()) {
+    return find_system (it->second);
+  }
+
+  return nullptr;
+}
+
+std::vector<const system_factory_registry::system_descriptor *>
+system_factory_registry::get_systems (system_order order) const
+{
+  std::vector<const system_descriptor *> systems;
+  systems.reserve (m_factories.size ());
+
+  for (const std::pair<const std::string, system_descriptor> &entry :
+       m_factories) {
+    systems.push_back (&entry.second);
+  }
+
+  if (order == system_order::type_id) {
+    std::sort (systems.begin (), systems.end (),
+               [] (const system_descriptor *lhs, const system_descriptor *rhs) {
+                 return lhs->type_id < rhs->type_id;
+               });
+    return systems;
+  }
+
+  std::sort (systems.begin (), systems.end (),
+             [] (const system_descriptor *lhs, const system_descriptor *rhs) {
+               if (lhs->display_name == rhs->display_name) {
+                 return lhs->type_id < rhs->type_id;
+               }
+               return lhs->display_name < rhs->display_name;
+             });
+  return systems;
+}
+
+std::unique_ptr<sys::ecs_system>
+system_factory_registry::create (const std::string &name, rsc::scene &scene)
+{
+  if (std::unordered_map<std::string, system_descriptor>::iterator const it
+      = m_factories.find (name);
+      it != m_factories.end ()) {
+    return it->second.factory (scene);
+  }
+  return nullptr;
+}
+
+std::vector<system_type_ref>
+system_factory_registry::get_system_dependencies (
+    entt::id_type system_type_id) const
+{
+  std::vector<system_type_ref> result;
+  const system_descriptor *desc = find_system (system_type_id);
+  if (desc == nullptr) {
+    return result;
+  }
+
+  result.reserve (desc->dependencies.size ());
+  for (entt::id_type dep_id : desc->dependencies) {
+    if (const system_descriptor *dep_desc = find_system (dep_id)) {
+      result.push_back (
+          { dep_id, dep_desc->type_name, dep_desc->display_name });
+    } else {
+      result.push_back ({ dep_id, "Unknown", "Unknown" });
+    }
+  }
+
+  return result;
+}
+
+std::vector<system_type_ref>
+system_factory_registry::get_system_conflicts (
+    entt::id_type system_type_id) const
+{
+  std::vector<system_type_ref> result;
+  const system_descriptor *desc = find_system (system_type_id);
+  if (desc == nullptr) {
+    return result;
+  }
+
+  result.reserve (desc->conflicts.size ());
+  for (entt::id_type conflict_id : desc->conflicts) {
+    if (const system_descriptor *conflict_desc = find_system (conflict_id)) {
+      result.push_back (
+          { conflict_id, conflict_desc->type_name, conflict_desc->display_name });
+    } else {
+      result.push_back ({ conflict_id, "Unknown", "Unknown" });
+    }
+  }
+
+  return result;
+}
+
+std::vector<const system_iteration_descriptor *>
+system_factory_registry::get_system_iterations (
+    entt::id_type system_type_id) const
+{
+  std::vector<const system_iteration_descriptor *> result;
+  if (m_signal_hub == nullptr || m_signal_hub->db == nullptr) {
+    return result;
+  }
+
+  for (const sig::system_iteration_debug_entry &iteration :
+       m_signal_hub->db->system_iterations) {
+    if (iteration.system_type_id == system_type_id) {
+      result.push_back (&iteration);
+    }
+  }
+
+  return result;
+}
+
+std::vector<const system_iteration_descriptor *>
+system_factory_registry::find_iterations_using_world_component (
+    entt::id_type component_type_id) const
+{
+  std::vector<const system_iteration_descriptor *> result;
+  if (m_signal_hub == nullptr || m_signal_hub->db == nullptr) {
+    return result;
+  }
+
+  for (const sig::system_iteration_debug_entry &iteration :
+       m_signal_hub->db->system_iterations) {
+    if (iteration.has_component (component_type_id)) {
+      result.push_back (&iteration);
+    }
+  }
+
+  return result;
+}
+
+void
+system_factory_registry::clear_runtime_systems ()
+{
+  std::vector<std::string> runtime_names;
+  runtime_names.reserve (m_factories.size ());
+
+  for (const std::pair<const std::string, system_descriptor> &entry :
+       m_factories) {
+    const system_descriptor &desc = entry.second;
+    if (desc.runtime_registered) {
+      runtime_names.push_back (entry.first);
+    }
+  }
+
+  for (const std::string &name : runtime_names) {
+    if (std::unordered_map<std::string, system_descriptor>::const_iterator const it
+        = m_factories.find (name);
+        it != m_factories.end ()) {
+      m_type_to_name.erase (it->second.type_id);
+    }
+    m_factories.erase (name);
+  }
+}
+
+std::vector<std::string>
+system_factory_registry::get_system_factory_names () const
+{
+  std::vector<std::string> names;
+  std::vector<const system_descriptor *> systems = get_systems ();
+  names.reserve (systems.size ());
+  for (const system_descriptor *desc : systems) {
+    if (desc == nullptr) {
+      continue;
+    }
+    names.push_back (desc->display_name);
+  }
+  return names;
+}
+
+} // namespace reg
+
+} // namespace wsl

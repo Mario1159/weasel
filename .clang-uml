@@ -1,0 +1,104 @@
+compilation_database_dir: build
+output_directory: build/docs/diagrams
+
+query_driver: /usr/lib/llvm21/bin/clang++
+
+add_compile_flags:
+  - -resource-dir=/usr/lib/llvm21/lib/clang/21
+
+diagrams:
+  comp_class_diagram:
+    type: class
+    glob:
+      - src/wsl/comp/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::comp
+    include:
+      namespaces:
+        - wsl::comp
+
+  sys_class_diagram:
+    type: class
+    glob:
+      - src/wsl/sys/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::sys
+    include:
+      namespaces:
+        - wsl::sys
+
+  rsc_class_diagram:
+    type: class
+    glob:
+      - src/wsl/rsc/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::rsc
+    include:
+      namespaces:
+        - wsl::rsc
+
+  reg_class_diagram:
+    type: class
+    glob:
+      - src/wsl/reg/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::reg
+    include:
+      namespaces:
+        - wsl::reg
+
+  gfx_class_diagram:
+    type: class
+    glob:
+      - src/wsl/gfx/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::gfx
+    include:
+      namespaces:
+        - wsl::gfx
+
+  phys_class_diagram:
+    type: class
+    glob:
+      - src/wsl/phys/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::phys
+    include:
+      namespaces:
+        - wsl::phys
+
+  input_class_diagram:
+    type: class
+    glob:
+      - src/wsl/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::phys
+    include:
+      namespaces:
+        - wsl::phys
+
+  log_class_diagram:
+    type: class
+    glob:
+      - src/wsl/**/*.cpp
+    generate_packages: true
+    package_type: namespace
+    using_namespace:
+      - wsl::phys
+    include:
+      namespaces:
+        - wsl::phys

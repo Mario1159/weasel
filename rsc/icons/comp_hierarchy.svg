@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="29.999996mm"
+   height="42mm"
+   viewBox="0 0 29.999996 42"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <marker
+       style="overflow:visible"
+       id="marker6"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       markerWidth="1"
+       markerHeight="1"
+       viewBox="0 0 1 1"
+       preserveAspectRatio="xMidYMid">
+      <path
+         transform="scale(0.5)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path6" />
+    </marker>
+    <marker
+       style="overflow:visible"
+       id="Triangle"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       markerWidth="1"
+       markerHeight="1"
+       viewBox="0 0 1 1"
+       preserveAspectRatio="xMidYMid">
+      <path
+         transform="scale(0.5)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path135" />
+    </marker>
+  </defs>
+  <g
+     id="layer1"
+     transform="translate(-8,-4)">
+    <rect
+       style="fill:#ffffff;stroke-width:0.396874"
+       id="rect2"
+       width="12"
+       height="12"
+       x="8"
+       y="4" />
+    <rect
+       style="fill:#ffffff;stroke-width:0.330729"
+       id="rect2-3"
+       width="10"
+       height="10"
+       x="28"
+       y="12" />
+    <rect
+       style="fill:#ffffff;stroke-width:0.330729"
+       id="rect2-1"
+       width="10"
+       height="10"
+       x="28"
+       y="24" />
+    <rect
+       style="fill:#ffffff;stroke-width:0.330729"
+       id="rect2-36"
+       width="10"
+       height="10"
+       x="28"
+       y="36" />
+    <path
+       style="fill:none;stroke:#f7f7f7;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Triangle)"
+       d="m 13.593904,18.799641 v 0.251299 h 9.515732"
+       id="path4" />
+    <path
+       style="fill:none;stroke:#f7f7f7;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker6)"
+       d="m 13.533487,24.046842 v 6.832129 h 9.606358"
+       id="path5" />
+    <path
+       style="fill:none;stroke:#f7f7f7;stroke-width:1;stroke-linecap:butt;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker6)"
+       d="m 13.473069,36.060418 v 6.710405 h 9.659078"
+       id="path7" />
+  </g>
+</svg>
