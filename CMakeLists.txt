@@ -48,10 +48,7 @@ find_package(SDL3 CONFIG REQUIRED)
 find_package(LibArchive REQUIRED)
 find_package(PkgConfig REQUIRED)
 
-set(WEASEL_LLVM_CMAKE_DIR "/usr/lib/llvm20/lib/cmake/llvm" CACHE PATH
-    "Path to the LLVM CMake package directory used to configure Clang-Repl." FORCE)
-set(WEASEL_CLANG_CMAKE_DIR "/usr/lib/llvm20/lib/cmake/clang" CACHE PATH
-    "Path to the Clang CMake package directory used to configure Clang-Repl." FORCE)
+
 
 pkg_check_modules(GLM QUIET glm)
 

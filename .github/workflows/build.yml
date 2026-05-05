@@ -30,8 +30,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install dependencies (Linux)
         if: matrix.name == 'linux'
@@ -43,28 +41,29 @@ jobs:
             opus opusfile libvorbis flac libgme mpg123 fluidsynth wavpack \
             brotli zlib freetype2 openssl protobuf libsodium \
             libavif libtiff libwebp libpng libjpeg-turbo \
-            abseil-cpp re2 gtest nlohmann-json
+            abseil-cpp re2 gtest nlohmann-json boost \
+            llvm clang python
 
       - name: Configure (Linux)
         if: matrix.name == 'linux'
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWEASEL_ENABLE_INTERPRETER=OFF \
+            -DLLVM20_PREFIX=/usr \
             -G Ninja
 
       - name: Install dependencies (Windows)
         if: matrix.name == 'windows'
         run: |
-          vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium --triplet x64-windows
+          choco install llvm python
+          vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost --triplet x64-windows
 
       - name: Configure (Windows)
         if: matrix.name == 'windows'
         run: |
           cmake -B build `
-            -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
-            -DWEASEL_ENABLE_INTERPRETER=OFF `
+            -DLLVM20_PREFIX="C:\Program Files\LLVM" `
             -G "Visual Studio 17 2022"
 
       - name: Install dependencies (macOS)
@@ -73,10 +72,10 @@ jobs:
           brew update
           brew install sdl3 libarchive glm pkg-config \
             opus opusfile libvorbis flac game-music-emu mpg123 fluid-synth wavpack \
-            jpeg-turbo libpng libtiff libwebp libavif \
+            jpeg-turbo libpng libtiff webp libavif \
             brotli zlib freetype openssl protobuf libsodium \
-            abseil re2 gtest nlohmann-json \
-            cmake ninja
+            abseil re2 googletest nlohmann-json boost \
+            cmake ninja llvm python
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libarchive)" >> $GITHUB_ENV
 
       - name: Configure (macOS)
@@ -85,7 +84,7 @@ jobs:
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH;$(brew --prefix)" \
-            -DWEASEL_ENABLE_INTERPRETER=OFF \
+            -DLLVM20_PREFIX="$(brew --prefix llvm)" \
             -G Ninja
 
       - name: Build (Linux / macOS)

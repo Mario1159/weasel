@@ -1,7 +1,14 @@
-file(GLOB_RECURSE WSL_SOURCES 
+file(GLOB_RECURSE WSL_SOURCES
     "*.cpp"
     "*.c"
     "log/*.cpp"
+)
+
+# Editor-specific sources referenced by wsl when WEASEL_BUILD_EDITOR is defined
+list(APPEND WSL_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/editor/renderer_imgui.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/editor_context_hooks.cpp"
+    "${CMAKE_SOURCE_DIR}/src/editor/physics_debug_drawer.cpp"
 )
 
 add_library(wsl SHARED ${WSL_SOURCES})
