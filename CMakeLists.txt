@@ -262,7 +262,32 @@ CPMAddPackage(
 
 # --- Asset Compilation ---
 set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/rsc/shaders")
-set(SLANG_EXE "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-2026.7.1-linux-x86_64/bin/slangc")
+
+# Discover slangc executable (platform-agnostic)
+file(GLOB SLANG_PREBUILT_DIRS "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-*")
+if(SLANG_PREBUILT_DIRS)
+    list(GET SLANG_PREBUILT_DIRS 0 SLANG_PREBUILT_DIR)
+    set(SLANG_EXE_CANDIDATE "${SLANG_PREBUILT_DIR}/bin/slangc")
+endif()
+
+if(NOT EXISTS "${SLANG_EXE_CANDIDATE}")
+    # Fallback: search in PATH or slang build tree
+    find_program(SLANG_EXE slangc
+        PATHS
+            "${CMAKE_BINARY_DIR}/_deps/slang-build/bin"
+            "${CMAKE_BINARY_DIR}/_deps/slang-build/source/slangc"
+            "${CMAKE_BINARY_DIR}/_deps/slang-build/tools"
+        NO_DEFAULT_PATH
+    )
+else()
+    set(SLANG_EXE "${SLANG_EXE_CANDIDATE}")
+endif()
+
+if(NOT SLANG_EXE OR NOT EXISTS "${SLANG_EXE}")
+    message(FATAL_ERROR "Could not find slangc executable. Build may need to complete slang first.")
+endif()
+
+message(STATUS "Using slangc: ${SLANG_EXE}")
 
 set(VERTEX_SHADER_SOURCES
     "${SHADER_SOURCE_DIR}/cube.vert.slang"

@@ -42,7 +42,7 @@ jobs:
             brotli zlib freetype2 openssl protobuf libsodium \
             libavif libtiff libwebp libpng libjpeg-turbo \
             abseil-cpp re2 gtest nlohmann-json boost \
-            llvm clang python
+            llvm clang python nodejs
 
       - name: Configure (Linux)
         if: matrix.name == 'linux'
@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies (Windows)
         if: matrix.name == 'windows'
         run: |
-          choco install llvm python
+          choco install llvm python nodejs
           vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost --triplet x64-windows
 
       - name: Configure (Windows)
@@ -75,7 +75,7 @@ jobs:
             jpeg-turbo libpng libtiff webp libavif \
             brotli zlib freetype openssl protobuf libsodium \
             abseil re2 googletest nlohmann-json boost \
-            cmake ninja llvm python
+            cmake ninja llvm python node
           echo "CMAKE_PREFIX_PATH=$(brew --prefix libarchive)" >> $GITHUB_ENV
 
       - name: Configure (macOS)
