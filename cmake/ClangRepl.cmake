@@ -6,7 +6,41 @@ if(NOT WEASEL_ENABLE_INTERPRETER)
     return()
 endif()
 
-set(LLVM20_PREFIX "/usr/lib/llvm20" CACHE PATH "Path to LLVM 20 installation prefix")
+# Common install prefixes to search on each platform
+if(WIN32)
+    set(_LLVM20_CANDIDATE_PREFIXES
+        "C:/Program Files/LLVM"
+        "C:/Program Files (x86)/LLVM"
+        "C:/LLVM"
+        "$ENV{PROGRAMFILES}/LLVM"
+    )
+else()
+    set(_LLVM20_CANDIDATE_PREFIXES
+        "/usr/lib/llvm20"
+        "/usr/lib/llvm-20"
+        "/usr/local/lib/llvm20"
+        "/usr/local/opt/llvm@20"
+        "/opt/llvm20"
+    )
+endif()
+
+# If the user hasn't set LLVM20_PREFIX, try to auto-detect an existing one
+set(_LLVM20_DETECTED_PREFIX "")
+if(NOT DEFINED LLVM20_PREFIX OR LLVM20_PREFIX STREQUAL "" OR LLVM20_PREFIX STREQUAL "/usr/lib/llvm20")
+    foreach(_prefix IN LISTS _LLVM20_CANDIDATE_PREFIXES)
+        if(EXISTS "${_prefix}/include/clang-c/Index.h" OR EXISTS "${_prefix}/lib/clang/20")
+            set(_LLVM20_DETECTED_PREFIX "${_prefix}")
+            break()
+        endif()
+    endforeach()
+endif()
+
+if(_LLVM20_DETECTED_PREFIX)
+    set(LLVM20_PREFIX "${_LLVM20_DETECTED_PREFIX}" CACHE PATH "Path to LLVM 20 installation prefix" FORCE)
+else()
+    set(LLVM20_PREFIX "/usr/lib/llvm20" CACHE PATH "Path to LLVM 20 installation prefix")
+endif()
+
 set(LLVM20_INCLUDE_DIR "${LLVM20_PREFIX}/include")
 set(LLVM20_LIB_DIR "${LLVM20_PREFIX}/lib")
 
@@ -31,7 +65,7 @@ find_library(LLVM_SO_LIB
 
 if(NOT CLANG_CPP_LIB)
     message(FATAL_ERROR "Could not find clang-cpp library in ${LLVM20_LIB_DIR}. "
-        "Set LLVM20_PREFIX to the correct LLVM installation path.")
+        "Set LLVM20_PREFIX to the correct LLVM 20 installation path.")
 endif()
 
 # We define weasel_clang_repl as an interface library that points to the official Clang Interpreter

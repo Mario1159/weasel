@@ -149,6 +149,11 @@ app::run ()
       if (e.type == SDL_EVENT_QUIT) {
         quit = true;
       }
+      if (e.type == SDL_EVENT_WINDOW_RESIZED
+          && e.window.windowID == SDL_GetWindowID (m_runtime_context->window.handler))
+        {
+          m_runtime_context->window.on_resize ();
+        }
       m_runtime_context->scene_manager.handle_events (e);
       on_event (e);
     }
