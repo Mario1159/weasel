@@ -360,7 +360,7 @@ foreach(SHADER_FILE IN LISTS VERTEX_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.vert.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}"
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}" -fvk-t-shift 0 0 -fvk-s-shift 0 0 -fvk-b-shift 0 1 -warnings-disable 40100
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
@@ -373,7 +373,7 @@ foreach(SHADER_FILE IN LISTS FRAGMENT_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.frag.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}"
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 -warnings-disable 40100
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
