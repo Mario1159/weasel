@@ -56,7 +56,7 @@ jobs:
         if: matrix.name == 'windows'
         run: |
           choco install llvm python nodejs
-          vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost --triplet x64-windows
+          vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost freetype --triplet x64-windows
 
       - name: Configure (Windows)
         if: matrix.name == 'windows'
