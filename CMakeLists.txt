@@ -271,20 +271,27 @@ if(SLANG_PREBUILT_DIRS)
 endif()
 
 if(NOT EXISTS "${SLANG_EXE_CANDIDATE}")
-    # Fallback: search in PATH or slang build tree
     find_program(SLANG_EXE slangc
         PATHS
             "${CMAKE_BINARY_DIR}/_deps/slang-build/bin"
             "${CMAKE_BINARY_DIR}/_deps/slang-build/source/slangc"
-            "${CMAKE_BINARY_DIR}/_deps/slang-build/tools"
         NO_DEFAULT_PATH
     )
 else()
     set(SLANG_EXE "${SLANG_EXE_CANDIDATE}")
 endif()
 
-if(NOT SLANG_EXE OR NOT EXISTS "${SLANG_EXE}")
-    message(FATAL_ERROR "Could not find slangc executable. Build may need to complete slang first.")
+# If slangc is built from source as a target, depend on it instead of a file
+set(SLANGC_IS_TARGET FALSE)
+if(TARGET slangc)
+    set(SLANGC_IS_TARGET TRUE)
+    if(NOT SLANG_EXE)
+        set(SLANG_EXE "$<TARGET_FILE:slangc>")
+    endif()
+elseif(NOT SLANG_EXE OR NOT EXISTS "${SLANG_EXE}")
+    message(FATAL_ERROR "Could not find slangc executable or target. "
+        "Prebuilt: ${SLANG_EXE_CANDIDATE}. "
+        "Set SLANG_EXE manually or ensure slang is built.")
 endif()
 
 message(STATUS "Using slangc: ${SLANG_EXE}")
@@ -348,7 +355,7 @@ foreach(SHADER_FILE IN LISTS VERTEX_SHADER_SOURCES)
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
         COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}"
-        DEPENDS "${SHADER_FILE}" "${SLANG_EXE}"
+        DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
     )
@@ -361,7 +368,7 @@ foreach(SHADER_FILE IN LISTS FRAGMENT_SHADER_SOURCES)
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
         COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}"
-        DEPENDS "${SHADER_FILE}" "${SLANG_EXE}"
+        DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
     )
@@ -369,6 +376,9 @@ foreach(SHADER_FILE IN LISTS FRAGMENT_SHADER_SOURCES)
 endforeach()
 
 add_custom_target(compile_shaders ALL DEPENDS ${COMPILED_SHADERS})
+if(SLANGC_IS_TARGET)
+    add_dependencies(compile_shaders slangc)
+endif()
 
 # --- Asset Copying ---
 macro(add_copy_target TARGET_NAME SOURCE_FILES DEST_DIR COMMENT_MSG)
