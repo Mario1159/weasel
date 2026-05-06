@@ -108,20 +108,26 @@ CPMAddPackage(
 )
 
 if(NOT TARGET slang::slang)
-    file(GLOB SLANG_BUILD_DIRS "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-*")
-    if(SLANG_BUILD_DIRS)
-        list(GET SLANG_BUILD_DIRS 0 SLANG_BUILD_DIR)
-        find_library(SLANG_COMPILER_LIBRARY
-            NAMES "slang-compiler"
-            PATHS "${SLANG_BUILD_DIR}/lib"
-        )
-
-        if(SLANG_COMPILER_LIBRARY)
-            add_library(slang::slang SHARED IMPORTED)
-            set_target_properties(slang::slang PROPERTIES
-                IMPORTED_LOCATION "${SLANG_COMPILER_LIBRARY}"
-                INTERFACE_INCLUDE_DIRECTORIES "${SLANG_BUILD_DIR}/include"
+    if(TARGET slang)
+        # Slang built from source - wrap the raw target in the expected namespace
+        add_library(slang::slang INTERFACE IMPORTED)
+        set_property(TARGET slang::slang PROPERTY INTERFACE_LINK_LIBRARIES slang)
+    else()
+        file(GLOB SLANG_BUILD_DIRS "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-*")
+        if(SLANG_BUILD_DIRS)
+            list(GET SLANG_BUILD_DIRS 0 SLANG_BUILD_DIR)
+            find_library(SLANG_COMPILER_LIBRARY
+                NAMES "slang-compiler"
+                PATHS "${SLANG_BUILD_DIR}/lib"
             )
+
+            if(SLANG_COMPILER_LIBRARY)
+                add_library(slang::slang SHARED IMPORTED)
+                set_target_properties(slang::slang PROPERTIES
+                    IMPORTED_LOCATION "${SLANG_COMPILER_LIBRARY}"
+                    INTERFACE_INCLUDE_DIRECTORIES "${SLANG_BUILD_DIR}/include"
+                )
+            endif()
         endif()
     endif()
 endif()
