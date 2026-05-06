@@ -18,10 +18,15 @@ struct PSOut {
     float4 bloom : SV_Target1;
 };
 
+float2 fwidth_approx(float2 v)
+{
+    return abs(ddx(v)) + abs(ddy(v));
+}
+
 float getGrid(float2 worldXZ, float res)
 {
     float2 coord = worldXZ * res;
-    float2 fw = fwidth(coord);
+    float2 fw = fwidth_approx(coord);
     float2 grid = abs(frac(coord - 0.5) - 0.5) / max(fw, 0.001);
     float line_val = min(grid.x, grid.y);
     return 1.0 - saturate(line_val);
@@ -37,7 +42,12 @@ PSOut main(PSInput input)
     // Very aggressive quartic falloff
     fog = fog * fog * fog * fog;
 
-    if (fog <= 0.005) discard;
+    if (fog <= 0.005) {
+        PSOut o;
+        o.color = float4(0, 0, 0, 0);
+        o.bloom = float4(0, 0, 0, 1);
+        return o;
+    }
 
     float2 uv = input.worldPos.xz;
 
@@ -46,7 +56,7 @@ PSOut main(PSInput input)
     float major = getGrid(uv, 0.1);
 
     // 3. Stable Axes
-    float2 fw = fwidth(uv);
+    float2 fw = fwidth_approx(uv);
     float x_axis = 1.0 - saturate(abs(uv.y) / max(fw.y * 3.0, 0.001));
     float z_axis = 1.0 - saturate(abs(uv.x) / max(fw.x * 3.0, 0.001));
 

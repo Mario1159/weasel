@@ -44,6 +44,25 @@ endif()
 set(LLVM20_INCLUDE_DIR "${LLVM20_PREFIX}/include")
 set(LLVM20_LIB_DIR "${LLVM20_PREFIX}/lib")
 
+# Debug: print what we actually found on the filesystem
+message(STATUS "[ClangRepl] LLVM20_PREFIX = ${LLVM20_PREFIX}")
+message(STATUS "[ClangRepl] LLVM20_INCLUDE_DIR = ${LLVM20_INCLUDE_DIR}")
+message(STATUS "[ClangRepl] LLVM20_LIB_DIR = ${LLVM20_LIB_DIR}")
+if(WIN32)
+    message(STATUS "[ClangRepl] Contents of ${LLVM20_PREFIX}:")
+    execute_process(COMMAND cmd /c dir /s /b "${LLVM20_PREFIX}\\lib\\clang*" RESULT_VARIABLE _dir_result OUTPUT_VARIABLE _dir_out)
+    message(STATUS "[ClangRepl] clang dirs: ${_dir_out}")
+    message(STATUS "[ClangRepl] Looking for lib files in ${LLVM20_LIB_DIR}:")
+    execute_process(COMMAND cmd /c dir /b "${LLVM20_LIB_DIR}\\*.lib" RESULT_VARIABLE _lib_result OUTPUT_VARIABLE _lib_out)
+    message(STATUS "[ClangRepl] .lib files: ${_lib_out}")
+    message(STATUS "[ClangRepl] Looking for lib files in ${LLVM20_PREFIX}\\bin:")
+    execute_process(COMMAND cmd /c dir /b "${LLVM20_PREFIX}\\bin\\*.lib" RESULT_VARIABLE _binlib_result OUTPUT_VARIABLE _binlib_out)
+    message(STATUS "[ClangRepl] bin .lib files: ${_binlib_out}")
+    message(STATUS "[ClangRepl] Looking for dll files in ${LLVM20_PREFIX}\\bin:")
+    execute_process(COMMAND cmd /c dir /b "${LLVM20_PREFIX}\\bin\\*.dll" RESULT_VARIABLE _dll_result OUTPUT_VARIABLE _dll_out)
+    message(STATUS "[ClangRepl] bin .dll files: ${_dll_out}")
+endif()
+
 # Auto-detect resource dir or allow override
 set(WEASEL_CLANG_RESOURCE_DIR "${LLVM20_PREFIX}/lib/clang/20" CACHE PATH
     "Path to Clang builtin headers (resource dir)")
