@@ -479,6 +479,11 @@ set(CPACK_COMPONENTS_ALL Runtime)
 set(CPACK_COMPONENT_RUNTIME_DISPLAY_NAME "Weasel Engine Runtime")
 set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "Weasel Engine runtime binaries and resources")
 
+# Override CPack's install step so it only installs our Runtime component.
+# Without this CPack runs a full "cmake --install ." which also executes
+# broken install() rules from CPM dependencies (slang, ai-sdk-cpp, brotli...).
+set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};weasel;Runtime;/")
+
 if(WIN32)
     set(CPACK_GENERATOR "NSIS;ZIP")
     set(CPACK_NSIS_DISPLAY_NAME "Weasel Engine")
