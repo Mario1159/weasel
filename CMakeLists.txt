@@ -492,7 +492,9 @@ if(WIN32)
 elseif(APPLE)
     set(CPACK_GENERATOR "productbuild;TGZ")
 else()
-    set(CPACK_GENERATOR "TGZ;DEB;RPM")
+    # DEB/RPM omitted: they require distro-specific tooling (dpkg, rpmbuild) and
+    # packaging metadata that is not available in CI containers.
+    set(CPACK_GENERATOR "TGZ")
 endif()
 
 include(CPack)
