@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies (Windows)
         if: matrix.name == 'windows'
         run: |
-          choco install llvm python nodejs
+          choco install llvm python nodejs nsis
           vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost freetype --triplet x64-windows
 
       - name: Configure (Windows)
@@ -136,7 +136,10 @@ jobs:
       - name: Package (Windows)
         if: matrix.name == 'windows'
         shell: powershell
-        run: cd build && cpack -C Release
+        run: |
+          cd build
+          cpack -C Release -G ZIP
+          cpack -C Release -G NSIS
 
       - name: Collect packages
         if: matrix.name != 'windows'
