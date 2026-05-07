@@ -457,20 +457,27 @@ add_test(NAME validate_roll_a_ball_project COMMAND weasel --validate-project "${
 add_test(NAME validate_roll_a_ball_scene COMMAND weasel --validate-scene "${ROLL_A_BALL_SCENE}" "${ROLL_A_BALL_PROJ}")
 
 # --- Installation ---
+# Only install our own targets/resources.  CPM dependencies (slang, ai-sdk-cpp,
+# etc.) have their own install() rules that break in CI (wrong paths, man pages,
+# missing files).  Tagging everything with COMPONENT Runtime and limiting
+# CPACK_COMPONENTS_ALL prevents CPack from touching them.
 install(TARGETS wsl weasel weasel-cli
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin COMPONENT Runtime
+    LIBRARY DESTINATION lib COMPONENT Runtime
+    ARCHIVE DESTINATION lib COMPONENT Runtime
 )
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel COMPONENT Runtime)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel COMPONENT Runtime)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel COMPONENT Runtime)
 
 set(CPACK_PACKAGE_NAME "WeaselEngine")
 set(CPACK_PACKAGE_VERSION "0.1.0")
 set(CPACK_PACKAGE_VENDOR "Weasel Engine")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Weasel Engine — a game engine")
+set(CPACK_COMPONENTS_ALL Runtime)
+set(CPACK_COMPONENT_RUNTIME_DISPLAY_NAME "Weasel Engine Runtime")
+set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "Weasel Engine runtime binaries and resources")
 
 if(WIN32)
     set(CPACK_GENERATOR "NSIS;ZIP")
