@@ -264,6 +264,7 @@ CPMAddPackage(
     GIT_TAG main
     GIT_SUBMODULES_RECURSE YES
     SYSTEM ON
+    PATCH_COMMAND ${CMAKE_COMMAND} -E touch third_party/nlohmann_json_patched/nlohmann_json.natvis
 )
 
 # --- Asset Compilation ---
@@ -433,22 +434,6 @@ if(DEFINED stb_SOURCE_DIR)
     endif()
 endif()
 
-# --- Export and Config Generation ---
-include(CMakePackageConfigHelpers)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/WeaselConfig.cmake"
-"include(CMakeFindDependencyMacro)
-find_dependency(SDL3 CONFIG REQUIRED)
-find_dependency(LibArchive REQUIRED)
-find_dependency(PkgConfig REQUIRED)
-include(\"\${CMAKE_CURRENT_LIST_DIR}/WeaselTargets.cmake\")
-")
-
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/WeaselConfigVersion.cmake"
-    VERSION 0.1.0
-    COMPATIBILITY AnyNewerVersion
-)
-
 # --- Documentation ---
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -471,18 +456,6 @@ set(ROLL_A_BALL_SCENE "${ROLL_A_BALL_DIR}/scenes/main.wscn.json")
 add_test(NAME validate_roll_a_ball_project COMMAND weasel --validate-project "${ROLL_A_BALL_PROJ}")
 add_test(NAME validate_roll_a_ball_scene COMMAND weasel --validate-scene "${ROLL_A_BALL_SCENE}" "${ROLL_A_BALL_PROJ}")
 
-# --- Target Export ---
-file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/WeaselTargets.cmake"
-CONTENT "if(NOT TARGET Weasel::wsl)
-    add_library(Weasel::wsl SHARED IMPORTED GLOBAL)
-    set_target_properties(Weasel::wsl PROPERTIES
-        IMPORTED_LOCATION \"${CMAKE_CURRENT_BINARY_DIR}/libwsl.so\"
-        INTERFACE_INCLUDE_DIRECTORIES [==[$<JOIN:$<TARGET_PROPERTY:wsl,INTERFACE_INCLUDE_DIRECTORIES>,;>]==]
-        INTERFACE_COMPILE_DEFINITIONS [==[$<JOIN:$<TARGET_PROPERTY:wsl,INTERFACE_COMPILE_DEFINITIONS>,;>]==]
-    )
-endif()
-")
-
 # --- Installation ---
 install(TARGETS wsl weasel weasel-cli
     RUNTIME DESTINATION bin
@@ -492,7 +465,6 @@ install(TARGETS wsl weasel weasel-cli
 
 install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/rml DESTINATION share/weasel)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel)
 
 set(CPACK_PACKAGE_NAME "WeaselEngine")
@@ -506,7 +478,7 @@ if(WIN32)
     set(CPACK_NSIS_HELP_LINK "https://github.com/Mario1159/weasel")
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/Mario1159/weasel")
 elseif(APPLE)
-    set(CPACK_GENERATOR "PackageMaker;TGZ")
+    set(CPACK_GENERATOR "productbuild;TGZ")
 else()
     set(CPACK_GENERATOR "TGZ;DEB;RPM")
 endif()

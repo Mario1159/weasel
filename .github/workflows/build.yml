@@ -104,7 +104,6 @@ jobs:
           cp build/libwsl.so artifacts/lib/
           cp -r build/compiled_shaders artifacts/share/weasel/
           cp -r build/otf artifacts/share/weasel/
-          cp -r build/rml artifacts/share/weasel/
           cp -r build/icons artifacts/share/weasel/
           cp packaging/linux/Makefile artifacts/
 
@@ -116,7 +115,7 @@ jobs:
           cp build/weasel build/weasel-cli artifacts/bin/
           cp build/libwsl.dylib artifacts/lib/ 2>/dev/null || true
           cp -L build/*.dylib artifacts/lib/ 2>/dev/null || true
-          cp -r build/compiled_shaders build/otf build/rml build/icons artifacts/ 2>/dev/null || true
+          cp -r build/compiled_shaders build/otf build/icons artifacts/ 2>/dev/null || true
 
       - name: Collect artifacts (Windows)
         if: matrix.name == 'windows'
@@ -127,7 +126,7 @@ jobs:
           Copy-Item build\Release\weasel-cli.exe artifacts\bin\ -ErrorAction SilentlyContinue
           Copy-Item build\Release\wsl.dll artifacts\lib\ -ErrorAction SilentlyContinue
           Copy-Item build\Release\*.dll artifacts\lib\ -ErrorAction SilentlyContinue
-          Copy-Item -Recurse -Force build\compiled_shaders, build\otf, build\rml, build\icons artifacts\ -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Force build\compiled_shaders, build\otf, build\icons artifacts\ -ErrorAction SilentlyContinue
 
       - name: Package (Linux / macOS / Windows)
         if: matrix.name != 'windows'
@@ -152,6 +151,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path packages | Out-Null
           Copy-Item build\*.exe packages\ -ErrorAction SilentlyContinue
+          Copy-Item build\*.zip packages\ -ErrorAction SilentlyContinue
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
