@@ -3,6 +3,7 @@
 #include "gfx/render_window.hpp"
 #include "wsl/gfx/shader.hpp"
 #include "wsl/phys/jolt_runtime.hpp"
+#include "wsl/rsc/resource_manager.hpp"
 
 #include <Jolt/Core/Color.h>
 #include <Jolt/Core/Core.h>
@@ -66,14 +67,18 @@ physics_debug_renderer::physics_debug_renderer (wsl::gfx::render_window &w, wsl:
 {
   Initialize ();
 
-  SDL_GPUShader *vert = wsl::gfx::shader::load (
-      m_ctx->gpu_device, "compiled_shaders/flat.vert.slang.spv",
+  auto *res_mgr = m_window->resource_manager ();
+  auto vs_id = res_mgr->register_shader ("engine://compiled_shaders/flat.vert.slang.spv");
+  auto fs_id = res_mgr->register_shader ("engine://compiled_shaders/flat.frag.slang.spv");
+
+  SDL_GPUShader *vert = wsl::gfx::shader::load_from_manager (
+      m_ctx->gpu_device, res_mgr, vs_id,
       SDL_GPU_SHADERSTAGE_VERTEX,
       /*num_uniform_buffers=*/1,
       /*num_samplers=*/0);
 
-  SDL_GPUShader *frag = wsl::gfx::shader::load (
-      m_ctx->gpu_device, "compiled_shaders/flat.frag.slang.spv",
+  SDL_GPUShader *frag = wsl::gfx::shader::load_from_manager (
+      m_ctx->gpu_device, res_mgr, fs_id,
       SDL_GPU_SHADERSTAGE_FRAGMENT,
       /*num_uniform_buffers=*/0,
       /*num_samplers=*/0);

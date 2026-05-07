@@ -1,6 +1,7 @@
 #include "engine_resources.hpp"
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_manager.hpp"
+#include "wsl/comp/singl/runtime_context.hpp"
 #include <string>
 #include <vector>
 
@@ -12,7 +13,7 @@ namespace comp::singl
 {
 
 engine_resources::engine_resources (comp::singl::runtime_context &runtime_ctx)
-    : m_resource_manager (&runtime_ctx)
+    : m_resource_manager (&runtime_ctx, runtime_ctx.resource_manager.get_engine_resource_path ())
 {
 }
 

@@ -99,11 +99,14 @@ jobs:
         if: matrix.name == 'linux'
         shell: bash
         run: |
-          mkdir -p artifacts/bin artifacts/lib
+          mkdir -p artifacts/bin artifacts/lib artifacts/share/weasel
           cp build/weasel build/weasel-cli artifacts/bin/
           cp build/libwsl.so artifacts/lib/
-          cp -L build/*.so artifacts/lib/ 2>/dev/null || true
-          cp -r build/compiled_shaders build/otf build/rml build/icons artifacts/ 2>/dev/null || true
+          cp -r build/compiled_shaders artifacts/share/weasel/
+          cp -r build/otf artifacts/share/weasel/
+          cp -r build/rml artifacts/share/weasel/
+          cp -r build/icons artifacts/share/weasel/
+          cp packaging/linux/Makefile artifacts/
 
       - name: Collect artifacts (macOS)
         if: matrix.name == 'macos'
@@ -126,8 +129,38 @@ jobs:
           Copy-Item build\Release\*.dll artifacts\lib\ -ErrorAction SilentlyContinue
           Copy-Item -Recurse -Force build\compiled_shaders, build\otf, build\rml, build\icons artifacts\ -ErrorAction SilentlyContinue
 
+      - name: Package (Linux / macOS / Windows)
+        if: matrix.name != 'windows'
+        shell: bash
+        run: cd build && cpack
+
+      - name: Package (Windows)
+        if: matrix.name == 'windows'
+        shell: powershell
+        run: cd build && cpack -C Release
+
+      - name: Collect packages
+        if: matrix.name != 'windows'
+        shell: bash
+        run: |
+          mkdir -p packages
+          cp build/*.tar.gz build/*.deb build/*.rpm build/*.pkg build/*.dmg packages/ 2>/dev/null || true
+
+      - name: Collect packages (Windows)
+        if: matrix.name == 'windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path packages | Out-Null
+          Copy-Item build\*.exe packages\ -ErrorAction SilentlyContinue
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: weasel-release-${{ matrix.name }}
           path: artifacts/**
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: weasel-packages-${{ matrix.name }}
+          path: packages/**

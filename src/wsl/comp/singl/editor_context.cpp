@@ -54,11 +54,20 @@ editor_context::editor_context (wsl::comp::singl::runtime_context &runtime_ctx)
   spdlog::warn ("editor_context: initializing WITHOUT WEASEL_BUILD_EDITOR");
 #endif
 
+  // Only override the engine resource path with compile-time paths if the
+  // current path (set by the launcher) does not already contain resources.
+  // This allows installed / archived builds to work without recompilation.
+  {
+    const std::string &current_path = runtime_ctx.resource_manager.get_engine_resource_path ();
+    if (!std::filesystem::exists (std::filesystem::path (current_path) / "compiled_shaders"))
+      {
 #ifdef WEASEL_BUILD_DIR
-  runtime_ctx.resource_manager.set_engine_resource_path (WEASEL_BUILD_DIR);
+        runtime_ctx.resource_manager.set_engine_resource_path (WEASEL_BUILD_DIR);
 #elif defined(WEASEL_SOURCE_DIR)
-  runtime_ctx.resource_manager.set_engine_resource_path (WEASEL_SOURCE_DIR);
+        runtime_ctx.resource_manager.set_engine_resource_path (WEASEL_SOURCE_DIR);
 #endif
+      }
+  }
 
 #ifdef WEASEL_SOURCE_DIR
   wsl_library_path = WEASEL_SOURCE_DIR;

@@ -73,6 +73,8 @@ public:
   void on_resize ();
   void postprocess_hdr_bloom ();
 
+  [[nodiscard]] wsl::rsc::resource_manager *resource_manager () const { return m_res_mgr; }
+
 private:
   SDL_GPUSampler *ensure_linear_sampler ();
   void destroy_texture (SDL_GPUTexture *&texture) const;
@@ -83,6 +85,7 @@ private:
   SDL_GPUGraphicsPipeline *create_downsample_pipe ();
   SDL_GPUGraphicsPipeline *create_blur_pipe ();
 
+private:
   wsl::rsc::resource_manager *m_res_mgr = nullptr;
 };
 

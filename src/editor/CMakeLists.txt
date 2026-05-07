@@ -13,6 +13,8 @@ add_executable(weasel ${EDITOR_SOURCES})
 
 set_target_properties(weasel PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    INSTALL_RPATH "$ORIGIN/../lib"
+    BUILD_RPATH "$ORIGIN;$ORIGIN/../lib"
 )
 
 target_link_libraries(weasel PRIVATE

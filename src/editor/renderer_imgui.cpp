@@ -9,8 +9,10 @@
 #include "wsl/rsc/resource_manager.hpp"
 #include "wsl/gfx/render_context.hpp"
 
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_rect.h>
 #include <SDL3/SDL_stdinc.h>
+#include <filesystem>
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -385,6 +387,27 @@ renderer_imgui::apply_editor_style (const editor_theme &t)
   colors[ImGuiCol_TreeLines] = border_soft;
 }
 
+static std::string
+resolve_font_path (const char *relative_path)
+{
+  const char *base_path = SDL_GetBasePath ();
+  if (base_path != nullptr)
+    {
+      std::filesystem::path exe_dir (base_path);
+      std::filesystem::path share_dir = exe_dir / ".." / "share" / "weasel";
+      if (std::filesystem::exists (share_dir / "otf"))
+        return (share_dir / relative_path).string ();
+    }
+
+#ifdef WEASEL_BUILD_DIR
+  return (std::filesystem::path (WEASEL_BUILD_DIR) / relative_path).string ();
+#elif defined(WEASEL_SOURCE_DIR)
+  return (std::filesystem::path (WEASEL_SOURCE_DIR) / relative_path).string ();
+#else
+  return relative_path;
+#endif
+}
+
 renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::render_context *ctx)
     : m_window (&window), m_ctx (ctx)
 {
@@ -405,21 +428,20 @@ renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::rende
   constexpr float font_size = 12.0F;
 
   // Main UI font
-  // Main UI font
   ImFont *font_regular = io.Fonts->AddFontFromFileTTF (
-      "./otf/splinesans-regular.otf", font_size, &cfg);
+      resolve_font_path ("otf/splinesans-regular.otf").c_str (), font_size, &cfg);
 
   fonts.regular = font_regular;
-  fonts.light = io.Fonts->AddFontFromFileTTF ("./otf/splinesans-light.otf",
-                                              font_size, &cfg);
-  fonts.medium = io.Fonts->AddFontFromFileTTF ("./otf/splinesans-medium.otf",
-                                               font_size, &cfg);
+  fonts.light = io.Fonts->AddFontFromFileTTF (
+      resolve_font_path ("otf/splinesans-light.otf").c_str (), font_size, &cfg);
+  fonts.medium = io.Fonts->AddFontFromFileTTF (
+      resolve_font_path ("otf/splinesans-medium.otf").c_str (), font_size, &cfg);
   fonts.semibold = io.Fonts->AddFontFromFileTTF (
-      "./otf/splinesans-semibold.otf", font_size, &cfg);
-  fonts.bold = io.Fonts->AddFontFromFileTTF ("./otf/splinesans-bold.otf",
-                                             font_size, &cfg);
-  fonts.title = io.Fonts->AddFontFromFileTTF ("./otf/splinesans-bold.otf",
-                                              32.0F, &cfg);
+      resolve_font_path ("otf/splinesans-semibold.otf").c_str (), font_size, &cfg);
+  fonts.bold = io.Fonts->AddFontFromFileTTF (
+      resolve_font_path ("otf/splinesans-bold.otf").c_str (), font_size, &cfg);
+  fonts.title = io.Fonts->AddFontFromFileTTF (
+      resolve_font_path ("otf/splinesans-bold.otf").c_str (), 32.0F, &cfg);
 
   IM_ASSERT (fonts.regular);
   IM_ASSERT (fonts.medium);
@@ -429,8 +451,8 @@ renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::rende
 
   io.FontDefault = fonts.regular;
 
-  fonts.mono
-      = io.Fonts->AddFontFromFileTTF ("./otf/hack-regular.otf", 11.0F, &cfg);
+  fonts.mono = io.Fonts->AddFontFromFileTTF (
+      resolve_font_path ("otf/hack-regular.otf").c_str (), 11.0F, &cfg);
 
   IM_ASSERT (fonts.mono && "Failed to load Hack font");
 

@@ -1,5 +1,8 @@
 #include "cli_handler.hpp"
 
+#include <SDL3/SDL_filesystem.h>
+#include <filesystem>
+
 #include "comp/area3d.hpp"
 #include "comp/camera.hpp"
 #include "comp/character_body.hpp"
@@ -262,7 +265,18 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
   return res;
 }
 
-std::string cli_handler::default_engine_resource_path() {
+std::string cli_handler::default_engine_resource_path ()
+{
+  const char *base_path = SDL_GetBasePath ();
+  if (base_path != nullptr)
+    {
+      std::filesystem::path exe_dir (base_path);
+
+      std::filesystem::path share_dir = exe_dir / ".." / "share" / "weasel";
+      if (std::filesystem::exists (share_dir / "compiled_shaders"))
+        return share_dir.string ();
+    }
+
 #ifdef WEASEL_BUILD_DIR
   return WEASEL_BUILD_DIR;
 #elif defined(WEASEL_SOURCE_DIR)

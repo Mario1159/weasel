@@ -16,5 +16,7 @@ target_link_libraries(cli PUBLIC wsl CLI11::CLI11)
 add_executable(weasel-cli main.cpp)
 set_target_properties(weasel-cli PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    INSTALL_RPATH "$ORIGIN/../lib"
+    BUILD_RPATH "$ORIGIN;$ORIGIN/../lib"
 )
 target_link_libraries(weasel-cli PRIVATE cli)
