@@ -494,7 +494,7 @@ elseif(APPLE)
 else()
     # DEB/RPM omitted: they require distro-specific tooling (dpkg, rpmbuild) and
     # packaging metadata that is not available in CI containers.
-    set(CPACK_GENERATOR "TGZ" CACHE STRING "CPack generator" FORCE)
+    set(CPACK_GENERATOR "TGZ")
 endif()
 
 include(CPack)
