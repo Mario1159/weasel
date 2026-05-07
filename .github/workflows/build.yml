@@ -128,15 +128,20 @@ jobs:
           Copy-Item build\Release\*.dll artifacts\lib\ -ErrorAction SilentlyContinue
           Copy-Item -Recurse -Force build\compiled_shaders, build\otf, build\icons artifacts\ -ErrorAction SilentlyContinue
 
-      - name: Package (Linux / macOS / Windows)
-        if: matrix.name != 'windows'
+      - name: Package (Linux)
+        if: matrix.name == 'linux'
         shell: bash
-        run: cd build && cpack
+        run: cd build && cpack -G TGZ
+
+      - name: Package (macOS)
+        if: matrix.name == 'macos'
+        shell: bash
+        run: cd build && cpack -G productbuild && cpack -G TGZ
 
       - name: Package (Windows)
         if: matrix.name == 'windows'
         shell: powershell
-        run: cd build && cpack -C Release
+        run: cd build && cpack -C Release -G NSIS; cd build && cpack -C Release -G ZIP
 
       - name: Collect packages
         if: matrix.name != 'windows'
