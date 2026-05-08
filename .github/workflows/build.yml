@@ -123,7 +123,7 @@ jobs:
           Write-Host "=== Testing simple shader compilation ==="
           "float4 main() : SV_Position { return float4(0,0,0,1); }" | Out-File -Encoding ASCII test.vert.slang
           $env:Path = "$slangDir;$env:Path"
-          & $slangc test.vert.slang -target dxil -o test.vert.dxil 2>&1 | Write-Host
+          & $slangc test.vert.slang -target dxil -o test.vert.dxil -Xdxc -Vd 2>&1 | Write-Host
           Write-Host "=== Listing test output ==="
           Get-ChildItem test.vert* -ErrorAction SilentlyContinue | Format-Table Name, Length
 

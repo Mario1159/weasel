@@ -347,12 +347,16 @@ file(MAKE_DIRECTORY "${SHADER_OUTPUT_DIR}")
 if(WIN32)
     set(SLANG_SHADER_TARGET dxil)
     set(SHADER_EXT ".dxil")
+    # DXC 1.9 rejects Slang-generated DXIL with validation enabled for some targets.
+    set(SLANG_DXC_FLAGS "-Xdxc" "-Vd")
 elseif(APPLE)
     set(SLANG_SHADER_TARGET metal)
     set(SHADER_EXT ".metal")
+    set(SLANG_DXC_FLAGS "")
 else()
     set(SLANG_SHADER_TARGET spirv)
     set(SHADER_EXT ".spv")
+    set(SLANG_DXC_FLAGS "")
 endif()
 
 set(COMPILED_SHADERS "")
@@ -361,7 +365,7 @@ foreach(SHADER_FILE IN LISTS VERTEX_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.vert.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}" -fvk-t-shift 0 0 -fvk-s-shift 0 0 -fvk-b-shift 0 1 -warnings-disable 40100
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}" -fvk-t-shift 0 0 -fvk-s-shift 0 0 -fvk-b-shift 0 1 -warnings-disable 40100 ${SLANG_DXC_FLAGS}
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
@@ -374,7 +378,7 @@ foreach(SHADER_FILE IN LISTS FRAGMENT_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.frag.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 -warnings-disable 40100
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 -warnings-disable 40100 ${SLANG_DXC_FLAGS}
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
