@@ -116,11 +116,13 @@ jobs:
         shell: powershell
         run: |
           $slangc = (Get-ChildItem -Recurse -Filter "slangc.exe" build | Select-Object -First 1).FullName
+          $slangDir = Split-Path $slangc
           Write-Host "Using slangc: $slangc"
-          Write-Host "=== slangc --version ==="
-          & $slangc --version 2>&1 | Write-Host
+          Write-Host "=== Checking dxc next to slangc ==="
+          Get-ChildItem $slangDir -Filter "dxc*" -ErrorAction SilentlyContinue | Format-Table Name
           Write-Host "=== Testing simple shader compilation ==="
-          "void main() {}" | Out-File -Encoding ASCII test.vert.slang
+          "float4 main() : SV_Position { return float4(0,0,0,1); }" | Out-File -Encoding ASCII test.vert.slang
+          $env:Path = "$slangDir;$env:Path"
           & $slangc test.vert.slang -target dxil -o test.vert.dxil 2>&1 | Write-Host
           Write-Host "=== Listing test output ==="
           Get-ChildItem test.vert* -ErrorAction SilentlyContinue | Format-Table Name, Length
