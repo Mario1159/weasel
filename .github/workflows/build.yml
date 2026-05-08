@@ -121,10 +121,8 @@ jobs:
           Write-Host "=== Checking dxc next to slangc ==="
           Get-ChildItem $slangDir -Filter "dxc*" -ErrorAction SilentlyContinue | Format-Table Name
           Write-Host "=== Testing simple shader compilation ==="
-          @"
-[shader("vertex")]
-float4 main() : SV_Position { return float4(0,0,0,1); }
-"@ | Out-File -Encoding ASCII test.vert.slang
+          Set-Content -Path test.vert.slang -Value '[shader("vertex")]' -Encoding ASCII
+          Add-Content -Path test.vert.slang -Value 'float4 main() : SV_Position { return float4(0,0,0,1); }' -Encoding ASCII
           $env:Path = "$slangDir;$env:Path"
           & $slangc test.vert.slang -target dxil -profile vs_6_0 -o test.vert.dxil -Xdxc -Vd 2>&1 | Write-Host
           Write-Host "=== Listing test output ==="
