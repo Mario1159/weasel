@@ -258,14 +258,25 @@ CPMAddPackage(
 )
 target_compile_definitions(Jolt PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED)
 
-CPMAddPackage(
-    NAME ai-sdk-cpp
-    GITHUB_REPOSITORY ClickHouse/ai-sdk-cpp
+# ai-sdk-cpp is fetched manually so we can patch the missing natvis file
+# before add_subdirectory runs.  CPM's PATCH_COMMAND is not reliable here.
+include(FetchContent)
+FetchContent_Declare(
+    ai-sdk-cpp
+    GIT_REPOSITORY https://github.com/ClickHouse/ai-sdk-cpp.git
     GIT_TAG main
     GIT_SUBMODULES_RECURSE YES
-    SYSTEM ON
-    PATCH_COMMAND ${CMAKE_COMMAND} -E touch third_party/nlohmann_json_patched/nlohmann_json.natvis
 )
+FetchContent_GetProperties(ai-sdk-cpp)
+if(NOT ai-sdk-cpp_POPULATED)
+    FetchContent_Populate(ai-sdk-cpp)
+    # MSVC: nlohmann_json_patched expects a natvis file that doesn't exist.
+    set(_AI_SDK_NATVIS "${ai-sdk-cpp_SOURCE_DIR}/third_party/nlohmann_json_patched/nlohmann_json.natvis")
+    if(NOT EXISTS "${_AI_SDK_NATVIS}")
+        file(TOUCH "${_AI_SDK_NATVIS}")
+    endif()
+endif()
+add_subdirectory(${ai-sdk-cpp_SOURCE_DIR} ${ai-sdk-cpp_BINARY_DIR} EXCLUDE_FROM_ALL SYSTEM)
 
 # --- Asset Compilation ---
 set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/rsc/shaders")
@@ -489,16 +500,16 @@ set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "Weasel Engine runtime binaries and reso
 set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};weasel;Runtime;/")
 
 if(WIN32)
-    set(CPACK_GENERATOR "NSIS;ZIP")
+    set(CPACK_GENERATOR "NSIS;ZIP" CACHE STRING "CPack generator" FORCE)
     set(CPACK_NSIS_DISPLAY_NAME "Weasel Engine")
     set(CPACK_NSIS_HELP_LINK "https://github.com/Mario1159/weasel")
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/Mario1159/weasel")
 elseif(APPLE)
-    set(CPACK_GENERATOR "productbuild;TGZ")
+    set(CPACK_GENERATOR "productbuild;TGZ" CACHE STRING "CPack generator" FORCE)
 else()
     # DEB/RPM omitted: they require distro-specific tooling (dpkg, rpmbuild) and
     # packaging metadata that is not available in CI containers.
-    set(CPACK_GENERATOR "TGZ")
+    set(CPACK_GENERATOR "TGZ" CACHE STRING "CPack generator" FORCE)
 endif()
 
 include(CPack)
