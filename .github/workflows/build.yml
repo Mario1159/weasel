@@ -100,6 +100,8 @@ jobs:
             Copy-Item "$dxcDir\dxc.exe" "$slangDir\" -ErrorAction SilentlyContinue
             Copy-Item "$dxcDir\dxcompiler.dll" "$slangDir\" -ErrorAction SilentlyContinue
             Copy-Item "$dxcDir\dxil.dll" "$slangDir\" -ErrorAction SilentlyContinue
+            Write-Host "=== Contents of $slangDir ==="
+            Get-ChildItem $slangDir | Format-Table Name
           } else {
             Write-Host "WARNING: slangc.exe not found, falling back to build\Release\bin"
             $destDir = "build\Release\bin"
@@ -108,6 +110,20 @@ jobs:
             Copy-Item "$dxcDir\dxcompiler.dll" "$destDir\" -ErrorAction SilentlyContinue
             Copy-Item "$dxcDir\dxil.dll" "$destDir\" -ErrorAction SilentlyContinue
           }
+
+      - name: Test Slang + DXC directly (Windows)
+        if: matrix.name == 'windows'
+        shell: powershell
+        run: |
+          $slangc = (Get-ChildItem -Recurse -Filter "slangc.exe" build | Select-Object -First 1).FullName
+          Write-Host "Using slangc: $slangc"
+          Write-Host "=== slangc --version ==="
+          & $slangc --version 2>&1 | Write-Host
+          Write-Host "=== Testing simple shader compilation ==="
+          "void main() {}" | Out-File -Encoding ASCII test.vert.slang
+          & $slangc test.vert.slang -target dxil -o test.vert.dxil 2>&1 | Write-Host
+          Write-Host "=== Listing test output ==="
+          Get-ChildItem test.vert* -ErrorAction SilentlyContinue | Format-Table Name, Length
 
       - name: Build (Linux / macOS)
         if: matrix.name != 'windows'
