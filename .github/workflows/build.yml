@@ -93,23 +93,24 @@ jobs:
         shell: powershell
         run: |
           $dxcDir = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
-          $slangBins = Get-ChildItem -Recurse -Filter "slangc.exe" build | Select-Object -First 1
+          # Copy DXC next to every slangc.exe already present (prebuilt download).
+          $slangBins = Get-ChildItem -Recurse -Filter "slangc.exe" build
           if ($slangBins) {
-            $slangDir = Split-Path $slangBins.FullName
-            Write-Host "Copying DXC to slangc directory: $slangDir"
-            Copy-Item "$dxcDir\dxc.exe" "$slangDir\" -ErrorAction SilentlyContinue
-            Copy-Item "$dxcDir\dxcompiler.dll" "$slangDir\" -ErrorAction SilentlyContinue
-            Copy-Item "$dxcDir\dxil.dll" "$slangDir\" -ErrorAction SilentlyContinue
-            Write-Host "=== Contents of $slangDir ==="
-            Get-ChildItem $slangDir | Format-Table Name
-          } else {
-            Write-Host "WARNING: slangc.exe not found, falling back to build\Release\bin"
-            $destDir = "build\Release\bin"
-            New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-            Copy-Item "$dxcDir\dxc.exe" "$destDir\" -ErrorAction SilentlyContinue
-            Copy-Item "$dxcDir\dxcompiler.dll" "$destDir\" -ErrorAction SilentlyContinue
-            Copy-Item "$dxcDir\dxil.dll" "$destDir\" -ErrorAction SilentlyContinue
+            foreach ($bin in $slangBins) {
+              $slangDir = Split-Path $bin.FullName
+              Write-Host "Copying DXC to slangc directory: $slangDir"
+              Copy-Item "$dxcDir\dxc.exe" "$slangDir\" -ErrorAction SilentlyContinue
+              Copy-Item "$dxcDir\dxcompiler.dll" "$slangDir\" -ErrorAction SilentlyContinue
+              Copy-Item "$dxcDir\dxil.dll" "$slangDir\" -ErrorAction SilentlyContinue
+            }
           }
+          # Also stage into Release\bin where MSBuild will run the built slangc.exe.
+          $releaseBin = "build\Release\bin"
+          New-Item -ItemType Directory -Force -Path $releaseBin | Out-Null
+          Copy-Item "$dxcDir\dxc.exe" "$releaseBin\" -ErrorAction SilentlyContinue
+          Copy-Item "$dxcDir\dxcompiler.dll" "$releaseBin\" -ErrorAction SilentlyContinue
+          Copy-Item "$dxcDir\dxil.dll" "$releaseBin\" -ErrorAction SilentlyContinue
+          Write-Host "Staged DXC into $releaseBin"
 
       - name: Test Slang + DXC directly (Windows)
         if: matrix.name == 'windows'
