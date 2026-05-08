@@ -57,7 +57,7 @@ jobs:
         run: |
           choco install llvm python nodejs nsis
           vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost freetype directx-dxc --triplet x64-windows
-          echo "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc" | Out-File -FilePath $env:GITHUB_PATH -Append
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
 
       - name: Configure (Windows)
         if: matrix.name == 'windows'
