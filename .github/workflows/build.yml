@@ -111,6 +111,10 @@ jobs:
           Copy-Item "$dxcDir\dxcompiler.dll" "$releaseBin\" -ErrorAction SilentlyContinue
           Copy-Item "$dxcDir\dxil.dll" "$releaseBin\" -ErrorAction SilentlyContinue
           Write-Host "Staged DXC into $releaseBin"
+          # Ensure PATH contains the directories where dxc.exe lives so Slang can find it.
+          $env:Path = "$releaseBin;$dxcDir;$env:Path"
+          Add-Content -Path $env:GITHUB_PATH -Value "$releaseBin"
+          Add-Content -Path $env:GITHUB_PATH -Value "$dxcDir"
 
       - name: Test Slang + DXC directly (Windows)
         if: matrix.name == 'windows'
