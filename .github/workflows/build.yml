@@ -139,7 +139,16 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.name == 'windows'
-        run: cmake --build build --config Release
+        shell: powershell
+        run: |
+          # MSBuild may not inherit PATH from GITHUB_PATH for custom build tools.
+          # Explicitly prepend the directories containing dxc.exe.
+          $slangPrebuilt = (Get-ChildItem -Recurse -Filter "slangc.exe" build | Select-Object -First 1).DirectoryName
+          $vcpkgDxc = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
+          $releaseBin = "build\Release\bin"
+          $env:Path = "$releaseBin;$slangPrebuilt;$vcpkgDxc;$env:Path"
+          Write-Host "Build PATH: $env:Path"
+          cmake --build build --config Release
 
       - name: Collect artifacts (Linux)
         if: matrix.name == 'linux'
