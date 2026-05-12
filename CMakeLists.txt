@@ -307,7 +307,7 @@ if(NOT SLANG_EXE)
         PATHS
             "${CMAKE_BINARY_DIR}/_deps/slang-build/bin"
             "${CMAKE_BINARY_DIR}/_deps/slang-build/source/slangc"
-        NO_DEFAULT_PATH
+            "${CMAKE_BINARY_DIR}/_deps/slang-build/slangc"
     )
 endif()
 
@@ -323,8 +323,6 @@ if(NOT SLANG_EXE)
     message(FATAL_ERROR "Could not find slangc executable or target. "
         "Set SLANG_EXE manually or ensure slang is built.")
 endif()
-
-message(STATUS "Using slangc: ${SLANG_EXE}")
 
 message(STATUS "Using slangc: ${SLANG_EXE}")
 
@@ -374,20 +372,14 @@ if(WIN32)
     set(SHADER_EXT ".dxil")
     # DXC 1.9 rejects Slang-generated DXIL with validation enabled for some targets.
     set(SLANG_DXC_FLAGS "-Xdxc" "-Vd")
-    # Find dxc.exe so we can pass it explicitly to slangc via -dxc-path.
-    find_program(DXC_EXE dxc
-        PATHS
-            "$ENV{VCPKG_INSTALLATION_ROOT}/installed/x64-windows/tools/directx-dxc"
-        NO_DEFAULT_PATH
-    )
-    if(NOT DXC_EXE)
-        find_program(DXC_EXE dxc)
-    endif()
-    if(DXC_EXE)
-        message(STATUS "Found dxc: ${DXC_EXE}")
-        set(SLANG_DXC_PATH_FLAG "-dxc-path" "${DXC_EXE}")
+    # On Windows Slang loads dxcompiler.dll directly (not dxc.exe).
+    # The vcpkg directx-dxc package provides it in the tools directory.
+    set(_DXC_DLL_CANDIDATE "$ENV{VCPKG_INSTALLATION_ROOT}/installed/x64-windows/tools/directx-dxc/dxcompiler.dll")
+    if(EXISTS "${_DXC_DLL_CANDIDATE}")
+        message(STATUS "Found dxcompiler.dll: ${_DXC_DLL_CANDIDATE}")
+        set(SLANG_DXC_PATH_FLAG "-dxc-path" "${_DXC_DLL_CANDIDATE}")
     else()
-        message(WARNING "dxc.exe not found. Slang may fail to compile DXIL shaders.")
+        message(WARNING "dxcompiler.dll not found. Slang may fail to compile DXIL shaders.")
         set(SLANG_DXC_PATH_FLAG "")
     endif()
 elseif(APPLE)
