@@ -299,14 +299,15 @@ else()
     set(SLANG_EXE "${SLANG_EXE_CANDIDATE}")
 endif()
 
-# If slangc is built from source as a target, depend on it instead of a file
+# If slangc is built from source as a target, add a dependency on it but
+# keep using the prebuilt slangc for shader compilation (it's known to work
+# with -dxc-path; the freshly built executable has path-resolution issues).
 set(SLANGC_IS_TARGET FALSE)
 if(TARGET slangc)
     set(SLANGC_IS_TARGET TRUE)
-    if(NOT SLANG_EXE)
-        set(SLANG_EXE "$<TARGET_FILE:slangc>")
-    endif()
-elseif(NOT SLANG_EXE OR NOT EXISTS "${SLANG_EXE}")
+endif()
+
+if(NOT SLANG_EXE OR NOT EXISTS "${SLANG_EXE}")
     message(FATAL_ERROR "Could not find slangc executable or target. "
         "Prebuilt: ${SLANG_EXE_CANDIDATE}. "
         "Set SLANG_EXE manually or ensure slang is built.")
