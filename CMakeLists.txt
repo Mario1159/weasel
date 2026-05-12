@@ -360,14 +360,32 @@ if(WIN32)
     set(SHADER_EXT ".dxil")
     # DXC 1.9 rejects Slang-generated DXIL with validation enabled for some targets.
     set(SLANG_DXC_FLAGS "-Xdxc" "-Vd")
+    # Find dxc.exe so we can pass it explicitly to slangc via -dxc-path.
+    find_program(DXC_EXE dxc
+        PATHS
+            "$ENV{VCPKG_INSTALLATION_ROOT}/installed/x64-windows/tools/directx-dxc"
+        NO_DEFAULT_PATH
+    )
+    if(NOT DXC_EXE)
+        find_program(DXC_EXE dxc)
+    endif()
+    if(DXC_EXE)
+        message(STATUS "Found dxc: ${DXC_EXE}")
+        set(SLANG_DXC_PATH_FLAG "-dxc-path" "${DXC_EXE}")
+    else()
+        message(WARNING "dxc.exe not found. Slang may fail to compile DXIL shaders.")
+        set(SLANG_DXC_PATH_FLAG "")
+    endif()
 elseif(APPLE)
     set(SLANG_SHADER_TARGET metal)
     set(SHADER_EXT ".metal")
     set(SLANG_DXC_FLAGS "")
+    set(SLANG_DXC_PATH_FLAG "")
 else()
     set(SLANG_SHADER_TARGET spirv)
     set(SHADER_EXT ".spv")
     set(SLANG_DXC_FLAGS "")
+    set(SLANG_DXC_PATH_FLAG "")
 endif()
 
 if(WIN32)
@@ -384,7 +402,7 @@ foreach(SHADER_FILE IN LISTS VERTEX_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.vert.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_VERT_PROFILE} -o "${OUTPUT_FILE}" -fvk-t-shift 0 0 -fvk-s-shift 0 0 -fvk-b-shift 0 1 -warnings-disable 40100 ${SLANG_DXC_FLAGS}
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_VERT_PROFILE} -o "${OUTPUT_FILE}" -fvk-t-shift 0 0 -fvk-s-shift 0 0 -fvk-b-shift 0 1 -warnings-disable 40100 ${SLANG_DXC_FLAGS} ${SLANG_DXC_PATH_FLAG}
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
@@ -397,7 +415,7 @@ foreach(SHADER_FILE IN LISTS FRAGMENT_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.frag.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_FRAG_PROFILE} -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 -warnings-disable 40100 ${SLANG_DXC_FLAGS}
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_FRAG_PROFILE} -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 -warnings-disable 40100 ${SLANG_DXC_FLAGS} ${SLANG_DXC_PATH_FLAG}
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM

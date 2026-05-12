@@ -139,16 +139,7 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.name == 'windows'
-        shell: powershell
-        run: |
-          $dxcPath = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc\dxc.exe"
-          if (-Not (Test-Path $dxcPath)) {
-            Write-Error "DXC not found at $dxcPath"
-            exit 1
-          }
-          $env:SLANG_DXC_PATH = $dxcPath
-          Write-Host "SLANG_DXC_PATH=$env:SLANG_DXC_PATH"
-          cmake --build build --config Release
+        run: cmake --build build --config Release
 
       - name: Collect artifacts (Linux)
         if: matrix.name == 'linux'
