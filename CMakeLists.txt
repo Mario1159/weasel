@@ -281,22 +281,34 @@ add_subdirectory(${ai-sdk-cpp_SOURCE_DIR} ${ai-sdk-cpp_BINARY_DIR} EXCLUDE_FROM_
 # --- Asset Compilation ---
 set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/rsc/shaders")
 
-# Discover slangc executable (platform-agnostic)
-file(GLOB SLANG_PREBUILT_DIRS "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-*")
-if(SLANG_PREBUILT_DIRS)
-    list(GET SLANG_PREBUILT_DIRS 0 SLANG_PREBUILT_DIR)
-    set(SLANG_EXE_CANDIDATE "${SLANG_PREBUILT_DIR}/bin/slangc")
+# Find slangc executable robustly across platforms.
+if(WIN32)
+    set(_SLANGC_NAME "slangc.exe")
+else()
+    set(_SLANGC_NAME "slangc")
 endif()
 
-if(NOT EXISTS "${SLANG_EXE_CANDIDATE}")
+# Priority 1: prebuilt slangc downloaded by CPM (slang-* directories)
+set(SLANG_EXE "")
+file(GLOB _SLANG_PREBUILT_CANDIDATES LIST_DIRECTORIES true "${CMAKE_BINARY_DIR}/_deps/slang-build/slang-*")
+foreach(_dir IN LISTS _SLANG_PREBUILT_CANDIDATES)
+    if(IS_DIRECTORY "${_dir}")
+        set(_candidate "${_dir}/bin/${_SLANGC_NAME}")
+        if(EXISTS "${_candidate}")
+            set(SLANG_EXE "${_candidate}")
+            break()
+        endif()
+    endif()
+endforeach()
+
+# Priority 2: find_program fallback in known build directories
+if(NOT SLANG_EXE)
     find_program(SLANG_EXE slangc
         PATHS
             "${CMAKE_BINARY_DIR}/_deps/slang-build/bin"
             "${CMAKE_BINARY_DIR}/_deps/slang-build/source/slangc"
         NO_DEFAULT_PATH
     )
-else()
-    set(SLANG_EXE "${SLANG_EXE_CANDIDATE}")
 endif()
 
 # If slangc is built from source as a target, add a dependency on it but
@@ -307,11 +319,12 @@ if(TARGET slangc)
     set(SLANGC_IS_TARGET TRUE)
 endif()
 
-if(NOT SLANG_EXE OR NOT EXISTS "${SLANG_EXE}")
+if(NOT SLANG_EXE)
     message(FATAL_ERROR "Could not find slangc executable or target. "
-        "Prebuilt: ${SLANG_EXE_CANDIDATE}. "
         "Set SLANG_EXE manually or ensure slang is built.")
 endif()
+
+message(STATUS "Using slangc: ${SLANG_EXE}")
 
 message(STATUS "Using slangc: ${SLANG_EXE}")
 
