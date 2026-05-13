@@ -12,7 +12,7 @@ broad_phase_layer_interface::broad_phase_layer_interface ()
 {
 }
 
-uint
+uint32_t
 broad_phase_layer_interface::GetNumBroadPhaseLayers () const
 {
   return 2;

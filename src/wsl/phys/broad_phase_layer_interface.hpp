@@ -5,6 +5,7 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 
+#include <cstdint>
 
 namespace wsl
 {
@@ -14,7 +15,7 @@ class broad_phase_layer_interface : public JPH::BroadPhaseLayerInterface
 public:
   broad_phase_layer_interface ();
 
-  uint GetNumBroadPhaseLayers () const override;
+  uint32_t GetNumBroadPhaseLayers () const override;
   JPH::BroadPhaseLayer
   GetBroadPhaseLayer (JPH::ObjectLayer in_layer) const override;
 

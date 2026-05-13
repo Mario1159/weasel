@@ -437,8 +437,8 @@ render_window::postprocess_hdr_bloom ()
   }
 
   // bloom texel size (half res)
-  uint32_t const bw = std::max (1U, (uint)ww / 2);
-  uint32_t const bh = std::max (1U, (uint)hh / 2);
+  uint32_t const bw = std::max (1U, (uint32_t)ww / 2);
+  uint32_t const bh = std::max (1U, (uint32_t)hh / 2);
   float const bloom_texel[2] = { 1.0F / float (bw), 1.0F / float (bh) };
 
   // ---------- (2) Blur H: bloom_a -> bloom_b ----------

@@ -6,6 +6,8 @@
 #include <Jolt/Core/Factory.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <cstdint>
+
 #include <atomic>
 #include <cassert>
 #include <cstdarg>
@@ -50,7 +52,7 @@ phys::retain_jolt_runtime ()
 
 #ifdef JPH_ENABLE_ASSERTS
   JPH::AssertFailed = [] (const char *expr, const char *msg, const char *file,
-                          uint line) -> bool {
+                          uint32_t line) -> bool {
     std::cerr << file << ":" << line << ": (" << expr << ") "
               << (msg ? msg : "") << std::endl;
     return true;

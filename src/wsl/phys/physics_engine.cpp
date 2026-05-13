@@ -1,18 +1,19 @@
 #include "physics_engine.hpp"
-#include "jolt_runtime.hpp"
+
 #include "Jolt/Core/TempAllocator.h"
 #include "Jolt/Physics/Body/BodyID.h"
 #include "Jolt/Physics/Body/BodyInterface.h"
 #include "Jolt/Physics/Collision/NarrowPhaseQuery.h"
 #include "Jolt/Physics/PhysicsSystem.h"
-#include "phys/broad_phase_layer_interface.hpp"
-#include "phys/object_layer_pair_filter.hpp"
-#include "phys/object_vs_broad_phase_layer_filter.hpp"
+#include "comp/singl/physics_manager.hpp"
+#include "components.hpp"
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Physics/Body/BodyLockInterface.h>
 #include <Jolt/Physics/Body/BodyManager.h>
-
+#include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/PhysicsSettings.h>
+
+#include <cstdint>
 #include <algorithm>
 #include <memory>
 #include <mutex>
@@ -37,10 +38,10 @@ phys::engine::engine ()
   m_obj_vs_bp_layer_filter = std::make_unique<object_vs_broad_phase_layer_filter> ();
   m_obj_layer_filter = std::make_unique<object_layer_pair_filter> ();
 
-  const uint max_bodies = 1024;
-  const uint num_body_mutexes = 0;
-  const uint max_body_pairs = 1024;
-  const uint max_contact_constraints = 1024;
+  const uint32_t max_bodies = 1024;
+  const uint32_t num_body_mutexes = 0;
+  const uint32_t max_body_pairs = 1024;
+  const uint32_t max_contact_constraints = 1024;
 
   m_phys_sys.Init (max_bodies, num_body_mutexes, max_body_pairs,
                  max_contact_constraints, *m_bp_layer_if, *m_obj_vs_bp_layer_filter,
