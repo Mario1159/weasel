@@ -201,6 +201,8 @@ CPMAddPackage(
     SYSTEM ON
 )
 
+set(SDLIMAGE_AVIF OFF CACHE BOOL "Disable AVIF in SDL3_image" FORCE)
+set(SDLIMAGE_JXL OFF CACHE BOOL "Disable JXL in SDL3_image" FORCE)
 CPMAddPackage(
     NAME SDL3_image
     GITHUB_REPOSITORY libsdl-org/SDL_image
@@ -309,6 +311,11 @@ if(NOT SLANG_EXE)
             "${CMAKE_BINARY_DIR}/_deps/slang-build/source/slangc"
             "${CMAKE_BINARY_DIR}/_deps/slang-build/slangc"
     )
+endif()
+
+# Priority 3: last resort – search in PATH / system directories
+if(NOT SLANG_EXE)
+    find_program(SLANG_EXE slangc)
 endif()
 
 # If slangc is built from source as a target, add a dependency on it but
