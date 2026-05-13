@@ -93,45 +93,27 @@ jobs:
         shell: powershell
         run: |
           $dxcDir = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
-          # Copy DXC next to every slangc.exe already present (prebuilt download).
-          $slangBins = Get-ChildItem -Recurse -Filter "slangc.exe" build
-          if ($slangBins) {
-            foreach ($bin in $slangBins) {
-              $slangDir = Split-Path $bin.FullName
-              Write-Host "Copying DXC to slangc directory: $slangDir"
-              Copy-Item "$dxcDir\dxc.exe" "$slangDir\" -ErrorAction SilentlyContinue
-              Copy-Item "$dxcDir\dxcompiler.dll" "$slangDir\" -ErrorAction SilentlyContinue
-              Copy-Item "$dxcDir\dxil.dll" "$slangDir\" -ErrorAction SilentlyContinue
-            }
+          $files = @("dxc.exe", "dxcompiler.dll", "dxil.dll")
+          # Verify source files exist
+          foreach ($f in $files) {
+            $src = "$dxcDir\$f"
+            if (-Not (Test-Path $src)) { Write-Error "Missing: $src"; exit 1 }
           }
-          # Also stage into Release\bin where MSBuild will run the built slangc.exe.
-          $releaseBin = "build\Release\bin"
-          New-Item -ItemType Directory -Force -Path $releaseBin | Out-Null
-          Copy-Item "$dxcDir\dxc.exe" "$releaseBin\" -ErrorAction SilentlyContinue
-          Copy-Item "$dxcDir\dxcompiler.dll" "$releaseBin\" -ErrorAction SilentlyContinue
-          Copy-Item "$dxcDir\dxil.dll" "$releaseBin\" -ErrorAction SilentlyContinue
-          Write-Host "Staged DXC into $releaseBin"
-          # Ensure PATH contains the directories where dxc.exe lives so Slang can find it.
-          $env:Path = "$releaseBin;$dxcDir;$env:Path"
-          Add-Content -Path $env:GITHUB_PATH -Value "$releaseBin"
-          Add-Content -Path $env:GITHUB_PATH -Value "$dxcDir"
-
-      - name: Test Slang + DXC directly (Windows)
-        if: matrix.name == 'windows'
-        shell: powershell
-        run: |
-          $slangc = (Get-ChildItem -Recurse -Filter "slangc.exe" build | Select-Object -First 1).FullName
-          $slangDir = Split-Path $slangc
-          Write-Host "Using slangc: $slangc"
-          Write-Host "=== Checking dxc next to slangc ==="
-          Get-ChildItem $slangDir -Filter "dxc*" -ErrorAction SilentlyContinue | Format-Table Name
-          Write-Host "=== Testing simple shader compilation ==="
-          Set-Content -Path test.vert.slang -Value '[shader("vertex")]' -Encoding ASCII
-          Add-Content -Path test.vert.slang -Value 'float4 main() : SV_Position { return float4(0,0,0,1); }' -Encoding ASCII
-          $env:Path = "$slangDir;$env:Path"
-          & $slangc test.vert.slang -target dxil -profile vs_6_0 -o test.vert.dxil -Xdxc -Vd 2>&1 | Write-Host
-          Write-Host "=== Listing test output ==="
-          Get-ChildItem test.vert* -ErrorAction SilentlyContinue | Format-Table Name, Length
+          # Copy next to every slangc.exe (prebuilt and built)
+          $slangBins = Get-ChildItem -Recurse -Filter "slangc.exe" build
+          $destDirs = @()
+          foreach ($bin in $slangBins) {
+            $destDirs += Split-Path $bin.FullName
+          }
+          $destDirs += "build\Release\bin"
+          foreach ($dir in $destDirs | Select-Object -Unique) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            foreach ($f in $files) {
+              Copy-Item "$dxcDir\$f" "$dir\" -Force
+            }
+            Write-Host "=== $dir ==="
+            Get-ChildItem $dir | Where-Object { $_.Name -match '^(dxc|dxcompiler|dxil)' } | Format-Table Name
+          }
 
       - name: Build (Linux / macOS)
         if: matrix.name != 'windows'
