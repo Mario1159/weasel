@@ -55,9 +55,10 @@ jobs:
       - name: Install dependencies (Windows)
         if: matrix.name == 'windows'
         run: |
-          choco install llvm python nodejs nsis
+          choco install llvm python nodejs nsis ninja
           vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost freetype directx-dxc --triplet x64-windows
           Add-Content -Path $env:GITHUB_PATH -Value "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\msys64\mingw64\bin"
 
       - name: Configure (Windows)
         if: matrix.name == 'windows'
@@ -65,7 +66,9 @@ jobs:
           cmake -B build `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
             -DLLVM20_PREFIX="C:\Program Files\LLVM" `
-            -G "Visual Studio 17 2022"
+            -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang.exe" `
+            -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang++.exe" `
+            -G Ninja
 
       - name: Install dependencies (macOS)
         if: matrix.name == 'macos'
@@ -105,7 +108,7 @@ jobs:
           foreach ($bin in $slangBins) {
             $destDirs += Split-Path $bin.FullName
           }
-          $destDirs += "build\Release\bin"
+          $destDirs += "build\bin"
           foreach ($dir in $destDirs | Select-Object -Unique) {
             New-Item -ItemType Directory -Force -Path $dir | Out-Null
             foreach ($f in $files) {
@@ -121,7 +124,7 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.name == 'windows'
-        run: cmake --build build --config Release
+        run: cmake --build build
 
       - name: Collect artifacts (Linux)
         if: matrix.name == 'linux'
@@ -150,10 +153,10 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path artifacts\bin, artifacts\lib | Out-Null
-          Copy-Item build\Release\weasel.exe artifacts\bin\ -ErrorAction SilentlyContinue
-          Copy-Item build\Release\weasel-cli.exe artifacts\bin\ -ErrorAction SilentlyContinue
-          Copy-Item build\Release\wsl.dll artifacts\lib\ -ErrorAction SilentlyContinue
-          Copy-Item build\Release\*.dll artifacts\lib\ -ErrorAction SilentlyContinue
+          Copy-Item build\weasel.exe artifacts\bin\ -ErrorAction SilentlyContinue
+          Copy-Item build\weasel-cli.exe artifacts\bin\ -ErrorAction SilentlyContinue
+          Copy-Item build\wsl.dll artifacts\lib\ -ErrorAction SilentlyContinue
+          Copy-Item build\*.dll artifacts\lib\ -ErrorAction SilentlyContinue
           Copy-Item -Recurse -Force build\compiled_shaders, build\otf, build\icons artifacts\ -ErrorAction SilentlyContinue
 
       - name: Package (Linux / macOS / Windows)
@@ -166,8 +169,8 @@ jobs:
         shell: powershell
         run: |
           cd build
-          cpack -C Release -G ZIP
-          cpack -C Release -G NSIS
+          cpack -G ZIP
+          cpack -G NSIS
 
       - name: Collect packages
         if: matrix.name != 'windows'
