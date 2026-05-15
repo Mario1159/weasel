@@ -60,6 +60,22 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
           Add-Content -Path $env:GITHUB_PATH -Value "C:\msys64\mingw64\bin"
 
+      - name: Find dumpbin (Windows)
+        if: matrix.name == 'windows'
+        shell: powershell
+        run: |
+          $dumpbin = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\2022", "C:\Program Files (x86)\Microsoft Visual Studio\2022", "C:\Program Files (x86)\Microsoft Visual Studio\2019" -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-Not $dumpbin) {
+            $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+            $dumpbin = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-Not $dumpbin) {
+            Write-Error "dumpbin.exe not found"
+            exit 1
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $dumpbin.DirectoryName
+          Write-Host "Found dumpbin at $($dumpbin.FullName)"
+
       - name: Configure (Windows)
         if: matrix.name == 'windows'
         run: |
