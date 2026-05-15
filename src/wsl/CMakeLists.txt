@@ -48,7 +48,7 @@ if(TARGET weasel_clang_repl)
 endif()
 
 target_link_libraries(wsl PRIVATE
-    GameNetworkingSockets
+    $<$<BOOL:${WEASEL_ENABLE_MULTIPLAYER}>:GameNetworkingSockets>
     TracyClient
     LibArchive::LibArchive
     ${CMAKE_DL_LIBS}
@@ -60,6 +60,9 @@ endif()
 
 target_compile_definitions(wsl PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED)
 target_compile_definitions(wsl PRIVATE WEASEL_BUILD_EDITOR)
+if(WEASEL_ENABLE_MULTIPLAYER)
+    target_compile_definitions(wsl PUBLIC WEASEL_ENABLE_MULTIPLAYER)
+endif()
 target_compile_definitions(wsl PRIVATE
     WEASEL_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\"
     WEASEL_BUILD_DIR=\"${CMAKE_BINARY_DIR}\"

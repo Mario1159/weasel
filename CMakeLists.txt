@@ -12,6 +12,20 @@ option(WEASEL_DISCONNECTED_DEPENDENCY_UPDATES
 option(WEASEL_LIMIT_NINJA_RESOURCES
     "Limit Ninja compile/link parallelism to keep the editor responsive"
     ON)
+option(WEASEL_ENABLE_MULTIPLAYER
+    "Enable multiplayer support via GameNetworkingSockets"
+    ON)
+
+# Temporarily disable GameNetworkingSockets on Windows until abseil-cpp is fixed.
+# See: https://github.com/abseil/abseil-cpp/pull/2054
+if(WIN32 AND WEASEL_ENABLE_MULTIPLAYER)
+    message(STATUS
+        "Disabling WEASEL_ENABLE_MULTIPLAYER on Windows "
+        "(temporarily until abseil-cpp PR #2054 is merged and published in vcpkg)"
+    )
+    set(WEASEL_ENABLE_MULTIPLAYER OFF CACHE BOOL
+        "Enable multiplayer support via GameNetworkingSockets" FORCE)
+endif()
 set(WEASEL_NINJA_COMPILE_JOBS "4"
     CACHE STRING "Maximum number of concurrent compile jobs when using Ninja.")
 set(WEASEL_NINJA_LINK_JOBS "1"
@@ -151,6 +165,7 @@ CPMAddPackage(
     NAME ImSearch
     GITHUB_REPOSITORY Mario1159/imsearch
     GIT_TAG main
+    OPTIONS "CMAKE_POSITION_INDEPENDENT_CODE ON"
     SYSTEM ON
 )
 
@@ -224,12 +239,14 @@ CPMAddPackage(
     SYSTEM ON
 )
 
-CPMAddPackage(
-    NAME GameNetworkingSockets
-    GITHUB_REPOSITORY ValveSoftware/GameNetworkingSockets
-    GIT_TAG master
-    SYSTEM ON
-)
+if(WEASEL_ENABLE_MULTIPLAYER)
+    CPMAddPackage(
+        NAME GameNetworkingSockets
+        GITHUB_REPOSITORY ValveSoftware/GameNetworkingSockets
+        GIT_TAG master
+        SYSTEM ON
+    )
+endif()
 
 CPMAddPackage(
     NAME RmlUi

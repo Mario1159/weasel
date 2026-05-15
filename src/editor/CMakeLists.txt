@@ -23,7 +23,7 @@ target_link_libraries(weasel PRIVATE
     SDL3::SDL3
     SDL3_image::SDL3_image
     SDL3_mixer::SDL3_mixer
-    GameNetworkingSockets
+    $<$<BOOL:${WEASEL_ENABLE_MULTIPLAYER}>:GameNetworkingSockets>
     RmlUi::RmlUi
     Jolt
     fastgltf
@@ -53,6 +53,9 @@ if(TARGET imgui)
 endif()
 
 target_compile_definitions(weasel PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED WEASEL_BUILD_EDITOR)
+if(WEASEL_ENABLE_MULTIPLAYER)
+    target_compile_definitions(weasel PUBLIC WEASEL_ENABLE_MULTIPLAYER)
+endif()
 target_compile_definitions(weasel PRIVATE
     WEASEL_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\"
     WEASEL_BUILD_DIR=\"${CMAKE_BINARY_DIR}\"
