@@ -50,6 +50,7 @@ jobs:
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DLLVM20_PREFIX=/usr \
+            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             -G Ninja
 
       - name: Install dependencies (Windows)
@@ -88,6 +89,7 @@ jobs:
             -DLLVM20_PREFIX="C:\Program Files\LLVM" `
             -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang.exe" `
             -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang++.exe" `
+            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} `
             -G Ninja
 
       - name: Install dependencies (macOS)
@@ -109,6 +111,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH;$(brew --prefix)" \
             -DLLVM20_PREFIX="$(brew --prefix llvm)" \
+            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             -G Ninja
 
       - name: Stage DXC for Slang (Windows)
