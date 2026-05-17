@@ -117,7 +117,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME slang
     GITHUB_REPOSITORY shader-slang/slang
-    GIT_TAG v2026.7.1
+    GIT_TAG v2026.8.1
     SYSTEM ON
 )
 

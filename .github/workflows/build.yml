@@ -76,6 +76,10 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $dumpbin.DirectoryName
           Write-Host "Found dumpbin at $($dumpbin.FullName)"
 
+      - name: Setup MSVC dev environment (Windows)
+        if: matrix.name == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure (Windows)
         if: matrix.name == 'windows'
         run: |
