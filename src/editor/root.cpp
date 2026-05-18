@@ -151,7 +151,7 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   }
 
   // feed mono font and background color from renderer_imgui
-  m_text_editor_window.set_mono_font (m_editor_ctx->get_imgui_renderer()->fonts.mono);
+  m_text_editor_window.set_mono_font (m_editor_ctx->get_imgui_renderer()->get_fonts().mono);
   m_text_editor_window.set_background_color (
       ImGui::ColorConvertFloat4ToU32 (
           m_editor_ctx->get_imgui_renderer ()->get_theme ().background2));
@@ -555,7 +555,7 @@ editor::root::apply_preferences_style ()
   io.FontGlobalScale = m_pref_font_scale;
 
   // Apply theme -> derived style colors
-  editor_theme t{};
+  wsl::gfx::editor_theme t{};
   t.primary = m_pref_primary;
   t.secondary = m_pref_secondary;
   t.background1 = m_pref_bg1;
@@ -717,7 +717,7 @@ editor::root::draw_welcome_tab ()
       }
     }
 
-    ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->fonts.title);
+    ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().title);
     ImGui::Text ("weasel");
     ImGui::PopFont ();
 

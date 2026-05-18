@@ -37,7 +37,7 @@ engine_ui::initialize ()
 }
 
 void
-engine_ui::set_console_command_handler (console::command_handler_t handler)
+engine_ui::set_console_command_handler (std::function<std::string (const std::string &)> handler)
 {
   m_root.set_console_command_handler (std::move (handler));
 }

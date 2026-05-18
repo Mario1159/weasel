@@ -15,12 +15,8 @@
 #include <imgui.h>
 #endif
 
-namespace editor
-{
-class renderer_imgui;
-}
-
-namespace wsl { namespace debug { class debug_renderer_interface; } }
+namespace wsl::gfx { class imgui_renderer_interface; }
+namespace wsl::debug { class debug_renderer_interface; }
 
 namespace wsl
 {
@@ -35,10 +31,6 @@ namespace comp::singl
 class editor_context : public comp::singleton_component
 {
 public:
-  // Hooks for editor-specific initialization (set by the editor at startup)
-  static void (*on_init_hook)(editor_context*);
-  static void (*on_deinit_hook)(editor_context*);
-
   explicit editor_context (wsl::comp::singl::runtime_context &runtime_ctx);
   ~editor_context (); // Defined in .cpp where renderer types are complete
 
@@ -49,21 +41,16 @@ public:
 
   static void register_meta ();
   bool custom_inspect (const char *label,
-                       wsl::comp::singl::runtime_context *runtime_ctx);
+                        wsl::comp::singl::runtime_context *runtime_ctx);
 
   wsl::comp::singl::runtime_context &runtime_ctx;
 
-  // Editor-specific renderers (managed as opaque pointers to avoid linkage dependencies)
-#ifdef WEASEL_BUILD_EDITOR
-  std::unique_ptr<editor::renderer_imgui> imgui_renderer;
+  // Editor-specific renderers (created by wsl::editor_app factory methods)
+  std::unique_ptr<wsl::gfx::imgui_renderer_interface> imgui_renderer;
   std::unique_ptr<wsl::debug::debug_renderer_interface> debug_renderer;
 
-  editor::renderer_imgui* get_imgui_renderer() const;
+  wsl::gfx::imgui_renderer_interface* get_imgui_renderer() const;
   wsl::debug::debug_renderer_interface* get_debug_renderer() const;
-#else
-  void* imgui_renderer = nullptr;
-  void* debug_renderer = nullptr;
-#endif
 
   enum class game_view_cam_mode
   {

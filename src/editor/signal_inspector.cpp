@@ -543,7 +543,7 @@ signal_inspector::draw ()
     return;
   }
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->fonts.bold);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().bold);
   const bool open = ImGui::Begin ("Signals");
   ImGui::PopFont ();
 

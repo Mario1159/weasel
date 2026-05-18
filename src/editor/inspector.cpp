@@ -121,7 +121,7 @@ draw_system_name_list (const char *label, const std::vector<std::string> &items)
 void
 inspector::draw ()
 {
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.bold);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().bold);
   bool const open = ImGui::Begin ("Inspector");
   ImGui::PopFont ();
 
@@ -170,7 +170,7 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
     return;
   }
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.semibold);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().semibold);
   ImGui::TextUnformatted (system->get_name ().c_str ());
   ImGui::PopFont ();
 
@@ -205,7 +205,7 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
   ImGui::Separator ();
   ImGui::Spacing ();
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.medium);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().medium);
   ImGui::TextUnformatted ("Iterations");
   ImGui::PopFont ();
 
@@ -320,13 +320,13 @@ inspector::draw_entity_inspector (entt::entity entity)
 
   const std::string &name = scene.get_entity_name (entity);
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.semibold);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().semibold);
   ImGui::TextUnformatted (name.c_str ());
   ImGui::PopFont ();
 
   ImGui::SameLine ();
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.light);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().light);
   ImGui::TextDisabled (" (%u)", static_cast<uint32_t> (entity));
   ImGui::PopFont ();
 
@@ -356,7 +356,7 @@ inspector::draw_entity_inspector (entt::entity entity)
     if (!meta) {
       // Fallback: draw a basic header even if we can't reflect the fields
       ImGui::Separator ();
-      ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->fonts.medium);
+      ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().medium);
       ImGui::TextUnformatted (display_name.c_str ());
       ImGui::PopFont ();
       ImGui::TextDisabled ("(No reflection data available)");
@@ -513,7 +513,7 @@ inspector::draw_hierarchy_component (entt::entity entity)
     ImGui::EndCombo ();
   }
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.light);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().light);
   ImGui::TextDisabled ("First child: %u", (uint32_t)h.first);
   ImGui::TextDisabled ("Next sibling: %u", (uint32_t)h.next);
   ImGui::PopFont ();
@@ -1061,7 +1061,7 @@ inspector::draw_add_component_ui (entt::entity entity)
 {
   static entt::id_type selected_type = entt::null;
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.medium);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().medium);
   ImGui::TextUnformatted ("Add Component");
   ImGui::PopFont ();
 
@@ -1128,7 +1128,7 @@ inspector::draw_singleton_header (
     const wsl::reg::singleton_registry::descriptor &desc, const entt::meta_type& meta,
     bool can_remove, bool *remove_requested)
 {
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.medium);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().medium);
   ImGui::TextUnformatted (desc.display_name.c_str ());
   ImGui::PopFont ();
 

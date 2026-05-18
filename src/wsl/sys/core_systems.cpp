@@ -194,9 +194,7 @@ core_systems::update (double dt)
   m_runtime_ctx->resource_manager.update_async_uploads ();
 
   if (m_editor_ctx != nullptr) {
-#ifdef WEASEL_BUILD_EDITOR
     m_editor_ctx->editor_resources.update_async_uploads ();
-#endif
   }
 
   rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();

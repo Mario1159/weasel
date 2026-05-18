@@ -158,8 +158,7 @@ app::run ()
       on_event (e);
     }
 
-    m_runtime_context->resource_manager.update_async_uploads ();
-    m_runtime_context->scene_manager.update (dt);
+    m_runtime_context->core_systems->update (dt);
     on_update (dt);
     on_render ();
   }

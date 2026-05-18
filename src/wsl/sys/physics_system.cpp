@@ -30,11 +30,9 @@
 #include <glm/matrix.hpp>
 #include <string>
 
-#ifdef WEASEL_BUILD_EDITOR
 #include "../../editor/physics_debug_drawer.hpp"
 #include "../comp/singl/editor_context.hpp"
 #include "../debug/debug_renderer.hpp"
-#endif
 
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
@@ -240,7 +238,6 @@ physics_system::on_update (entt::registry &registry, double dt)
 void
 physics_system::on_render_build_draw_data (entt::registry &registry)
 {
-#ifdef WEASEL_BUILD_EDITOR
   auto &ctx = registry.ctx ();
   if (!ctx.contains<comp::singl::runtime_context *> ()) {
     return;
@@ -273,15 +270,11 @@ physics_system::on_render_build_draw_data (entt::registry &registry)
   }
 
   debug_renderer->upload_buffers ();
-#else
-  (void)registry;
-#endif
 }
 
 void
 physics_system::on_render_record_draw_cmd (entt::registry &registry)
 {
-#ifdef WEASEL_BUILD_EDITOR
   auto &ctx = registry.ctx ();
   if (!ctx.contains<comp::singl::runtime_context *> ()) {
     return;
@@ -304,9 +297,6 @@ physics_system::on_render_record_draw_cmd (entt::registry &registry)
 }
 
   editor_ctx.get_debug_renderer ()->end_frame (rc.vp);
-#else
-  (void)registry;
-#endif
 }
 
 void

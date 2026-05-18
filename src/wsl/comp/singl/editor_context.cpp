@@ -29,30 +29,18 @@
 #include <spdlog/spdlog.h>
 #include <vector>
 
-#ifdef WEASEL_BUILD_EDITOR
-#include "editor/renderer_imgui.hpp"
+#include "wsl/gfx/imgui_renderer_interface.hpp"
 #include <imgui.h>
-#endif
 
 namespace wsl::comp::singl
 {
-
-void (*editor_context::on_init_hook)(editor_context*) = nullptr;
-void (*editor_context::on_deinit_hook)(editor_context*) = nullptr;
 
 editor_context::editor_context (wsl::comp::singl::runtime_context &runtime_ctx)
     : runtime_ctx (runtime_ctx),
       editor_resources (runtime_ctx)
 {
-#ifdef WEASEL_BUILD_EDITOR
   spdlog::debug ("editor_context: core constructor started");
-  if (on_init_hook != nullptr) {
-    on_init_hook(this);
-  }
   editor_resources.set_editor_context (this);
-#else
-  spdlog::warn ("editor_context: initializing WITHOUT WEASEL_BUILD_EDITOR");
-#endif
 
   // Only override the engine resource path with compile-time paths if the
   // current path (set by the launcher) does not already contain resources.
@@ -121,11 +109,18 @@ editor_context::editor_context (wsl::comp::singl::runtime_context &runtime_ctx)
   };
 }
 
-editor_context::~editor_context ()
+editor_context::~editor_context () = default;
+
+wsl::gfx::imgui_renderer_interface *
+editor_context::get_imgui_renderer () const
 {
-  if (on_deinit_hook != nullptr) {
-    on_deinit_hook(this);
-  }
+  return imgui_renderer ? imgui_renderer.get () : nullptr;
+}
+
+wsl::debug::debug_renderer_interface *
+editor_context::get_debug_renderer () const
+{
+  return debug_renderer ? debug_renderer.get () : nullptr;
 }
 
 void

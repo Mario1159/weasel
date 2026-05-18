@@ -142,7 +142,7 @@ editor::logger::draw (const char *title, bool *open)
                      ImGuiWindowFlags_HorizontalScrollbar
                          | ImGuiWindowFlags_NoMove);
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->fonts.mono);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().mono);
 
   // Render visible lines
   for (size_t i = 0; i < m_entries.size (); ++i) {

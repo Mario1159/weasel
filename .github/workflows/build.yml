@@ -86,6 +86,8 @@ jobs:
         run: |
           cmake -B build `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DVCPKG_HOST_TRIPLET=x64-windows `
             -DLLVM20_PREFIX="C:\Program Files\LLVM" `
             -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang.exe" `
             -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang++.exe" `

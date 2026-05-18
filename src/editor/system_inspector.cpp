@@ -193,7 +193,7 @@ system_inspector::draw ()
   const bool has_scene = (scene != nullptr);
 
   ImGui::AlignTextToFramePadding ();
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->fonts.bold);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().bold);
   ImGui::TextUnformatted ("Systems");
   ImGui::PopFont ();
   ImGui::SameLine ();

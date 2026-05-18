@@ -141,7 +141,7 @@ console::draw (const char *title, bool *open)
   ImGui::BeginChild ("scrolling_region", ImVec2 (0, -footer_height_to_reserve), 
                     false, ImGuiWindowFlags_HorizontalScrollbar);
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->fonts.mono);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().mono);
 
   for (const auto &line : m_lines) {
     ImGui::TextUnformatted (line.c_str ());

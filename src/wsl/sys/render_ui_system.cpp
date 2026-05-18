@@ -11,9 +11,7 @@
 #include "wsl/reg/sig/signal_hub.hpp"
 #include "wsl/comp/singl/ui_manager.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
-#ifdef WEASEL_BUILD_EDITOR
 #include "wsl/comp/singl/editor_context.hpp"
-#endif
 #include "wsl/comp/singl/engine_resources.hpp"
 
 
@@ -83,14 +81,12 @@ render_ui_system::on_update (entt::registry &registry, double /*unused*/)
     }
 
     // Load engine fonts from editor context if available
-#ifdef WEASEL_BUILD_EDITOR
     if (runtime_ctx.editor_ctx != nullptr) {
         for (const auto& font : runtime_ctx.editor_ctx->editor_resources.list_fonts()) {
             std::string const resolved = runtime_ctx.editor_ctx->editor_resources.resolve_path(font.path);
             ui.load_font(resolved);
         }
     }
-#endif
 
     if (ui.active_document_instance != nullptr) {
       ui.active_document_instance->Close ();
@@ -138,7 +134,6 @@ render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
 }
 
   int width, height;
-#ifdef WEASEL_BUILD_EDITOR
   if ((runtime_ctx.editor_ctx != nullptr) && !runtime_ctx.editor_ctx->game_fullscreen) {
     // In editor mode, RmlUi should match the present_tex size
     width = (int)runtime_ctx.window.present_tex.width;
@@ -146,9 +141,6 @@ render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
   } else {
     runtime_ctx.window.get_size (width, height);
   }
-#else
-  runtime_ctx.window.get_size (width, height);
-#endif
 
   // Update context size if it changed
   Rml::Vector2i const current_size = ui.context->GetDimensions ();
@@ -179,7 +171,6 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
 
 
 
-#ifdef WEASEL_BUILD_EDITOR
   if ((runtime_ctx.editor_ctx != nullptr) && !runtime_ctx.is_running) {
     return;
   }
@@ -221,9 +212,6 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
   } else {
     RmlSDL::InputEventHandler (ui.context, runtime_ctx.window.handler, ev);
   }
-#else
-  RmlSDL::InputEventHandler (ui.context, runtime_ctx.window.handler, ev);
-#endif
 }
 
 } // namespace sys

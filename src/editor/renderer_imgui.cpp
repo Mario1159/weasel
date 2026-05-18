@@ -239,7 +239,7 @@ mix (ImVec4 a, ImVec4 b, float t)
                  a.z + ((b.z - a.z) * t), a.w + ((b.w - a.w) * t));
 }
 void
-renderer_imgui::apply_editor_style (const editor_theme &t)
+renderer_imgui::apply_editor_style (const wsl::gfx::editor_theme &t)
 {
   this->m_theme = t;
   ImGuiStyle &style = ImGui::GetStyle ();
@@ -460,7 +460,7 @@ renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::rende
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
   ImGui::StyleColorsDark ();
 
-  editor_theme theme{};
+  wsl::gfx::editor_theme theme{};
   theme.primary = rgba_u8 (0x68, 0x76, 0x3c);     // dusty_olive
   theme.secondary = rgba_u8 (0xde, 0xc1, 0x6b);   // old_gold
   theme.background1 = rgba_u8 (0x09, 0x09, 0x0c); // black

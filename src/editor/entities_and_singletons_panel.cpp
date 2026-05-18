@@ -102,7 +102,7 @@ entities_and_singletons_panel::draw ()
     entt::registry *registry = has_scene ? &scene->get_registry () : nullptr;
 
     ImGui::AlignTextToFramePadding ();
-    ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->fonts.bold);
+    ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().bold);
     ImGui::TextUnformatted ("Entities");
     ImGui::PopFont ();
     ImGui::SameLine ();

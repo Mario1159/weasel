@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "wsl/gfx/imgui_renderer_interface.hpp"
 #include "wsl/gfx/render_window.hpp"
 #include "wsl/gfx/render_context.hpp"
 #include <imgui_impl_sdl3.h>
@@ -19,56 +20,39 @@ namespace wsl::rsc { class resource_manager; }
 namespace editor
 {
 
-struct imgui_fonts
-{
-  ImFont *regular;
-  ImFont *light;
-  ImFont *medium;
-  ImFont *semibold;
-  ImFont *bold;
-  ImFont *title;
-  ImFont *mono;
-};
-
-struct editor_theme
-{
-  ImVec4 primary;
-  ImVec4 secondary;
-  ImVec4 background1;
-  ImVec4 background2;
-  ImVec4 foreground;
-};
-
-class renderer_imgui
+class renderer_imgui : public wsl::gfx::imgui_renderer_interface
 {
 public:
   renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::render_context *ctx);
-  ~renderer_imgui ();
+  ~renderer_imgui () override;
 
-  static void begin_frame ();
-  static void end_frame ();
+  void begin_frame () override;
+  void end_frame () override;
 
-  void prepare (ImDrawData *draw_data);
-  void render (ImDrawData *draw_data);
-  void render_requested_previews ();
+  void prepare (ImDrawData *draw_data) override;
+  void render (ImDrawData *draw_data) override;
+  void render_requested_previews () override;
 
   void request_model_preview (wsl::comp::singl::runtime_context *runtime_ctx,
                               wsl::rsc::resource_manager *resource_manager,
-                              entt::id_type model_eid, uint32_t w, uint32_t h);
+                              entt::id_type model_eid, uint32_t w, uint32_t h) override;
 
-  void on_resize (uint32_t w, uint32_t h);
+  void on_resize (uint32_t w, uint32_t h) override;
 
   void preview_set_camera_from_gizmo (const glm::vec3 &pos,
-                                      const glm::quat &rot);
-  void preview_get_camera (glm::vec3 &out_pos, glm::quat &out_rot) const;
-  void preview_reset_camera_to_default ();
+                                      const glm::quat &rot) override;
+  void preview_get_camera (glm::vec3 &out_pos, glm::quat &out_rot) const override;
+  void preview_reset_camera_to_default () override;
 
-  SDL_GPUTexture *get_model_preview_texture () const;
+  SDL_GPUTexture *get_model_preview_texture () const override;
 
-  void apply_editor_style (const editor_theme &t);
-  const editor_theme &get_theme () const { return m_theme; }
+  void apply_editor_style (const wsl::gfx::editor_theme &t) override;
+  const wsl::gfx::editor_theme &get_theme () const override { return m_theme; }
 
-  imgui_fonts fonts;
+  wsl::gfx::imgui_fonts &get_fonts () override { return fonts; }
+  const wsl::gfx::imgui_fonts &get_fonts () const override { return fonts; }
+
+  wsl::gfx::imgui_fonts fonts;
 
 private:
   void setup_style ();
@@ -124,7 +108,7 @@ private:
   float m_preview_idle_reset_seconds = 5.0F;
   float m_preview_yaw_speed = 0.5F;
 
-  editor_theme m_theme{};
+  wsl::gfx::editor_theme m_theme{};
 
   bool render_model_preview_low_lod (wsl::comp::singl::runtime_context &runtime_ctx,
                                      entt::id_type model_id,
