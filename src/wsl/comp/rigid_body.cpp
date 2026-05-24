@@ -505,7 +505,7 @@ rigid_body::register_meta ()
       .type (entt::type_hash<comp::rigid_body>::value ())
       .custom<comp::meta_info> (meta_info{ "Rigid Body",
                                            "Physics body simulated by Jolt",
-                                           "./icons/comp_rigidbody.svg" })
+                                            "engine://icons/comp_rigidbody.svg" })
       .func<&comp::rigid_body::on_inspector_changed> ("on_inspector_changed"_hs)
 
       .data<&comp::rigid_body::shape> ("shape"_hs)

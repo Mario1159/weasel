@@ -88,10 +88,12 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
   app.allow_extras();
 
   std::string project_to_load;
-  app.add_option("--project", project_to_load, "Path to the project to load");
+  auto* project_opt = app.add_option("--project", project_to_load, "Path to the project to load");
 
   bool interactive = false;
-  app.add_flag("-i,--interactive", interactive, "Start the interactive REPL");
+  auto* interactive_flag = app.add_flag("-i,--interactive", interactive, "Start the interactive REPL");
+
+  project_opt->needs(interactive_flag);
 
   bool attach = false;
   app.add_flag("-a,--attach", attach, "Attach to running editor server for the project");
@@ -99,8 +101,10 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
   auto* create_project = app.add_subcommand("create-project", "Create a new project");
   create_project->alias("--create-project");
   std::string cp_path, cp_name;
-  create_project->add_option("path", cp_path, "Project path")->required();
-  create_project->add_option("name", cp_name, "Project name")->required();
+  bool no_subdir = false;
+  create_project->add_option("path", cp_path, "Project parent path");
+  create_project->add_option("name", cp_name, "Project name");
+  create_project->add_flag("--no-subdir", no_subdir, "Don't create a project-name subdirectory");
 
   auto* create_scene = app.add_subcommand("create-scene", "Create a new scene");
   create_scene->alias("--create-scene");
@@ -128,10 +132,34 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
   }
 
   if (*create_project) {
+    if (cp_path.empty () && cp_name.empty ()) {
+      std::cerr << "Error: Project name is required" << std::endl;
+      return {true, 1, std::nullopt};
+    }
+    if (!cp_path.empty () && cp_name.empty ()) {
+      cp_name = cp_path;
+      cp_path.clear ();
+    }
+
+    std::filesystem::path project_root;
+    if (cp_path.empty ()) {
+      if (no_subdir) {
+        project_root = std::filesystem::current_path ();
+      } else {
+        project_root = std::filesystem::current_path () / cp_name;
+      }
+    } else {
+      if (no_subdir) {
+        project_root = std::filesystem::path (cp_path);
+      } else {
+        project_root = std::filesystem::path (cp_path) / cp_name;
+      }
+    }
+
     wsl::rsc::project proj;
     proj.name = cp_name;
     proj.author = "Unknown";
-    proj.root_path = std::filesystem::absolute (cp_path).string ();
+    proj.root_path = std::filesystem::absolute (project_root).string ();
     proj.systems_path = "src/systems";
     proj.components_path = "src/components";
     proj.singletons_path = "src/singletons";

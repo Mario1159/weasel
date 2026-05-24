@@ -10,6 +10,7 @@
 
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_scancode.h>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <entt/core/hashed_string.hpp>
@@ -27,6 +28,7 @@
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 #include <spdlog/spdlog.h>
+#include <unistd.h>
 #include <vector>
 
 #include "wsl/gfx/imgui_renderer_interface.hpp"
@@ -47,13 +49,50 @@ editor_context::editor_context (wsl::comp::singl::runtime_context &runtime_ctx)
   // This allows installed / archived builds to work without recompilation.
   {
     const std::string &current_path = runtime_ctx.resource_manager.get_engine_resource_path ();
-    if (!std::filesystem::exists (std::filesystem::path (current_path) / "compiled_shaders"))
+    bool has_dev_resources
+        = std::filesystem::exists (std::filesystem::path (current_path) / "compiled_shaders");
+    bool has_packaged_resources
+        = std::filesystem::exists (std::filesystem::path (current_path) / "share/weasel/compiled_shaders");
+
+    if (!has_dev_resources && !has_packaged_resources)
       {
+        // Try to derive the install prefix from the executable path.
+        // On Linux /usr/local/bin/weasel -> prefix /usr/local ->
+        // /usr/local/share/weasel/compiled_shaders
+        char exe_buf[PATH_MAX];
+        ssize_t len = readlink ("/proc/self/exe", exe_buf, sizeof (exe_buf) - 1);
+        if (len != -1)
+          {
+            exe_buf[len] = '\0';
+            std::filesystem::path exe_path (exe_buf);
+            std::filesystem::path prefix
+                = exe_path.parent_path ().parent_path ();
+            if (std::filesystem::exists (prefix / "share/weasel/compiled_shaders"))
+              {
+                runtime_ctx.resource_manager.set_engine_resource_path (
+                    prefix.string ());
+              }
+            else
+              {
 #ifdef WEASEL_BUILD_DIR
-        runtime_ctx.resource_manager.set_engine_resource_path (WEASEL_BUILD_DIR);
+                runtime_ctx.resource_manager.set_engine_resource_path (
+                    WEASEL_BUILD_DIR);
 #elif defined(WEASEL_SOURCE_DIR)
-        runtime_ctx.resource_manager.set_engine_resource_path (WEASEL_SOURCE_DIR);
+                runtime_ctx.resource_manager.set_engine_resource_path (
+                    WEASEL_SOURCE_DIR);
 #endif
+              }
+          }
+        else
+          {
+#ifdef WEASEL_BUILD_DIR
+            runtime_ctx.resource_manager.set_engine_resource_path (
+                WEASEL_BUILD_DIR);
+#elif defined(WEASEL_SOURCE_DIR)
+            runtime_ctx.resource_manager.set_engine_resource_path (
+                WEASEL_SOURCE_DIR);
+#endif
+          }
       }
   }
 

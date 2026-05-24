@@ -21,17 +21,21 @@
  *  3. This notice may not be removed or altered from any source distribution.
  */
 
-#include <assert.h>
-#include <stdio.h>
-#include <math.h>
-#include <string.h>
-#include <float.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cstdio>
+#include <cmath>
+#include <cstring>
+#include <cfloat>
+#include <cstdlib>
+#include <vector>
+#include <algorithm>
 
 #include "mikktspace.h"
 
-#define TFALSE		0
-#define TTRUE		1
+
+namespace wsl {
+namespace math {
+namespace mikktspace {
 
 #ifndef M_PI
 #define M_PI	3.1415926535897932384626433832795
@@ -39,81 +43,57 @@
 
 #define INTERNAL_RND_SORT_SEED		39871946
 
-// internal structure
-typedef struct {
-	float x, y, z;
-} SVec3;
+// Local 3-float vector type used by the algorithm.
+struct vec3f { float x, y, z; };
 
-static tbool			veq( const SVec3 v1, const SVec3 v2 )
+static bool veq(const vec3f& v1, const vec3f& v2)
 {
 	return (v1.x == v2.x) && (v1.y == v2.y) && (v1.z == v2.z);
 }
 
-static SVec3		vadd( const SVec3 v1, const SVec3 v2 )
+static vec3f vadd(const vec3f& v1, const vec3f& v2)
 {
-	SVec3 vRes;
-
-	vRes.x = v1.x + v2.x;
-	vRes.y = v1.y + v2.y;
-	vRes.z = v1.z + v2.z;
-
-	return vRes;
+	return vec3f{ v1.x + v2.x, v1.y + v2.y, v1.z + v2.z };
 }
 
-
-static SVec3		vsub( const SVec3 v1, const SVec3 v2 )
+static vec3f vsub(const vec3f& v1, const vec3f& v2)
 {
-	SVec3 vRes;
-
-	vRes.x = v1.x - v2.x;
-	vRes.y = v1.y - v2.y;
-	vRes.z = v1.z - v2.z;
-
-	return vRes;
+	return vec3f{ v1.x - v2.x, v1.y - v2.y, v1.z - v2.z };
 }
 
-static SVec3		vscale(const float fS, const SVec3 v)
+static vec3f vscale(const float fS, const vec3f& v)
 {
-	SVec3 vRes;
-
-	vRes.x = fS * v.x;
-	vRes.y = fS * v.y;
-	vRes.z = fS * v.z;
-
-	return vRes;
+	return vec3f{ fS * v.x, fS * v.y, fS * v.z };
 }
 
-static float			LengthSquared( const SVec3 v )
+static float LengthSquared(const vec3f& v)
 {
 	return v.x*v.x + v.y*v.y + v.z*v.z;
 }
 
-static float			Length( const SVec3 v )
+static float Length(const vec3f& v)
 {
-	return sqrtf(LengthSquared(v));
+	return std::sqrt(LengthSquared(v));
 }
 
-static SVec3		Normalize( const SVec3 v )
+static vec3f Normalize(const vec3f& v)
 {
-	return vscale(1 / Length(v), v);
+	return vscale(1.0f / Length(v), v);
 }
 
-static float		vdot( const SVec3 v1, const SVec3 v2)
+static float vdot(const vec3f& v1, const vec3f& v2)
 {
 	return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;
 }
 
-
-static tbool NotZero(const float fX)
+static bool not_zero(const float fX)
 {
-	// could possibly use FLT_EPSILON instead
-	return fabsf(fX) > FLT_MIN;
+	return std::fabs(fX) > FLT_MIN;
 }
 
-static tbool VNotZero(const SVec3 v)
+static bool vnot_zero(const vec3f& v)
 {
-	// might change this to an epsilon based test
-	return NotZero(v.x) || NotZero(v.y) || NotZero(v.z);
+	return not_zero(v.x) || not_zero(v.y) || not_zero(v.z);
 }
 
 
@@ -127,7 +107,7 @@ typedef struct {
 	int iNrFaces;
 	int * pFaceIndices;
 	int iVertexRepresentitive;
-	tbool bOrientPreservering;
+	bool bOrientPreservering;
 } SGroup;
 
 // 
@@ -143,7 +123,7 @@ typedef struct {
 	SGroup * AssignedGroup[3];
 	
 	// normalized first order face derivatives
-	SVec3 vOs, vOt;
+	vec3f vOs, vOt;
 	float fMagS, fMagT;	// original magnitudes
 
 	// determines if the current and the next triangle are a quad.
@@ -153,19 +133,19 @@ typedef struct {
 } STriInfo;
 
 typedef struct {
-	SVec3 vOs;
+	vec3f vOs;
 	float fMagS;
-	SVec3 vOt;
+	vec3f vOt;
 	float fMagT;
 	int iCounter;	// this is to average back into quads.
-	tbool bOrient;
+	bool bOrient;
 } STSpace;
 
 static int GenerateInitialVerticesIndexList(STriInfo pTriInfos[], int piTriList_out[], const SMikkTSpaceContext * pContext, const int iNrTrianglesIn);
 static void GenerateSharedVerticesIndexList(int piTriList_in_and_out[], const SMikkTSpaceContext * pContext, const int iNrTrianglesIn);
 static void InitTriInfo(STriInfo pTriInfos[], const int piTriListIn[], const SMikkTSpaceContext * pContext, const int iNrTrianglesIn);
 static int Build4RuleGroups(STriInfo pTriInfos[], SGroup pGroups[], int piGroupTrianglesBuffer[], const int piTriListIn[], const int iNrTrianglesIn);
-static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], const SGroup pGroups[],
+static bool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], const SGroup pGroups[],
                              const int iNrActiveGroups, const int piTriListIn[], const float fThresCos,
                              const SMikkTSpaceContext * pContext);
 
@@ -202,8 +182,8 @@ static STSpace AvgTSpace(const STSpace * pTS0, const STSpace * pTS1)
 		ts_res.fMagT = 0.5f*(pTS0->fMagT+pTS1->fMagT);
 		ts_res.vOs = vadd(pTS0->vOs,pTS1->vOs);
 		ts_res.vOt = vadd(pTS0->vOt,pTS1->vOt);
-		if ( VNotZero(ts_res.vOs) ) ts_res.vOs = Normalize(ts_res.vOs);
-		if ( VNotZero(ts_res.vOt) ) ts_res.vOt = Normalize(ts_res.vOt);
+		if ( vnot_zero(ts_res.vOs) ) ts_res.vOs = Normalize(ts_res.vOs);
+		if ( vnot_zero(ts_res.vOt) ) ts_res.vOt = Normalize(ts_res.vOt);
 	}
 
 	return ts_res;
@@ -211,22 +191,25 @@ static STSpace AvgTSpace(const STSpace * pTS0, const STSpace * pTS1)
 
 
 
-static SVec3 GetPosition(const SMikkTSpaceContext * pContext, const int index);
-static SVec3 GetNormal(const SMikkTSpaceContext * pContext, const int index);
-static SVec3 GetTexCoord(const SMikkTSpaceContext * pContext, const int index);
+static vec3f GetPosition(const SMikkTSpaceContext * pContext, const int index);
+static vec3f GetNormal(const SMikkTSpaceContext * pContext, const int index);
+static vec3f GetTexCoord(const SMikkTSpaceContext * pContext, const int index);
 
 
 // degen triangles
 static void DegenPrologue(STriInfo pTriInfos[], int piTriList_out[], const int iNrTrianglesIn, const int iTotTris);
 static void DegenEpilogue(STSpace psTspace[], STriInfo pTriInfos[], int piTriListIn[], const SMikkTSpaceContext * pContext, const int iNrTrianglesIn, const int iTotTris);
 
+// forward declaration needed now that the renaming macro is gone
+bool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThreshold);
 
-tbool genTangSpaceDefault(const SMikkTSpaceContext * pContext)
+
+bool genTangSpaceDefault(const SMikkTSpaceContext * pContext)
 {
 	return genTangSpace(pContext, 180.0f);
 }
 
-tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThreshold)
+bool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThreshold)
 {
 	// count nr_triangles
 	int * piTriListIn = NULL, * piGroupTrianglesBuffer = NULL;
@@ -237,7 +220,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 	int iNrTSPaces = 0, iTotTris = 0, iDegenTriangles = 0, iNrMaxGroups = 0;
 	int iNrActiveGroups = 0, index = 0;
 	const int iNrFaces = pContext->m_pInterface->m_getNumFaces(pContext);
-	tbool bRes = TFALSE;
+	bool bRes = false;
 	const float fThresCos = (float) cos((fAngularThreshold*(float)M_PI)/180.0f);
 
 	// verify all call-backs have been set
@@ -246,7 +229,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 		pContext->m_pInterface->m_getPosition==NULL ||
 		pContext->m_pInterface->m_getNormal==NULL ||
 		pContext->m_pInterface->m_getTexCoord==NULL )
-		return TFALSE;
+		return false;
 
 	// count triangles on supported faces
 	for (f=0; f<iNrFaces; f++)
@@ -255,7 +238,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 		if (verts==3) ++iNrTrianglesIn;
 		else if (verts==4) iNrTrianglesIn += 2;
 	}
-	if (iNrTrianglesIn<=0) return TFALSE;
+	if (iNrTrianglesIn<=0) return false;
 
 	// allocate memory for an index list
 	piTriListIn = (int *) malloc(sizeof(int)*3*iNrTrianglesIn);
@@ -264,7 +247,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 	{
 		if (piTriListIn!=NULL) free(piTriListIn);
 		if (pTriInfos!=NULL) free(pTriInfos);
-		return TFALSE;
+		return false;
 	}
 
 	// make an initial triangle --> face index list
@@ -283,9 +266,9 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 		const int i0 = piTriListIn[t*3+0];
 		const int i1 = piTriListIn[t*3+1];
 		const int i2 = piTriListIn[t*3+2];
-		const SVec3 p0 = GetPosition(pContext, i0);
-		const SVec3 p1 = GetPosition(pContext, i1);
-		const SVec3 p2 = GetPosition(pContext, i2);
+		const vec3f p0 = GetPosition(pContext, i0);
+		const vec3f p1 = GetPosition(pContext, i1);
+		const vec3f p2 = GetPosition(pContext, i2);
 		if (veq(p0,p1) || veq(p0,p2) || veq(p1,p2))	// degenerate
 		{
 			pTriInfos[t].iFlag |= MARK_DEGENERATE;
@@ -318,7 +301,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 		if (piGroupTrianglesBuffer!=NULL) free(piGroupTrianglesBuffer);
 		free(piTriListIn);
 		free(pTriInfos);
-		return TFALSE;
+		return false;
 	}
 	//printf("gen 4rule groups begin\n");
 	iNrActiveGroups =
@@ -334,7 +317,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 		free(pTriInfos);
 		free(pGroups);
 		free(piGroupTrianglesBuffer);
-		return TFALSE;
+		return false;
 	}
 	memset(psTspace, 0, sizeof(STSpace)*iNrTSPaces);
 	for (t=0; t<iNrTSPaces; t++)
@@ -358,7 +341,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 	{
 		// clean up and return false
 		free(pTriInfos); free(piTriListIn); free(psTspace);
-		return TFALSE;
+		return false;
 	}
 
 
@@ -407,7 +390,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 			if (pContext->m_pInterface->m_setTSpace!=NULL)
 				pContext->m_pInterface->m_setTSpace(pContext, tang, bitang, pTSpace->fMagS, pTSpace->fMagT, pTSpace->bOrient, f, i);
 			if (pContext->m_pInterface->m_setTSpaceBasic!=NULL)
-				pContext->m_pInterface->m_setTSpaceBasic(pContext, tang, pTSpace->bOrient==TTRUE ? 1.0f : (-1.0f), f, i);
+				pContext->m_pInterface->m_setTSpaceBasic(pContext, tang, pTSpace->bOrient==true ? 1.0f : (-1.0f), f, i);
 
 			++index;
 		}
@@ -416,7 +399,7 @@ tbool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThre
 	free(psTspace);
 
 	
-	return TTRUE;
+	return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -456,13 +439,13 @@ static void GenerateSharedVerticesIndexList(int piTriList_in_and_out[], const SM
 	STmpVert * pTmpVert = NULL;
 	int i=0, iChannel=0, k=0, e=0;
 	int iMaxCount=0;
-	SVec3 vMin = GetPosition(pContext, 0), vMax = vMin, vDim;
+	vec3f vMin = GetPosition(pContext, 0), vMax = vMin, vDim;
 	float fMin, fMax;
 	for (i=1; i<(iNrTrianglesIn*3); i++)
 	{
 		const int index = piTriList_in_and_out[i];
 
-		const SVec3 vP = GetPosition(pContext, index);
+		const vec3f vP = GetPosition(pContext, index);
 		if (vMin.x > vP.x) vMin.x = vP.x;
 		else if (vMax.x < vP.x) vMax.x = vP.x;
 		if (vMin.y > vP.y) vMin.y = vP.y;
@@ -509,7 +492,7 @@ static void GenerateSharedVerticesIndexList(int piTriList_in_and_out[], const SM
 	for (i=0; i<(iNrTrianglesIn*3); i++)
 	{
 		const int index = piTriList_in_and_out[i];
-		const SVec3 vP = GetPosition(pContext, index);
+		const vec3f vP = GetPosition(pContext, index);
 		const float fVal = iChannel==0 ? vP.x : (iChannel==1 ? vP.y : vP.z);
 		const int iCell = FindGridCell(fMin, fMax, fVal);
 		++piHashCount[iCell];
@@ -524,7 +507,7 @@ static void GenerateSharedVerticesIndexList(int piTriList_in_and_out[], const SM
 	for (i=0; i<(iNrTrianglesIn*3); i++)
 	{
 		const int index = piTriList_in_and_out[i];
-		const SVec3 vP = GetPosition(pContext, index);
+		const vec3f vP = GetPosition(pContext, index);
 		const float fVal = iChannel==0 ? vP.x : (iChannel==1 ? vP.y : vP.z);
 		const int iCell = FindGridCell(fMin, fMax, fVal);
 		int * pTable = NULL;
@@ -559,7 +542,7 @@ static void GenerateSharedVerticesIndexList(int piTriList_in_and_out[], const SM
 			for (e=0; e<iEntries; e++)
 			{
 				int i = pTable[e];
-				const SVec3 vP = GetPosition(pContext, piTriList_in_and_out[i]);
+				const vec3f vP = GetPosition(pContext, piTriList_in_and_out[i]);
 				pTmpVert[e].vert[0] = vP.x; pTmpVert[e].vert[1] = vP.y;
 				pTmpVert[e].vert[2] = vP.z; pTmpVert[e].index = i;
 			}
@@ -601,7 +584,7 @@ static void MergeVertsFast(int piTriList_in_and_out[], STmpVert pTmpVert[], cons
 	fSep = 0.5f*(fvMax[channel]+fvMin[channel]);
 
 	// stop if all vertices are NaNs
-	if (!isfinite(fSep))
+	if (!std::isfinite(fSep))
 		return;
 
 	// terminate recursion when the separation/average value
@@ -613,26 +596,26 @@ static void MergeVertsFast(int piTriList_in_and_out[], STmpVert pTmpVert[], cons
 		{
 			int i = pTmpVert[l].index;
 			const int index = piTriList_in_and_out[i];
-			const SVec3 vP = GetPosition(pContext, index);
-			const SVec3 vN = GetNormal(pContext, index);
-			const SVec3 vT = GetTexCoord(pContext, index);
+			const vec3f vP = GetPosition(pContext, index);
+			const vec3f vN = GetNormal(pContext, index);
+			const vec3f vT = GetTexCoord(pContext, index);
 
-			tbool bNotFound = TTRUE;
+			bool bNotFound = true;
 			int l2=iL_in, i2rec=-1;
 			while (l2<l && bNotFound)
 			{
 				const int i2 = pTmpVert[l2].index;
 				const int index2 = piTriList_in_and_out[i2];
-				const SVec3 vP2 = GetPosition(pContext, index2);
-				const SVec3 vN2 = GetNormal(pContext, index2);
-				const SVec3 vT2 = GetTexCoord(pContext, index2);
+				const vec3f vP2 = GetPosition(pContext, index2);
+				const vec3f vN2 = GetNormal(pContext, index2);
+				const vec3f vT2 = GetTexCoord(pContext, index2);
 				i2rec=i2;
 
 				//if (vP==vP2 && vN==vN2 && vT==vT2)
 				if (vP.x==vP2.x && vP.y==vP2.y && vP.z==vP2.z &&
 					vN.x==vN2.x && vN.y==vN2.y && vN.z==vN2.z &&
 					vT.x==vT2.x && vT.y==vT2.y && vT.z==vT2.z)
-					bNotFound = TFALSE;
+					bNotFound = false;
 				else
 					++l2;
 			}
@@ -650,7 +633,7 @@ static void MergeVertsFast(int piTriList_in_and_out[], STmpVert pTmpVert[], cons
 		// separate (by fSep) all points between iL_in and iR_in in pTmpVert[]
 		while (iL < iR)
 		{
-			tbool bReadyLeftSwap = TFALSE, bReadyRightSwap = TFALSE;
+			bool bReadyLeftSwap = false, bReadyRightSwap = false;
 			while ((!bReadyLeftSwap) && iL<iR)
 			{
 				assert(iL>=iL_in && iL<=iR_in);
@@ -678,7 +661,7 @@ static void MergeVertsFast(int piTriList_in_and_out[], STmpVert pTmpVert[], cons
 		assert(iL==(iR+1) || (iL==iR));
 		if (iL==iR)
 		{
-			const tbool bReadyRightSwap = pTmpVert[iR].vert[channel]<fSep;
+			const bool bReadyRightSwap = pTmpVert[iR].vert[channel]<fSep;
 			if (bReadyRightSwap) ++iL;
 			else --iR;
 		}
@@ -699,23 +682,23 @@ static void MergeVertsSlow(int piTriList_in_and_out[], const SMikkTSpaceContext 
 	{
 		int i = pTable[e];
 		const int index = piTriList_in_and_out[i];
-		const SVec3 vP = GetPosition(pContext, index);
-		const SVec3 vN = GetNormal(pContext, index);
-		const SVec3 vT = GetTexCoord(pContext, index);
+		const vec3f vP = GetPosition(pContext, index);
+		const vec3f vN = GetNormal(pContext, index);
+		const vec3f vT = GetTexCoord(pContext, index);
 
-		tbool bNotFound = TTRUE;
+		bool bNotFound = true;
 		int e2=0, i2rec=-1;
 		while (e2<e && bNotFound)
 		{
 			const int i2 = pTable[e2];
 			const int index2 = piTriList_in_and_out[i2];
-			const SVec3 vP2 = GetPosition(pContext, index2);
-			const SVec3 vN2 = GetNormal(pContext, index2);
-			const SVec3 vT2 = GetTexCoord(pContext, index2);
+			const vec3f vP2 = GetPosition(pContext, index2);
+			const vec3f vN2 = GetNormal(pContext, index2);
+			const vec3f vT2 = GetTexCoord(pContext, index2);
 			i2rec = i2;
 
 			if (veq(vP,vP2) && veq(vN,vN2) && veq(vT,vT2))
-				bNotFound = TFALSE;
+				bNotFound = false;
 			else
 				++e2;
 		}
@@ -736,11 +719,11 @@ static void GenerateSharedVerticesIndexListSlow(int piTriList_in_and_out[], cons
 			const int offs = t*3 + i;
 			const int index = piTriList_in_and_out[offs];
 
-			const SVec3 vP = GetPosition(pContext, index);
-			const SVec3 vN = GetNormal(pContext, index);
-			const SVec3 vT = GetTexCoord(pContext, index);
+			const vec3f vP = GetPosition(pContext, index);
+			const vec3f vN = GetNormal(pContext, index);
+			const vec3f vT = GetTexCoord(pContext, index);
 
-			tbool bFound = TFALSE;
+			bool bFound = false;
 			int t2=0, index2rec=-1;
 			while (!bFound && t2<=t)
 			{
@@ -748,12 +731,12 @@ static void GenerateSharedVerticesIndexListSlow(int piTriList_in_and_out[], cons
 				while (!bFound && j<3)
 				{
 					const int index2 = piTriList_in_and_out[t2*3 + j];
-					const SVec3 vP2 = GetPosition(pContext, index2);
-					const SVec3 vN2 = GetNormal(pContext, index2);
-					const SVec3 vT2 = GetTexCoord(pContext, index2);
+					const vec3f vP2 = GetPosition(pContext, index2);
+					const vec3f vN2 = GetNormal(pContext, index2);
+					const vec3f vT2 = GetTexCoord(pContext, index2);
 					
 					if (veq(vP,vP2) && veq(vN,vN2) && veq(vT,vT2))
-						bFound = TTRUE;
+						bFound = true;
 					else
 						++j;
 				}
@@ -805,27 +788,27 @@ static int GenerateInitialVerticesIndexList(STriInfo pTriInfos[], int piTriList_
 				const int i1 = MakeIndex(f, 1);
 				const int i2 = MakeIndex(f, 2);
 				const int i3 = MakeIndex(f, 3);
-				const SVec3 T0 = GetTexCoord(pContext, i0);
-				const SVec3 T1 = GetTexCoord(pContext, i1);
-				const SVec3 T2 = GetTexCoord(pContext, i2);
-				const SVec3 T3 = GetTexCoord(pContext, i3);
+				const vec3f T0 = GetTexCoord(pContext, i0);
+				const vec3f T1 = GetTexCoord(pContext, i1);
+				const vec3f T2 = GetTexCoord(pContext, i2);
+				const vec3f T3 = GetTexCoord(pContext, i3);
 				const float distSQ_02 = LengthSquared(vsub(T2,T0));
 				const float distSQ_13 = LengthSquared(vsub(T3,T1));
-				tbool bQuadDiagIs_02;
+				bool bQuadDiagIs_02;
 				if (distSQ_02<distSQ_13)
-					bQuadDiagIs_02 = TTRUE;
+					bQuadDiagIs_02 = true;
 				else if (distSQ_13<distSQ_02)
-					bQuadDiagIs_02 = TFALSE;
+					bQuadDiagIs_02 = false;
 				else
 				{
-					const SVec3 P0 = GetPosition(pContext, i0);
-					const SVec3 P1 = GetPosition(pContext, i1);
-					const SVec3 P2 = GetPosition(pContext, i2);
-					const SVec3 P3 = GetPosition(pContext, i3);
+					const vec3f P0 = GetPosition(pContext, i0);
+					const vec3f P1 = GetPosition(pContext, i1);
+					const vec3f P2 = GetPosition(pContext, i2);
+					const vec3f P3 = GetPosition(pContext, i3);
 					const float distSQ_02 = LengthSquared(vsub(P2,P0));
 					const float distSQ_13 = LengthSquared(vsub(P3,P1));
 
-					bQuadDiagIs_02 = distSQ_13<distSQ_02 ? TFALSE : TTRUE;
+					bQuadDiagIs_02 = distSQ_13<distSQ_02 ? false : true;
 				}
 
 				if (bQuadDiagIs_02)
@@ -880,30 +863,30 @@ static int GenerateInitialVerticesIndexList(STriInfo pTriInfos[], int piTriList_
 	return iTSpacesOffs;
 }
 
-static SVec3 GetPosition(const SMikkTSpaceContext * pContext, const int index)
+static vec3f GetPosition(const SMikkTSpaceContext * pContext, const int index)
 {
 	int iF, iI;
-	SVec3 res; float pos[3];
+	vec3f res; float pos[3];
 	IndexToData(&iF, &iI, index);
 	pContext->m_pInterface->m_getPosition(pContext, pos, iF, iI);
 	res.x=pos[0]; res.y=pos[1]; res.z=pos[2];
 	return res;
 }
 
-static SVec3 GetNormal(const SMikkTSpaceContext * pContext, const int index)
+static vec3f GetNormal(const SMikkTSpaceContext * pContext, const int index)
 {
 	int iF, iI;
-	SVec3 res; float norm[3];
+	vec3f res; float norm[3];
 	IndexToData(&iF, &iI, index);
 	pContext->m_pInterface->m_getNormal(pContext, norm, iF, iI);
 	res.x=norm[0]; res.y=norm[1]; res.z=norm[2];
 	return res;
 }
 
-static SVec3 GetTexCoord(const SMikkTSpaceContext * pContext, const int index)
+static vec3f GetTexCoord(const SMikkTSpaceContext * pContext, const int index)
 {
 	int iF, iI;
-	SVec3 res; float texc[2];
+	vec3f res; float texc[2];
 	IndexToData(&iF, &iI, index);
 	pContext->m_pInterface->m_getTexCoord(pContext, texc, iF, iI);
 	res.x=texc[0]; res.y=texc[1]; res.z=1.0f;
@@ -927,9 +910,9 @@ static void BuildNeighborsSlow(STriInfo pTriInfos[], const int piTriListIn[], co
 // returns the texture area times 2
 static float CalcTexArea(const SMikkTSpaceContext * pContext, const int indices[])
 {
-	const SVec3 t1 = GetTexCoord(pContext, indices[0]);
-	const SVec3 t2 = GetTexCoord(pContext, indices[1]);
-	const SVec3 t3 = GetTexCoord(pContext, indices[2]);
+	const vec3f t1 = GetTexCoord(pContext, indices[0]);
+	const vec3f t2 = GetTexCoord(pContext, indices[1]);
+	const vec3f t3 = GetTexCoord(pContext, indices[2]);
 
 	const float t21x = t2.x-t1.x;
 	const float t21y = t2.y-t1.y;
@@ -966,42 +949,42 @@ static void InitTriInfo(STriInfo pTriInfos[], const int piTriListIn[], const SMi
 	for (f=0; f<iNrTrianglesIn; f++)
 	{
 		// initial values
-		const SVec3 v1 = GetPosition(pContext, piTriListIn[f*3+0]);
-		const SVec3 v2 = GetPosition(pContext, piTriListIn[f*3+1]);
-		const SVec3 v3 = GetPosition(pContext, piTriListIn[f*3+2]);
-		const SVec3 t1 = GetTexCoord(pContext, piTriListIn[f*3+0]);
-		const SVec3 t2 = GetTexCoord(pContext, piTriListIn[f*3+1]);
-		const SVec3 t3 = GetTexCoord(pContext, piTriListIn[f*3+2]);
+		const vec3f v1 = GetPosition(pContext, piTriListIn[f*3+0]);
+		const vec3f v2 = GetPosition(pContext, piTriListIn[f*3+1]);
+		const vec3f v3 = GetPosition(pContext, piTriListIn[f*3+2]);
+		const vec3f t1 = GetTexCoord(pContext, piTriListIn[f*3+0]);
+		const vec3f t2 = GetTexCoord(pContext, piTriListIn[f*3+1]);
+		const vec3f t3 = GetTexCoord(pContext, piTriListIn[f*3+2]);
 
 		const float t21x = t2.x-t1.x;
 		const float t21y = t2.y-t1.y;
 		const float t31x = t3.x-t1.x;
 		const float t31y = t3.y-t1.y;
-		const SVec3 d1 = vsub(v2,v1);
-		const SVec3 d2 = vsub(v3,v1);
+		const vec3f d1 = vsub(v2,v1);
+		const vec3f d2 = vsub(v3,v1);
 
 		const float fSignedAreaSTx2 = t21x*t31y - t21y*t31x;
 		//assert(fSignedAreaSTx2!=0);
-		SVec3 vOs = vsub(vscale(t31y,d1), vscale(t21y,d2));	// eq 18
-		SVec3 vOt = vadd(vscale(-t31x,d1), vscale(t21x,d2)); // eq 19
+		vec3f vOs = vsub(vscale(t31y,d1), vscale(t21y,d2));	// eq 18
+		vec3f vOt = vadd(vscale(-t31x,d1), vscale(t21x,d2)); // eq 19
 
 		pTriInfos[f].iFlag |= (fSignedAreaSTx2>0 ? ORIENT_PRESERVING : 0);
 
-		if ( NotZero(fSignedAreaSTx2) )
+		if ( not_zero(fSignedAreaSTx2) )
 		{
 			const float fAbsArea = fabsf(fSignedAreaSTx2);
 			const float fLenOs = Length(vOs);
 			const float fLenOt = Length(vOt);
 			const float fS = (pTriInfos[f].iFlag&ORIENT_PRESERVING)==0 ? (-1.0f) : 1.0f;
-			if ( NotZero(fLenOs) ) pTriInfos[f].vOs = vscale(fS/fLenOs, vOs);
-			if ( NotZero(fLenOt) ) pTriInfos[f].vOt = vscale(fS/fLenOt, vOt);
+			if ( not_zero(fLenOs) ) pTriInfos[f].vOs = vscale(fS/fLenOs, vOs);
+			if ( not_zero(fLenOt) ) pTriInfos[f].vOt = vscale(fS/fLenOt, vOt);
 
 			// evaluate magnitudes prior to normalization of vOs and vOt
 			pTriInfos[f].fMagS = fLenOs / fAbsArea;
 			pTriInfos[f].fMagT = fLenOt / fAbsArea;
 
 			// if this is a good triangle
-			if ( NotZero(pTriInfos[f].fMagS) && NotZero(pTriInfos[f].fMagT))
+			if ( not_zero(pTriInfos[f].fMagS) && not_zero(pTriInfos[f].fMagT))
 				pTriInfos[f].iFlag &= (~GROUP_WITH_ANY);
 		}
 	}
@@ -1013,23 +996,23 @@ static void InitTriInfo(STriInfo pTriInfos[], const int piTriListIn[], const SMi
 		const int iFO_b = pTriInfos[t+1].iOrgFaceNumber;
 		if (iFO_a==iFO_b)	// this is a quad
 		{
-			const tbool bIsDeg_a = (pTriInfos[t].iFlag&MARK_DEGENERATE)!=0 ? TTRUE : TFALSE;
-			const tbool bIsDeg_b = (pTriInfos[t+1].iFlag&MARK_DEGENERATE)!=0 ? TTRUE : TFALSE;
+			const bool bIsDeg_a = (pTriInfos[t].iFlag&MARK_DEGENERATE)!=0 ? true : false;
+			const bool bIsDeg_b = (pTriInfos[t+1].iFlag&MARK_DEGENERATE)!=0 ? true : false;
 			
 			// bad triangles should already have been removed by
 			// DegenPrologue(), but just in case check bIsDeg_a and bIsDeg_a are false
-			if ((bIsDeg_a||bIsDeg_b)==TFALSE)
+			if ((bIsDeg_a||bIsDeg_b)==false)
 			{
-				const tbool bOrientA = (pTriInfos[t].iFlag&ORIENT_PRESERVING)!=0 ? TTRUE : TFALSE;
-				const tbool bOrientB = (pTriInfos[t+1].iFlag&ORIENT_PRESERVING)!=0 ? TTRUE : TFALSE;
+				const bool bOrientA = (pTriInfos[t].iFlag&ORIENT_PRESERVING)!=0 ? true : false;
+				const bool bOrientB = (pTriInfos[t+1].iFlag&ORIENT_PRESERVING)!=0 ? true : false;
 				// if this happens the quad has extremely bad mapping!!
 				if (bOrientA!=bOrientB)
 				{
 					//printf("found quad with bad mapping\n");
-					tbool bChooseOrientFirstTri = TFALSE;
-					if ((pTriInfos[t+1].iFlag&GROUP_WITH_ANY)!=0) bChooseOrientFirstTri = TTRUE;
+					bool bChooseOrientFirstTri = false;
+					if ((pTriInfos[t+1].iFlag&GROUP_WITH_ANY)!=0) bChooseOrientFirstTri = true;
 					else if ( CalcTexArea(pContext, &piTriListIn[t*3+0]) >= CalcTexArea(pContext, &piTriListIn[(t+1)*3+0]) )
-						bChooseOrientFirstTri = TTRUE;
+						bChooseOrientFirstTri = true;
 
 					// force match
 					{
@@ -1063,7 +1046,7 @@ static void InitTriInfo(STriInfo pTriInfos[], const int piTriListIn[], const SMi
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static tbool AssignRecur(const int piTriListIn[], STriInfo psTriInfos[], const int iMyTriIndex, SGroup * pGroup);
+static bool AssignRecur(const int piTriListIn[], STriInfo psTriInfos[], const int iMyTriIndex, SGroup * pGroup);
 static void AddTriToGroup(SGroup * pGroup, const int iTriIndex);
 
 static int Build4RuleGroups(STriInfo pTriInfos[], SGroup pGroups[], int piGroupTrianglesBuffer[], const int piTriListIn[], const int iNrTrianglesIn)
@@ -1079,7 +1062,7 @@ static int Build4RuleGroups(STriInfo pTriInfos[], SGroup pGroups[], int piGroupT
 			// if not assigned to a group
 			if ((pTriInfos[f].iFlag&GROUP_WITH_ANY)==0 && pTriInfos[f].AssignedGroup[i]==NULL)
 			{
-				tbool bOrPre;
+				bool bOrPre;
 				int neigh_indexL, neigh_indexR;
 				const int vert_index = piTriListIn[f*3+i];
 				assert(iNrActiveGroups<iNrMaxGroups);
@@ -1091,28 +1074,28 @@ static int Build4RuleGroups(STriInfo pTriInfos[], SGroup pGroups[], int piGroupT
 				++iNrActiveGroups;
 
 				AddTriToGroup(pTriInfos[f].AssignedGroup[i], f);
-				bOrPre = (pTriInfos[f].iFlag&ORIENT_PRESERVING)!=0 ? TTRUE : TFALSE;
+				bOrPre = (pTriInfos[f].iFlag&ORIENT_PRESERVING)!=0 ? true : false;
 				neigh_indexL = pTriInfos[f].FaceNeighbors[i];
 				neigh_indexR = pTriInfos[f].FaceNeighbors[i>0?(i-1):2];
 				if (neigh_indexL>=0) // neighbor
 				{
-					const tbool bAnswer =
+					const bool bAnswer =
 						AssignRecur(piTriListIn, pTriInfos, neigh_indexL,
 									pTriInfos[f].AssignedGroup[i] );
 					
-					const tbool bOrPre2 = (pTriInfos[neigh_indexL].iFlag&ORIENT_PRESERVING)!=0 ? TTRUE : TFALSE;
-					const tbool bDiff = bOrPre!=bOrPre2 ? TTRUE : TFALSE;
+					const bool bOrPre2 = (pTriInfos[neigh_indexL].iFlag&ORIENT_PRESERVING)!=0 ? true : false;
+					const bool bDiff = bOrPre!=bOrPre2 ? true : false;
 					assert(bAnswer || bDiff);
 					(void)bAnswer, (void)bDiff;  /* quiet warnings in non debug mode */
 				}
 				if (neigh_indexR>=0) // neighbor
 				{
-					const tbool bAnswer =
+					const bool bAnswer =
 						AssignRecur(piTriListIn, pTriInfos, neigh_indexR,
 									pTriInfos[f].AssignedGroup[i] );
 
-					const tbool bOrPre2 = (pTriInfos[neigh_indexR].iFlag&ORIENT_PRESERVING)!=0 ? TTRUE : TFALSE;
-					const tbool bDiff = bOrPre!=bOrPre2 ? TTRUE : TFALSE;
+					const bool bOrPre2 = (pTriInfos[neigh_indexR].iFlag&ORIENT_PRESERVING)!=0 ? true : false;
+					const bool bDiff = bOrPre!=bOrPre2 ? true : false;
 					assert(bAnswer || bDiff);
 					(void)bAnswer, (void)bDiff;  /* quiet warnings in non debug mode */
 				}
@@ -1136,7 +1119,7 @@ static void AddTriToGroup(SGroup * pGroup, const int iTriIndex)
 	++pGroup->iNrFaces;
 }
 
-static tbool AssignRecur(const int piTriListIn[], STriInfo psTriInfos[],
+static bool AssignRecur(const int piTriListIn[], STriInfo psTriInfos[],
 				 const int iMyTriIndex, SGroup * pGroup)
 {
 	STriInfo * pMyTriInfo = &psTriInfos[iMyTriIndex];
@@ -1151,8 +1134,8 @@ static tbool AssignRecur(const int piTriListIn[], STriInfo psTriInfos[],
 	assert(i>=0 && i<3);
 
 	// early out
-	if (pMyTriInfo->AssignedGroup[i] == pGroup) return TTRUE;
-	else if (pMyTriInfo->AssignedGroup[i]!=NULL) return TFALSE;
+	if (pMyTriInfo->AssignedGroup[i] == pGroup) return true;
+	else if (pMyTriInfo->AssignedGroup[i]!=NULL) return false;
 	if ((pMyTriInfo->iFlag&GROUP_WITH_ANY)!=0)
 	{
 		// first to group with a group-with-anything triangle
@@ -1167,8 +1150,8 @@ static tbool AssignRecur(const int piTriListIn[], STriInfo psTriInfos[],
 		}
 	}
 	{
-		const tbool bOrient = (pMyTriInfo->iFlag&ORIENT_PRESERVING)!=0 ? TTRUE : TFALSE;
-		if (bOrient != pGroup->bOrientPreservering) return TFALSE;
+		const bool bOrient = (pMyTriInfo->iFlag&ORIENT_PRESERVING)!=0 ? true : false;
+		if (bOrient != pGroup->bOrientPreservering) return false;
 	}
 
 	AddTriToGroup(pGroup, iMyTriIndex);
@@ -1185,17 +1168,17 @@ static tbool AssignRecur(const int piTriListIn[], STriInfo psTriInfos[],
 
 
 
-	return TTRUE;
+	return true;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static tbool CompareSubGroups(const SSubGroup * pg1, const SSubGroup * pg2);
+static bool CompareSubGroups(const SSubGroup * pg1, const SSubGroup * pg2);
 static void QuickSort(int* pSortBuffer, int iLeft, int iRight, unsigned int uSeed);
 static STSpace EvalTspace(int face_indices[], const int iFaces, const int piTriListIn[], const STriInfo pTriInfos[], const SMikkTSpaceContext * pContext, const int iVertexRepresentitive);
 
-static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], const SGroup pGroups[],
+static bool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], const SGroup pGroups[],
                              const int iNrActiveGroups, const int piTriListIn[], const float fThresCos,
                              const SMikkTSpaceContext * pContext)
 {
@@ -1207,7 +1190,7 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 		if (iMaxNrFaces < pGroups[g].iNrFaces)
 			iMaxNrFaces = pGroups[g].iNrFaces;
 
-	if (iMaxNrFaces == 0) return TTRUE;
+	if (iMaxNrFaces == 0) return true;
 
 	// make initial allocations
 	pSubGroupTspace = (STSpace *) malloc(sizeof(STSpace)*iMaxNrFaces);
@@ -1218,7 +1201,7 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 		if (pSubGroupTspace!=NULL) free(pSubGroupTspace);
 		if (pUniSubGroups!=NULL) free(pUniSubGroups);
 		if (pTmpMembers!=NULL) free(pTmpMembers);
-		return TFALSE;
+		return false;
 	}
 
 
@@ -1233,8 +1216,8 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 			const int f = pGroup->pFaceIndices[i];	// triangle number
 			int index=-1, iVertIndex=-1, iOF_1=-1, iMembers=0, j=0, l=0;
 			SSubGroup tmp_group;
-			tbool bFound;
-			SVec3 n, vOs, vOt;
+			bool bFound;
+			vec3f n, vOs, vOt;
 			if (pTriInfos[f].AssignedGroup[0]==pGroup) index=0;
 			else if (pTriInfos[f].AssignedGroup[1]==pGroup) index=1;
 			else if (pTriInfos[f].AssignedGroup[2]==pGroup) index=2;
@@ -1249,8 +1232,8 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 			// project
 			vOs = vsub(pTriInfos[f].vOs, vscale(vdot(n,pTriInfos[f].vOs), n));
 			vOt = vsub(pTriInfos[f].vOt, vscale(vdot(n,pTriInfos[f].vOt), n));
-			if ( VNotZero(vOs) ) vOs = Normalize(vOs);
-			if ( VNotZero(vOt) ) vOt = Normalize(vOt);
+			if ( vnot_zero(vOs) ) vOs = Normalize(vOs);
+			if ( vnot_zero(vOt) ) vOt = Normalize(vOt);
 
 			// original face number
 			iOF_1 = pTriInfos[f].iOrgFaceNumber;
@@ -1262,15 +1245,15 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 				const int iOF_2 = pTriInfos[t].iOrgFaceNumber;
 
 				// project
-				SVec3 vOs2 = vsub(pTriInfos[t].vOs, vscale(vdot(n,pTriInfos[t].vOs), n));
-				SVec3 vOt2 = vsub(pTriInfos[t].vOt, vscale(vdot(n,pTriInfos[t].vOt), n));
-				if ( VNotZero(vOs2) ) vOs2 = Normalize(vOs2);
-				if ( VNotZero(vOt2) ) vOt2 = Normalize(vOt2);
+				vec3f vOs2 = vsub(pTriInfos[t].vOs, vscale(vdot(n,pTriInfos[t].vOs), n));
+				vec3f vOt2 = vsub(pTriInfos[t].vOt, vscale(vdot(n,pTriInfos[t].vOt), n));
+				if ( vnot_zero(vOs2) ) vOs2 = Normalize(vOs2);
+				if ( vnot_zero(vOt2) ) vOt2 = Normalize(vOt2);
 
 				{
-					const tbool bAny = ( (pTriInfos[f].iFlag | pTriInfos[t].iFlag) & GROUP_WITH_ANY )!=0 ? TTRUE : TFALSE;
+					const bool bAny = ( (pTriInfos[f].iFlag | pTriInfos[t].iFlag) & GROUP_WITH_ANY )!=0 ? true : false;
 					// make sure triangles which belong to the same quad are joined.
-					const tbool bSameOrgFace = iOF_1==iOF_2 ? TTRUE : TFALSE;
+					const bool bSameOrgFace = iOF_1==iOF_2 ? true : false;
 
 					const float fCosS = vdot(vOs,vOs2);
 					const float fCosT = vdot(vOt,vOt2);
@@ -1291,7 +1274,7 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 			}
 
 			// look for an existing match
-			bFound = TFALSE;
+			bFound = false;
 			l=0;
 			while (l<iUniqueSubGroups && !bFound)
 			{
@@ -1317,7 +1300,7 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 					free(pUniSubGroups);
 					free(pTmpMembers);
 					free(pSubGroupTspace);
-					return TFALSE;
+					return false;
 				}
 				pUniSubGroups[iUniqueSubGroups].iNrFaces = iMembers;
 				pUniSubGroups[iUniqueSubGroups].pTriMembers = pIndices;
@@ -1361,7 +1344,7 @@ static tbool GenerateTSpaces(STSpace psTspace[], const STriInfo pTriInfos[], con
 	free(pTmpMembers);
 	free(pSubGroupTspace);
 
-	return TTRUE;
+	return true;
 }
 
 static STSpace EvalTspace(int face_indices[], const int iFaces, const int piTriListIn[], const STriInfo pTriInfos[],
@@ -1381,7 +1364,7 @@ static STSpace EvalTspace(int face_indices[], const int iFaces, const int piTriL
 		// only valid triangles get to add their contribution
 		if ( (pTriInfos[f].iFlag&GROUP_WITH_ANY)==0 )
 		{
-			SVec3 n, vOs, vOt, p0, p1, p2, v1, v2;
+			vec3f n, vOs, vOt, p0, p1, p2, v1, v2;
 			float fCos, fAngle, fMagS, fMagT;
 			int i=-1, index=-1, i0=-1, i1=-1, i2=-1;
 			if (piTriListIn[3*f+0]==iVertexRepresentitive) i=0;
@@ -1394,8 +1377,8 @@ static STSpace EvalTspace(int face_indices[], const int iFaces, const int piTriL
 			n = GetNormal(pContext, index);
 			vOs = vsub(pTriInfos[f].vOs, vscale(vdot(n,pTriInfos[f].vOs), n));
 			vOt = vsub(pTriInfos[f].vOt, vscale(vdot(n,pTriInfos[f].vOt), n));
-			if ( VNotZero(vOs) ) vOs = Normalize(vOs);
-			if ( VNotZero(vOt) ) vOt = Normalize(vOt);
+			if ( vnot_zero(vOs) ) vOs = Normalize(vOs);
+			if ( vnot_zero(vOt) ) vOt = Normalize(vOt);
 
 			i2 = piTriListIn[3*f + (i<2?(i+1):0)];
 			i1 = piTriListIn[3*f + i];
@@ -1408,8 +1391,8 @@ static STSpace EvalTspace(int face_indices[], const int iFaces, const int piTriL
 			v2 = vsub(p2,p1);
 
 			// project
-			v1 = vsub(v1, vscale(vdot(n,v1),n)); if ( VNotZero(v1) ) v1 = Normalize(v1);
-			v2 = vsub(v2, vscale(vdot(n,v2),n)); if ( VNotZero(v2) ) v2 = Normalize(v2);
+			v1 = vsub(v1, vscale(vdot(n,v1),n)); if ( vnot_zero(v1) ) v1 = Normalize(v1);
+			v2 = vsub(v2, vscale(vdot(n,v2),n)); if ( vnot_zero(v2) ) v2 = Normalize(v2);
 
 			// weight contribution by the angle
 			// between the two edge vectors
@@ -1427,8 +1410,8 @@ static STSpace EvalTspace(int face_indices[], const int iFaces, const int piTriL
 	}
 
 	// normalize
-	if ( VNotZero(res.vOs) ) res.vOs = Normalize(res.vOs);
-	if ( VNotZero(res.vOt) ) res.vOt = Normalize(res.vOt);
+	if ( vnot_zero(res.vOs) ) res.vOs = Normalize(res.vOs);
+	if ( vnot_zero(res.vOt) ) res.vOt = Normalize(res.vOt);
 	if (fAngleSum>0)
 	{
 		res.fMagS /= fAngleSum;
@@ -1438,14 +1421,14 @@ static STSpace EvalTspace(int face_indices[], const int iFaces, const int piTriL
 	return res;
 }
 
-static tbool CompareSubGroups(const SSubGroup * pg1, const SSubGroup * pg2)
+static bool CompareSubGroups(const SSubGroup * pg1, const SSubGroup * pg2)
 {
-	tbool bStillSame=TTRUE;
+	bool bStillSame=true;
 	int i=0;
-	if (pg1->iNrFaces!=pg2->iNrFaces) return TFALSE;
+	if (pg1->iNrFaces!=pg2->iNrFaces) return false;
 	while (i<pg1->iNrFaces && bStillSame)
 	{
-		bStillSame = pg1->pTriMembers[i]==pg2->pTriMembers[i] ? TTRUE : TFALSE;
+		bStillSame = pg1->pTriMembers[i]==pg2->pTriMembers[i] ? true : false;
 		if (bStillSame) ++i;
 	}
 	return bStillSame;
@@ -1555,29 +1538,29 @@ static void BuildNeighborsFast(STriInfo pTriInfos[], SEdge * pEdges, const int p
 		const int i0=pEdges[i].i0;
 		const int i1=pEdges[i].i1;
 		const int f = pEdges[i].f;
-		tbool bUnassigned_A;
+		bool bUnassigned_A;
 
 		int i0_A, i1_A;
 		int edgenum_A, edgenum_B=0;	// 0,1 or 2
 		GetEdge(&i0_A, &i1_A, &edgenum_A, &piTriListIn[f*3], i0, i1);	// resolve index ordering and edge_num
-		bUnassigned_A = pTriInfos[f].FaceNeighbors[edgenum_A] == -1 ? TTRUE : TFALSE;
+		bUnassigned_A = pTriInfos[f].FaceNeighbors[edgenum_A] == -1 ? true : false;
 
 		if (bUnassigned_A)
 		{
 			// get true index ordering
 			int j=i+1, t;
-			tbool bNotFound = TTRUE;
+			bool bNotFound = true;
 			while (j<iEntries && i0==pEdges[j].i0 && i1==pEdges[j].i1 && bNotFound)
 			{
-				tbool bUnassigned_B;
+				bool bUnassigned_B;
 				int i0_B, i1_B;
 				t = pEdges[j].f;
 				// flip i0_B and i1_B
 				GetEdge(&i1_B, &i0_B, &edgenum_B, &piTriListIn[t*3], pEdges[j].i0, pEdges[j].i1);	// resolve index ordering and edge_num
 				//assert(!(i0_A==i1_B && i1_A==i0_B));
-				bUnassigned_B =  pTriInfos[t].FaceNeighbors[edgenum_B]==-1 ? TTRUE : TFALSE;
+				bUnassigned_B =  pTriInfos[t].FaceNeighbors[edgenum_B]==-1 ? true : false;
 				if (i0_A==i0_B && i1_A==i1_B && bUnassigned_B)
-					bNotFound = TFALSE;
+					bNotFound = false;
 				else
 					++j;
 			}
@@ -1607,7 +1590,7 @@ static void BuildNeighborsSlow(STriInfo pTriInfos[], const int piTriListIn[], co
 				const int i1_A = piTriListIn[f*3+(i<2?(i+1):0)];
 
 				// search for a neighbor
-				tbool bFound = TFALSE;
+				bool bFound = false;
 				int t=0, j=0;
 				while (!bFound && t<iNrTrianglesIn)
 				{
@@ -1621,7 +1604,7 @@ static void BuildNeighborsSlow(STriInfo pTriInfos[], const int piTriListIn[], co
 							const int i0_B = piTriListIn[t*3+(j<2?(j+1):0)];
 							//assert(!(i0_A==i1_B && i1_A==i0_B));
 							if (i0_A==i0_B && i1_A==i1_B)
-								bFound = TTRUE;
+								bFound = true;
 							else
 								++j;
 						}
@@ -1737,7 +1720,7 @@ static void GetEdge(int * i0_out, int * i1_out, int * edgenum_out, const int ind
 static void DegenPrologue(STriInfo pTriInfos[], int piTriList_out[], const int iNrTrianglesIn, const int iTotTris)
 {
 	int iNextGoodTriangleSearchIndex=-1;
-	tbool bStillFindingGoodOnes;
+	bool bStillFindingGoodOnes;
 
 	// locate quads with only one good triangle
 	int t=0;
@@ -1747,8 +1730,8 @@ static void DegenPrologue(STriInfo pTriInfos[], int piTriList_out[], const int i
 		const int iFO_b = pTriInfos[t+1].iOrgFaceNumber;
 		if (iFO_a==iFO_b)	// this is a quad
 		{
-			const tbool bIsDeg_a = (pTriInfos[t].iFlag&MARK_DEGENERATE)!=0 ? TTRUE : TFALSE;
-			const tbool bIsDeg_b = (pTriInfos[t+1].iFlag&MARK_DEGENERATE)!=0 ? TTRUE : TFALSE;
+			const bool bIsDeg_a = (pTriInfos[t].iFlag&MARK_DEGENERATE)!=0 ? true : false;
+			const bool bIsDeg_b = (pTriInfos[t+1].iFlag&MARK_DEGENERATE)!=0 ? true : false;
 			if ((bIsDeg_a^bIsDeg_b)!=0)
 			{
 				pTriInfos[t].iFlag |= QUAD_ONE_DEGEN_TRI;
@@ -1764,10 +1747,10 @@ static void DegenPrologue(STriInfo pTriInfos[], int piTriList_out[], const int i
 	// without reordering the good triangles
 	iNextGoodTriangleSearchIndex = 1;
 	t=0;
-	bStillFindingGoodOnes = TTRUE;
+	bStillFindingGoodOnes = true;
 	while (t<iNrTrianglesIn && bStillFindingGoodOnes)
 	{
-		const tbool bIsGood = (pTriInfos[t].iFlag&MARK_DEGENERATE)==0 ? TTRUE : TFALSE;
+		const bool bIsGood = (pTriInfos[t].iFlag&MARK_DEGENERATE)==0 ? true : false;
 		if (bIsGood)
 		{
 			if (iNextGoodTriangleSearchIndex < (t+2))
@@ -1777,11 +1760,11 @@ static void DegenPrologue(STriInfo pTriInfos[], int piTriList_out[], const int i
 		{
 			int t0, t1;
 			// search for the first good triangle.
-			tbool bJustADegenerate = TTRUE;
+			bool bJustADegenerate = true;
 			while (bJustADegenerate && iNextGoodTriangleSearchIndex<iTotTris)
 			{
-				const tbool bIsGood = (pTriInfos[iNextGoodTriangleSearchIndex].iFlag&MARK_DEGENERATE)==0 ? TTRUE : TFALSE;
-				if (bIsGood) bJustADegenerate=TFALSE;
+				const bool bIsGood = (pTriInfos[iNextGoodTriangleSearchIndex].iFlag&MARK_DEGENERATE)==0 ? true : false;
+				if (bIsGood) bJustADegenerate=false;
 				else ++iNextGoodTriangleSearchIndex;
 			}
 
@@ -1807,7 +1790,7 @@ static void DegenPrologue(STriInfo pTriInfos[], int piTriList_out[], const int i
 				}
 			}
 			else
-				bStillFindingGoodOnes = TFALSE;	// this is not supposed to happen
+				bStillFindingGoodOnes = false;	// this is not supposed to happen
 		}
 
 		if (bStillFindingGoodOnes) ++t;
@@ -1826,7 +1809,7 @@ static void DegenEpilogue(STSpace psTspace[], STriInfo pTriInfos[], int piTriLis
 	{
 		// degenerate triangles on a quad with one good triangle are skipped
 		// here but processed in the next loop
-		const tbool bSkip = (pTriInfos[t].iFlag&QUAD_ONE_DEGEN_TRI)!=0 ? TTRUE : TFALSE;
+		const bool bSkip = (pTriInfos[t].iFlag&QUAD_ONE_DEGEN_TRI)!=0 ? true : false;
 
 		if (!bSkip)
 		{
@@ -1834,12 +1817,12 @@ static void DegenEpilogue(STSpace psTspace[], STriInfo pTriInfos[], int piTriLis
 			{
 				const int index1 = piTriListIn[t*3+i];
 				// search through the good triangles
-				tbool bNotFound = TTRUE;
+				bool bNotFound = true;
 				int j=0;
 				while (bNotFound && j<(3*iNrTrianglesIn))
 				{
 					const int index2 = piTriListIn[j];
-					if (index1==index2) bNotFound=TFALSE;
+					if (index1==index2) bNotFound=false;
 					else ++j;
 				}
 
@@ -1866,9 +1849,9 @@ static void DegenEpilogue(STSpace psTspace[], STriInfo pTriInfos[], int piTriLis
 		// other triangle is degenerate
 		if ( (pTriInfos[t].iFlag&QUAD_ONE_DEGEN_TRI)!=0 )
 		{
-			SVec3 vDstP;
+			vec3f vDstP;
 			int iOrgF=-1, i=0;
-			tbool bNotFound;
+			bool bNotFound;
 			unsigned char * pV = pTriInfos[t].vert_num;
 			int iFlag = (1<<pV[0]) | (1<<pV[1]) | (1<<pV[2]);
 			int iMissingIndex = 0;
@@ -1878,17 +1861,17 @@ static void DegenEpilogue(STSpace psTspace[], STriInfo pTriInfos[], int piTriLis
 
 			iOrgF = pTriInfos[t].iOrgFaceNumber;
 			vDstP = GetPosition(pContext, MakeIndex(iOrgF, iMissingIndex));
-			bNotFound = TTRUE;
+			bNotFound = true;
 			i=0;
 			while (bNotFound && i<3)
 			{
 				const int iVert = pV[i];
-				const SVec3 vSrcP = GetPosition(pContext, MakeIndex(iOrgF, iVert));
-				if (veq(vSrcP, vDstP)==TTRUE)
+				const vec3f vSrcP = GetPosition(pContext, MakeIndex(iOrgF, iVert));
+				if (veq(vSrcP, vDstP)==true)
 				{
 					const int iOffs = pTriInfos[t].iTSpacesOffs;
 					psTspace[iOffs+iMissingIndex] = psTspace[iOffs+iVert];
-					bNotFound=TFALSE;
+					bNotFound=false;
 				}
 				else
 					++i;
@@ -1897,3 +1880,7 @@ static void DegenEpilogue(STSpace psTspace[], STriInfo pTriInfos[], int piTriLis
 		}
 	}
 }
+
+} // namespace mikktspace
+} // namespace math
+} // namespace wsl

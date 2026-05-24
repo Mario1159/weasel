@@ -80,7 +80,7 @@ struct transform : world_component
         .custom<comp::meta_info> (meta_info{
             "Transform",
             "Controls local position, rotation and scale relative to parent",
-            "./icons/comp_transform.svg" })
+            "engine://icons/comp_transform.svg" })
 
         .data<&comp::transform::position> ("position"_hs)
         .custom<comp::meta_info> (meta_info{

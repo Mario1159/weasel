@@ -38,7 +38,7 @@ struct hierarchy : world_component
         .type (entt::type_hash<comp::hierarchy>::value ())
         .custom<comp::meta_info> (meta_info{
             "Hierarchy", "Defines parent/child relationships between entities",
-            "./icons/comp_hierarchy.svg" })
+            "engine://icons/comp_hierarchy.svg" })
         .data<&comp::hierarchy::parent> ("parent"_hs)
         .custom<comp::meta_info> (
             meta_info{ "Parent", "Parent entity (entt::null if root)", "" })

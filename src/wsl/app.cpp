@@ -47,11 +47,6 @@ app::app (const std::string &name, int width, int height,
   wsl::log::init ();
 
   SDL_SetHint (SDL_HINT_GPU_DRIVER, "vulkan");
-  if (!SDL_Init (SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO)) {
-    spdlog::critical ("Failed to initialize SDL: {}", SDL_GetError ());
-  } else {
-    spdlog::debug ("SDL initialized successfully");
-  }
 
   m_runtime_context = std::make_unique<wsl::comp::singl::runtime_context> (name.c_str (), width, height, engine_res_path);
 
@@ -102,7 +97,7 @@ app::app (const std::string &name, int width, int height,
           { "Physics Manager", true });
 }
 
-app::~app () { SDL_Quit (); }
+app::~app () = default;
 
 void
 app::set_project_path (const std::string &path)

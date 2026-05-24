@@ -11,11 +11,14 @@
 #ifndef MIKKTSPACE_COMPAT_ALIASES
 #define MIKKTSPACE_COMPAT_ALIASES
 
-// Member name alias
+// Member name alias so the original C source can use m_pInterface while
+// the canonical C++ header uses m_p_interface.
 #define m_pInterface m_p_interface
 
-// Function name aliases
-#define genTangSpaceDefault gen_tang_space_default
-#define genTangSpace gen_tang_space
+// NOTE: The function name aliases (genTangSpaceDefault -> gen_tang_space_default,
+// genTangSpace -> gen_tang_space) have been removed so the original C
+// implementation keeps its camelCase names and the C++ wrapper in
+// mikktspace_cpp_impl.cpp provides the snake_case public API without
+// causing duplicate-symbol / infinite-recursion issues.
 
 #endif // MIKKTSPACE_COMPAT_ALIASES

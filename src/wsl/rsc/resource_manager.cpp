@@ -1729,7 +1729,17 @@ rsc::resource_manager::resolve_path (const std::string &path) const
   }
 
   if (path.rfind ("engine://", 0) == 0) {
-    std::filesystem::path base_path = std::filesystem::path (m_wsl_resource_path) / path.substr (9);
+    const std::string sub_path = path.substr (9);
+
+    // Try the installed/ packaged layout first (share/weasel/...)
+    std::filesystem::path installed_path
+        = std::filesystem::path (m_wsl_resource_path) / "share/weasel" / sub_path;
+    if (std::filesystem::exists (installed_path)) {
+      return installed_path.string ();
+    }
+
+    // Fall back to the legacy / development layout directly under the resource path
+    std::filesystem::path base_path = std::filesystem::path (m_wsl_resource_path) / sub_path;
 
     // Only apply shader extension replacement for files without an existing extension
     // or with shader-specific extensions (like .hlsl)

@@ -23,7 +23,6 @@ target_link_libraries(weasel PRIVATE
     SDL3::SDL3
     SDL3_image::SDL3_image
     SDL3_mixer::SDL3_mixer
-    $<$<BOOL:${WEASEL_ENABLE_MULTIPLAYER}>:GameNetworkingSockets>
     RmlUi::RmlUi
     Jolt
     fastgltf

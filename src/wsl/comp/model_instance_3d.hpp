@@ -28,7 +28,7 @@ struct model_instance_3d : world_component
         .type (entt::type_hash<comp::model_instance_3d>::value ())
         .custom<comp::meta_info> (meta_info{
             "Model Instance", "Renders a 3D model using the current transform",
-            "./icons/comp_model_instance.svg" })
+            "engine://icons/comp_model_instance.svg" })
 
         .data<&comp::model_instance_3d::id> ("model_id"_hs)
         .custom<comp::meta_info> (

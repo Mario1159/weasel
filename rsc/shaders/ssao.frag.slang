@@ -49,7 +49,7 @@ float main(FSIn input) : SV_Target0
     float3 origin = ReconstructViewPos(input.uv, depth);
 
     float2 noiseUV = input.uv * u_ScreenNoiseScale.xy;
-    float3 randVec = normalize(u_NoiseTex.Sample(u_Samplers[1], noiseUV).xyz * 2.0 - 1.0);
+    float3 randVec = normalize(u_NoiseTex.Sample(u_Samplers[1], noiseUV).xyz);
 
     float3 T = normalize(randVec - N * dot(randVec, N));
     float3 B = normalize(cross(N, T));
@@ -64,7 +64,7 @@ float main(FSIn input) : SV_Target0
     [unroll]
     for (int i = 0; i < KERNEL_SIZE; ++i)
     {
-        float3 sampleVS = origin + mul(TBN, u_Samples[i].xyz) * radius;
+        float3 sampleVS = origin + mul(u_Samples[i].xyz, TBN) * radius;
 
         float4 sampleClip = mul(u_Proj, float4(sampleVS, 1.0));
         sampleClip.xyz /= max(sampleClip.w, 1e-6);

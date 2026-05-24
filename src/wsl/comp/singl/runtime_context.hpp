@@ -119,11 +119,20 @@ public:
   reg::registry_queries reg_queries;
   reg::runtime::runtime_project_module runtime_project_module;
 
-  reg::sig::signal_hub signal_hub;
-  entt::dispatcher dispatcher;
+    reg::sig::signal_hub signal_hub;
+    entt::dispatcher dispatcher;
 
-  gfx::render_context render_ctx;
-  gfx::render_window window;
+private:
+    struct sdl_init_guard
+    {
+        sdl_init_guard ();
+        ~sdl_init_guard ();
+    };
+    sdl_init_guard sdl_init_guard_;
+
+public:
+    gfx::render_context render_ctx;
+    gfx::render_window window;
 
   comp::singl::ui_manager ui_manager;
 

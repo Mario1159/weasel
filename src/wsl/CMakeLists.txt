@@ -51,7 +51,7 @@ if(TARGET weasel_clang_repl)
 endif()
 
 target_link_libraries(wsl PRIVATE
-    $<$<BOOL:${WEASEL_ENABLE_MULTIPLAYER}>:GameNetworkingSockets>
+    $<$<BOOL:${WEASEL_ENABLE_MULTIPLAYER}>:GameNetworkingSockets_s>
     TracyClient
     LibArchive::LibArchive
     ${CMAKE_DL_LIBS}

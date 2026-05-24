@@ -1,6 +1,5 @@
 #include "cli/cli_handler.hpp"
 #include "editor_app.hpp"
-#include <SDL3/SDL_init.h>
 #include <SDL3/SDL_filesystem.h>
 #include <filesystem>
 
@@ -42,8 +41,6 @@ main (int argc, char **argv)
     return result.exit_code;
   }
 
-  SDL_Init (SDL_INIT_VIDEO | SDL_INIT_EVENTS);
-  
   editor::editor_app g ("Incantation", 1280, 720,
                         default_engine_resource_path ());
   

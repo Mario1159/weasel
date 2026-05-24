@@ -205,11 +205,21 @@ rsc::project_loader::load (const std::string &path)
   }
 
   if (path.ends_with (".json")) {
-    cereal::JSONInputArchive archive (file);
-    archive (cereal::make_nvp ("project", *proj));
+    try {
+      cereal::JSONInputArchive archive (file);
+      archive (cereal::make_nvp ("project", *proj));
+    } catch (const std::exception &e) {
+      wsl::log::resources ()->error ("Failed to parse project file '{}': {}", path, e.what ());
+      return {};
+    }
   } else {
-    cereal::BinaryInputArchive archive (file);
-    archive (cereal::make_nvp ("project", *proj));
+    try {
+      cereal::BinaryInputArchive archive (file);
+      archive (cereal::make_nvp ("project", *proj));
+    } catch (const std::exception &e) {
+      wsl::log::resources ()->error ("Failed to parse project file '{}': {}", path, e.what ());
+      return {};
+    }
   }
 
   // Ensure root_path is absolute and points to the manifest's directory

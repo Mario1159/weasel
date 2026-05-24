@@ -55,7 +55,7 @@ struct camera : world_component
     entt::meta_factory<comp::camera> ()
         .type (entt::type_hash<comp::camera>::value ())
         .custom<comp::meta_info> (meta_info{
-            "Camera", "Projection parameters only", "./icons/comp_camera.svg" })
+            "Camera", "Projection parameters only", "engine://icons/comp_camera.svg" })
         .data<&camera::fov> ("fov"_hs)
         .custom<comp::meta_info> (
             meta_info{ "FOV", "Field of view in degrees", "" })

@@ -115,9 +115,18 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
+    NAME cpp-mcp
+    GITHUB_REPOSITORY hkr04/cpp-mcp
+    GIT_TAG main
+    SYSTEM ON
+)
+
+CPMAddPackage(
     NAME slang
     GITHUB_REPOSITORY shader-slang/slang
     GIT_TAG v2026.8.1
+    OPTIONS
+        "SLANG_LIB_TYPE STATIC"
     SYSTEM ON
 )
 
@@ -197,7 +206,7 @@ CPMAddPackage(
     OPTIONS
         "TRACY_ENABLE ON"
         "TRACY_ON_DEMAND ON"
-        "TRACY_STATIC OFF"
+        "TRACY_STATIC ON"
     SYSTEM ON
 )
 
@@ -480,6 +489,7 @@ endif()
 add_subdirectory(src/wsl)
 add_subdirectory(src/cli)
 add_subdirectory(src/editor)
+add_subdirectory(src/mcp-server)
 
 # --- stb integration (needs wsl target) ---
 if(DEFINED stb_SOURCE_DIR)
@@ -529,6 +539,10 @@ install(TARGETS wsl weasel weasel-cli
 install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel COMPONENT Runtime)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel COMPONENT Runtime)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel COMPONENT Runtime)
+
+if(UNIX AND NOT APPLE)
+    install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/Makefile" DESTINATION . COMPONENT Runtime)
+endif()
 
 set(CPACK_PACKAGE_NAME "WeaselEngine")
 set(CPACK_PACKAGE_VERSION "0.1.0")

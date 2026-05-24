@@ -63,16 +63,9 @@ console::execute_command (const std::string &command)
   }
 
   // Fallback: spawn weasel-cli binary
-  std::string project_arg = "";
-  if (m_runtime_ctx) {
-    auto proj = m_runtime_ctx->resource_manager.current_project();
-    if (proj && !proj->root_path.empty()) {
-      std::filesystem::path project_file = std::filesystem::path(proj->root_path) / "wslpro.json";
-      project_arg = "--project \"" + project_file.string() + "\" ";
-    }
-  }
-
-  std::string full_cmd = "./weasel-cli " + project_arg + command + " 2>&1";
+  // Note: --project is no longer passed here because it now requires
+  // --interactive, and the console fallback runs one-shot commands.
+  std::string full_cmd = "./weasel-cli " + command + " 2>&1";
   
   FILE* pipe = popen(full_cmd.c_str(), "r");
   if (!pipe) {

@@ -74,7 +74,7 @@ public:
         .custom<comp::meta_info> (
             meta_info{ "Character Body",
                        "Capsule-based kinematic character controller (Jolt)",
-                       "./icons/comp_character_body.svg" })
+                        "engine://icons/comp_character_body.svg" })
         .func<&comp::character_body::on_inspector_changed> (
             "on_inspector_changed"_hs)
 

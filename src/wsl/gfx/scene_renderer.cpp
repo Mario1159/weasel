@@ -2887,7 +2887,7 @@ gfx::scene_renderer::create_ssao_noise_texture ()
 
   SDL_GPUTextureCreateInfo ti{};
   ti.type = SDL_GPU_TEXTURETYPE_2D;
-  ti.format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+  ti.format = SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT;
   ti.width = 4;
   ti.height = 4;
   ti.layer_count_or_depth = 1;
@@ -3012,9 +3012,9 @@ gfx::scene_renderer::create_ssao_resources (uint32_t w, uint32_t h)
   point.min_filter = SDL_GPU_FILTER_NEAREST;
   point.mag_filter = SDL_GPU_FILTER_NEAREST;
   point.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-  point.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  point.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  point.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  point.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  point.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  point.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   m_ssao_point_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &point);
 
   if ((m_ssao_normal_depth == nullptr) || (m_ssao_depth == nullptr) || (m_ssao_raw == nullptr) || (m_ssao_blur == nullptr)

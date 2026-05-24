@@ -15,6 +15,7 @@
 #include "sys/system.hpp"
 
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_init.h>
 #include <cassert>
 #include <entt/core/fwd.hpp>
 #include <entt/core/hashed_string.hpp>
@@ -154,6 +155,20 @@ comp::singl::runtime_context::custom_inspect (
 
   return changed;
 }
+
+comp::singl::runtime_context::sdl_init_guard::sdl_init_guard ()
+{
+  if (!SDL_Init (SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO))
+    {
+      spdlog::critical ("Failed to initialize SDL: {}", SDL_GetError ());
+    }
+  else
+    {
+      spdlog::debug ("SDL initialized successfully");
+    }
+}
+
+comp::singl::runtime_context::sdl_init_guard::~sdl_init_guard () { SDL_Quit (); }
 
 comp::singl::runtime_context::runtime_context (const char *name, int width,
                                                int height,
