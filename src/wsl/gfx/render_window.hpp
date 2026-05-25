@@ -21,7 +21,8 @@ class render_window
 public:
   render_window (const char *name, int width, int height,
                  wsl::gfx::render_context *ctx,
-                 wsl::rsc::resource_manager *res_mgr);
+                 wsl::rsc::resource_manager *res_mgr,
+                 bool headless = false);
   ~render_window ();
 
   void get_size (uint32_t &width, uint32_t &height) const;

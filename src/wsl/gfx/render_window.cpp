@@ -162,9 +162,16 @@ render_window::create_blur_pipe ()
 
 render_window::render_window (const char *name, int width, int height,
                               wsl::gfx::render_context *ctx,
-                              wsl::rsc::resource_manager *res_mgr)
+                              wsl::rsc::resource_manager *res_mgr,
+                              bool headless)
     : ctx (ctx), m_res_mgr (res_mgr)
 {
+  if (headless)
+    {
+      spdlog::debug ("render_window: headless mode, skipping window creation");
+      return;
+    }
+
   handler = SDL_CreateWindow (name, width, height, SDL_WINDOW_RESIZABLE);
   SDL_ShowWindow (handler);
   SDL_ClaimWindowForGPUDevice (ctx->gpu_device, handler);
@@ -182,6 +189,13 @@ render_window::render_window (const char *name, int width, int height,
 
 render_window::~render_window ()
 {
+  if (ctx->gpu_device == nullptr)
+    {
+      if (handler != nullptr)
+        SDL_DestroyWindow (handler);
+      return;
+    }
+
   if (pipe_downsample != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_downsample);
 }
@@ -212,6 +226,13 @@ render_window::~render_window ()
 void
 render_window::get_size (uint32_t &width, uint32_t &height) const
 {
+  if (handler == nullptr)
+    {
+      width = 0;
+      height = 0;
+      return;
+    }
+
   int w;
   int h;
   SDL_GetWindowSize (handler, &w, &h);
@@ -222,12 +243,20 @@ render_window::get_size (uint32_t &width, uint32_t &height) const
 void
 render_window::get_size (int &width, int &height) const
 {
+  if (handler == nullptr)
+    {
+      width = 0;
+      height = 0;
+      return;
+    }
   SDL_GetWindowSize (handler, &width, &height);
 }
 
 void
 render_window::create_depth_texture ()
 {
+  if (ctx->gpu_device == nullptr || handler == nullptr) return;
+
   destroy_texture (depth_texture);
 
   int w;

@@ -156,8 +156,15 @@ comp::singl::runtime_context::custom_inspect (
   return changed;
 }
 
-comp::singl::runtime_context::sdl_init_guard::sdl_init_guard ()
+comp::singl::runtime_context::sdl_init_guard::sdl_init_guard (bool headless)
+    : is_headless (headless)
 {
+  if (headless)
+    {
+      spdlog::debug ("runtime_context: headless mode, skipping SDL initialization");
+      return;
+    }
+
   if (!SDL_Init (SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO))
     {
       spdlog::critical ("Failed to initialize SDL: {}", SDL_GetError ());
@@ -168,21 +175,29 @@ comp::singl::runtime_context::sdl_init_guard::sdl_init_guard ()
     }
 }
 
-comp::singl::runtime_context::sdl_init_guard::~sdl_init_guard () { SDL_Quit (); }
+comp::singl::runtime_context::sdl_init_guard::~sdl_init_guard ()
+{
+  if (!is_headless)
+    SDL_Quit ();
+}
 
 comp::singl::runtime_context::runtime_context (const char *name, int width,
                                                int height,
-                                               const std::string &engine_res_path)
+                                               const std::string &engine_res_path,
+                                               bool headless)
     : signal_hub (dispatcher, signal_db), world (this), scene_manager (world),
       resource_manager (this, engine_res_path),
       resource_manager_view (&resource_manager),
-      window (name, width, height, &render_ctx, &resource_manager),
+      sdl_init_guard_ (headless),
+      render_ctx (headless),
+      window (name, width, height, &render_ctx, &resource_manager, headless),
       runtime_project_module (this),
       ui_manager (render_ctx, window, &resource_manager),
       reg_queries (component_registry, system_factory_registry, signal_hub)
 {
   system_factory_registry.set_signal_hub (&signal_hub);
-  spdlog::debug ("runtime_context: GPU device status: {}", (void*)render_ctx.gpu_device);
+  if (!headless)
+    spdlog::debug ("runtime_context: GPU device status: {}", (void*)render_ctx.gpu_device);
   current_input_map = &app_input_map;
 
   signal_hub.resolve_active_registry = [this] () -> entt::registry * {

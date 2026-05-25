@@ -172,7 +172,13 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
     proj.fonts_path = "rsc/fonts";
     proj.default_scene_path = "";
 
-    wsl::rsc::project_loader const loader;
+    wsl::comp::singl::runtime_context rtc{
+      "Project Generator", 0, 0, default_engine_resource_path (), true
+    };
+    rtc.set_editor_ctx(nullptr);
+    register_all(rtc);
+
+    wsl::rsc::project_loader const loader(&rtc);
     if (loader.create (proj)) {
       std::cout << "Project created successfully at " << proj.root_path << '\n';
       return {true, 0, std::nullopt};
@@ -191,7 +197,7 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
     }
 
     wsl::comp::singl::runtime_context rtc{
-      "Scene Generator", 1, 1, default_engine_resource_path ()
+      "Scene Generator", 0, 0, default_engine_resource_path (), true
     };
     rtc.set_editor_ctx(nullptr);
     register_all(rtc);
@@ -242,7 +248,7 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
       }
 
       wsl::comp::singl::runtime_context rtc{
-        "Validator", 1, 1, default_engine_resource_path ()
+        "Validator", 0, 0, default_engine_resource_path (), true
       };
       register_all(rtc);
 

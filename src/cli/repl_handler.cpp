@@ -302,7 +302,7 @@ void repl_handler::run(std::optional<std::string> initial_project) {
         spdlog::info("Connected to editor server for project: {}", *initial_project);
     } else {
         // Initialize local runtime context
-        m_rtc = std::make_unique<wsl::comp::singl::runtime_context>("Weasel REPL", 1, 1, m_engine_res_path);
+        m_rtc = std::make_unique<wsl::comp::singl::runtime_context>("Weasel REPL", 0, 0, m_engine_res_path, true);
         m_rtc->set_editor_ctx(nullptr);
         
         // Register components/systems

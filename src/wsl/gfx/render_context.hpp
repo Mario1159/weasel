@@ -17,7 +17,7 @@ namespace gfx
 class render_context
 {
 public:
-  render_context ();
+  render_context (bool headless = false);
   ~render_context ();
 
   SDL_GPUDevice *device () const;

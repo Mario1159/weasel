@@ -536,6 +536,223 @@ install(TARGETS wsl weasel weasel-cli
     ARCHIVE DESTINATION lib COMPONENT Runtime
 )
 
+# Generate a manual WeaselTargets.cmake with an imported target for wsl.
+# This avoids CMake export issues with wsl's many CPM-based PUBLIC dependencies.
+set(_WEASEL_IMPORTED_DEFS "JPH_DEBUG_RENDERER;CPP_RTTI_ENABLED;RMLUI_SDL_VERSION_MAJOR=3;RMLUI_NUM_MSAA_SAMPLES=4")
+if(WEASEL_ENABLE_MULTIPLAYER)
+    set(_WEASEL_IMPORTED_DEFS "${_WEASEL_IMPORTED_DEFS};WEASEL_ENABLE_MULTIPLAYER")
+endif()
+
+if(WIN32)
+    set(_WSL_IMPORTED_LOCATION "wsl.dll")
+    set(_WSL_IMPORTED_IMPLIB "wsl.lib")
+elseif(APPLE)
+    set(_WSL_IMPORTED_LOCATION "libwsl.dylib")
+else()
+    set(_WSL_IMPORTED_LOCATION "libwsl.so")
+endif()
+
+file(WRITE "${CMAKE_BINARY_DIR}/WeaselTargets.cmake" "# Auto-generated WeaselTargets.cmake
+get_filename_component(_IMPORT_PREFIX \"\${CMAKE_CURRENT_LIST_DIR}/../../..\" ABSOLUTE)
+
+add_library(Weasel::wsl SHARED IMPORTED)
+set_target_properties(Weasel::wsl PROPERTIES
+    IMPORTED_LOCATION \"\${_IMPORT_PREFIX}/lib/${_WSL_IMPORTED_LOCATION}\"")
+
+if(WIN32)
+    file(APPEND "${CMAKE_BINARY_DIR}/WeaselTargets.cmake" "
+    IMPORTED_IMPLIB \"\${_IMPORT_PREFIX}/lib/${_WSL_IMPORTED_IMPLIB}\"")
+endif()
+
+file(APPEND "${CMAKE_BINARY_DIR}/WeaselTargets.cmake" "
+    INTERFACE_INCLUDE_DIRECTORIES \"\${_IMPORT_PREFIX}/include\"")
+
+if(_WEASEL_IMPORTED_DEFS)
+    file(APPEND "${CMAKE_BINARY_DIR}/WeaselTargets.cmake" "
+    INTERFACE_COMPILE_DEFINITIONS \"${_WEASEL_IMPORTED_DEFS}\"")
+endif()
+
+file(APPEND "${CMAKE_BINARY_DIR}/WeaselTargets.cmake" "
+)
+add_library(wsl ALIAS Weasel::wsl)
+")
+
+install(FILES "${CMAKE_BINARY_DIR}/WeaselTargets.cmake"
+    DESTINATION lib/cmake/Weasel
+    COMPONENT Runtime
+)
+
+install(FILES WeaselConfig.cmake
+    DESTINATION lib/cmake/Weasel
+    COMPONENT Runtime
+)
+
+set(_WEASEL_HEADER_PATTERNS PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl")
+
+install(DIRECTORY src/
+    DESTINATION include
+    COMPONENT Runtime
+    FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+)
+
+# Install dependency headers needed by wsl public API
+if(DEFINED EnTT_SOURCE_DIR)
+    install(DIRECTORY ${EnTT_SOURCE_DIR}/src/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+endif()
+
+if(DEFINED cereal_SOURCE_DIR)
+    install(DIRECTORY ${cereal_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+endif()
+
+if(DEFINED JoltPhysics_SOURCE_DIR)
+    install(DIRECTORY ${JoltPhysics_SOURCE_DIR}/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+endif()
+
+if(DEFINED fastgltf_SOURCE_DIR)
+    install(DIRECTORY ${fastgltf_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+endif()
+
+if(DEFINED spdlog_SOURCE_DIR)
+    install(DIRECTORY ${spdlog_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+endif()
+
+if(DEFINED RmlUi_SOURCE_DIR)
+    install(DIRECTORY ${RmlUi_SOURCE_DIR}/Include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+    install(DIRECTORY ${RmlUi_SOURCE_DIR}/Backends/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "RmlUi_*.h"
+    )
+endif()
+
+if(DEFINED slang_SOURCE_DIR)
+    install(DIRECTORY ${slang_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+endif()
+
+if(DEFINED SDL3_image_SOURCE_DIR)
+    install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+
+if(DEFINED SDL3_mixer_SOURCE_DIR)
+    install(DIRECTORY ${SDL3_mixer_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+
+if(DEFINED imgui_SOURCE_DIR)
+    install(DIRECTORY ${imgui_SOURCE_DIR}/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "imgui*.h" PATTERN "imconfig.h"
+    )
+endif()
+
+if(DEFINED cereal_SOURCE_DIR)
+    install(DIRECTORY ${cereal_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+    )
+endif()
+
+if(DEFINED JoltPhysics_SOURCE_DIR)
+    install(DIRECTORY ${JoltPhysics_SOURCE_DIR}/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    )
+endif()
+
+if(DEFINED fastgltf_SOURCE_DIR)
+    install(DIRECTORY ${fastgltf_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+    )
+endif()
+
+if(DEFINED spdlog_SOURCE_DIR)
+    install(DIRECTORY ${spdlog_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+    )
+endif()
+
+if(DEFINED RmlUi_SOURCE_DIR)
+    install(DIRECTORY ${RmlUi_SOURCE_DIR}/Include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
+    )
+endif()
+
+if(DEFINED slang_SOURCE_DIR)
+    install(DIRECTORY ${slang_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    )
+endif()
+
+if(DEFINED imgui_SOURCE_DIR)
+    install(DIRECTORY ${imgui_SOURCE_DIR}/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "imgui*.h" PATTERN "imconfig.h"
+    )
+endif()
+
+if(DEFINED SDL3_image_SOURCE_DIR)
+    install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+
+if(DEFINED SDL3_mixer_SOURCE_DIR)
+    install(DIRECTORY ${SDL3_mixer_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Runtime
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+
 install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel COMPONENT Runtime)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel COMPONENT Runtime)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel COMPONENT Runtime)

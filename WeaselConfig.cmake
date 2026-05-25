@@ -1,29 +1,51 @@
+include(CMakeFindDependencyMacro)
+
+# Find public dependencies needed by wsl headers
+find_dependency(SDL3 CONFIG REQUIRED)
+find_dependency(LibArchive REQUIRED)
+find_dependency(PkgConfig REQUIRED)
+
 if(NOT TARGET wsl)
     # Check if a pre-built engine exists (prefer explicit build dir if provided)
     set(_WEASEL_TARGETS_PATH "")
     if(DEFINED Weasel_BUILD_DIR AND EXISTS "${Weasel_BUILD_DIR}/WeaselTargets.cmake")
         set(_WEASEL_TARGETS_PATH "${Weasel_BUILD_DIR}/WeaselTargets.cmake")
+    elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/WeaselTargets.cmake")
+        # Installed package
+        set(_WEASEL_TARGETS_PATH "${CMAKE_CURRENT_LIST_DIR}/WeaselTargets.cmake")
     elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/build/WeaselTargets.cmake")
+        # Source tree with build subdir
         set(_WEASEL_TARGETS_PATH "${CMAKE_CURRENT_LIST_DIR}/build/WeaselTargets.cmake")
     endif()
 
     if(_WEASEL_TARGETS_PATH)
-        message(STATUS "Using pre-built Weasel Engine from: ${_WEASEL_TARGETS_PATH}")
-        
-        include(CMakeFindDependencyMacro)
-        find_dependency(SDL3 CONFIG REQUIRED)
-        find_dependency(LibArchive REQUIRED)
-        find_dependency(PkgConfig REQUIRED)
-
+        message(STATUS "Using Weasel Engine from: ${_WEASEL_TARGETS_PATH}")
         include("${_WEASEL_TARGETS_PATH}")
-        if(TARGET Weasel::wsl)
+        if(TARGET Weasel::wsl AND NOT TARGET wsl)
             add_library(wsl ALIAS Weasel::wsl)
+        endif()
+        if(TARGET wsl)
             set(Weasel_FOUND TRUE)
+
+            # Set resource path based on whether this is an install or a build tree
+            get_filename_component(_WEASEL_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+            if(EXISTS "${_WEASEL_PREFIX}/share/weasel/compiled_shaders")
+                set(Weasel_RESOURCE_PATH "${_WEASEL_PREFIX}/share/weasel")
+            elseif(DEFINED Weasel_BUILD_DIR AND EXISTS "${Weasel_BUILD_DIR}/compiled_shaders")
+                set(Weasel_RESOURCE_PATH "${Weasel_BUILD_DIR}")
+            elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/build/compiled_shaders")
+                set(Weasel_RESOURCE_PATH "${CMAKE_CURRENT_LIST_DIR}/build")
+            endif()
             return()
         endif()
     endif()
 
     # Fallback: add_subdirectory (builds from source)
-    message(STATUS "Pre-built Weasel Engine not found, building from source...")
-    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/weasel")
+    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt")
+        message(STATUS "Pre-built Weasel Engine not found, building from source...")
+        add_subdirectory("${CMAKE_CURRENT_LIST_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/weasel")
+        set(Weasel_RESOURCE_PATH "${CMAKE_CURRENT_BINARY_DIR}/weasel" CACHE PATH "Weasel engine resource path")
+    else()
+        message(FATAL_ERROR "Weasel Engine not found. Set Weasel_DIR to the engine source or install directory.")
+    endif()
 endif()

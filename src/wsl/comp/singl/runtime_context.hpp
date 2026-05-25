@@ -52,7 +52,8 @@ public:
    * \param engine_res_path Base path for engine resources.
    */
   explicit runtime_context (const char *name, int width, int height,
-                            const std::string &engine_res_path);
+                            const std::string &engine_res_path,
+                            bool headless = false);
 
   /*! \brief Register reflection metadata for this class. */
   static void register_meta ();
@@ -125,8 +126,10 @@ public:
 private:
     struct sdl_init_guard
     {
-        sdl_init_guard ();
+        sdl_init_guard (bool headless = false);
         ~sdl_init_guard ();
+
+        bool is_headless = false;
     };
     sdl_init_guard sdl_init_guard_;
 

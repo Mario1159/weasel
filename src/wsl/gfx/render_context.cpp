@@ -9,8 +9,14 @@
 namespace wsl
 {
 
-gfx::render_context::render_context ()
+gfx::render_context::render_context (bool headless)
 {
+  if (headless)
+    {
+      spdlog::debug ("render_context: headless mode, skipping GPU device creation");
+      return;
+    }
+
   int driver_count = SDL_GetNumGPUDrivers ();
   spdlog::debug ("render_context: found {} GPU drivers", driver_count);
 

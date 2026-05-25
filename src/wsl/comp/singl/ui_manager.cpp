@@ -32,6 +32,12 @@ ui_manager::ui_manager (gfx::render_context &ctx, wsl::gfx::render_window &windo
                         wsl::rsc::resource_manager *res_mgr)
     :  render_interface (ctx.gpu_device, window.handler)
 {
+  if (ctx.gpu_device == nullptr || window.handler == nullptr)
+    {
+      spdlog::debug ("ui_manager: headless mode, skipping RmlUi initialization");
+      return;
+    }
+
   spdlog::debug ("ui_manager: using GPU device {}", (void*)ctx.gpu_device);
   Rml::SetRenderInterface (&render_interface);
   Rml::SetSystemInterface (&system_interface);
@@ -52,6 +58,8 @@ ui_manager::ui_manager (gfx::render_context &ctx, wsl::gfx::render_window &windo
 
 ui_manager::~ui_manager ()
 {
+  if (context == nullptr) return;
+
   if (active_document_instance != nullptr) {
     active_document_instance->Close ();
     active_document_instance = nullptr;
