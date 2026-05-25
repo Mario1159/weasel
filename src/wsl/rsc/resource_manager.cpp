@@ -123,12 +123,13 @@ sort_infos (std::vector<Info> &infos)
 
 rsc::resource_manager::resource_manager (
     comp::singl::runtime_context *m_runtime_ctx,
-    const std::string &engine_res_path)
+    const std::string &engine_res_path, bool manages_runtime_state)
     : m_runtime_ctx (m_runtime_ctx), m_scenes (scene_loader{}),
       m_models (model_loader{ &m_runtime_ctx->render_ctx }),
       m_cubemaps (cubemap_loader{ &m_runtime_ctx->render_ctx }),
       m_images (image_loader{}), m_shaders (shader_loader{}),
-      m_project_loader (m_runtime_ctx), m_wsl_resource_path (engine_res_path)
+      m_project_loader (m_runtime_ctx), m_wsl_resource_path (engine_res_path),
+      m_manages_runtime_state (manages_runtime_state)
 {
 
   if (!MIX_Init ()) {
@@ -988,25 +989,39 @@ rsc::resource_manager::list_fonts () const
 
 rsc::resource_manager::~resource_manager ()
 {
-  clear_all_resources ();
-  if (m_mixer != nullptr) {
-    MIX_DestroyMixer (m_mixer);
-  }
-  MIX_Quit ();
+  shutdown ();
 }
 
 void
-rsc::resource_manager::clear_all_resources ()
+rsc::resource_manager::shutdown ()
+{
+  if (m_shutdown) {
+    return;
+  }
+
+  clear_all_resources (false);
+  if (m_mixer != nullptr) {
+    MIX_DestroyMixer (m_mixer);
+    m_mixer = nullptr;
+  }
+  MIX_Quit ();
+
+  m_editor_ctx = nullptr;
+  m_runtime_ctx = nullptr;
+  m_shutdown = true;
+}
+
+void
+rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
 {
   if (m_clearing) {
     return;
   }
   m_clearing = true;
 
-  // Project reload tears down scenes, renderer-owned resources, and asset
-  // caches that may still be referenced by the previous frame submission.
   // Wait for the GPU first so we do not destroy in-flight resources.
   if ((m_runtime_ctx != nullptr) && (m_runtime_ctx->render_ctx.gpu_device != nullptr)) {
+    // Only wait if SDL is still initialized and the device is valid
     SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
   }
 
@@ -1045,8 +1060,10 @@ rsc::resource_manager::clear_all_resources ()
   m_cancel_scenes.clear ();
   m_active_project.reset ();
 
-  // Shut down systems properly before destroying scenes to avoid stale context access
-  if (m_runtime_ctx != nullptr) {
+  // Shut down systems properly before destroying scenes to avoid stale context
+  // access. Auxiliary managers (like editor-only engine resources) must not
+  // tear down the shared runtime world.
+  if (m_manages_runtime_state && (m_runtime_ctx != nullptr)) {
     for (auto &scene : m_runtime_ctx->world.get_scenes ()) {
       if (scene) {
         scene->stop_and_clear ();
@@ -1064,8 +1081,10 @@ rsc::resource_manager::clear_all_resources ()
     m_runtime_ctx->signal_hub.clear_connections ();
   }
 
-  register_builtin_models ();
-  register_builtin_cubemaps ();
+  if (restore_builtin_defaults) {
+    register_builtin_models ();
+    register_builtin_cubemaps ();
+  }
   m_clearing = false;
 }
 

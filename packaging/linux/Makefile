@@ -11,7 +11,7 @@ SHAREDIR   = $(PREFIX)/share/weasel
 INCLUDEDIR = $(PREFIX)/include
 CMAKE_DIR  = $(PREFIX)/lib/cmake/Weasel
 
-BINARIES   = bin/weasel bin/weasel-cli
+BINARIES   = bin/weasel bin/weasel-cli bin/weasel-mcp-server
 LIBRARIES  = lib/libwsl.so
 SHAREDIRS  = share/weasel/compiled_shaders \
              share/weasel/icons \
@@ -28,6 +28,7 @@ all:
 check:
 	@test -f bin/weasel || { echo "Error: bin/weasel not found"; exit 1; }
 	@test -f bin/weasel-cli || { echo "Error: bin/weasel-cli not found"; exit 1; }
+	@test -f bin/weasel-mcp-server || { echo "Error: bin/weasel-mcp-server not found"; exit 1; }
 	@test -f lib/libwsl.so || { echo "Error: lib/libwsl.so not found"; exit 1; }
 	@test -d lib/cmake/Weasel || { echo "Error: lib/cmake/Weasel not found"; exit 1; }
 
@@ -36,6 +37,7 @@ install: check
 		$(DESTDIR)$(INCLUDEDIR) $(DESTDIR)$(CMAKE_DIR)
 	install -Dm755 bin/weasel $(DESTDIR)$(BINDIR)/weasel
 	install -Dm755 bin/weasel-cli $(DESTDIR)$(BINDIR)/weasel-cli
+	install -Dm755 bin/weasel-mcp-server $(DESTDIR)$(BINDIR)/weasel-mcp-server
 	install -Dm644 lib/libwsl.so $(DESTDIR)$(LIBDIR)/libwsl.so
 	cp -r share/weasel/* $(DESTDIR)$(SHAREDIR)/
 	cp -r lib/cmake/Weasel/* $(DESTDIR)$(CMAKE_DIR)/
@@ -46,6 +48,7 @@ install: check
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/weasel
 	rm -f $(DESTDIR)$(BINDIR)/weasel-cli
+	rm -f $(DESTDIR)$(BINDIR)/weasel-mcp-server
 	rm -f $(DESTDIR)$(LIBDIR)/libwsl.so
 	rm -rf $(DESTDIR)$(SHAREDIR)
 	rm -rf $(DESTDIR)$(CMAKE_DIR)

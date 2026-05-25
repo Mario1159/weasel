@@ -45,7 +45,19 @@ gfx::render_context::render_context (bool headless)
   spdlog::debug ("GPU DEVICE {}", (void *)gpu_device);
 }
 
-gfx::render_context::~render_context () { SDL_DestroyGPUDevice (gpu_device); }
+gfx::render_context::~render_context ()
+{
+  if (gpu_device != nullptr)
+    {
+      SDL_WaitForGPUIdle (gpu_device);
+      SDL_DestroyGPUDevice (gpu_device);
+      gpu_device = nullptr;
+      main_cmd = nullptr;
+      main_pass = nullptr;
+      ui_pass = nullptr;
+      SDL_PumpEvents ();
+    }
+}
 
 SDL_GPUDevice *
 gfx::render_context::device () const

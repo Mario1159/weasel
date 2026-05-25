@@ -317,9 +317,13 @@ public:
    * \param engine_res_path Path to engine-provided resources used as a base for resolution.
    */
   explicit resource_manager (comp::singl::runtime_context *runtime_ctx,
-                             const std::string &engine_res_path = ".");
+                             const std::string &engine_res_path = ".",
+                             bool manages_runtime_state = true);
   /*! \brief Destroy the resource manager and release owned resources. */
   ~resource_manager ();
+
+  /*! \brief Final shutdown used when the owning runtime is being destroyed. */
+  void shutdown ();
 
   /*! \brief Assign an editor context for editor-only behaviors (non-owning).
    * \param editor_ctx Editor context pointer, or nullptr to clear.
@@ -592,7 +596,7 @@ public:
   std::shared_ptr<rsc::project> current_project () const;
 
   /*! \brief Unload and clear all managed resources, releasing GPU and CPU memory. */
-  void clear_all_resources ();
+  void clear_all_resources (bool restore_builtin_defaults = true);
 
   /*! \brief Access to the internal audio mixer instance (non-owning). */
   MIX_Mixer *mixer () const { return m_mixer; }
@@ -672,6 +676,8 @@ private:
   std::string m_wsl_resource_path = ".";
 
   bool m_clearing = false;
+  bool m_shutdown = false;
+  bool m_manages_runtime_state = true;
 
   struct project_load_job
   {

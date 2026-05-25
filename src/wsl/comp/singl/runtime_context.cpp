@@ -185,15 +185,17 @@ comp::singl::runtime_context::runtime_context (const char *name, int width,
                                                int height,
                                                const std::string &engine_res_path,
                                                bool headless)
-    : signal_hub (dispatcher, signal_db), world (this), scene_manager (world),
-      resource_manager (this, engine_res_path),
-      resource_manager_view (&resource_manager),
+    : world (this),
+      scene_manager (world),
+      signal_hub (dispatcher, signal_db),
+      reg_queries (component_registry, system_factory_registry, signal_hub),
+      runtime_project_module (this),
       sdl_init_guard_ (headless),
       render_ctx (headless),
+      resource_manager (this, engine_res_path),
+      resource_manager_view (&resource_manager),
       window (name, width, height, &render_ctx, &resource_manager, headless),
-      runtime_project_module (this),
-      ui_manager (render_ctx, window, &resource_manager),
-      reg_queries (component_registry, system_factory_registry, signal_hub)
+      ui_manager (render_ctx, window, &resource_manager)
 {
   system_factory_registry.set_signal_hub (&signal_hub);
   if (!headless)
@@ -230,6 +232,14 @@ comp::singl::runtime_context::runtime_context (const char *name, int width,
 
   core_systems = std::make_unique<sys::core_systems> ();
   core_systems->init (this, nullptr);
+}
+
+comp::singl::runtime_context::~runtime_context ()
+{
+  // The main resource manager depends on the runtime world, core systems, and
+  // GPU device still being alive. Shut it down explicitly before member
+  // destruction starts.
+  resource_manager.shutdown ();
 }
 
 void

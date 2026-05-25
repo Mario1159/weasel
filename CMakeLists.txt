@@ -530,7 +530,7 @@ add_test(NAME validate_roll_a_ball_scene COMMAND weasel --validate-scene "${ROLL
 # etc.) have their own install() rules that break in CI (wrong paths, man pages,
 # missing files).  Tagging everything with COMPONENT Runtime and limiting
 # CPACK_COMPONENTS_ALL prevents CPack from touching them.
-install(TARGETS wsl weasel weasel-cli
+install(TARGETS wsl weasel weasel-cli weasel-mcp-server
     RUNTIME DESTINATION bin COMPONENT Runtime
     LIBRARY DESTINATION lib COMPONENT Runtime
     ARCHIVE DESTINATION lib COMPONENT Runtime

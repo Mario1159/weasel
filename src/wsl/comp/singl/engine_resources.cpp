@@ -13,7 +13,9 @@ namespace comp::singl
 {
 
 engine_resources::engine_resources (comp::singl::runtime_context &runtime_ctx)
-    : m_resource_manager (&runtime_ctx, runtime_ctx.resource_manager.get_engine_resource_path ())
+    : m_resource_manager (&runtime_ctx,
+                          runtime_ctx.resource_manager.get_engine_resource_path (),
+                          false)
 {
 }
 

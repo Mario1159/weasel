@@ -55,6 +55,8 @@ public:
                             const std::string &engine_res_path,
                             bool headless = false);
 
+  ~runtime_context ();
+
   /*! \brief Register reflection metadata for this class. */
   static void register_meta ();
 
@@ -111,31 +113,31 @@ public:
 
   rsc::world world;
   rsc::scene_manager scene_manager;
-  rsc::resource_manager resource_manager;
-  rsc::resource_manager_view resource_manager_view;
 
   reg::component_registry component_registry;
   reg::singleton_registry singleton_registry;
   reg::system_factory_registry system_factory_registry;
+  reg::sig::signal_debug_db signal_db;
+  entt::dispatcher dispatcher;
+  reg::sig::signal_hub signal_hub;
   reg::registry_queries reg_queries;
   reg::runtime::runtime_project_module runtime_project_module;
 
-    reg::sig::signal_hub signal_hub;
-    entt::dispatcher dispatcher;
-
 private:
-    struct sdl_init_guard
-    {
-        sdl_init_guard (bool headless = false);
-        ~sdl_init_guard ();
+  struct sdl_init_guard
+  {
+    sdl_init_guard (bool headless = false);
+    ~sdl_init_guard ();
 
-        bool is_headless = false;
-    };
-    sdl_init_guard sdl_init_guard_;
+    bool is_headless = false;
+  };
+  sdl_init_guard sdl_init_guard_;
 
 public:
-    gfx::render_context render_ctx;
-    gfx::render_window window;
+  gfx::render_context render_ctx;
+  rsc::resource_manager resource_manager;
+  rsc::resource_manager_view resource_manager_view;
+  gfx::render_window window;
 
   comp::singl::ui_manager ui_manager;
 
@@ -146,8 +148,6 @@ public:
   bool in_play_session = false;
 
   class editor_context *editor_ctx = nullptr;
-
-  reg::sig::signal_debug_db signal_db;
   std::unordered_map<entt::id_type, std::string> scene_save_states;
 
 private:

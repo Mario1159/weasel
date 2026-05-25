@@ -196,6 +196,8 @@ render_window::~render_window ()
       return;
     }
 
+  SDL_WaitForGPUIdle (ctx->gpu_device);
+
   if (pipe_downsample != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_downsample);
 }
@@ -220,7 +222,11 @@ render_window::~render_window ()
   destroy_texture (depth_texture);
   destroy_texture (present_tex.texture_data);
 
+  SDL_WaitForGPUIdle (ctx->gpu_device);
+
+  SDL_ReleaseWindowFromGPUDevice (ctx->gpu_device, handler);
   SDL_DestroyWindow (handler);
+  SDL_PumpEvents ();
 }
 
 void
@@ -347,6 +353,8 @@ render_window::on_resize ()
   if (w <= 0 || h <= 0) {
     return;
 }
+
+  SDL_WaitForGPUIdle (ctx->gpu_device);
 
   // Depth
   create_depth_texture ();

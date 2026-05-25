@@ -483,6 +483,10 @@ renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::rende
 
 renderer_imgui::~renderer_imgui ()
 {
+  if ((m_ctx != nullptr) && (m_ctx->gpu_device != nullptr))
+    {
+      SDL_WaitForGPUIdle (m_ctx->gpu_device);
+    }
   destroy_preview_targets ();
 
   ImGui_ImplSDLGPU3_Shutdown ();

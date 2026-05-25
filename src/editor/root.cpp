@@ -304,7 +304,9 @@ editor::root::draw_main_menu ()
     ImGui::Separator ();
 
     if (ImGui::MenuItem ("Exit")) {
-      std::exit (0);
+      SDL_Event quit_event;
+      quit_event.type = SDL_EVENT_QUIT;
+      SDL_PushEvent (&quit_event);
     }
 
     ImGui::EndMenu ();
