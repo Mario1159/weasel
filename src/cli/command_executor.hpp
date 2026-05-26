@@ -26,6 +26,7 @@ private:
     void cmd_sig(const std::vector<std::string>& tokens);
     void cmd_sys(const std::vector<std::string>& tokens);
     void cmd_check(const std::vector<std::string>& tokens);
+    void cmd_rsc(const std::vector<std::string>& tokens);
     void cmd_help();
     
     wsl::rsc::scene* get_active_scene();

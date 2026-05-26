@@ -154,6 +154,7 @@ std::string command_executor::execute(const std::string& line) {
     else if (family == "sig") cmd_sig(tokens);
     else if (family == "sys") cmd_sys(tokens);
     else if (family == "check") cmd_check(tokens);
+    else if (family == "rsc") cmd_rsc(tokens);
     else if (family == "help") cmd_help();
     else if (family == "exit" || family == "quit") m_output << "exit\n";
     else if (family == "cls") m_output << "\033[2J\033[1;1H";
@@ -386,11 +387,17 @@ void command_executor::cmd_comp(const std::vector<std::string>& tokens) {
         }
     } else if (action == "add") {
         if (tokens.size() < 4) return;
-        auto type = entt::resolve(entt::hashed_string(tokens[3].c_str()));
-        if (type) {
-            (void)type.construct(entt::forward_as_any(scene->get_registry()), entt::forward_as_any(e));
-            m_output << "Added " << tokens[3] << " to " << tokens[2] << "\n";
-        } else m_output << "Unknown component type: " << tokens[3] << "\n";
+        const auto* descriptor = m_rtc.component_registry.find_world_component(tokens[3]);
+        if (descriptor && descriptor->emplace_default) {
+            if (descriptor->emplace_default(scene->get_registry(), e)) {
+                m_output << "Added " << tokens[3] << " to " << tokens[2] << "\n";
+            } else {
+                m_output << "Failed to add " << tokens[3] << " to " << tokens[2]
+                         << " (already has it or entity invalid)\n";
+            }
+        } else {
+            m_output << "Unknown component type: " << tokens[3] << "\n";
+        }
     }
 }
 
@@ -428,6 +435,117 @@ void command_executor::cmd_check(const std::vector<std::string>& tokens) {
     m_output << "Validation placeholder for " << tokens[1] << "\n";
 }
 
+static std::string resource_state_str(wsl::rsc::model_state s) {
+    switch (s) {
+        case wsl::rsc::model_state::not_loaded:    return "not_loaded";
+        case wsl::rsc::model_state::loading_cpu:   return "loading_cpu";
+        case wsl::rsc::model_state::preparing_gpu: return "preparing_gpu";
+        case wsl::rsc::model_state::uploading_gpu: return "uploading_gpu";
+        case wsl::rsc::model_state::loaded:        return "loaded";
+    }
+    return "unknown";
+}
+
+static std::string resource_state_str(wsl::rsc::image_state s) {
+    switch (s) {
+        case wsl::rsc::image_state::not_loaded: return "not_loaded";
+        case wsl::rsc::image_state::loading:    return "loading";
+        case wsl::rsc::image_state::loaded:     return "loaded";
+    }
+    return "unknown";
+}
+
+static std::string resource_state_str(wsl::rsc::cubemap_state s) {
+    switch (s) {
+        case wsl::rsc::cubemap_state::not_loaded: return "not_loaded";
+        case wsl::rsc::cubemap_state::loading:    return "loading";
+        case wsl::rsc::cubemap_state::loaded:     return "loaded";
+    }
+    return "unknown";
+}
+
+static std::string resource_state_str(wsl::rsc::scene_state s) {
+    switch (s) {
+        case wsl::rsc::scene_state::not_loaded: return "not_loaded";
+        case wsl::rsc::scene_state::loading:    return "loading";
+        case wsl::rsc::scene_state::loaded:     return "loaded";
+    }
+    return "unknown";
+}
+
+static std::string resource_state_str(wsl::rsc::audio_state s) {
+    switch (s) {
+        case wsl::rsc::audio_state::not_loaded: return "not_loaded";
+        case wsl::rsc::audio_state::loading:    return "loading";
+        case wsl::rsc::audio_state::loaded:     return "loaded";
+    }
+    return "unknown";
+}
+
+static std::string resource_state_str(wsl::rsc::ui_layout_state s) {
+    switch (s) {
+        case wsl::rsc::ui_layout_state::not_loaded: return "not_loaded";
+        case wsl::rsc::ui_layout_state::loaded:     return "loaded";
+    }
+    return "unknown";
+}
+
+static std::string resource_state_str(wsl::rsc::shader_state s) {
+    switch (s) {
+        case wsl::rsc::shader_state::not_loaded: return "not_loaded";
+        case wsl::rsc::shader_state::loading:    return "loading";
+        case wsl::rsc::shader_state::loaded:     return "loaded";
+    }
+    return "unknown";
+}
+
+void command_executor::cmd_rsc(const std::vector<std::string>& tokens) {
+    auto& mgr = m_rtc.resource_manager;
+
+    auto list_type = [&](std::string_view label, auto&& list_fn) {
+        auto items = list_fn();
+        m_output << "  " << label << " (" << items.size() << "):\n";
+        for (auto& item : items) {
+            m_output << "    " << item.path << "\n";
+        }
+    };
+
+    auto list_type_with_state = [&](std::string_view label, auto&& list_fn) {
+        auto items = list_fn();
+        m_output << "  " << label << " (" << items.size() << "):\n";
+        for (auto& item : items) {
+            m_output << "    " << item.path << "  [" << resource_state_str(item.state) << "]\n";
+        }
+    };
+
+    if (tokens.size() < 2 || tokens[1] == "ls") {
+        if (tokens.size() < 3) {
+            m_output << "Registered resources:\n";
+            list_type_with_state("models",    [&]{ return mgr.list_models(); });
+            list_type_with_state("images",    [&]{ return mgr.list_images(); });
+            list_type_with_state("cubemaps",  [&]{ return mgr.list_cubemaps(); });
+            list_type_with_state("scenes",    [&]{ return mgr.list_scenes(); });
+            list_type_with_state("audio",     [&]{ return mgr.list_audio(); });
+            list_type_with_state("layouts",   [&]{ return mgr.list_ui_layouts(); });
+            list_type("fonts",     [&]{ return mgr.list_fonts(); });
+            list_type_with_state("shaders",   [&]{ return mgr.list_shaders(); });
+        } else {
+            const std::string& type = tokens[2];
+            if (type == "models")    list_type_with_state("models",   [&]{ return mgr.list_models(); });
+            else if (type == "images")   list_type_with_state("images",   [&]{ return mgr.list_images(); });
+            else if (type == "cubemaps") list_type_with_state("cubemaps", [&]{ return mgr.list_cubemaps(); });
+            else if (type == "scenes")   list_type_with_state("scenes",   [&]{ return mgr.list_scenes(); });
+            else if (type == "audio")    list_type_with_state("audio",    [&]{ return mgr.list_audio(); });
+            else if (type == "layouts")  list_type_with_state("layouts",  [&]{ return mgr.list_ui_layouts(); });
+            else if (type == "fonts")    list_type("fonts",    [&]{ return mgr.list_fonts(); });
+            else if (type == "shaders")  list_type_with_state("shaders",  [&]{ return mgr.list_shaders(); });
+            else m_output << "Unknown resource type: " << type << "\n";
+        }
+    } else {
+        m_output << "Usage: rsc ls [type]\n";
+    }
+}
+
 void command_executor::cmd_help() {
     m_output << "Available commands:\n"
               << " proj <new|load|info>      - Project management\n"
@@ -437,6 +555,7 @@ void command_executor::cmd_help() {
               << " comp <add|rm|set>         - Component management\n"
               << " sig conn ...              - Signal management\n"
               << " sys ls                    - List registered systems\n"
+              << " rsc ls [type]             - List resources (models, images, ...)\n"
               << " cls                       - Clear screen\n"
               << " help                      - Show this help\n"
               << " exit                      - Exit REPL\n";
