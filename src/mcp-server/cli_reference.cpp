@@ -29,13 +29,22 @@ const std::vector<cli_command_info> g_cli_reference = {
     {"weasel-cli --project ./mygame --attach"}
   },
   {
+    "--scene",
+    "cli",
+    "Path to a scene file (.wscn.json) to load before running a command.",
+    "weasel-cli --project <path> --scene <scene_path>",
+    {"<scene_path> – Path to the .wscn.json scene file."},
+    {"weasel-cli --project ./mygame --scene rsc/scenes/level1.wscn.json"}
+  },
+  {
     "create-project",
     "cli",
     "Create a new Weasel Engine project on disk.",
-    "weasel-cli create-project <path> <name>",
+    "weasel-cli create-project <path> <name> [--no-subdir]",
     {
       "<path> – Directory where the project will be created.",
-      "<name> – Human-readable project name."
+      "<name> – Human-readable project name.",
+      "--no-subdir – Don't create a project-name subdirectory."
     },
     {
       "weasel-cli create-project ./mygame MyGame",
@@ -53,7 +62,8 @@ const std::vector<cli_command_info> g_cli_reference = {
       "[systems...] – Optional system names to attach."
     },
     {
-      "weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn.json Level1"
+      "weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn.json Level1",
+      "weasel-cli --create-scene ./mygame/rsc/scenes/level1.wscn.json Level1"
     }
   },
   {
@@ -62,7 +72,7 @@ const std::vector<cli_command_info> g_cli_reference = {
     "Validate a project file (wslpro.json).",
     "weasel-cli validate-project <path>",
     {"<path> – Path to the project's wslpro.json file."},
-    {"weasel-cli validate-project ./mygame/wslpro.json"}
+    {"weasel-cli validate-project ./mygame/wslpro.json", "weasel-cli --validate-project ./mygame/wslpro.json"}
   },
   {
     "validate-scene",
@@ -73,7 +83,58 @@ const std::vector<cli_command_info> g_cli_reference = {
       "<scene_path> – Path to the scene .wscn.json file.",
       "<proj_path> – Path to the project's wslpro.json file."
     },
-    {"weasel-cli validate-scene ./mygame/rsc/scenes/main.wscn.json ./mygame/wslpro.json"}
+    {"weasel-cli validate-scene ./mygame/rsc/scenes/main.wscn.json ./mygame/wslpro.json", "weasel-cli --validate-scene ./mygame/rsc/scenes/main.wscn.json ./mygame/wslpro.json"}
+  },
+
+  {
+    "proj",
+    "cli",
+    "Run a project REPL command without entering the interactive shell.",
+    "weasel-cli proj <new|load|info|save> [args...]",
+    {
+      "<new|load|info|save> – Project subcommand."
+    },
+    {"weasel-cli proj load ./mygame", "weasel-cli proj info"}
+  },
+  {
+    "scene",
+    "cli",
+    "Run a scene REPL command without entering the interactive shell.",
+    "weasel-cli scene <new|load|save|ls|status> [args...]",
+    {
+      "<new|load|save|ls|status> – Scene subcommand."
+    },
+    {"weasel-cli scene ls", "weasel-cli scene status"}
+  },
+  {
+    "ent",
+    "cli",
+    "Run an entity REPL command without entering the interactive shell.",
+    "weasel-cli ent <new|ls|rm|ren|inspect> [args...]",
+    {
+      "<new|ls|rm|ren|inspect> – Entity subcommand."
+    },
+    {"weasel-cli ent ls", "weasel-cli ent new Player"}
+  },
+  {
+    "comp",
+    "cli",
+    "Run a component REPL command without entering the interactive shell.",
+    "weasel-cli comp <ls|avail|add> [args...]",
+    {
+      "<ls|avail|add> – Component subcommand."
+    },
+    {"weasel-cli comp avail", "weasel-cli comp add 42 transform"}
+  },
+  {
+    "sys",
+    "cli",
+    "Run a system REPL command without entering the interactive shell.",
+    "weasel-cli sys <ls|avail>",
+    {
+      "<ls|avail> – System subcommand."
+    },
+    {"weasel-cli sys ls", "weasel-cli sys avail"}
   },
 
   // === REPL Commands ===
@@ -204,6 +265,14 @@ const std::vector<cli_command_info> g_cli_reference = {
     {"comp ls 42"}
   },
   {
+    "comp avail",
+    "repl",
+    "List all registered component types available in the runtime.",
+    "comp avail",
+    {},
+    {"comp avail"}
+  },
+  {
     "comp add",
     "repl",
     "Add a component to an entity by type name.",
@@ -253,6 +322,14 @@ const std::vector<cli_command_info> g_cli_reference = {
     "sys ls",
     {},
     {"sys ls"}
+  },
+  {
+    "sys avail",
+    "repl",
+    "Alias for sys ls — list registered systems.",
+    "sys avail",
+    {},
+    {"sys avail"}
   },
   {
     "check",

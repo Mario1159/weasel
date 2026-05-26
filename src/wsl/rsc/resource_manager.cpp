@@ -131,6 +131,11 @@ rsc::resource_manager::resource_manager (
       m_project_loader (m_runtime_ctx), m_wsl_resource_path (engine_res_path),
       m_manages_runtime_state (manages_runtime_state)
 {
+  if ((SDL_WasInit (SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0) {
+    spdlog::debug (
+        "resource_manager: SDL audio is not initialized, skipping mixer creation");
+    return;
+  }
 
   if (!MIX_Init ()) {
     spdlog::error ("Failed to initialize SDL_mixer: {}", SDL_GetError ());

@@ -8,8 +8,8 @@ namespace wsl::cli {
 /**
  * @brief Handles command-line arguments for the Weasel Engine.
  * 
- * This class encapsulates all CLI parsing logic using CLI11 and executes
- * headless subcommands (like project/scene creation or validation).
+ * This class encapsulates CLI11 parsing for both headless utility commands
+ * and non-interactive equivalents of the REPL command families.
  */
 class cli_handler {
 public:
@@ -17,6 +17,7 @@ public:
         bool should_exit = false;
         int exit_code = 0;
         std::optional<std::string> project_to_load;
+        std::optional<std::string> scene_to_load;
         bool interactive = false;
         std::optional<std::string> command;
         bool attach = false;  // Connect to running editor server

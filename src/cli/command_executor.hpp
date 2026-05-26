@@ -16,9 +16,9 @@ public:
     // Execute a command and return the output
     std::string execute(const std::string& line);
     
-private:
-    std::vector<std::string> tokenize(const std::string& line);
+    static std::vector<std::string> tokenize(const std::string& line);
     
+private:
     void cmd_proj(const std::vector<std::string>& tokens);
     void cmd_scene(const std::vector<std::string>& tokens);
     void cmd_ent(const std::vector<std::string>& tokens);

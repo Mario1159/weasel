@@ -31,6 +31,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
 #include <iterator>
 #include <filesystem>
 #include <fstream>
@@ -39,6 +40,97 @@
 using namespace entt::literals;
 
 namespace wsl::cli {
+
+namespace {
+
+void register_repl_types(wsl::comp::singl::runtime_context& rtc) {
+    wsl::comp::singl::runtime_context::register_meta();
+    wsl::comp::singl::editor_context::register_meta();
+    wsl::comp::singl::ui_manager::register_meta();
+
+    wsl::comp::register_component_meta<
+        wsl::comp::hierarchy, wsl::comp::world_transform, wsl::comp::transform, wsl::math::vec3f, wsl::math::quatf,
+        wsl::rsc::model_id, wsl::comp::model_instance_3d, wsl::comp::camera, wsl::comp::point_light,
+        wsl::comp::spot_light, wsl::comp::directional_light,
+        wsl::comp::rigid_body, wsl::comp::area, wsl::comp::character_body,
+        wsl::rsc::scene_manager, wsl::rsc::resource_manager_view>();
+
+    wsl::comp::for_each_type<wsl::comp::component_types>::apply ([&rtc]<typename T> () {
+        rtc.component_registry.register_world_component<T> ();
+    });
+
+    rtc.singleton_registry
+        .register_bound_singleton_component<wsl::comp::singl::runtime_context> (
+            { "Runtime Context", true });
+    rtc.singleton_registry
+        .register_bound_singleton_component<wsl::comp::singl::editor_context> (
+            { "Editor Context", true });
+    rtc.singleton_registry.register_bound_singleton_component<wsl::rsc::scene_manager> (
+        { "Scene Manager", true });
+    rtc.singleton_registry
+        .register_bound_singleton_component<wsl::rsc::resource_manager_view> (
+            { "Resource Manager", true });
+    rtc.singleton_registry
+        .register_bound_singleton_component<wsl::comp::singl::ui_manager> (
+            { "UI Manager", true, false, true });
+    rtc.singleton_registry
+        .register_singleton_component<wsl::comp::singl::rendering_manager> (
+            { "Rendering Manager", true });
+    rtc.singleton_registry
+        .register_singleton_component<wsl::comp::singl::physics_manager> (
+            { "Physics Manager", true });
+}
+
+template <typename Descriptor>
+void write_registered_entry(std::ostringstream& output, const Descriptor& descriptor) {
+    output << " - " << descriptor.display_name;
+    if (!descriptor.type_name.empty() && descriptor.type_name != descriptor.display_name) {
+        output << " [" << descriptor.type_name << "]";
+    }
+    if (descriptor.runtime_registered) {
+        output << " [runtime]";
+    }
+    output << "\n";
+}
+
+std::string quote_repl_arg(std::string_view arg) {
+    const bool needs_quotes = arg.empty() || std::any_of(arg.begin(), arg.end(), [] (unsigned char ch) {
+        return std::isspace(ch) || ch == '"' || ch == '\'';
+    });
+    if (!needs_quotes) {
+        return std::string(arg);
+    }
+
+    std::string out;
+    out.reserve(arg.size() + 2);
+    out.push_back('"');
+    for (char ch : arg) {
+        if (ch == '"' || ch == '\\') {
+            out.push_back('\\');
+        }
+        out.push_back(ch);
+    }
+    out.push_back('"');
+    return out;
+}
+
+std::string build_repl_command(const std::vector<std::string>& args) {
+    std::ostringstream output;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i > 0) {
+            output << ' ';
+        }
+        output << quote_repl_arg(args[i]);
+    }
+    return output.str();
+}
+
+bool command_failed(std::string_view output) {
+    return output.find("Failed") != std::string_view::npos
+        || output.find("Error:") != std::string_view::npos;
+}
+
+} // namespace
 
 // -------- command_executor implementation --------
 
@@ -71,9 +163,55 @@ std::string command_executor::execute(const std::string& line) {
 }
 
 std::vector<std::string> command_executor::tokenize(const std::string& line) {
-    std::istringstream iss(line);
-    return std::vector<std::string>{std::istream_iterator<std::string>{iss},
-                                    std::istream_iterator<std::string>{}};
+    std::vector<std::string> tokens;
+    std::string current;
+    bool in_single_quotes = false;
+    bool in_double_quotes = false;
+    bool escape_next = false;
+
+    for (char ch : line) {
+        if (escape_next) {
+            current.push_back(ch);
+            escape_next = false;
+            continue;
+        }
+
+        if (in_double_quotes && ch == '\\') {
+            escape_next = true;
+            continue;
+        }
+
+        if (!in_double_quotes && ch == '\'') {
+            in_single_quotes = !in_single_quotes;
+            continue;
+        }
+
+        if (!in_single_quotes && ch == '"') {
+            in_double_quotes = !in_double_quotes;
+            continue;
+        }
+
+        if (!in_single_quotes && !in_double_quotes
+            && std::isspace(static_cast<unsigned char>(ch))) {
+            if (!current.empty()) {
+                tokens.push_back(std::move(current));
+                current.clear();
+            }
+            continue;
+        }
+
+        current.push_back(ch);
+    }
+
+    if (escape_next) {
+        current.push_back('\\');
+    }
+
+    if (!current.empty()) {
+        tokens.push_back(std::move(current));
+    }
+
+    return tokens;
 }
 
 wsl::rsc::scene* command_executor::get_active_scene() {
@@ -205,23 +343,42 @@ void command_executor::cmd_ent(const std::vector<std::string>& tokens) {
 }
 
 void command_executor::cmd_comp(const std::vector<std::string>& tokens) {
+    if (tokens.size() < 2) {
+        m_output << "Usage: comp <ls|avail|add|rm|set> [ent_id] [args...]\n";
+        return;
+    }
+    const std::string& action = tokens[1];
+
+    if ((action == "ls" || action == "avail") && tokens.size() == 2) {
+        auto components = m_rtc.component_registry.get_world_components();
+        m_output << "Registered Components (" << components.size() << "):\n";
+        for (const auto* component : components) {
+            if (component == nullptr) {
+                continue;
+            }
+            write_registered_entry(m_output, *component);
+        }
+        return;
+    }
+
     auto* scene = get_active_scene();
-    if (!scene) return;
-    
+    if (!scene) {
+        m_output << "No active scene.\n";
+        return;
+    }
+
     if (tokens.size() < 3) {
         m_output << "Usage: comp <ls|add|rm|set> <ent_id> [args...]\n";
         return;
     }
-    
+
     entt::entity e = (entt::entity)std::stoul(tokens[2]);
-    const std::string& action = tokens[1];
-    
+
     if (action == "ls") {
         for (auto [id, storage] : scene->get_registry().storage()) {
             if (storage.contains(e)) {
-                auto type = entt::resolve(id);
-                if (type) {
-                    m_output << " - " << id << " (Hash)\n";
+                if (const auto* descriptor = m_rtc.component_registry.find_world_component(id)) {
+                    write_registered_entry(m_output, *descriptor);
                 } else {
                     m_output << " - Unknown Component (Hash: " << id << ")\n";
                 }
@@ -242,12 +399,27 @@ void command_executor::cmd_sig(const std::vector<std::string>& tokens) {
 }
 
 void command_executor::cmd_sys(const std::vector<std::string>& tokens) {
-    auto* scene = get_active_scene();
-    if (!scene) return;
-    if (tokens.size() < 2) return;
-    
-    if (tokens[1] == "ls") {
-        m_output << "Active Systems:\n";
+    if (tokens.size() < 2) {
+        m_output << "Usage: sys <ls|avail>\n";
+        return;
+    }
+
+    if (tokens[1] == "ls" || tokens[1] == "avail") {
+        auto systems = m_rtc.system_factory_registry.get_systems();
+        if (systems.empty()) {
+            m_output << "No registered scene systems.\n";
+            return;
+        }
+
+        m_output << "Registered Systems (" << systems.size() << "):\n";
+        for (const auto* system : systems) {
+            if (system == nullptr) {
+                continue;
+            }
+            write_registered_entry(m_output, *system);
+        }
+    } else {
+        m_output << "Usage: sys <ls|avail>\n";
     }
 }
 
@@ -261,9 +433,10 @@ void command_executor::cmd_help() {
               << " proj <new|load|info>      - Project management\n"
               << " scene <new|load|save|ls>  - Scene management\n"
               << " ent <new|ls|rm|inspect>   - Entity management\n"
-              << " comp <ls|add|rm|set>      - Component management\n"
+              << " comp ls [ent_id]          - List registered or entity components\n"
+              << " comp <add|rm|set>         - Component management\n"
               << " sig conn ...              - Signal management\n"
-              << " sys ls ...                - System management\n"
+              << " sys ls                    - List registered systems\n"
               << " cls                       - Clear screen\n"
               << " help                      - Show this help\n"
               << " exit                      - Exit REPL\n";
@@ -277,78 +450,88 @@ repl_handler::repl_handler(const std::string& engine_res_path, bool attach)
 {
 }
 
-void repl_handler::run(std::optional<std::string> initial_project) {
-    spdlog::info("repl_handler::run() called, m_attach={}", m_attach);
-    // If attaching, connect to editor server
+void repl_handler::ensure_local_executor() {
+    if (m_attach || m_local_executor) {
+        return;
+    }
+
+    m_rtc = std::make_unique<wsl::comp::singl::runtime_context>("Weasel REPL", 0, 0, m_engine_res_path, true);
+    m_rtc->set_editor_ctx(nullptr);
+    register_repl_types(*m_rtc);
+    m_local_executor = std::make_unique<command_executor>(*m_rtc);
+}
+
+bool repl_handler::prepare(std::optional<std::string> initial_project,
+                           std::optional<std::string> initial_scene) {
     if (m_attach) {
-        if (!initial_project) {
-            std::cerr << "Error: --attach requires --project to be specified.\n";
-            return;
+        if (!m_editor_client.is_connected()) {
+            if (!initial_project) {
+                std::cerr << "Error: --attach requires --project to be specified.\n";
+                return false;
+            }
+
+            std::filesystem::path proj_path(*initial_project);
+            spdlog::info("repl_handler: initial project path: {}", proj_path.string());
+            if (proj_path.filename().string() == "wslpro.json") {
+                proj_path = proj_path.parent_path();
+                spdlog::info("repl_handler: detected wslpro.json, using parent: {}", proj_path.string());
+            }
+
+            std::string abs_project_path = std::filesystem::weakly_canonical(proj_path).string();
+            spdlog::info("repl_handler: attaching to project at: {}", abs_project_path);
+            if (!m_editor_client.connect(abs_project_path)) {
+                std::cerr << "Error: Failed to connect to editor server for project: " << *initial_project << "\n";
+                std::cerr << "Make sure the editor is running with the same project loaded.\n";
+                return false;
+            }
+            spdlog::info("Connected to editor server for project: {}", *initial_project);
         }
-        // Extract project root directory (not the wslpro.json file)
-        std::filesystem::path proj_path(*initial_project);
-        spdlog::info("repl_handler: initial project path: {}", proj_path.string());
-        if (proj_path.filename().string() == "wslpro.json") {
-            proj_path = proj_path.parent_path();
-            spdlog::info("repl_handler: detected wslpro.json, using parent: {}", proj_path.string());
+
+        if (initial_scene) {
+            auto response = m_editor_client.execute_command(
+                build_repl_command({"scene", "load", *initial_scene}));
+            if (!response || command_failed(*response)) {
+                if (response && !response->empty()) {
+                    std::cerr << *response;
+                    if (response->back() != '\n') {
+                        std::cerr << '\n';
+                    }
+                }
+                return false;
+            }
         }
-        std::string abs_project_path = std::filesystem::weakly_canonical(proj_path).string();
-        spdlog::info("repl_handler: attaching to project at: {}", abs_project_path);
-        if (!m_editor_client.connect(abs_project_path)) {
-            std::cerr << "Error: Failed to connect to editor server for project: " << *initial_project << "\n";
-            std::cerr << "Make sure the editor is running with the same project loaded.\n";
-            return;
-        }
-        spdlog::info("Connected to editor server for project: {}", *initial_project);
-    } else {
-        // Initialize local runtime context
-        m_rtc = std::make_unique<wsl::comp::singl::runtime_context>("Weasel REPL", 0, 0, m_engine_res_path, true);
-        m_rtc->set_editor_ctx(nullptr);
-        
-        // Register components/systems
-        wsl::comp::singl::runtime_context::register_meta();
-        wsl::comp::singl::editor_context::register_meta();
-        wsl::comp::singl::ui_manager::register_meta();
-        
-        wsl::comp::register_component_meta<
-            wsl::comp::hierarchy, wsl::comp::world_transform, wsl::comp::transform, wsl::math::vec3f, wsl::math::quatf,
-            wsl::rsc::model_id, wsl::comp::model_instance_3d, wsl::comp::camera, wsl::comp::point_light,
-            wsl::comp::spot_light, wsl::comp::directional_light,
-            wsl::comp::rigid_body, wsl::comp::area, wsl::comp::character_body,
-            wsl::rsc::scene_manager, wsl::rsc::resource_manager_view>();
-        
-        wsl::comp::for_each_type<wsl::comp::component_types>::apply ([this]<typename T> () {
-            m_rtc->component_registry.register_world_component<T> ();
-        });
-        
-        m_rtc->singleton_registry
-            .register_bound_singleton_component<wsl::comp::singl::runtime_context> (
-                { "Runtime Context", true });
-        m_rtc->singleton_registry
-            .register_bound_singleton_component<wsl::comp::singl::editor_context> (
-                { "Editor Context", true });
-        m_rtc->singleton_registry.register_bound_singleton_component<wsl::rsc::scene_manager> (
-            { "Scene Manager", true });
-        m_rtc->singleton_registry
-            .register_bound_singleton_component<wsl::rsc::resource_manager_view> (
-                { "Resource Manager", true });
-        m_rtc->singleton_registry
-            .register_bound_singleton_component<wsl::comp::singl::ui_manager> (
-                { "UI Manager", true, false, true });
-        m_rtc->singleton_registry
-            .register_singleton_component<wsl::comp::singl::rendering_manager> (
-                { "Rendering Manager", true });
-        m_rtc->singleton_registry
-            .register_singleton_component<wsl::comp::singl::physics_manager> (
-                { "Physics Manager", true });
-        
-        if (initial_project) {
-            // Load project locally
-            m_local_executor = std::make_unique<command_executor>(*m_rtc);
-            m_local_executor->execute("proj load " + *initial_project);
+
+        return true;
+    }
+
+    ensure_local_executor();
+    if (initial_project) {
+        std::string const output
+            = m_local_executor->execute(build_repl_command({"proj", "load", *initial_project}));
+        if (command_failed(output)) {
+            std::cerr << output;
+            return false;
         }
     }
-    
+    if (initial_scene) {
+        std::string const output
+            = m_local_executor->execute(build_repl_command({"scene", "load", *initial_scene}));
+        if (command_failed(output)) {
+            std::cerr << output;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void repl_handler::run(std::optional<std::string> initial_project,
+                       std::optional<std::string> initial_scene) {
+    spdlog::info("repl_handler::run() called, m_attach={}", m_attach);
+    if (!prepare(initial_project, initial_scene)) {
+        return;
+    }
+
     std::string line;
     std::cout << "Weasel Engine REPL\nType 'help' for commands.\n";
     while (m_running && std::cout << "wsl> " && std::getline(std::cin, line)) {
@@ -375,6 +558,7 @@ void repl_handler::execute_command(const std::string& line) {
     }
     
     // Otherwise, execute locally
+    ensure_local_executor();
     if (m_local_executor) {
         std::string output = m_local_executor->execute(line);
         std::cout << output;

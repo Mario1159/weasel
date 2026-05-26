@@ -13,14 +13,14 @@ int main(int argc, char** argv) {
 
     if (result.interactive) {
         wsl::cli::repl_handler repl(wsl::cli::cli_handler::default_engine_resource_path(), result.attach);
-        repl.run(result.project_to_load);
+        repl.run(result.project_to_load, result.scene_to_load);
         return 0;
     }
 
     if (result.command) {
         wsl::cli::repl_handler repl(wsl::cli::cli_handler::default_engine_resource_path(), result.attach);
-        if (result.project_to_load && !result.attach) {
-            repl.execute_command("proj load " + *result.project_to_load);
+        if (!repl.prepare(result.project_to_load, result.scene_to_load)) {
+            return 1;
         }
         repl.execute_command(*result.command);
         return 0;

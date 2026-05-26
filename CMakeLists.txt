@@ -159,7 +159,7 @@ CPMAddPackage(
     NAME cereal
     GITHUB_REPOSITORY USCiLab/cereal
     GIT_TAG v1.3.2
-    OPTIONS "BUILD_SANDBOX OFF"
+    OPTIONS "BUILD_SANDBOX OFF" "BUILD_TESTS OFF"
     SYSTEM ON
 )
 
@@ -253,6 +253,7 @@ if(WEASEL_ENABLE_MULTIPLAYER)
         NAME GameNetworkingSockets
         GITHUB_REPOSITORY ValveSoftware/GameNetworkingSockets
         GIT_TAG master
+        OPTIONS "BUILD_TESTS OFF"
         SYSTEM ON
     )
 endif()
@@ -519,11 +520,31 @@ endif()
 
 # --- Testing ---
 enable_testing()
-set(ROLL_A_BALL_DIR "${CMAKE_SOURCE_DIR}/examples/0_roll-a-ball")
-set(ROLL_A_BALL_PROJ "${ROLL_A_BALL_DIR}/wslpro.json")
-set(ROLL_A_BALL_SCENE "${ROLL_A_BALL_DIR}/scenes/main.wscn.json")
-add_test(NAME validate_roll_a_ball_project COMMAND weasel --validate-project "${ROLL_A_BALL_PROJ}")
-add_test(NAME validate_roll_a_ball_scene COMMAND weasel --validate-scene "${ROLL_A_BALL_SCENE}" "${ROLL_A_BALL_PROJ}")
+# Use doctest for weasel-cli unit tests (tests/weasel-cli/*.cpp)
+include(FetchContent)
+FetchContent_Declare(
+  doctest
+  GIT_REPOSITORY https://github.com/onqtam/doctest.git
+  GIT_TAG master
+)
+FetchContent_GetProperties(doctest)
+if(NOT doctest_POPULATED)
+  FetchContent_Populate(doctest)
+endif()
+
+# Create an interface target for doctest headers
+add_library(doctest INTERFACE)
+target_include_directories(doctest INTERFACE ${doctest_SOURCE_DIR})
+
+# Add doctest-based tests for the CLI handler
+add_executable(weasel_cli_tests
+    "${CMAKE_SOURCE_DIR}/tests/weasel-cli/test_weasel_cli.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/weasel-cli/test_command_executor.cpp"
+)
+target_link_libraries(weasel_cli_tests PRIVATE cli doctest)
+
+include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
+doctest_discover_tests(weasel_cli_tests)
 
 # --- Installation ---
 # Only install our own targets/resources.  CPM dependencies (slang, ai-sdk-cpp,
