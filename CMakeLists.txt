@@ -549,12 +549,18 @@ doctest_discover_tests(weasel_cli_tests)
 # --- Installation ---
 # Only install our own targets/resources.  CPM dependencies (slang, ai-sdk-cpp,
 # etc.) have their own install() rules that break in CI (wrong paths, man pages,
-# missing files).  Tagging everything with COMPONENT Runtime and limiting
-# CPACK_COMPONENTS_ALL prevents CPack from touching them.
-install(TARGETS wsl weasel weasel-cli weasel-mcp-server
-    RUNTIME DESTINATION bin COMPONENT Runtime
-    LIBRARY DESTINATION lib COMPONENT Runtime
-    ARCHIVE DESTINATION lib COMPONENT Runtime
+# missing files).  Tagging installs with COMPONENT Engine/CLI/McpServer and
+# limiting CPACK_COMPONENTS_ALL prevents CPack from touching them.
+install(TARGETS wsl weasel
+    RUNTIME DESTINATION bin COMPONENT Engine
+    LIBRARY DESTINATION lib COMPONENT Engine
+    ARCHIVE DESTINATION lib COMPONENT Engine
+)
+install(TARGETS weasel-cli
+    RUNTIME DESTINATION bin COMPONENT CLI
+)
+install(TARGETS weasel-mcp-server
+    RUNTIME DESTINATION bin COMPONENT McpServer
 )
 
 # Generate a manual WeaselTargets.cmake with an imported target for wsl.
@@ -600,19 +606,19 @@ add_library(wsl ALIAS Weasel::wsl)
 
 install(FILES "${CMAKE_BINARY_DIR}/WeaselTargets.cmake"
     DESTINATION lib/cmake/Weasel
-    COMPONENT Runtime
+    COMPONENT Engine
 )
 
 install(FILES WeaselConfig.cmake
     DESTINATION lib/cmake/Weasel
-    COMPONENT Runtime
+    COMPONENT Engine
 )
 
 set(_WEASEL_HEADER_PATTERNS PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl")
 
 install(DIRECTORY src/
     DESTINATION include
-    COMPONENT Runtime
+    COMPONENT Engine
     FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
 )
 
@@ -620,7 +626,7 @@ install(DIRECTORY src/
 if(DEFINED EnTT_SOURCE_DIR)
     install(DIRECTORY ${EnTT_SOURCE_DIR}/src/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
     )
 endif()
@@ -628,7 +634,7 @@ endif()
 if(DEFINED cereal_SOURCE_DIR)
     install(DIRECTORY ${cereal_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
     )
 endif()
@@ -636,7 +642,7 @@ endif()
 if(DEFINED JoltPhysics_SOURCE_DIR)
     install(DIRECTORY ${JoltPhysics_SOURCE_DIR}/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
     )
 endif()
@@ -644,7 +650,7 @@ endif()
 if(DEFINED fastgltf_SOURCE_DIR)
     install(DIRECTORY ${fastgltf_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
     )
 endif()
@@ -652,7 +658,7 @@ endif()
 if(DEFINED spdlog_SOURCE_DIR)
     install(DIRECTORY ${spdlog_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
     )
 endif()
@@ -660,12 +666,12 @@ endif()
 if(DEFINED RmlUi_SOURCE_DIR)
     install(DIRECTORY ${RmlUi_SOURCE_DIR}/Include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
     )
     install(DIRECTORY ${RmlUi_SOURCE_DIR}/Backends/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "RmlUi_*.h"
     )
 endif()
@@ -673,7 +679,7 @@ endif()
 if(DEFINED slang_SOURCE_DIR)
     install(DIRECTORY ${slang_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
     )
 endif()
@@ -681,7 +687,7 @@ endif()
 if(DEFINED SDL3_image_SOURCE_DIR)
     install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.h"
     )
 endif()
@@ -689,7 +695,7 @@ endif()
 if(DEFINED SDL3_mixer_SOURCE_DIR)
     install(DIRECTORY ${SDL3_mixer_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.h"
     )
 endif()
@@ -697,7 +703,7 @@ endif()
 if(DEFINED imgui_SOURCE_DIR)
     install(DIRECTORY ${imgui_SOURCE_DIR}/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "imgui*.h" PATTERN "imconfig.h"
     )
 endif()
@@ -705,7 +711,7 @@ endif()
 if(DEFINED cereal_SOURCE_DIR)
     install(DIRECTORY ${cereal_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
     )
 endif()
@@ -713,7 +719,7 @@ endif()
 if(DEFINED JoltPhysics_SOURCE_DIR)
     install(DIRECTORY ${JoltPhysics_SOURCE_DIR}/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     )
 endif()
@@ -721,7 +727,7 @@ endif()
 if(DEFINED fastgltf_SOURCE_DIR)
     install(DIRECTORY ${fastgltf_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
     )
 endif()
@@ -729,7 +735,7 @@ endif()
 if(DEFINED spdlog_SOURCE_DIR)
     install(DIRECTORY ${spdlog_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
     )
 endif()
@@ -737,7 +743,7 @@ endif()
 if(DEFINED RmlUi_SOURCE_DIR)
     install(DIRECTORY ${RmlUi_SOURCE_DIR}/Include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
     )
 endif()
@@ -745,7 +751,7 @@ endif()
 if(DEFINED slang_SOURCE_DIR)
     install(DIRECTORY ${slang_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     )
 endif()
@@ -753,7 +759,7 @@ endif()
 if(DEFINED imgui_SOURCE_DIR)
     install(DIRECTORY ${imgui_SOURCE_DIR}/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "imgui*.h" PATTERN "imconfig.h"
     )
 endif()
@@ -761,7 +767,7 @@ endif()
 if(DEFINED SDL3_image_SOURCE_DIR)
     install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.h"
     )
 endif()
@@ -769,31 +775,41 @@ endif()
 if(DEFINED SDL3_mixer_SOURCE_DIR)
     install(DIRECTORY ${SDL3_mixer_SOURCE_DIR}/include/
         DESTINATION include
-        COMPONENT Runtime
+        COMPONENT Engine
         FILES_MATCHING PATTERN "*.h"
     )
 endif()
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel COMPONENT Runtime)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel COMPONENT Runtime)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel COMPONENT Runtime)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel COMPONENT Engine)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel COMPONENT Engine)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel COMPONENT Engine)
 
 if(UNIX AND NOT APPLE)
-    install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/Makefile" DESTINATION . COMPONENT Runtime)
+    install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/Makefile" DESTINATION . COMPONENT Engine)
 endif()
 
 set(CPACK_PACKAGE_NAME "WeaselEngine")
 set(CPACK_PACKAGE_VERSION "0.1.0")
 set(CPACK_PACKAGE_VENDOR "Weasel Engine")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Weasel Engine — a game engine")
-set(CPACK_COMPONENTS_ALL Runtime)
-set(CPACK_COMPONENT_RUNTIME_DISPLAY_NAME "Weasel Engine Runtime")
-set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "Weasel Engine runtime binaries and resources")
+set(CPACK_COMPONENTS_ALL Engine CLI McpServer)
+set(CPACK_COMPONENT_ENGINE_DISPLAY_NAME "Weasel Engine")
+set(CPACK_COMPONENT_ENGINE_DESCRIPTION "Weasel Engine core library, editor, headers and resources")
+set(CPACK_COMPONENT_CLI_DISPLAY_NAME "weasel-cli")
+set(CPACK_COMPONENT_CLI_DESCRIPTION "Weasel Engine command-line interface")
+set(CPACK_COMPONENT_CLI_DEPENDS Engine)
+set(CPACK_COMPONENT_MCPSERVER_DISPLAY_NAME "weasel-mcp-server")
+set(CPACK_COMPONENT_MCPSERVER_DESCRIPTION "Weasel Engine MCP server")
+set(CPACK_COMPONENT_MCPSERVER_DEPENDS Engine)
 
-# Override CPack's install step so it only installs our Runtime component.
+# Override CPack's install step so it only installs our own components.
 # Without this CPack runs a full "cmake --install ." which also executes
 # broken install() rules from CPM dependencies (slang, ai-sdk-cpp, brotli...).
-set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};weasel;Runtime;/")
+set(CPACK_INSTALL_CMAKE_PROJECTS
+    "${CMAKE_BINARY_DIR};weasel;Engine;/"
+    "${CMAKE_BINARY_DIR};weasel;CLI;/"
+    "${CMAKE_BINARY_DIR};weasel;McpServer;/"
+)
 
 if(WIN32)
     set(CPACK_GENERATOR "NSIS;ZIP" CACHE STRING "CPack generator" FORCE)
