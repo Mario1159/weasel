@@ -1,0 +1,5 @@
+if(CPACK_GENERATOR MATCHES "productbuild")
+    set(CPACK_COMPONENTS_ENGINE "Engine")
+    set(CPACK_COMPONENTS_CLI "CLI")
+    set(CPACK_COMPONENTS_MCPSERVER "McpServer")
+endif()

@@ -818,10 +818,13 @@ if(WIN32)
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/Mario1159/weasel")
 elseif(APPLE)
     set(CPACK_GENERATOR "productbuild;TGZ" CACHE STRING "CPack generator" FORCE)
+    set(CPACK_PRODUCTBUILD_IDENTIFIER "com.weaselengine")
 else()
     # DEB/RPM omitted: they require distro-specific tooling (dpkg, rpmbuild) and
     # packaging metadata that is not available in CI containers.
     set(CPACK_GENERATOR "TGZ" CACHE STRING "CPack generator" FORCE)
 endif()
+
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/CPackProjectConfig.cmake")
 
 include(CPack)
