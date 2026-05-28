@@ -46,8 +46,6 @@ app::app (const std::string &name, int width, int height,
 {
   wsl::log::init ();
 
-  SDL_SetHint (SDL_HINT_GPU_DRIVER, "vulkan");
-
   m_runtime_context = std::make_unique<wsl::comp::singl::runtime_context> (name.c_str (), width, height, engine_res_path);
 
   if (m_runtime_context->render_ctx.gpu_device == nullptr) {

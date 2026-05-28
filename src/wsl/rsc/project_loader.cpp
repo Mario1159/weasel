@@ -264,7 +264,7 @@ rsc::project_loader::scan_assets (const project &proj)
   scan_dir (resolve (proj.ui_layouts_path), { ".rml", ".rcss" },
             assets.ui_layouts);
   scan_dir (resolve (proj.fonts_path), { ".otf", ".ttf" }, assets.fonts);
-  scan_dir (resolve (proj.shaders_path), { ".hlsl", ".spv" }, assets.shaders);
+  scan_dir (resolve (proj.shaders_path), { ".hlsl", ".spv", ".dxil", ".metal" }, assets.shaders);
 
   std::sort (assets.models.begin (), assets.models.end ());
   std::sort (assets.images.begin (), assets.images.end ());

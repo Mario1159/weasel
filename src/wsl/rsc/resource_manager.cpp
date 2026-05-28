@@ -1765,10 +1765,13 @@ rsc::resource_manager::resolve_path (const std::string &path) const
     // Fall back to the legacy / development layout directly under the resource path
     std::filesystem::path base_path = std::filesystem::path (m_wsl_resource_path) / sub_path;
 
-    // Only apply shader extension replacement for files without an existing extension
-    // or with shader-specific extensions (like .hlsl)
+    // Apply shader extension replacement for known shader bytecode extensions,
+    // swapping to the platform-native format (.spv -> .metal on macOS, etc.)
     std::string ext = base_path.extension ().string ();
-    bool has_non_shader_ext = (!ext.empty () && ext != ".hlsl" && ext != ".HLSL");
+    bool has_non_shader_ext = (!ext.empty () && ext != ".hlsl" && ext != ".HLSL"
+                               && ext != ".spv" && ext != ".SPV"
+                               && ext != ".dxil" && ext != ".DXIL"
+                               && ext != ".metal" && ext != ".METAL");
 
     if (!has_non_shader_ext) {
 #if defined(_WIN32)

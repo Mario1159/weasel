@@ -1,6 +1,8 @@
 #include "mcp_server_app.hpp"
 #include "cli_reference.hpp"
+#include "component_info.hpp"
 #include "mcp_stdio_server.hpp"
+#include "namespace_info.hpp"
 
 #include <mcp_server.h>
 #include <sstream>
@@ -99,9 +101,74 @@ handle_get_quick_start (const mcp::json &params)
   oss << "   weasel-cli validate-project ./mygame/wslpro.json\n\n";
   oss << "4. Start the interactive REPL:\n";
   oss << "   weasel-cli --project ./mygame/wslpro.json --interactive\n\n";
+  oss << "   Inside the REPL you can manage entities, components, scenes, and more:\n";
+  oss << "     scene new Level1              # Create a new scene\n";
+  oss << "     ent new Player                # Create an entity named Player\n";
+  oss << "     comp add 1 transform          # Add Transform component\n";
+  oss << "     comp set 1 transform position '[0,2,0]'  # Set position\n";
+  oss << "     comp add 1 rigid_body         # Add RigidBody component\n";
+  oss << "     comp set 1 rigid_body shape sphere  # Set shape to sphere\n";
+  oss << "     comp set 1 rigid_body radius 0.5      # Set radius\n";
+  oss << "     comp rm 1 rigid_body          # Remove component\n";
+  oss << "     ent inspect 1                 # Inspect entity\n";
+  oss << "     scene save                    # Save scene\n";
+  oss << "     help                          # Show full command reference\n\n";
   oss << "5. Attach to a running editor:\n";
   oss << "   weasel-cli --project ./mygame/wslpro.json --attach\n\n";
-  oss << "For full command reference, use the list_commands and describe_command tools.";
+  oss << "For full command reference, use the list_commands and describe_command tools.\n";
+  oss << "For component property details, use describe_component (e.g. Rigid Body).\n";
+  oss << "For implementation status, use cli_capabilities.";
+
+  return build_text_response (oss.str ());
+}
+
+mcp::json
+handle_cli_capabilities (const mcp::json &params)
+{
+  (void)params;
+  std::ostringstream oss;
+  oss << "Weasel CLI/REPL Capabilities Manifest\n";
+  oss << "======================================\n\n";
+
+  oss << "== Fully Implemented ==\n";
+  oss << "  proj new        - Create and load a new project\n";
+  oss << "  proj load       - Load an existing project\n";
+  oss << "  proj info       - Show project metadata\n";
+  oss << "  proj save       - Save project metadata\n";
+  oss << "  scene new       - Create a new empty scene\n";
+  oss << "  scene load      - Load a scene from disk\n";
+  oss << "  scene save      - Save the active scene\n";
+  oss << "  scene ls        - List scene assets\n";
+  oss << "  scene status    - Show scene statistics\n";
+  oss << "  ent new         - Create a new entity\n";
+  oss << "  ent ls          - List all entities\n";
+  oss << "  ent rm          - Remove (destroy) an entity\n";
+  oss << "  ent ren         - Rename an entity\n";
+  oss << "  ent inspect     - Show entity details\n";
+  oss << "  comp ls         - List components (registered or on an entity)\n";
+  oss << "  comp avail      - List registered component types\n";
+  oss << "  comp add        - Add a component to an entity\n";
+  oss << "  comp rm         - Remove a component from an entity\n";
+  oss << "  comp set        - Set a component property\n";
+  oss << "  sys ls          - List active systems\n";
+  oss << "  sys avail       - List registered systems\n";
+  oss << "  check           - Run validation checks\n";
+  oss << "  rsc ls          - List resources\n";
+  oss << "  help            - Show help\n";
+  oss << "  exit/quit       - Exit REPL\n";
+  oss << "  cls             - Clear screen\n\n";
+
+  oss << "== Documented but NOT Implemented ==\n";
+  oss << "  sig             - Signal management (stub only)\n\n";
+
+  oss << "== Known Limitations ==\n";
+  oss << "  - `scene new` creates a scene with no systems attached\n";
+  oss << "  - Systems can only be loaded from saved scene files\n";
+  oss << "  - `comp set` supports primitive types, enums (by name or int),\n";
+  oss << "    compound types (vec3, quat) via JSON arrays/objects,\n";
+  oss << "    and nested property paths (e.g. motion_type.value)\n";
+  oss << "  - Physics components modified via comp set may need manual\n";
+  oss << "    re-sync (e.g. rigid_body changes require on_inspector_changed)\n";
 
   return build_text_response (oss.str ());
 }
@@ -118,14 +185,22 @@ mcp_server_app::mcp_server_app (const std::string &host, int port)
   m_server.set_server_info ("Weasel MCP Server", "0.1.0");
   m_server.set_capabilities (capabilities);
   m_server.set_instructions (
-    "This MCP server provides reference documentation for the Weasel Engine "
-    "CLI and REPL commands.");
+    "This MCP server provides reference documentation for the Weasel Engine. "
+    "Available tool categories:\n"
+    "  CLI/REPL: list_commands, describe_command, get_quick_start, cli_capabilities\n"
+    "  Components: list_components, describe_component\n"
+    "  Engine Namespaces: list_namespaces, describe_namespace — learn how to "
+    "write a game using comp/sys/rsc/phys/gfx/math/reg");
 
   m_stdio_server.set_server_info ("Weasel MCP Server", "0.1.0");
   m_stdio_server.set_capabilities (capabilities);
   m_stdio_server.set_instructions (
-    "This MCP server provides reference documentation for the Weasel Engine "
-    "CLI and REPL commands.");
+    "This MCP server provides reference documentation for the Weasel Engine. "
+    "Available tool categories:\n"
+    "  CLI/REPL: list_commands, describe_command, get_quick_start, cli_capabilities\n"
+    "  Components: list_components, describe_component\n"
+    "  Engine Namespaces: list_namespaces, describe_namespace — learn how to "
+    "write a game using comp/sys/rsc/phys/gfx/math/reg");
 
   register_tools ();
 }
@@ -182,13 +257,110 @@ mcp_server_app::register_tools ()
                               "Return a quick-start guide for the Weasel CLI.")
                             .build ();
   m_server.register_tool (quick_tool, [] (const mcp::json &params,
-                                            const std::string & /*session_id*/) {
+                                          const std::string & /*session_id*/) {
     return handle_get_quick_start (params);
   });
   m_stdio_server.register_tool (quick_tool, [] (const mcp::json &params,
-                                                  const std::string & /*session_id*/) {
+                                                const std::string & /*session_id*/) {
     return handle_get_quick_start (params);
   });
+
+  // --- Component introspection tools ---
+
+  mcp::tool list_comp_tool
+      = mcp::tool_builder ("list_components")
+            .with_description (
+                "List all registered ECS components with their fully "
+                "qualified C++ type names.")
+            .build ();
+  m_server.register_tool (list_comp_tool,
+                          [] (const mcp::json &params,
+                              const std::string & /*session_id*/) {
+                            return handle_list_components (params);
+                          });
+  m_stdio_server.register_tool (list_comp_tool,
+                                [] (const mcp::json &params,
+                                    const std::string & /*session_id*/) {
+                                  return handle_list_components (params);
+                                });
+
+  mcp::tool desc_comp_tool
+      = mcp::tool_builder ("describe_component")
+            .with_description (
+                "Get detailed information about a registered component: all "
+                "properties, their types, enum values, and descriptions.")
+            .with_string_param ("name",
+                                "Component name (display name like 'Rigid Body' "
+                                "or C++ type like 'wsl::comp::rigid_body').")
+            .build ();
+  m_server.register_tool (desc_comp_tool,
+                          [] (const mcp::json &params,
+                              const std::string & /*session_id*/) {
+                            return handle_describe_component (params);
+                          });
+  m_stdio_server.register_tool (desc_comp_tool,
+                                [] (const mcp::json &params,
+                                    const std::string & /*session_id*/) {
+                                  return handle_describe_component (params);
+                                });
+
+  // --- Engine Namespace documentation tools ---
+
+  mcp::tool list_ns_tool
+      = mcp::tool_builder ("list_namespaces")
+            .with_description (
+                "List all engine namespaces (comp, sys, rsc, phys, gfx, math, "
+                "reg) with brief descriptions. Use describe_namespace for "
+                "detailed documentation on how to use each one.")
+            .build ();
+  m_server.register_tool (list_ns_tool,
+                          [] (const mcp::json &params,
+                              const std::string & /*session_id*/) {
+                            return handle_list_namespaces (params);
+                          });
+  m_stdio_server.register_tool (list_ns_tool,
+                                [] (const mcp::json &params,
+                                    const std::string & /*session_id*/) {
+                                  return handle_list_namespaces (params);
+                                });
+
+  mcp::tool desc_ns_tool
+      = mcp::tool_builder ("describe_namespace")
+            .with_description (
+                "Get detailed documentation about an engine namespace: what "
+                "it contains, key classes, and how to use it to write a game.")
+            .with_string_param (
+                "name",
+                "Namespace name: comp, sys, rsc, phys, gfx, math, or reg.")
+            .build ();
+  m_server.register_tool (desc_ns_tool,
+                          [] (const mcp::json &params,
+                              const std::string & /*session_id*/) {
+                            return handle_describe_namespace (params);
+                          });
+  m_stdio_server.register_tool (desc_ns_tool,
+                                [] (const mcp::json &params,
+                                    const std::string & /*session_id*/) {
+                                  return handle_describe_namespace (params);
+                                });
+
+  // --- CLI capabilities tool ---
+
+  mcp::tool cli_cap_tool = mcp::tool_builder ("cli_capabilities")
+                               .with_description (
+                                   "List which CLI/REPL commands are actually "
+                                   "implemented vs. documented but missing.")
+                               .build ();
+  m_server.register_tool (
+      cli_cap_tool, [] (const mcp::json &params,
+                        const std::string & /*session_id*/) {
+        return handle_cli_capabilities (params);
+      });
+  m_stdio_server.register_tool (
+      cli_cap_tool, [] (const mcp::json &params,
+                        const std::string & /*session_id*/) {
+        return handle_cli_capabilities (params);
+      });
 }
 
 } // namespace wsl::mcp_server

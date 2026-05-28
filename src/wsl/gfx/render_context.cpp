@@ -17,25 +17,12 @@ gfx::render_context::render_context (bool headless)
       return;
     }
 
-  int driver_count = SDL_GetNumGPUDrivers ();
-  spdlog::debug ("render_context: found {} GPU drivers", driver_count);
+  SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats (nullptr);
+  spdlog::debug ("render_context: supported shader formats: 0x{:x}", static_cast<unsigned> (formats));
 
-  for (int i = 0; i < driver_count; i++) {
-    const char *driver_name = SDL_GetGPUDriver (i);
-    gpu_device = SDL_CreateGPUDevice (SDL_GPU_SHADERFORMAT_SPIRV, false, driver_name);
-    if (gpu_device != nullptr) {
-      spdlog::info ("render_context: created GPU device using driver: {}", driver_name);
-      break;
-    }
-    spdlog::warn ("render_context: failed to create GPU device with driver {}: {}", driver_name, SDL_GetError ());
-  }
-
-  if (gpu_device == nullptr) {
-    // Try default with fallback formats
-    gpu_device = SDL_CreateGPUDevice (SDL_GetGPUShaderFormats (nullptr), false, nullptr);
-    if (gpu_device != nullptr) {
-      spdlog::info ("render_context: created GPU device using default driver and fallback formats");
-    }
+  gpu_device = SDL_CreateGPUDevice (formats, false, nullptr);
+  if (gpu_device != nullptr) {
+    spdlog::info ("render_context: created GPU device");
   }
   
   if (gpu_device == nullptr) {

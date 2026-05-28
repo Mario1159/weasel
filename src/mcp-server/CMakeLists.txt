@@ -11,7 +11,7 @@ target_include_directories(mcp_server_lib PUBLIC
     ${cpp-mcp_SOURCE_DIR}/include
     ${cpp-mcp_SOURCE_DIR}/common
 )
-target_link_libraries(mcp_server_lib PUBLIC mcp CLI11::CLI11)
+target_link_libraries(mcp_server_lib PUBLIC mcp CLI11::CLI11 wsl)
 
 add_executable(weasel-mcp-server main.cpp)
 set_target_properties(weasel-mcp-server PROPERTIES

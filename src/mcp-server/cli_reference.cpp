@@ -120,11 +120,11 @@ const std::vector<cli_command_info> g_cli_reference = {
     "comp",
     "cli",
     "Run a component REPL command without entering the interactive shell.",
-    "weasel-cli comp <ls|avail|add> [args...]",
+    "weasel-cli comp <ls|avail|add|rm|set> [args...]",
     {
-      "<ls|avail|add> – Component subcommand."
+      "<ls|avail|add|rm|set> – Component subcommand."
     },
-    {"weasel-cli comp avail", "weasel-cli comp add 42 transform"}
+    {"weasel-cli comp avail", "weasel-cli comp add 42 transform", "weasel-cli comp rm 42 rigid_body", "weasel-cli comp set 42 transform position '[1,2,3]'"}
   },
   {
     "sys",
@@ -286,26 +286,26 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "comp rm",
     "repl",
-    "Remove a component from an entity.",
+    "Remove a component from an entity. The entity must have the component already attached.",
     "comp rm <id> <type>",
     {
       "<id> – Numeric entity ID.",
-      "<type> – Component type name."
+      "<type> – Component type name (e.g. rigid_body, camera, transform)."
     },
-    {"comp rm 42 camera"}
+    {"comp rm 42 camera", "comp rm 42 rigid_body"}
   },
   {
     "comp set",
     "repl",
-    "Set a property on an entity's component.",
+    "Set a property on an entity's component. Supports nested property paths (dot-separated) and JSON-compatible values.",
     "comp set <id> <type> <property> <value>",
     {
       "<id> – Numeric entity ID.",
-      "<type> – Component type name.",
-      "<property> – Property name.",
-      "<value> – New value (JSON-compatible)."
+      "<type> – Component type name (e.g. transform, rigid_body).",
+      "<property> – Property name. Use dot notation for nested fields (e.g. motion_type.value, collision_layer.value).",
+      "<value> – New value as JSON: numbers (1.5), strings (\"text\"), booleans (true/false), arrays ([1,2,3]), or enum names (sphere, Dynamic)."
     },
-    {"comp set 42 transform position '[1.0, 2.0, 3.0]'"}
+    {"comp set 42 transform position '[1.0, 2.0, 3.0]'", "comp set 42 rigid_body shape sphere", "comp set 42 rigid_body radius 0.5", "comp set 42 rigid_body motion_type.value 2"}
   },
   {
     "sig",

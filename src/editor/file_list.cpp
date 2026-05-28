@@ -360,7 +360,7 @@ file_list::refresh_if_needed (wsl::rsc::resource_manager *resources)
   gather_cpp_hpp (singl, singleton_files);
   gather_cpp_hpp (sys, system_files);
   gather_files_with_extensions (ui, { ".rml", ".rcss" }, ui_layout_files);
-  gather_files_with_extensions (shaders, { ".hlsl", ".spv", ".vert", ".frag" }, shader_files);
+  gather_files_with_extensions (shaders, { ".hlsl", ".spv", ".dxil", ".metal", ".vert", ".frag" }, shader_files);
 
   if (!pending_open_path.empty ()) {
     if (select_entry_by_path (component_files, pending_open_path,

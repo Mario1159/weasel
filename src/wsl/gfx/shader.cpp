@@ -35,7 +35,7 @@ shader::load_from_manager (SDL_GPUDevice *device, rsc::resource_manager *res_mgr
   info.code_size = static_cast<Uint32> (handle->bytecode.size ());
   info.stage = stage;
   info.entrypoint = "main";
-  info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+  info.format = native_format ();
 
   info.num_uniform_buffers = num_uniform_buffers;
   info.num_samplers = num_samplers;
@@ -64,7 +64,7 @@ shader::load (SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage,
   info.code_size = static_cast<Uint32> (size);
   info.stage = stage;
   info.entrypoint = "main";
-  info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+  info.format = native_format ();
 
   // Use caller-provided reflection counts (required for IBL + other variants).
   info.num_uniform_buffers = num_uniform_buffers;
@@ -96,7 +96,7 @@ shader::load_ui_shader (SDL_GPUDevice *device, const char *path,
   info.code_size = static_cast<Uint32> (size);
   info.stage = stage;
   info.entrypoint = "main";
-  info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+  info.format = native_format ();
 
   info.num_uniform_buffers = 1;
   info.num_samplers = 0;
@@ -126,7 +126,7 @@ shader::load_skybox_shader (SDL_GPUDevice *device, const char *path,
   info.code_size = static_cast<Uint32> (size);
   info.stage = stage;
   info.entrypoint = "main";
-  info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+  info.format = native_format ();
 
   if (stage == SDL_GPU_SHADERSTAGE_VERTEX) {
     info.num_uniform_buffers = 1; // Matrices
@@ -143,6 +143,18 @@ shader::load_skybox_shader (SDL_GPUDevice *device, const char *path,
   SDL_GPUShader *shader = SDL_CreateGPUShader (device, &info);
   SDL_free (data);
   return shader;
+}
+
+SDL_GPUShaderFormat
+shader::native_format ()
+{
+#if defined(__APPLE__)
+  return SDL_GPU_SHADERFORMAT_MSL;
+#elif defined(_WIN32)
+  return SDL_GPU_SHADERFORMAT_DXIL;
+#else
+  return SDL_GPU_SHADERFORMAT_SPIRV;
+#endif
 }
 
 } // namespace gfx

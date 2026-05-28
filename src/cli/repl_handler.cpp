@@ -28,6 +28,7 @@
 #include "wsl/comp/components.hpp"
 
 #include <entt/entt.hpp>
+#include <nlohmann/json.hpp>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -128,6 +129,189 @@ std::string build_repl_command(const std::vector<std::string>& args) {
 bool command_failed(std::string_view output) {
     return output.find("Failed") != std::string_view::npos
         || output.find("Error:") != std::string_view::npos;
+}
+
+// Set a meta_any value from a parsed nlohmann::json value.
+// Modifies the field in-place via its void pointer.
+bool set_meta_from_json(entt::meta_any& field_inst, const nlohmann::json& j) {
+    auto meta = field_inst.type();
+    if (!meta) return false;
+    void* ptr = field_inst.data();
+    if (!ptr) return false;
+
+    auto type_id = meta.id();
+
+    // Arithmetic types
+    if (meta.is_arithmetic()) {
+        if (type_id == entt::type_hash<float>::value()) {
+            *static_cast<float*>(ptr) = j.get<float>();
+            return true;
+        }
+        if (type_id == entt::type_hash<int>::value()) {
+            *static_cast<int*>(ptr) = j.get<int>();
+            return true;
+        }
+        if (type_id == entt::type_hash<bool>::value()) {
+            *static_cast<bool*>(ptr) = j.get<bool>();
+            return true;
+        }
+        if (type_id == entt::type_hash<uint32_t>::value()) {
+            *static_cast<uint32_t*>(ptr) = j.get<uint32_t>();
+            return true;
+        }
+        if (type_id == entt::type_hash<double>::value()) {
+            *static_cast<double*>(ptr) = j.get<double>();
+            return true;
+        }
+        return false;
+    }
+
+    // Enum types
+    if (meta.is_enum()) {
+        if (j.is_string()) {
+            std::string name = j.get<std::string>();
+            for (auto [ev_id, ev_data] : meta.data()) {
+                (void)ev_id;
+                if (const char* const* p = ev_data.custom(); p && *p) {
+                    if (name == *p) {
+                        entt::meta_any enum_val = ev_data.get({});
+                        if (enum_val && enum_val.allow_cast<int>()) {
+                            *static_cast<int*>(ptr) = enum_val.cast<int>();
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+        if (j.is_number_integer()) {
+            *static_cast<int*>(ptr) = j.get<int>();
+            return true;
+        }
+        return false;
+    }
+
+    // String type
+    if (type_id == entt::type_hash<std::string>::value()) {
+        *static_cast<std::string*>(ptr) = j.get<std::string>();
+        return true;
+    }
+
+    // Compound type with registered sub-fields
+    if (meta.is_class()) {
+        if (j.is_array()) {
+            size_t idx = 0;
+            for (auto [fid, fdata] : meta.data()) {
+                (void)fid;
+                if (idx >= j.size()) break;
+                entt::meta_any sub_inst = fdata.get(field_inst);
+                if (sub_inst && set_meta_from_json(sub_inst, j[idx])) {
+                    fdata.set(field_inst, sub_inst);
+                }
+                ++idx;
+            }
+            return true;
+        }
+        if (j.is_object()) {
+            for (auto [fid, fdata] : meta.data()) {
+                (void)fid;
+                auto mi = wsl::comp::get_meta_info(fdata);
+                std::string fn = mi ? mi->display_name : "";
+                if (fn.empty()) continue;
+                std::string key;
+                for (char c : fn) key.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+                if (j.contains(key)) {
+                    entt::meta_any sub_inst = fdata.get(field_inst);
+                    if (sub_inst && set_meta_from_json(sub_inst, j[key])) {
+                        fdata.set(field_inst, sub_inst);
+                    }
+                }
+            }
+            return true;
+        }
+        // Single value fallback: try each sub-field
+        if (!j.is_object() && !j.is_array()) {
+            for (auto [fid, fdata] : meta.data()) {
+                (void)fid;
+                entt::meta_any sub_inst = fdata.get(field_inst);
+                if (sub_inst && sub_inst.type().is_arithmetic()) {
+                    if (set_meta_from_json(sub_inst, j)) {
+                        fdata.set(field_inst, sub_inst);
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+// Try to set a component property from a string value.
+// Returns true on success and writes a description to out_msg.
+bool set_component_property(entt::meta_any& instance, entt::meta_data prop_data,
+                            const std::string& value_str, std::string& out_msg) {
+    auto field_type = prop_data.type();
+    if (!field_type) {
+        out_msg = "Property has no reflected type";
+        return false;
+    }
+
+    nlohmann::json j;
+    try {
+        j = nlohmann::json::parse(value_str);
+    } catch (...) {
+        j = value_str;
+    }
+
+    // For enum types, try matching the raw string as an enum value name first
+    if (field_type.is_enum() && j.is_string()) {
+        std::string name = j.get<std::string>();
+        for (auto [ev_id, ev_data] : field_type.data()) {
+            (void)ev_id;
+            if (const char* const* p = ev_data.custom(); p && *p && *p == name) {
+                entt::meta_any enum_val = ev_data.get({});
+                if (enum_val && enum_val.allow_cast<int>()) {
+                    entt::meta_any converted = enum_val.allow_cast(field_type);
+                    if (converted) {
+                        prop_data.set(instance, converted);
+                        out_msg = "set to " + name;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // Get current field value to modify in-place
+    entt::meta_any field_inst = prop_data.get(instance);
+    if (!field_inst) {
+        out_msg = "Failed to access property value";
+        return false;
+    }
+
+    if (set_meta_from_json(field_inst, j)) {
+        prop_data.set(instance, field_inst);
+        out_msg = "set";
+        return true;
+    }
+
+    // Fallback: try allow_cast from a basic meta_any
+    entt::meta_any val;
+    if (j.is_number_float()) val = j.get<float>();
+    else if (j.is_number_integer()) val = j.get<int>();
+    else if (j.is_boolean()) val = j.get<bool>();
+    else val = j.get<std::string>();
+
+    entt::meta_any converted = val.allow_cast(field_type);
+    if (converted) {
+        prop_data.set(instance, converted);
+        out_msg = "set";
+        return true;
+    }
+
+    out_msg = "Unsupported value type or conversion failed";
+    return false;
 }
 
 } // namespace
@@ -398,6 +582,115 @@ void command_executor::cmd_comp(const std::vector<std::string>& tokens) {
         } else {
             m_output << "Unknown component type: " << tokens[3] << "\n";
         }
+    } else if (action == "rm") {
+        if (tokens.size() < 4) return;
+        const auto* descriptor = m_rtc.component_registry.find_world_component(tokens[3]);
+        if (descriptor && descriptor->remove) {
+            if (descriptor->remove(scene->get_registry(), e)) {
+                m_output << "Removed " << tokens[3] << " from " << tokens[2] << "\n";
+            } else {
+                m_output << "Failed to remove " << tokens[3] << " from " << tokens[2]
+                         << " (entity doesn't have this component or entity invalid)\n";
+            }
+        } else {
+            m_output << "Unknown component type: " << tokens[3] << "\n";
+        }
+        } else if (action == "set") {
+        if (tokens.size() < 6) {
+            m_output << "Usage: comp set <id> <type> <property> <value>\n";
+            return;
+        }
+
+        const auto* descriptor = m_rtc.component_registry.find_world_component(tokens[3]);
+        if (!descriptor) {
+            m_output << "Unknown component type: " << tokens[3] << "\n";
+            return;
+        }
+
+        entt::meta_type meta = entt::resolve(descriptor->type_id);
+        if (!meta) {
+            m_output << "No reflection metadata for " << tokens[3] << "\n";
+            return;
+        }
+
+        auto& registry = scene->get_registry();
+
+        if (!registry.valid(e)) {
+            m_output << "Invalid entity: " << tokens[2] << "\n";
+            return;
+        }
+
+        if (descriptor->contains && !descriptor->contains(registry, e)) {
+            m_output << "Entity " << tokens[2] << " does not have component " << tokens[3] << "\n";
+            return;
+        }
+
+        // Find component storage and get void pointer
+        void* comp_ptr = nullptr;
+        for (auto [sid, storage] : registry.storage()) {
+            if (storage.contains(e)) {
+                entt::id_type stable = m_rtc.component_registry.to_stable_id(sid);
+                if (stable == descriptor->type_id) {
+                    comp_ptr = storage.value(e);
+                    break;
+                }
+            }
+        }
+
+        if (!comp_ptr) {
+            m_output << "Could not locate component data for " << tokens[3] << " on entity " << tokens[2] << "\n";
+            return;
+        }
+
+        // Split property path on '.' for nested traversal
+        std::string prop_path = tokens[4];
+        std::vector<std::string> segments;
+        size_t start = 0, dot;
+        while ((dot = prop_path.find('.', start)) != std::string::npos) {
+            segments.push_back(prop_path.substr(start, dot - start));
+            start = dot + 1;
+        }
+        segments.push_back(prop_path.substr(start));
+
+        entt::meta_any instance = meta.from_void(comp_ptr);
+        if (!instance) {
+            m_output << "Failed to wrap component instance\n";
+            return;
+        }
+
+        // Traverse all segments except the last
+        entt::meta_type current_meta = meta;
+        for (size_t i = 0; i + 1 < segments.size(); ++i) {
+            entt::id_type seg_hash = entt::hashed_string::value(segments[i].c_str(), segments[i].size());
+            auto data = current_meta.data(seg_hash);
+            if (!data) {
+                m_output << "Unknown property: " << segments[i] << " in path " << tokens[4] << "\n";
+                return;
+            }
+            entt::meta_any sub_inst = data.get(instance);
+            if (!sub_inst) {
+                m_output << "Cannot access " << segments[i] << " (null or unset)\n";
+                return;
+            }
+            instance = std::move(sub_inst);
+            current_meta = data.type();
+        }
+
+        // Final segment — set the value
+        const std::string& last_seg = segments.back();
+        entt::id_type last_hash = entt::hashed_string::value(last_seg.c_str(), last_seg.size());
+        auto prop_data = current_meta.data(last_hash);
+        if (!prop_data) {
+            m_output << "Unknown property: " << tokens[4] << "\n";
+            return;
+        }
+
+        std::string set_msg;
+        if (set_component_property(instance, prop_data, tokens[5], set_msg)) {
+            m_output << "Set " << tokens[3] << "." << tokens[4] << " = " << tokens[5] << " (" << set_msg << ")\n";
+        } else {
+            m_output << "Failed to set " << tokens[3] << "." << tokens[4] << ": " << set_msg << "\n";
+        }
     }
 }
 
@@ -547,18 +840,47 @@ void command_executor::cmd_rsc(const std::vector<std::string>& tokens) {
 }
 
 void command_executor::cmd_help() {
-    m_output << "Available commands:\n"
-              << " proj <new|load|info>      - Project management\n"
-              << " scene <new|load|save|ls>  - Scene management\n"
-              << " ent <new|ls|rm|inspect>   - Entity management\n"
-              << " comp ls [ent_id]          - List registered or entity components\n"
-              << " comp <add|rm|set>         - Component management\n"
-              << " sig conn ...              - Signal management\n"
-              << " sys ls                    - List registered systems\n"
-              << " rsc ls [type]             - List resources (models, images, ...)\n"
-              << " cls                       - Clear screen\n"
-              << " help                      - Show this help\n"
-              << " exit                      - Exit REPL\n";
+    m_output << "Weasel Engine REPL - Available Commands\n"
+              << "======================================\n\n"
+              << "Project:\n"
+              << "  proj new <path> <name>     Create a new project at path with name\n"
+              << "  proj load <path>           Load an existing project\n"
+              << "  proj info                  Show current project metadata\n"
+              << "  proj save                  Save current project metadata to disk\n\n"
+              << "Scene:\n"
+              << "  scene new <name>           Create a new empty scene and set it active\n"
+              << "  scene load <path>          Load a .wscn.json scene file from disk\n"
+              << "  scene save [path]          Save active scene (default: <name>.wscn.json)\n"
+              << "  scene ls                   List all scene assets in the project\n"
+              << "  scene status               Show active scene statistics\n\n"
+              << "Entity:\n"
+              << "  ent new [name]             Create a new entity (optional name)\n"
+              << "  ent ls                     List all entities in the active scene\n"
+              << "  ent rm <id>                Destroy entity by numeric ID\n"
+              << "  ent ren <id> <name>        Rename an entity\n"
+              << "  ent inspect <id>           Show entity details and its components\n\n"
+              << "Component:\n"
+              << "  comp avail                 List all registered component types\n"
+              << "  comp ls [id]               List components on an entity, or all types\n"
+              << "  comp add <id> <type>       Add a component to entity by type name\n"
+              << "  comp rm <id> <type>        Remove a component from entity\n"
+              << "  comp set <id> <type> <prop> <val>   Set a component property\n"
+              << "    Value is JSON: numbers, strings, booleans, arrays, objects\n"
+              << "    Enum names: box/sphere, Static/Kinematic/Dynamic, etc.\n"
+              << "    Nested paths: motion_type.value, collision_layer.value\n"
+              << "    Examples:\n"
+              << "      comp set 42 transform position '[1,2,3]'\n"
+              << "      comp set 42 rigid_body shape sphere\n"
+              << "      comp set 42 rigid_body radius 0.5\n"
+              << "      comp set 42 rigid_body motion_type.value 2\n\n"
+              << "System:\n"
+              << "  sys ls | avail             List registered systems\n\n"
+              << "Resources:\n"
+              << "  rsc ls [type]              List resources (models, images, audio, etc.)\n\n"
+              << "Other:\n"
+              << "  help                       Show this help message\n"
+              << "  cls                        Clear the terminal screen\n"
+              << "  exit | quit                Exit the REPL\n";
 }
 
 // -------- repl_handler implementation --------

@@ -42,8 +42,16 @@ public:
    * \brief Loads a shader configured for skybox rendering.
    */
   static SDL_GPUShader *load_skybox_shader (SDL_GPUDevice *device,
-                                            const char *path,
-                                            SDL_GPUShaderStage stage);
+                                             const char *path,
+                                             SDL_GPUShaderStage stage);
+
+  /*!
+   * \brief Returns the native shader format for the current platform.
+   *
+   * Matches the shader bytecode format that the build system compiles to
+   * (SPIR-V on Linux, MSL on macOS, DXIL on Windows).
+   */
+  static SDL_GPUShaderFormat native_format ();
 };
 
 } // namespace gfx

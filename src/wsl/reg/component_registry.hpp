@@ -79,6 +79,8 @@ public:
     bool (*contains) (entt::registry &, entt::entity) = nullptr;
     //! Emplaces a default instance of the component on the given entity.
     bool (*emplace_default) (entt::registry &, entt::entity) = nullptr;
+    //! Removes the component from the given entity.
+    bool (*remove) (entt::registry &, entt::entity) = nullptr;
     //! Copies the component from a source entity to a destination entity.
     void (*copy) (entt::registry &src_reg, entt::entity src_ent,
                   entt::registry &dst_reg, entt::entity dst_ent)
@@ -296,6 +298,15 @@ component_registry::register_world_component (
       return true;
     };
   }
+
+  desc.remove = +[] (entt::registry &registry, entt::entity entity) -> bool {
+    if (!registry.valid (entity) || !registry.all_of<T> (entity)) {
+      return false;
+    }
+
+    registry.remove<T> (entity);
+    return true;
+  };
 
   spdlog::debug (
       "component_registry: registered component '{}' ({}) with type_id {}",
