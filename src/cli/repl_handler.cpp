@@ -133,13 +133,26 @@ bool command_failed(std::string_view output) {
 
 // Set a meta_any value from a parsed nlohmann::json value.
 // Modifies the field in-place via its void pointer.
-bool set_meta_from_json(entt::meta_any& field_inst, const nlohmann::json& j) {
+// The optional resource_manager is used to resolve resource path strings
+// (e.g. "builtin://sphere") into typed resource handles such as model_id.
+bool set_meta_from_json(entt::meta_any& field_inst, const nlohmann::json& j,
+                        wsl::rsc::resource_manager* res_mgr = nullptr) {
     auto meta = field_inst.type();
     if (!meta) return false;
     void* ptr = field_inst.data();
     if (!ptr) return false;
 
     auto type_id = meta.id();
+
+    // ── model_id: accept a string resource path ──
+    if (type_id == entt::type_hash<wsl::rsc::model_id>::value()) {
+        if (j.is_string() && res_mgr) {
+            std::string path = j.get<std::string>();
+            *static_cast<wsl::rsc::model_id*>(ptr) = res_mgr->register_model(path);
+            return true;
+        }
+        return false;
+    }
 
     // Arithmetic types
     if (meta.is_arithmetic()) {
@@ -205,7 +218,7 @@ bool set_meta_from_json(entt::meta_any& field_inst, const nlohmann::json& j) {
                 (void)fid;
                 if (idx >= j.size()) break;
                 entt::meta_any sub_inst = fdata.get(field_inst);
-                if (sub_inst && set_meta_from_json(sub_inst, j[idx])) {
+                if (sub_inst && set_meta_from_json(sub_inst, j[idx], res_mgr)) {
                     fdata.set(field_inst, sub_inst);
                 }
                 ++idx;
@@ -222,7 +235,7 @@ bool set_meta_from_json(entt::meta_any& field_inst, const nlohmann::json& j) {
                 for (char c : fn) key.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
                 if (j.contains(key)) {
                     entt::meta_any sub_inst = fdata.get(field_inst);
-                    if (sub_inst && set_meta_from_json(sub_inst, j[key])) {
+                    if (sub_inst && set_meta_from_json(sub_inst, j[key], res_mgr)) {
                         fdata.set(field_inst, sub_inst);
                     }
                 }
@@ -235,7 +248,7 @@ bool set_meta_from_json(entt::meta_any& field_inst, const nlohmann::json& j) {
                 (void)fid;
                 entt::meta_any sub_inst = fdata.get(field_inst);
                 if (sub_inst && sub_inst.type().is_arithmetic()) {
-                    if (set_meta_from_json(sub_inst, j)) {
+                    if (set_meta_from_json(sub_inst, j, res_mgr)) {
                         fdata.set(field_inst, sub_inst);
                         return true;
                     }
@@ -249,8 +262,11 @@ bool set_meta_from_json(entt::meta_any& field_inst, const nlohmann::json& j) {
 
 // Try to set a component property from a string value.
 // Returns true on success and writes a description to out_msg.
+// The optional resource_manager is forwarded to set_meta_from_json for
+// resolving resource paths (model_id, etc.).
 bool set_component_property(entt::meta_any& instance, entt::meta_data prop_data,
-                            const std::string& value_str, std::string& out_msg) {
+                            const std::string& value_str, std::string& out_msg,
+                            wsl::rsc::resource_manager* res_mgr = nullptr) {
     auto field_type = prop_data.type();
     if (!field_type) {
         out_msg = "Property has no reflected type";
@@ -264,7 +280,17 @@ bool set_component_property(entt::meta_any& instance, entt::meta_data prop_data,
         j = value_str;
     }
 
-    // For enum types, try matching the raw string as an enum value name first
+    // Get current field value to modify in-place (always use this path
+    // for reliability — avoids potential issues with meta_data::set and
+    // from_void instances, and also handles enum types correctly).
+    entt::meta_any field_inst = prop_data.get(instance);
+    if (!field_inst) {
+        out_msg = "Failed to access property value";
+        return false;
+    }
+
+    // For enum types with string values, build the correct integer via enum
+    // data lookup, then inject into the get-modify-set flow.
     if (field_type.is_enum() && j.is_string()) {
         std::string name = j.get<std::string>();
         for (auto [ev_id, ev_data] : field_type.data()) {
@@ -272,9 +298,11 @@ bool set_component_property(entt::meta_any& instance, entt::meta_data prop_data,
             if (const char* const* p = ev_data.custom(); p && *p && *p == name) {
                 entt::meta_any enum_val = ev_data.get({});
                 if (enum_val && enum_val.allow_cast<int>()) {
-                    entt::meta_any converted = enum_val.allow_cast(field_type);
-                    if (converted) {
-                        prop_data.set(instance, converted);
+                    int iv = enum_val.cast<int>();
+                    void* fp = field_inst.data();
+                    if (fp) {
+                        std::memcpy(fp, &iv, sizeof(int));
+                        prop_data.set(instance, field_inst);
                         out_msg = "set to " + name;
                         return true;
                     }
@@ -283,14 +311,7 @@ bool set_component_property(entt::meta_any& instance, entt::meta_data prop_data,
         }
     }
 
-    // Get current field value to modify in-place
-    entt::meta_any field_inst = prop_data.get(instance);
-    if (!field_inst) {
-        out_msg = "Failed to access property value";
-        return false;
-    }
-
-    if (set_meta_from_json(field_inst, j)) {
+    if (set_meta_from_json(field_inst, j, res_mgr)) {
         prop_data.set(instance, field_inst);
         out_msg = "set";
         return true;
@@ -327,7 +348,18 @@ std::string command_executor::execute(const std::string& line) {
     m_output.str("");
     m_output.clear();
     
-    auto tokens = tokenize(line);
+    // Strip inline comments: remove everything from the first unquoted '#'.
+    std::string cleaned;
+    cleaned.reserve(line.size());
+    bool in_sq = false, in_dq = false;
+    for (char ch : line) {
+        if (ch == '\'' && !in_dq) { in_sq = !in_sq; cleaned.push_back(ch); continue; }
+        if (ch == '"' && !in_sq)  { in_dq = !in_dq; cleaned.push_back(ch); continue; }
+        if (ch == '#' && !in_sq && !in_dq) break;  // strip rest of line
+        cleaned.push_back(ch);
+    }
+
+    auto tokens = tokenize(cleaned);
     if (tokens.empty()) return "";
     
     const std::string& family = tokens[0];
@@ -471,7 +503,29 @@ void command_executor::cmd_scene(const std::vector<std::string>& tokens) {
     } else if (action == "save") {
         auto* scene = get_active_scene();
         if (!scene) { m_output << "No active scene.\n"; return; }
-        std::string path = (tokens.size() > 2) ? tokens[2] : scene->get_name() + ".wscn.json";
+        std::string path;
+        if (tokens.size() > 2) {
+            path = tokens[2];
+        } else {
+            // Default to project's scenes_path + scene_name.wscn.json
+            if (m_current_project) {
+                std::filesystem::path scenes_dir(m_current_project->root_path);
+                scenes_dir /= m_current_project->scenes_path;
+                std::string sname = std::filesystem::path(scene->get_name()).filename().string();
+                if (sname.ends_with(".wscn.json"))
+                    sname.resize(sname.size() - 10);
+                else if (sname.ends_with(".json"))
+                    sname.resize(sname.size() - 5);
+                path = (scenes_dir / (sname + ".wscn.json")).string();
+            } else {
+                std::string sname = std::filesystem::path(scene->get_name()).filename().string();
+                if (sname.ends_with(".wscn.json"))
+                    sname.resize(sname.size() - 10);
+                else if (sname.ends_with(".json"))
+                    sname.resize(sname.size() - 5);
+                path = sname + ".wscn.json";
+            }
+        }
         wsl::rsc::io::scene_snapshot_serializer serializer(&m_rtc, *scene);
         if (serializer.save_json(path)) {
             m_output << "Scene saved to " << path << "\n";
@@ -652,41 +706,66 @@ void command_executor::cmd_comp(const std::vector<std::string>& tokens) {
         }
         segments.push_back(prop_path.substr(start));
 
-        entt::meta_any instance = meta.from_void(comp_ptr);
-        if (!instance) {
-            m_output << "Failed to wrap component instance\n";
-            return;
-        }
+        // ── Nested property traversal ──
+        // meta_data::get/set internally use try_cast which fails on
+        // reference-typed meta_any (from from_void or field accessors).
+        // Solution: for the innermost parent, create a VALUE copy, set the
+        // property on the VALUE copy (try_cast works), then write the
+        // entire modified copy back to the registry component via memcpy.
+        // The nested path is walked using the original comp_ptr and
+        // from_void; each level's data() gives the field address which we
+        // store so we know where to memcpy the modified parent back.
+        struct cl { void* parent_ptr; entt::meta_type parent_type; entt::id_type acc_hash; };
+        std::vector<cl> chain;
 
-        // Traverse all segments except the last
-        entt::meta_type current_meta = meta;
+        void* cur = comp_ptr;
+        entt::meta_type cur_meta = meta;
         for (size_t i = 0; i + 1 < segments.size(); ++i) {
             entt::id_type seg_hash = entt::hashed_string::value(segments[i].c_str(), segments[i].size());
-            auto data = current_meta.data(seg_hash);
+            auto data = cur_meta.data(seg_hash);
             if (!data) {
                 m_output << "Unknown property: " << segments[i] << " in path " << tokens[4] << "\n";
                 return;
             }
-            entt::meta_any sub_inst = data.get(instance);
-            if (!sub_inst) {
+            chain.push_back({cur, cur_meta, seg_hash});
+            entt::meta_any p = cur_meta.from_void(cur);
+            if (!p) {
+                m_output << "Cannot access parent at " << segments[i] << "\n";
+                return;
+            }
+            entt::meta_any s = data.get(p);
+            if (!s) {
                 m_output << "Cannot access " << segments[i] << " (null or unset)\n";
                 return;
             }
-            instance = std::move(sub_inst);
-            current_meta = data.type();
+            void* np = s.data();
+            if (!np) {
+                m_output << "Cannot resolve field " << segments[i] << "\n";
+                return;
+            }
+            cur = np;
+            cur_meta = data.type();
         }
 
-        // Final segment — set the value
-        const std::string& last_seg = segments.back();
-        entt::id_type last_hash = entt::hashed_string::value(last_seg.c_str(), last_seg.size());
-        auto prop_data = current_meta.data(last_hash);
+        // Create a VALUE copy of the innermost parent
+        size_t parent_sz = cur_meta.size_of();
+        void* parent_buf = std::malloc(parent_sz);
+        std::memcpy(parent_buf, cur, parent_sz);
+        entt::meta_any parent_val = cur_meta.from_void(parent_buf, true);
+
+        // Set the leaf property on the VALUE copy
+        entt::id_type last_hash = entt::hashed_string::value(segments.back().c_str(), segments.back().size());
+        auto prop_data = cur_meta.data(last_hash);
         if (!prop_data) {
             m_output << "Unknown property: " << tokens[4] << "\n";
             return;
         }
 
         std::string set_msg;
-        if (set_component_property(instance, prop_data, tokens[5], set_msg)) {
+        if (set_component_property(parent_val, prop_data, tokens[5], set_msg,
+                                   &m_rtc.resource_manager)) {
+            // Write the modified VALUE copy back to the component
+            std::memcpy(cur, parent_buf, parent_sz);
             m_output << "Set " << tokens[3] << "." << tokens[4] << " = " << tokens[5] << " (" << set_msg << ")\n";
         } else {
             m_output << "Failed to set " << tokens[3] << "." << tokens[4] << ": " << set_msg << "\n";
@@ -700,7 +779,7 @@ void command_executor::cmd_sig(const std::vector<std::string>& tokens) {
 
 void command_executor::cmd_sys(const std::vector<std::string>& tokens) {
     if (tokens.size() < 2) {
-        m_output << "Usage: sys <ls|avail>\n";
+        m_output << "Usage: sys <ls|avail|add>\n";
         return;
     }
 
@@ -718,8 +797,29 @@ void command_executor::cmd_sys(const std::vector<std::string>& tokens) {
             }
             write_registered_entry(m_output, *system);
         }
+    } else if (tokens[1] == "add") {
+        if (tokens.size() < 3) {
+            m_output << "Usage: sys add <name>\n";
+            return;
+        }
+        std::string sys_name = tokens[2];
+        for (size_t i = 3; i < tokens.size(); ++i) {
+            sys_name += ' ' + tokens[i];
+        }
+        auto* scene = get_active_scene();
+        if (!scene) {
+            m_output << "No active scene.\n";
+            return;
+        }
+        auto sys = m_rtc.system_factory_registry.create(sys_name, *scene);
+        if (sys) {
+            scene->add_system_instance(std::move(sys));
+            m_output << "Added system '" << sys_name << "' to active scene.\n";
+        } else {
+            m_output << "Unknown system: " << sys_name << "\n";
+        }
     } else {
-        m_output << "Usage: sys <ls|avail>\n";
+        m_output << "Usage: sys <ls|avail|add>\n";
     }
 }
 
@@ -850,7 +950,7 @@ void command_executor::cmd_help() {
               << "Scene:\n"
               << "  scene new <name>           Create a new empty scene and set it active\n"
               << "  scene load <path>          Load a .wscn.json scene file from disk\n"
-              << "  scene save [path]          Save active scene (default: <name>.wscn.json)\n"
+              << "  scene save [path]          Save active scene (default: project scenes dir)\n"
               << "  scene ls                   List all scene assets in the project\n"
               << "  scene status               Show active scene statistics\n\n"
               << "Entity:\n"
@@ -865,22 +965,28 @@ void command_executor::cmd_help() {
               << "  comp add <id> <type>       Add a component to entity by type name\n"
               << "  comp rm <id> <type>        Remove a component from entity\n"
               << "  comp set <id> <type> <prop> <val>   Set a component property\n"
+              << "    Type name: short name (transform), display name (Transform),\n"
+              << "              or fully qualified (wsl::comp::transform)\n"
               << "    Value is JSON: numbers, strings, booleans, arrays, objects\n"
               << "    Enum names: box/sphere, Static/Kinematic/Dynamic, etc.\n"
+              << "    Resource paths: builtin://cube, builtin://sphere, etc.\n"
               << "    Nested paths: motion_type.value, collision_layer.value\n"
               << "    Examples:\n"
               << "      comp set 42 transform position '[1,2,3]'\n"
               << "      comp set 42 rigid_body shape sphere\n"
               << "      comp set 42 rigid_body radius 0.5\n"
-              << "      comp set 42 rigid_body motion_type.value 2\n\n"
+              << "      comp set 42 rigid_body motion_type.value 2\n"
+              << "      comp set 42 model_instance_3d model_id builtin://cube\n\n"
               << "System:\n"
-              << "  sys ls | avail             List registered systems\n\n"
+              << "  sys ls | avail             List registered systems\n"
+              << "  sys add <name>             Add a system (e.g. Transform, Physics, 3D Render)\n\n"
               << "Resources:\n"
               << "  rsc ls [type]              List resources (models, images, audio, etc.)\n\n"
               << "Other:\n"
               << "  help                       Show this help message\n"
               << "  cls                        Clear the terminal screen\n"
-              << "  exit | quit                Exit the REPL\n";
+              << "  exit | quit                Exit the REPL\n"
+              << "  # ...                      Lines starting with # are ignored (comments)\n";
 }
 
 // -------- repl_handler implementation --------

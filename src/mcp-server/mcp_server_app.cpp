@@ -152,6 +152,7 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "  comp set        - Set a component property\n";
   oss << "  sys ls          - List active systems\n";
   oss << "  sys avail       - List registered systems\n";
+  oss << "  sys add         - Add a system to the active scene\n";
   oss << "  check           - Run validation checks\n";
   oss << "  rsc ls          - List resources\n";
   oss << "  help            - Show help\n";
@@ -161,14 +162,30 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "== Documented but NOT Implemented ==\n";
   oss << "  sig             - Signal management (stub only)\n\n";
 
-  oss << "== Known Limitations ==\n";
+  oss << "== Previously Fixed Limitations ==\n";
+  oss << "  - Component type names now accept short names (transform,\n";
+  oss << "    rigid_body), display names (Transform), or fully qualified\n";
+  oss << "    C++ names (wsl::comp::transform)\n";
+  oss << "  - model_id property on model_instance_3d now accepts\n";
+  oss << "    builtin:// paths (e.g. builtin://cube) without crashing\n";
+  oss << "  - sys add <name> can attach systems to scenes dynamically\n";
+  oss << "    (e.g. Transform, Physics, 3D Render)\n";
+  oss << "  - Nested comp set properties (motion_type.value,\n";
+  oss << "    collision_layer.value) now persist through scene save\n";
+  oss << "  - scene save without a path writes to project's scenes_path\n";
+  oss << "    (no double .wscn.json extension)\n";
+  oss << "  - # comments and inline comments are now supported in REPL\n\n";
+  oss << "== Remaining Notes ==\n";
   oss << "  - `scene new` creates a scene with no systems attached\n";
-  oss << "  - Systems can only be loaded from saved scene files\n";
+  oss << "    (use sys add to add them)\n";
   oss << "  - `comp set` supports primitive types, enums (by name or int),\n";
   oss << "    compound types (vec3, quat) via JSON arrays/objects,\n";
   oss << "    and nested property paths (e.g. motion_type.value)\n";
   oss << "  - Physics components modified via comp set may need manual\n";
   oss << "    re-sync (e.g. rigid_body changes require on_inspector_changed)\n";
+  oss << "  - comp set uses EnTT meta property names (e.g. motion_type)\n";
+  oss << "    NOT display names (e.g. Motion Type) or serialization names\n";
+  oss << "  - comp set only works on components with register_meta() called\n";
 
   return build_text_response (oss.str ());
 }

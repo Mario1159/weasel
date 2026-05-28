@@ -138,6 +138,19 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
     audio_sys = std::make_unique<audio_system> ("Audio System");
   }
 
+  // Register system factories so CLI `sys add` can create them dynamically.
+  if (m_runtime_ctx) {
+    auto& factory = m_runtime_ctx->system_factory_registry;
+    factory.register_system_type<transform_system>({"Transform"});
+    factory.register_system_type<physics_system>({"Physics"});
+    factory.register_system_type<render_3d_system>({"3D Render"});
+    factory.register_system_type<audio_system>({"Audio"});
+    factory.register_system_type<lighting_system>({"Lighting"});
+    factory.register_system_type<skybox_system>({"Skybox"});
+    factory.register_system_type<shadow_system>({"Shadow"});
+    factory.register_system_type<render_ui_system>({"UI"});
+  }
+
   register_debug_metadata ();
 
   sync_activation ();

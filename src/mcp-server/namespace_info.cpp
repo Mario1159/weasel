@@ -316,6 +316,27 @@ to decouple scenes from concrete asset paths.
   Load:   res_mgr.load_project("path/to/wslpro.json")
   Access: res_mgr.current_project() → shared_ptr<project>
 
+── Built-in Primitives ──
+
+  The engine registers built-in procedural models accessible via
+  builtin:// URIs. These require no asset files on disk:
+
+    builtin://cube       — unit cube (1×1×1), Box shape
+    builtin://sphere     — unit sphere, radius 0.5
+    builtin://cylinder   — unit cylinder, height 1, radius 0.5
+    builtin://prism      — triangular prism
+    builtin://quad       — unit quad (2D, 1×1)
+
+  Use with model_instance_3d.model_id via CLI:
+    comp set <id> model_instance_3d model_id builtin://cube
+
+  Or in C++:
+    res_mgr.register_model("builtin://cube") → model_id
+
+  Procedural mesh generators (gfx/model_3d):
+    model_3d::make_unit_quad(), make_unit_cube(),
+    make_unit_sphere(), make_unit_cylinder(), make_unit_prism()
+
 ── resource_manager_view ──
 
   Singleton component wrapping a pointer to the resource_manager.

@@ -130,9 +130,10 @@ const std::vector<cli_command_info> g_cli_reference = {
     "sys",
     "cli",
     "Run a system REPL command without entering the interactive shell.",
-    "weasel-cli sys <ls|avail>",
+    "weasel-cli sys <ls|avail|add>",
     {
-      "<ls|avail> – System subcommand."
+      "<ls|avail> – List registered systems.",
+      "add <name> – Add a system to the active scene."
     },
     {"weasel-cli sys ls", "weasel-cli sys avail"}
   },
@@ -192,9 +193,15 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "scene save",
     "repl",
-    "Save the active scene to disk.",
+    "Save the active scene to disk. When a project is loaded, the default "
+    "path is {project_root}/{scenes_path}/{scene_name}.wscn.json. "
+    "Without a project, defaults to {scene_name}.wscn.json in the CWD.",
     "scene save [path]",
-    {"[path] – Optional override path (defaults to scene's current path)."},
+    {
+      "[path] – Optional override path. Default: project's scenes_path + scene name.",
+      "When a project is loaded, saves to the project's configured scenes_path.",
+      "Without a project, saves to the current working directory."
+    },
     {"scene save", "scene save ./backup.wscn.json"}
   },
   {
@@ -297,15 +304,18 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "comp set",
     "repl",
-    "Set a property on an entity's component. Supports nested property paths (dot-separated) and JSON-compatible values.",
+    "Set a property on an entity's component. Uses EnTT meta property names "
+    "(NOT serialization/JSON names). Only works on components that have been "
+    "initialized with register_meta(). Supports nested property paths "
+    "(dot-separated) and JSON-compatible values.",
     "comp set <id> <type> <property> <value>",
     {
       "<id> – Numeric entity ID.",
-      "<type> – Component type name (e.g. transform, rigid_body).",
-      "<property> – Property name. Use dot notation for nested fields (e.g. motion_type.value, collision_layer.value).",
-      "<value> – New value as JSON: numbers (1.5), strings (\"text\"), booleans (true/false), arrays ([1,2,3]), or enum names (sphere, Dynamic)."
+      "<type> – Component type name (e.g. transform, rigid_body). Short names, display names, and fully qualified C++ names all work.",
+      "<property> – EnTT meta property name (e.g. motion_type, not 'Motion Type'). Use dot notation for nested fields (e.g. motion_type.value, collision_layer.value). These differ from serialization names in some cases.",
+      "<value> – New value as JSON: numbers (1.5), strings (\\\"text\\\"), booleans (true/false), arrays ([1,2,3]), or enum names (Box, Sphere, Static, Dynamic, Kinematic)."
     },
-    {"comp set 42 transform position '[1.0, 2.0, 3.0]'", "comp set 42 rigid_body shape sphere", "comp set 42 rigid_body radius 0.5", "comp set 42 rigid_body motion_type.value 2"}
+    {"comp set 42 transform position '[1.0, 2.0, 3.0]'", "comp set 42 rigid_body shape Box", "comp set 42 rigid_body radius 0.5", "comp set 42 rigid_body motion_type.value 2"}
   },
   {
     "sig",
@@ -314,6 +324,16 @@ const std::vector<cli_command_info> g_cli_reference = {
     "sig <subcommand> [args...]",
     {},
     {}
+  },
+  {
+    "sys add",
+    "repl",
+    "Add a system to the active scene by registered name.",
+    "sys add <name>",
+    {
+      "<name> – System name (e.g. Transform, Physics, 3D Render, Audio, Lighting, Skybox, Shadow, UI). System names are case-sensitive."
+    },
+    {"sys add Transform", "sys add Physics", "sys add 3D Render"}
   },
   {
     "sys ls",

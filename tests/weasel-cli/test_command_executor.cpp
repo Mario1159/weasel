@@ -74,7 +74,7 @@ TEST_CASE ("help lists all command families")
 {
   exec_fixture fx;
   auto out = fx.execute ("help");
-  CHECK (out.find ("Available commands:") != std::string::npos);
+  CHECK (out.find ("Available Commands") != std::string::npos);
   CHECK (out.find ("proj") != std::string::npos);
   CHECK (out.find ("scene") != std::string::npos);
   CHECK (out.find ("ent") != std::string::npos);
@@ -269,18 +269,21 @@ TEST_CASE ("comp add with unknown component type")
 
 // ===== sys commands =====
 
-TEST_CASE ("sys ls with no registered systems")
+TEST_CASE ("sys ls lists registered systems")
 {
   exec_fixture fx;
   auto out = fx.execute ("sys ls");
-  CHECK (out.find ("No registered scene systems") != std::string::npos);
+  CHECK (out.find ("Registered Systems") != std::string::npos);
+  CHECK (out.find ("Transform") != std::string::npos);
+  CHECK (out.find ("Physics") != std::string::npos);
 }
 
-TEST_CASE ("sys avail with no registered systems")
+TEST_CASE ("sys avail lists registered systems")
 {
   exec_fixture fx;
   auto out = fx.execute ("sys avail");
-  CHECK (out.find ("No registered scene systems") != std::string::npos);
+  CHECK (out.find ("Registered Systems") != std::string::npos);
+  CHECK (out.find ("Transform") != std::string::npos);
 }
 
 TEST_CASE ("sys with unknown subcommand prints usage")

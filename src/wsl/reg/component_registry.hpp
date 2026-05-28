@@ -259,6 +259,7 @@ private:
   std::unordered_map<entt::id_type, descriptor> m_descriptors;
   std::unordered_map<entt::id_type, entt::id_type> m_internal_to_stable;
   std::unordered_map<std::string, entt::id_type> m_type_name_to_stable;
+  std::unordered_map<std::string, entt::id_type> m_display_name_to_stable;
 };
 
 template <comp::world_component_type T>
@@ -281,6 +282,7 @@ component_registry::register_world_component (
   desc.type_name = std::string (entt::type_name<T> ().value ());
   desc.display_name = detail::resolve_display_name<T> (options.display_name);
   m_type_name_to_stable[desc.type_name] = type_id;
+  m_display_name_to_stable[desc.display_name] = type_id;
   desc.runtime_registered = options.runtime_registered;
   desc.contains = +[] (entt::registry &registry, entt::entity entity) -> bool {
     return registry.valid (entity) && registry.all_of<T> (entity);

@@ -17,14 +17,34 @@ gfx::render_context::render_context (bool headless)
       return;
     }
 
-  SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats (nullptr);
-  spdlog::debug ("render_context: supported shader formats: 0x{:x}", static_cast<unsigned> (formats));
+#if defined(__APPLE__)
+  SDL_GPUShaderFormat shader_format = SDL_GPU_SHADERFORMAT_MSL;
+#elif defined(_WIN32)
+  SDL_GPUShaderFormat shader_format = SDL_GPU_SHADERFORMAT_DXIL;
+#else
+  SDL_GPUShaderFormat shader_format = SDL_GPU_SHADERFORMAT_SPIRV;
+#endif
 
-  gpu_device = SDL_CreateGPUDevice (formats, false, nullptr);
-  if (gpu_device != nullptr) {
-    spdlog::info ("render_context: created GPU device");
+  int driver_count = SDL_GetNumGPUDrivers ();
+  spdlog::debug ("render_context: found {} GPU drivers", driver_count);
+
+  for (int i = 0; i < driver_count; i++) {
+    const char *driver_name = SDL_GetGPUDriver (i);
+    gpu_device = SDL_CreateGPUDevice (shader_format, false, driver_name);
+    if (gpu_device != nullptr) {
+      spdlog::info ("render_context: created GPU device using driver: {}", driver_name);
+      break;
+    }
+    spdlog::warn ("render_context: failed to create GPU device with driver {}: {}", driver_name, SDL_GetError ());
   }
-  
+
+  if (gpu_device == nullptr) {
+    gpu_device = SDL_CreateGPUDevice (shader_format, false, nullptr);
+    if (gpu_device != nullptr) {
+      spdlog::info ("render_context: created GPU device using default driver");
+    }
+  }
+
   if (gpu_device == nullptr) {
     SDL_Log ("render_context: CRITICAL: failed to create GPU device: %s", SDL_GetError ());
     spdlog::critical ("render_context: CRITICAL: failed to create GPU device: {}", SDL_GetError ());

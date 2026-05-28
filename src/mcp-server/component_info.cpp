@@ -13,8 +13,6 @@
 
 namespace wsl::mcp_server {
 
-namespace {
-
 // --- lazy initialization ---------------------------------------------------
 
 reg::component_registry& ensure_registry() {
@@ -56,13 +54,20 @@ std::string format_enum_value(const entt::meta_data& data) {
     }
 
     entt::meta_any val = data.get({});
-    if (!val) return label + " = <?>";
+    if (!val) return label + " = <?";
 
-    if (val.allow_cast<int>()) {
-        return label + " = " + std::to_string(val.cast<int>());
+    std::string result = label;
+
+    // Show the EnTT hashed-string name used by `comp set` for enum matching
+    if (const char *const *p = data.custom(); (p != nullptr) && ((*p) != nullptr)) {
+        result += " [match: " + std::string(*p) + "]";
     }
 
-    return label;
+    if (val.allow_cast<int>()) {
+        result += " = " + std::to_string(val.cast<int>());
+    }
+
+    return result;
 }
 
 // Describe a meta type's data members, recursing into nested types that
@@ -72,7 +77,6 @@ void describe_fields(std::ostringstream& oss, const entt::meta_type& meta,
     if (!meta || depth > 5) return;
 
     for (auto&& [id, data] : meta.data()) {
-        (void)id;
 
         auto field_type = data.type();
 
@@ -84,7 +88,14 @@ void describe_fields(std::ostringstream& oss, const entt::meta_type& meta,
         }
         if (display_name.empty()) display_name = "<unnamed>";
 
-        oss << indent << "  " << display_name;
+        // Derive the meta property name from the display name convention:
+        // lowercase, spaces→underscores, strip trailing punctuation.
+        std::string prop_name = display_name;
+        for (auto& c : prop_name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (auto& c : prop_name) if (c == ' ') c = '_';
+        while (!prop_name.empty() && prop_name.back() == '.') prop_name.pop_back();
+
+        oss << indent << "  " << display_name << " [key: " << prop_name << "]";
 
         if (field_type) {
             oss << " (" << type_name_str(field_type) << ")";
@@ -97,11 +108,15 @@ void describe_fields(std::ostringstream& oss, const entt::meta_type& meta,
         }
         oss << "\n";
 
+        // Show CLI example for "comp set" property name usage
+        oss << indent << "    CLI: comp set <id> <type> " << prop_name << " <value>\n";
+
         // Enum type: list possible values
         if (field_type && field_type.is_enum()) {
+            oss << indent << "    Values (comp set matches against the bracketed label):\n";
             for (auto&& [ev_id, ev_data] : field_type.data()) {
                 (void)ev_id;
-                oss << indent << "    " << format_enum_value(ev_data) << "\n";
+                oss << indent << "      " << format_enum_value(ev_data) << "\n";
             }
             continue;
         }
@@ -161,8 +176,6 @@ find_component(const std::string& name) {
     return nullptr;
 }
 
-} // namespace
-
 // --- handlers --------------------------------------------------------------
 
 mcp::json handle_list_components(const mcp::json& params) {
@@ -215,6 +228,8 @@ mcp::json handle_describe_component(const mcp::json& params) {
     entt::meta_type meta = entt::resolve(desc->type_id);
     if (!meta) {
         oss << "  (No reflection metadata registered)\n";
+        oss << "  NOTE: comp set only works on components with EnTT meta\n";
+        oss << "  registration (register_meta() must have been called).\n";
     } else {
         bool has_fields = false;
         for (auto&& [id, data] : meta.data()) {
@@ -225,8 +240,14 @@ mcp::json handle_describe_component(const mcp::json& params) {
 
         if (!has_fields) {
             oss << "  Properties: none exposed via reflection\n";
+            oss << "  NOTE: comp set only works on components with EnTT meta\n";
+            oss << "  registration (register_meta() must have been called).\n";
         } else {
             oss << "Properties:\n";
+            oss << "  NOTE: comp set uses the bracketed hash IDs as property names,\n";
+            oss << "  NOT the display names. Example: use motion_type, not Motion Type.\n";
+            oss << "  Scene serialization uses yet another set of names (e.g. serializes\n";
+            oss << "  as 'motion_type' in JSON, but meta property is 'motion_type').\n\n";
             describe_fields(oss, meta, "", 0);
         }
     }

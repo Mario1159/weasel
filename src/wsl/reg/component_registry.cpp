@@ -39,10 +39,29 @@ component_registry::find_world_component (entt::id_type type_id) const
 const component_registry::descriptor *
 component_registry::find_world_component (std::string_view type_name) const
 {
+  // 1. Exact C++ type name (e.g. "wsl::comp::transform")
   if (std::unordered_map<std::string, entt::id_type>::const_iterator const it
       = m_type_name_to_stable.find (std::string (type_name));
       it != m_type_name_to_stable.end ()) {
     return find_world_component (it->second);
+  }
+
+  // 2. Display name (e.g. "Transform", "Rigid Body")
+  if (std::unordered_map<std::string, entt::id_type>::const_iterator const dit
+      = m_display_name_to_stable.find (std::string (type_name));
+      dit != m_display_name_to_stable.end ()) {
+    return find_world_component (dit->second);
+  }
+
+  // 3. Short name — last segment after "::" (e.g. "transform", "rigid_body")
+  for (const auto &entry : m_descriptors) {
+    std::string_view const full = entry.second.type_name;
+    std::size_t const pos = full.rfind ("::");
+    std::string_view const short_name
+        = (pos != std::string_view::npos) ? full.substr (pos + 2) : full;
+    if (short_name == type_name) {
+      return &entry.second;
+    }
   }
 
   return nullptr;
@@ -205,6 +224,7 @@ component_registry::clear_runtime_world_components ()
         = m_descriptors.find (type_id);
         it != m_descriptors.end ()) {
       m_type_name_to_stable.erase (it->second.type_name);
+      m_display_name_to_stable.erase (it->second.display_name);
     }
     m_descriptors.erase (type_id);
   }
