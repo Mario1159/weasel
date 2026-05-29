@@ -123,18 +123,18 @@ make_component_header_template (const std::string &class_name, bool header_only)
 {
   std::ostringstream output;
   output << "#pragma once\n\n";
-  output << "#include \"wsl::comp::component_meta.hpp\"\n";
-  output << "#include \"wsl/rsc/runtime_project_module_api.hpp\"\n";
+  output << "#include \"wsl/comp/component_meta.hpp\"\n";
+  output << "#include \"wsl/reg/runtime_project_module_api.hpp\"\n";
   output << "#include <cereal/cereal.hpp>\n\n";
-  output << "namespace editor\n{\n\n";
-  output << "struct " << class_name << " {\n";
+  output << "namespace wsl::comp\n{\n\n";
+  output << "struct " << class_name << " : world_component {\n";
   output << "  float value = 1.0f;\n\n";
   output << "  static void register_meta();\n\n";
   output << "  template <class Archive> void serialize(Archive &archive) {\n";
   output << "    archive(cereal::make_nvp(\"value\", value));\n";
   output << "  }\n";
   output << "};\n\n";
-  output << "} // namespace editor\n";
+  output << "} // namespace wsl::comp\n";
 
   if (header_only) {
     output << "\nWEASEL_RUNTIME_COMPONENT(wsl::comp::" << class_name << ")\n";
@@ -179,18 +179,18 @@ make_singleton_header_template (const std::string &class_name,
 {
   std::ostringstream output;
   output << "#pragma once\n\n";
-  output << "#include \"wsl::comp::component_meta.hpp\"\n";
-  output << "#include \"wsl/rsc/runtime_project_module_api.hpp\"\n";
+  output << "#include \"wsl/comp/component_meta.hpp\"\n";
+  output << "#include \"wsl/reg/runtime_project_module_api.hpp\"\n";
   output << "#include <cereal/cereal.hpp>\n\n";
-  output << "namespace editor\n{\n\n";
-  output << "struct " << class_name << " {\n";
+  output << "namespace wsl::comp\n{\n\n";
+  output << "struct " << class_name << " : singleton_component {\n";
   output << "  float value = 1.0f;\n\n";
   output << "  static void register_meta();\n\n";
   output << "  template <class Archive> void serialize(Archive &archive) {\n";
   output << "    archive(cereal::make_nvp(\"value\", value));\n";
   output << "  }\n";
   output << "};\n\n";
-  output << "} // namespace editor\n";
+  output << "} // namespace wsl::comp\n";
 
   if (header_only) {
     output << "\nWEASEL_RUNTIME_SINGLETON(wsl::comp::" << class_name << ", \""
@@ -206,9 +206,9 @@ make_system_header_template (const std::string &class_name,
 {
   std::ostringstream output;
   output << "#pragma once\n\n";
-  output << "#include \"wsl/rsc/runtime_project_module_api.hpp\"\n";
-  output << "#include \"wsl::sys::system.hpp\"\n\n";
-  output << "namespace editor {\n\n";
+  output << "#include \"wsl/reg/runtime_project_module_api.hpp\"\n";
+  output << "#include \"wsl/sys/system.hpp\"\n\n";
+  output << "namespace wsl::sys {\n\n";
   output << "class " << class_name << " : public ecs_system_t<" << class_name
          << "> {\n";
   output << "public:\n";
@@ -217,7 +217,7 @@ make_system_header_template (const std::string &class_name,
   output << "  void register_event_handlers(wsl::reg::sig::signal_hub &hub) override {}\n";
   output << "  void register_iterations(wsl::reg::sig::signal_hub &hub) override {}\n";
   output << "};\n\n";
-  output << "} // namespace editor\n";
+  output << "} // namespace wsl::sys\n";
 
   if (header_only) {
     output << "\nWEASEL_RUNTIME_SYSTEM(wsl::sys::" << class_name << ", \"" << display_name

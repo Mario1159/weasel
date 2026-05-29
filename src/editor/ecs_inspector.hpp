@@ -19,11 +19,14 @@ public:
                  wsl::comp::singl::editor_context *editor_ctx,
                  ecs_selection &selection);
 
+  ~ecs_inspector ();
+
   void draw ();
   void on_scene_changed (const wsl::event::scene_changed &e);
 
 private:
   ecs_selection &m_selection;
+  wsl::comp::singl::runtime_context *m_runtime_ctx;
 
   entities_and_singletons_panel m_entities_and_singletons;
   inspector m_inspector;
