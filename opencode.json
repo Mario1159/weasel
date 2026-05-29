@@ -6,5 +6,7 @@
       "command": ["./build/weasel-mcp-server", "--stdio"],
       "enabled": true
     }
-  }
+  },
+  "lsp": true,
+  "formatter": true
 }

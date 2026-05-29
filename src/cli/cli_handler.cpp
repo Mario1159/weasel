@@ -195,9 +195,11 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
   auto* scene_status = scene_cmd->add_subcommand("status", "Show active scene status");
 
   auto* ent_cmd = app.add_subcommand("ent", "Run an entity REPL command without entering the interactive shell");
-  auto* ent_new = ent_cmd->add_subcommand("new", "Create a new entity");
+  auto* ent_new = ent_cmd->add_subcommand("new", "Create a new entity with default components (Transform, WorldTransform, Hierarchy)");
   std::string ent_new_name;
+  bool ent_new_empty = false;
   ent_new->add_option("name", ent_new_name, "Optional entity name");
+  ent_new->add_flag("--empty", ent_new_empty, "Create an empty entity without default components");
 
   auto* ent_ls = ent_cmd->add_subcommand("ls", "List entities in the active scene");
 
@@ -412,6 +414,9 @@ cli_handler::result cli_handler::parse(int argc, char** argv) {
     repl_command = build_repl_command ({ "scene", "status" });
   } else if (*ent_new) {
     std::vector<std::string> args{ "ent", "new" };
+    if (ent_new_empty) {
+      args.push_back ("--empty");
+    }
     if (!ent_new_name.empty ()) {
       args.push_back (ent_new_name);
     }

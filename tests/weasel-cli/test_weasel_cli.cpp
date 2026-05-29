@@ -228,6 +228,24 @@ TEST_CASE ("ent new <name> builds command")
   CHECK (*res.command == "ent new PlayerShip");
 }
 
+TEST_CASE ("ent new --empty builds command")
+{
+  const char* argv[] = {"weasel-cli", "ent", "new", "--empty"};
+  auto res = cli_handler ().parse (4, const_cast<char**> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "ent new --empty");
+}
+
+TEST_CASE ("ent new --empty <name> builds command")
+{
+  const char* argv[] = {"weasel-cli", "ent", "new", "--empty", "MyBareEntity"};
+  auto res = cli_handler ().parse (5, const_cast<char**> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "ent new --empty MyBareEntity");
+}
+
 TEST_CASE ("ent ls builds command")
 {
   const char* argv[] = {"weasel-cli", "ent", "ls"};

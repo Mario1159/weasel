@@ -207,6 +207,56 @@ skybox_system
 audio_system
   Manages audio source playback, 3D positioning, and mixer state.
 
+── Default Scene State ──
+
+Every scene created via scene_manager::create_scene() starts with:
+
+  • An empty per-scene systems vector (no systems attached)
+  • Registry context bindings: runtime_context*, scene_manager*,
+    resource_manager_view*, editor_context*, ui_manager*
+  • Core singleton components auto-emplaced in the registry:
+    - Runtime Context      (play mode, frame counter)
+    - Scene Manager        (scene lifecycle)
+    - Resource Manager     (asset loading/caching)
+    - UI Manager           (docking layout, themes)
+    - Rendering Manager    (renderer config, shadow settings)
+    - Physics Manager      (Jolt engine pointer)
+
+No per-scene systems (Transform, Physics, etc.) are pre-attached
+to a newly created scene. Use sys add <name> in the REPL or call
+scene.add_system<T>() in C++ to attach them.
+
+── Global Core Systems ──
+
+Separate from per-scene systems, the engine maintains 8 global
+system instances in core_systems that always run each frame on
+the active scene's registry, regardless of which per-scene systems
+are attached:
+
+  1. Audio     — audio source playback and 3D positioning
+  2. Physics   — steps Jolt simulation, syncs rigid_body ↔ transform
+  3. Transform — recomputes world_transform from hierarchy + transforms
+  4. Shadow    — renders shadow-map depth passes
+  5. Lighting  — uploads light data to GPU UBO
+  6. Skybox    — renders cubemap background
+  7. 3D Render — collects models and issues draw calls
+  8. UI        — renders ImGui overlay
+
+These global systems are initialized in core_systems::init() and
+updated/rendered via core_systems::update(dt) and
+core_systems::render(window, callbacks).
+
+── Per-Scene Systems ──
+
+Per-scene systems are optional user- or tool-added systems stored
+in the scene's systems vector. They run in addition to (and at a
+different point in the frame from) the global core systems. Use
+the factory registry to register and create them:
+
+  system_factory_registry factory;
+  factory.register_system_type<my_system>({"My System"});
+  scene.add_system(factory.create("My System", scene));
+
 ── Orchestrator: core_systems ──
 
   core_systems owns all built-in systems and provides a unified API:

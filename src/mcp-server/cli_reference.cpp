@@ -109,12 +109,13 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "ent",
     "cli",
-    "Run an entity REPL command without entering the interactive shell.",
+    "Run an entity REPL command without entering the interactive shell. 'ent new' creates an entity with Transform, WorldTransform, and Hierarchy by default.",
     "weasel-cli ent <new|ls|rm|ren|inspect> [args...]",
     {
-      "<new|ls|rm|ren|inspect> – Entity subcommand."
+      "<new|ls|rm|ren|inspect> – Entity subcommand.",
+      "ent new [--empty] [name] – Create entity (default components added unless --empty is specified)."
     },
-    {"weasel-cli ent ls", "weasel-cli ent new Player"}
+    {"weasel-cli ent ls", "weasel-cli ent new Player", "weasel-cli ent new --empty"}
   },
   {
     "comp",
@@ -177,7 +178,7 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "scene new",
     "repl",
-    "Create a new empty scene and set it as active.",
+    "Create a new empty scene and set it as active. No per-scene systems are added by default — use 'sys add' to attach systems. Core singleton components (Runtime Context, Scene Manager, Resource Manager, UI Manager, Rendering Manager, Physics Manager) are automatically present in every scene.",
     "scene new <name>",
     {"<name> – Name for the new scene."},
     {"scene new Level1"}
@@ -223,10 +224,13 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "ent new",
     "repl",
-    "Create a new entity in the active scene.",
-    "ent new [name]",
-    {"[name] – Optional entity name."},
-    {"ent new", "ent new Player"}
+    "Create a new entity in the active scene. By default adds Transform, WorldTransform, and Hierarchy components. Use --empty to create a bare entity.",
+    "ent new [--empty] [name]",
+    {
+      "[name] – Optional entity name.",
+      "--empty – Create an empty entity without default components (Transform, WorldTransform, Hierarchy)."
+    },
+    {"ent new", "ent new Player", "ent new --empty", "ent new --empty MyBareEntity"}
   },
   {
     "ent ls",
@@ -328,17 +332,17 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "sys add",
     "repl",
-    "Add a system to the active scene by registered name.",
+    "Add a system to the active scene by registered name. Scenes start with no per-scene systems — you must add them explicitly. Available system types: Transform (recomputes world transforms from hierarchy), Physics (steps Jolt physics simulation), 3D Render (draws models), Audio (3D audio playback), Lighting (uploads light UBO data), Skybox (renders cubemap background), Shadow (shadow-map depth passes), UI (renders ImGui overlay). System names are case-sensitive.",
     "sys add <name>",
     {
-      "<name> – System name (e.g. Transform, Physics, 3D Render, Audio, Lighting, Skybox, Shadow, UI). System names are case-sensitive."
+      "<name> – System name. Available: Transform, Physics, 3D Render, Audio, Lighting, Skybox, Shadow, UI. Names are case-sensitive."
     },
     {"sys add Transform", "sys add Physics", "sys add 3D Render"}
   },
   {
     "sys ls",
     "repl",
-    "List active systems in the current scene.",
+    "List per-scene systems currently active in the active scene. Scenes start empty — use 'sys add' to attach systems. Note: global core systems (transform, physics, render, etc.) always run regardless of per-scene system list.",
     "sys ls",
     {},
     {"sys ls"}
@@ -346,7 +350,7 @@ const std::vector<cli_command_info> g_cli_reference = {
   {
     "sys avail",
     "repl",
-    "Alias for sys ls — list registered systems.",
+    "List all registered system types available via 'sys add'.",
     "sys avail",
     {},
     {"sys avail"}

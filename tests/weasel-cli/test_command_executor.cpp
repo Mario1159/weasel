@@ -180,12 +180,12 @@ TEST_CASE ("ent with no active scene")
   CHECK (out.find ("No active scene") != std::string::npos);
 }
 
-TEST_CASE ("ent new without name creates entity")
+TEST_CASE ("ent new without name creates entity with defaults")
 {
   exec_fixture fx;
   fx.execute ("scene new TestScene");
   auto out = fx.execute ("ent new");
-  CHECK (out.find ("Entity 0 created") != std::string::npos);
+  CHECK (out.find ("Entity 0 created with Transform") != std::string::npos);
 }
 
 TEST_CASE ("ent new with name creates named entity")
@@ -193,7 +193,23 @@ TEST_CASE ("ent new with name creates named entity")
   exec_fixture fx;
   fx.execute ("scene new TestScene");
   auto out = fx.execute ("ent new Player");
-  CHECK (out.find ("Entity 0 created") != std::string::npos);
+  CHECK (out.find ("Entity 0 created with Transform") != std::string::npos);
+}
+
+TEST_CASE ("ent new --empty creates empty entity")
+{
+  exec_fixture fx;
+  fx.execute ("scene new TestScene");
+  auto out = fx.execute ("ent new --empty");
+  CHECK (out.find ("Entity 0 created (empty)") != std::string::npos);
+}
+
+TEST_CASE ("ent new --empty with name creates empty named entity")
+{
+  exec_fixture fx;
+  fx.execute ("scene new TestScene");
+  auto out = fx.execute ("ent new --empty MyEntity");
+  CHECK (out.find ("Entity 0 created (empty)") != std::string::npos);
 }
 
 TEST_CASE ("ent ls lists created entities")

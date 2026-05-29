@@ -554,9 +554,30 @@ void command_executor::cmd_ent(const std::vector<std::string>& tokens) {
     
     const std::string& action = tokens[1];
     if (action == "new") {
-        auto e = scene->get_registry().create();
-        if (tokens.size() > 2) scene->set_entity_name(e, tokens[2]);
-        m_output << "Entity " << (uint32_t)e << " created.\n";
+        auto& reg = scene->get_registry();
+        auto e = reg.create();
+
+        std::size_t name_idx = 2;
+        bool empty_entity = false;
+
+        if (tokens.size() > 2 && tokens[2] == "--empty") {
+            empty_entity = true;
+            name_idx = 3;
+        }
+
+        if (!empty_entity) {
+            reg.emplace<wsl::comp::transform>(e);
+            reg.emplace<wsl::comp::world_transform>(e);
+            reg.emplace<wsl::comp::hierarchy>(e);
+        }
+
+        if (tokens.size() > name_idx) scene->set_entity_name(e, tokens[name_idx]);
+
+        if (empty_entity) {
+            m_output << "Entity " << (uint32_t)e << " created (empty).\n";
+        } else {
+            m_output << "Entity " << (uint32_t)e << " created with Transform, WorldTransform, Hierarchy.\n";
+        }
     } else if (action == "ls") {
         for (auto [e] : scene->get_registry().storage<entt::entity>().each()) {
             m_output << "ID: " << (uint32_t)e << " | Name: " << scene->get_entity_name(e) << "\n";
