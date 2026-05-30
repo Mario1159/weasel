@@ -503,9 +503,9 @@ rigid_body::register_meta ()
 
   entt::meta_factory<comp::rigid_body> ()
       .type (entt::type_hash<comp::rigid_body>::value ())
-      .custom<comp::meta_info> (meta_info{ "Rigid Body",
-                                           "Physics body simulated by Jolt",
-                                            "engine://icons/comp_rigidbody.svg" })
+      .custom<comp::meta_info> (
+          meta_info{ "Rigid Body", "Physics body simulated by Jolt",
+                     "engine://icons/comp_rigidbody.svg" })
       .func<&comp::rigid_body::on_inspector_changed> ("on_inspector_changed"_hs)
 
       .data<&comp::rigid_body::shape> ("shape"_hs)
@@ -524,10 +524,6 @@ rigid_body::register_meta ()
 
       .data<&comp::rigid_body::radius> ("radius"_hs)
       .custom<comp::meta_info> (meta_info{ "Radius", "Sphere radius", "" })
-
-      .data<&comp::rigid_body::dynamic> ("dynamic"_hs)
-      .custom<comp::meta_info> (
-          meta_info{ "Dynamic", "Derived from motion type", "" })
 
       .data<&comp::rigid_body::motion_type> ("motion_type"_hs)
       .custom<comp::meta_info> (
@@ -554,7 +550,7 @@ rigid_body::register_meta ()
       .custom<comp::meta_info> (meta_info{
           "Restitution", "Surface bounciness used by the physics solver", "" })
 
-      .data<&comp::rigid_body::body_id> ("body_id"_hs);
+      ;
 }
 
 } // namespace comp

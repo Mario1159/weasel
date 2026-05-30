@@ -15,6 +15,7 @@
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_ref.hpp"
 #include "rsc/shader_loader.hpp"
+#include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_audio.h>
 #include <SDL3/SDL_error.h>
@@ -37,13 +38,11 @@
 #include <imgui.h>
 #include <memory>
 #include <optional>
-#include <spdlog/spdlog.h>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
 
 namespace wsl
 {
@@ -85,8 +84,7 @@ find_record (Table &table, entt::id_type id) -> Table::mapped_type *
 
 template <typename Table>
 auto
-find_record (const Table &table, entt::id_type id) -> const
-    Table::mapped_type *
+find_record (const Table &table, entt::id_type id) -> const Table::mapped_type *
 {
   auto it = table.find (id);
   if (it == table.end ()) {
@@ -132,18 +130,21 @@ rsc::resource_manager::resource_manager (
       m_manages_runtime_state (manages_runtime_state)
 {
   if ((SDL_WasInit (SDL_INIT_AUDIO) & SDL_INIT_AUDIO) == 0) {
-    spdlog::debug (
-        "resource_manager: SDL audio is not initialized, skipping mixer creation");
+    wsl::log::rsc ()->debug (
+        "resource_manager: SDL audio is not initialized, skipping "
+        "mixer creation");
     return;
   }
 
   if (!MIX_Init ()) {
-    spdlog::error ("Failed to initialize SDL_mixer: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("Failed to initialize SDL_mixer: {}",
+                             SDL_GetError ());
   }
 
   m_mixer = MIX_CreateMixerDevice (SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
   if (m_mixer == nullptr) {
-    spdlog::error ("Failed to create SDL_mixer mixer: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("Failed to create SDL_mixer mixer: {}",
+                             SDL_GetError ());
   }
 }
 
@@ -276,7 +277,8 @@ rsc::resource_manager::register_model (const std::string &path)
     std::filesystem::path const root (m_active_project->root_path);
     std::filesystem::path const p (path);
     if (path.find (m_active_project->root_path) == 0) {
-      normalized = "res://" + std::filesystem::relative (p, root).generic_string ();
+      normalized
+          = "res://" + std::filesystem::relative (p, root).generic_string ();
     }
   }
 
@@ -288,9 +290,10 @@ rsc::resource_manager::register_model (const std::string &path)
 
   const entt::id_type id = entt::hashed_string{ normalized.c_str () };
   m_model_table.try_emplace (
-      id, detail::model_record{ .path = normalized,
-                        .name = display_name_for_model_path (normalized),
-                        .state = model_state::not_loaded });
+      id,
+      detail::model_record{ .path = normalized,
+                            .name = display_name_for_model_path (normalized),
+                            .state = model_state::not_loaded });
   m_model_ids_by_path[normalized] = id;
   return model_id{ id };
 }
@@ -382,7 +385,7 @@ rsc::resource_manager::register_image (const std::string &path)
   return image_id{
     register_resource<std::unordered_map<entt::id_type, detail::image_record>,
                       detail::image_record> (m_image_table, path,
-                                     image_state::not_loaded)
+                                             image_state::not_loaded)
   };
 }
 
@@ -477,7 +480,7 @@ rsc::resource_manager::register_cubemap (const std::string &path)
   return cubemap_id{
     register_resource<std::unordered_map<entt::id_type, detail::cubemap_record>,
                       detail::cubemap_record> (m_cubemap_table, path,
-                                       cubemap_state::not_loaded)
+                                               cubemap_state::not_loaded)
   };
 }
 
@@ -527,7 +530,8 @@ rsc::resource_manager::get (cubemap_id id)
 rsc::cubemap_state
 rsc::resource_manager::state (cubemap_id id) const
 {
-  if (const detail::cubemap_record *rec = find_record (m_cubemap_table, id.value)) {
+  if (const detail::cubemap_record *rec
+      = find_record (m_cubemap_table, id.value)) {
     return rec->state;
   }
   return cubemap_state::not_loaded;
@@ -574,10 +578,11 @@ rsc::resource_manager::register_scene (const std::string &path)
   std::filesystem::path const p (path);
   bool const is_prefab = p.extension () == ".prefab";
 
-  m_scene_table.try_emplace (id, detail::scene_record{ .path = path,
-                                               .name = basename_no_ext (path),
-                                               .state = scene_state::not_loaded,
-                                               .is_prefab = is_prefab });
+  m_scene_table.try_emplace (
+      id, detail::scene_record{ .path = path,
+                                .name = basename_no_ext (path),
+                                .state = scene_state::not_loaded,
+                                .is_prefab = is_prefab });
   return scene_id{ id };
 }
 
@@ -654,12 +659,12 @@ rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
   scene *active_scene = m_runtime_ctx->scene_manager.get_active ();
   if (active_scene == nullptr) {
     return;
-}
+  }
 
   detail::scene_record *rec = find_record (m_scene_table, id.value);
   if (rec == nullptr) {
     return;
-}
+  }
 
   // Ensure it is loaded.
   if (rec->state == scene_state::not_loaded) {
@@ -694,12 +699,12 @@ rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
 
   if (rec->state != scene_state::loaded) {
     return;
-}
+  }
 
   scene *prefab_scene = find_loaded_scene (id);
   if (prefab_scene == nullptr) {
     return;
-}
+  }
 
   entt::registry &prefab_reg = prefab_scene->get_registry ();
 
@@ -806,8 +811,8 @@ rsc::resource_manager::register_audio (const std::string &path)
   const entt::id_type id = entt::hashed_string{ normalized.c_str () };
   m_audio_table.try_emplace (
       id, detail::audio_record{ .path = normalized,
-                        .name = basename_no_ext (normalized),
-                        .state = audio_state::not_loaded });
+                                .name = basename_no_ext (normalized),
+                                .state = audio_state::not_loaded });
   m_audio_ids_by_path[normalized] = id;
   return audio_id{ id };
 }
@@ -828,18 +833,19 @@ rsc::resource_manager::load (audio_id id)
   detail::audio_record *rec = find_record (m_audio_table, id.value);
   if (rec == nullptr) {
     return nullptr;
-}
+  }
 
   if (rec->state == audio_state::loaded) {
     return rec->audio;
-}
+  }
 
   std::string resolved = resolve_path (rec->path);
   rec->audio = MIX_LoadAudio (m_mixer, resolved.c_str (), false);
   if (rec->audio != nullptr) {
     rec->state = audio_state::loaded;
   } else {
-    spdlog::error ("Failed to load audio {}: {}", resolved, SDL_GetError ());
+    wsl::log::rsc ()->error ("Failed to load audio {}: {}", resolved,
+                             SDL_GetError ());
     rec->state = audio_state::not_loaded;
   }
 
@@ -860,7 +866,7 @@ rsc::resource_manager::unload (audio_id id)
 MIX_Audio *
 rsc::resource_manager::get (audio_id id)
 {
-  detail::audio_record  const*rec = find_record (m_audio_table, id.value);
+  detail::audio_record const *rec = find_record (m_audio_table, id.value);
   return (rec != nullptr) ? rec->audio : nullptr;
 }
 
@@ -919,8 +925,8 @@ rsc::resource_manager::register_ui_layout (const std::string &path)
   const entt::id_type id = entt::hashed_string{ normalized.c_str () };
   m_ui_layout_table.try_emplace (
       id, detail::ui_layout_record{ .path = normalized,
-                            .name = basename_no_ext (normalized),
-                            .state = ui_layout_state::loaded });
+                                    .name = basename_no_ext (normalized),
+                                    .state = ui_layout_state::loaded });
   return ui_layout_id{ id };
 }
 
@@ -940,14 +946,15 @@ rsc::resource_manager::register_font (const std::string &path)
   const entt::id_type id = entt::hashed_string{ normalized.c_str () };
   m_font_table.try_emplace (
       id, detail::font_record{ .path = normalized,
-                       .name = basename_no_ext (normalized) });
+                               .name = basename_no_ext (normalized) });
   return font_id{ id };
 }
 
 std::optional<rsc::ui_layout_resource_info>
 rsc::resource_manager::info (ui_layout_id id) const
 {
-  if (const detail::ui_layout_record *rec = find_record (m_ui_layout_table, id.value)) {
+  if (const detail::ui_layout_record *rec
+      = find_record (m_ui_layout_table, id.value)) {
     return ui_layout_resource_info{
       .id = id.value, .path = rec->path, .name = rec->name, .state = rec->state
     };
@@ -992,10 +999,7 @@ rsc::resource_manager::list_fonts () const
   return infos;
 }
 
-rsc::resource_manager::~resource_manager ()
-{
-  shutdown ();
-}
+rsc::resource_manager::~resource_manager () { shutdown (); }
 
 void
 rsc::resource_manager::shutdown ()
@@ -1025,7 +1029,8 @@ rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
   m_clearing = true;
 
   // Wait for the GPU first so we do not destroy in-flight resources.
-  if ((m_runtime_ctx != nullptr) && (m_runtime_ctx->render_ctx.gpu_device != nullptr)) {
+  if ((m_runtime_ctx != nullptr)
+      && (m_runtime_ctx->render_ctx.gpu_device != nullptr)) {
     // Only wait if SDL is still initialized and the device is valid
     SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
   }
@@ -1046,7 +1051,6 @@ rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
   m_font_table.clear ();
   m_shader_table.clear ();
   m_model_ids_by_path.clear ();
-
 
   m_models.clear ();
   m_images.clear ();
@@ -1096,9 +1100,9 @@ rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
 bool
 rsc::resource_manager::new_project (const rsc::project &proj)
 {
-  spdlog::info ("Creating new project: {}", proj.name);
+  wsl::log::rsc ()->info ("Creating new project: {}", proj.name);
   if (!m_project_loader.create (proj)) {
-    spdlog::error ("Failed to create project");
+    wsl::log::rsc ()->error ("Failed to create project");
     return false;
   }
 
@@ -1122,9 +1126,10 @@ rsc::resource_manager::load_project (const std::string &path)
     }
   }
 
-  std::shared_ptr<rsc::project> const proj = m_project_loader.load (actual_path);
+  std::shared_ptr<rsc::project> const proj
+      = m_project_loader.load (actual_path);
   if (!proj) {
-    spdlog::error ("Project manifest loading failed for {}", path);
+    wsl::log::rsc ()->error ("Project manifest loading failed for {}", path);
     return false;
   }
 
@@ -1133,29 +1138,32 @@ rsc::resource_manager::load_project (const std::string &path)
   }
 
   const bool has_runtime_code
-      = std::filesystem::exists (
-            std::filesystem::path (proj->root_path) / proj->systems_path)
-        || std::filesystem::exists (
-            std::filesystem::path (proj->root_path) / proj->components_path)
-        || std::filesystem::exists (
-            std::filesystem::path (proj->root_path) / proj->singletons_path);
+      = std::filesystem::exists (std::filesystem::path (proj->root_path)
+                                 / proj->systems_path)
+        || std::filesystem::exists (std::filesystem::path (proj->root_path)
+                                    / proj->components_path)
+        || std::filesystem::exists (std::filesystem::path (proj->root_path)
+                                    / proj->singletons_path);
 
   m_active_project_load = project_load_job{
     .project_data = proj,
-    .assets_job = std::async (std::launch::async, [this, proj, has_runtime_code] () {
-      if (m_runtime_ctx->editor_ctx && has_runtime_code
-          && !m_runtime_ctx->runtime_project_module.has_loaded_module ()) {
-        if (!m_runtime_ctx->runtime_project_module.compile_and_load (
-                *proj)) {
-          spdlog::warn (
-              "Project runtime module failed to compile/load in background: "
-              "{}",
-              m_runtime_ctx->runtime_project_module.last_status ());
-        }
-      }
+    .assets_job = std::async (
+        std::launch::async,
+        [this, proj, has_runtime_code] () {
+          if (m_runtime_ctx->editor_ctx && has_runtime_code
+              && !m_runtime_ctx->runtime_project_module.has_loaded_module ()) {
+            if (!m_runtime_ctx->runtime_project_module.compile_and_load (
+                    *proj)) {
+              wsl::log::rsc ()->warn (
+                  "Project runtime module failed to compile/load in "
+                  "background: "
+                  "{}",
+                  m_runtime_ctx->runtime_project_module.last_status ());
+            }
+          }
 
-      return m_project_loader.scan_assets (*proj);
-    }),
+          return m_project_loader.scan_assets (*proj);
+        }),
     .has_runtime_code = has_runtime_code
   };
 
@@ -1179,10 +1187,11 @@ rsc::resource_manager::register_builtin_models ()
 void
 rsc::resource_manager::register_builtin_cubemaps ()
 {
-  m_cubemap_table.try_emplace (builtin_skybox_procedural,
-                               detail::cubemap_record{ .path = "builtin/skybox_procedural",
-                                               .name = "Procedural Skybox",
-                                               .state = cubemap_state::not_loaded });
+  m_cubemap_table.try_emplace (
+      builtin_skybox_procedural,
+      detail::cubemap_record{ .path = "builtin/skybox_procedural",
+                              .name = "Procedural Skybox",
+                              .state = cubemap_state::not_loaded });
 }
 
 void
@@ -1206,7 +1215,8 @@ rsc::resource_manager::update_async_uploads ()
       && m_active_project_load->assets_job.wait_for (std::chrono::seconds (0))
              == std::future_status::ready) {
     project_assets assets = m_active_project_load->assets_job.get ();
-    std::shared_ptr<rsc::project> const proj = m_active_project_load->project_data;
+    std::shared_ptr<rsc::project> const proj
+        = m_active_project_load->project_data;
 
     if (m_active_project_load->has_runtime_code) {
       m_runtime_ctx->runtime_project_module.finalize_load ();
@@ -1217,22 +1227,23 @@ rsc::resource_manager::update_async_uploads ()
 
     for (const std::string &p : assets.models) {
       register_model (p);
-}
+    }
 
     for (const std::string &p : assets.images) {
       register_image (p);
-}
+    }
 
     for (const std::string &p : assets.cubemaps) {
       register_cubemap (p);
-}
+    }
 
     m_preferred_default_scene_id = entt::null;
     m_waiting_for_preferred_default_scene = false;
 
     const std::string default_scene_full_path
         = !proj->default_scene_path.empty ()
-              ? (fs::path (proj->root_path) / proj->default_scene_path).string ()
+              ? (fs::path (proj->root_path) / proj->default_scene_path)
+                    .string ()
               : "";
 
     for (std::size_t i = 0; i < assets.scenes.size (); ++i) {
@@ -1267,12 +1278,12 @@ rsc::resource_manager::update_async_uploads ()
       register_shader (p);
     }
 
-    spdlog::info ("Project '{}' fully loaded through resource_manager",
-                  proj->name);
+    wsl::log::rsc ()->info (
+        "Project '{}' fully loaded through resource_manager", proj->name);
 
     if (m_editor_ctx != nullptr) {
       m_editor_ctx->is_loading_project = false;
-      m_editor_ctx->re_register_editor_resources();
+      m_editor_ctx->re_register_editor_resources ();
     }
     m_active_project_load.reset ();
   }
@@ -1280,11 +1291,11 @@ rsc::resource_manager::update_async_uploads ()
   for (auto &[id, rec] : m_model_table) {
     if (rec.state != model_state::loading_cpu) {
       continue;
-}
+    }
 
     if (!rec.job.valid ()) {
       continue;
-}
+    }
 
     if (rec.job.wait_for (std::chrono::seconds (0))
         == std::future_status::ready) {
@@ -1312,7 +1323,7 @@ rsc::resource_manager::update_async_uploads ()
   for (auto &[id, rec] : m_model_table) {
     if (rec.state != model_state::preparing_gpu) {
       continue;
-}
+    }
 
     if (m_cancel_models.contains (id)) {
       rec.cpu_data.reset ();
@@ -1335,7 +1346,7 @@ rsc::resource_manager::update_async_uploads ()
   for (auto &[id, rec] : m_model_table) {
     if (rec.state != model_state::uploading_gpu) {
       continue;
-}
+    }
 
     if (m_cancel_models.contains (id)) {
       SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
@@ -1416,9 +1427,8 @@ rsc::resource_manager::update_async_uploads ()
 
       if (cube) {
         if (auto *rendering = m_runtime_ctx->get_active_rendering_manager ()) {
-          auto &renderer = rendering->ensure_renderer (m_runtime_ctx->window,
-                                                       m_runtime_ctx->render_ctx,
-                                                       this);
+          auto &renderer = rendering->ensure_renderer (
+              m_runtime_ctx->window, m_runtime_ctx->render_ctx, this);
           if (cube->equirect_to_bake != nullptr) {
             renderer.bake_equirect_to_cube (*cube, cube->equirect_to_bake);
             // We can release equirect_to_bake now as it is no longer needed
@@ -1446,7 +1456,8 @@ rsc::resource_manager::update_async_uploads ()
       try {
         scn = rec.job.get ();
       } catch (const std::exception &e) {
-        spdlog::error ("Scene load job failed for '{}': {}", rec.path, e.what ());
+        wsl::log::rsc ()->error ("Scene load job failed for '{}': {}", rec.path,
+                                 e.what ());
         rec.state = scene_state::not_loaded;
         if (m_waiting_for_preferred_default_scene
             && it->first == m_preferred_default_scene_id) {
@@ -1455,8 +1466,8 @@ rsc::resource_manager::update_async_uploads ()
         }
         continue;
       } catch (...) {
-        spdlog::error ("Scene load job failed for '{}': unknown exception",
-                       rec.path);
+        wsl::log::rsc ()->error (
+            "Scene load job failed for '{}': unknown exception", rec.path);
         rec.state = scene_state::not_loaded;
         if (m_waiting_for_preferred_default_scene
             && it->first == m_preferred_default_scene_id) {
@@ -1514,7 +1525,7 @@ rsc::resource_manager::unload (model_id id)
   detail::model_record *rec = find_record (m_model_table, id.value);
   if (rec == nullptr) {
     return;
-}
+  }
 
   // If currently loading/preparing/uploading: mark cancelled and let
   // update_async_uploads discard it.
@@ -1538,7 +1549,7 @@ rsc::resource_manager::unload (image_id id)
   detail::image_record *rec = find_record (m_image_table, id.value);
   if (rec == nullptr) {
     return;
-}
+  }
 
   if (rec->state == image_state::loading) {
     m_cancel_images.insert (id.value);
@@ -1558,7 +1569,7 @@ rsc::resource_manager::unload (cubemap_id id)
   detail::cubemap_record *rec = find_record (m_cubemap_table, id.value);
   if (rec == nullptr) {
     return;
-}
+  }
 
   if (rec->state == cubemap_state::loading) {
     m_cancel_cubemaps.insert (id.value);
@@ -1578,7 +1589,7 @@ rsc::resource_manager::unload (scene_id id)
   detail::scene_record *rec = find_record (m_scene_table, id.value);
   if (rec == nullptr) {
     return;
-}
+  }
 
   if (rec->state == scene_state::loading) {
     m_cancel_scenes.insert (id.value);
@@ -1628,7 +1639,7 @@ rsc::resource_manager::load_preview_model_low_lod (model_id id)
   // if same, keep it
   if (m_preview_model_id == id.value) {
     return;
-}
+  }
 
   // unload previous preview model (only the preview one)
   unload_preview_model ();
@@ -1645,7 +1656,7 @@ rsc::resource_manager::unload_preview_model ()
 {
   if (m_preview_model_id == entt::null) {
     return;
-}
+  }
 
   // clear low-lod policy
   m_low_lod_only_models.erase (m_preview_model_id);
@@ -1716,8 +1727,8 @@ rsc::model_id::custom_inspect (const char *label,
       const bool selected = (rec.id == value);
 
       char item_buf[256];
-      std::snprintf (item_buf, sizeof (item_buf), "%s (%s)",
-                     rec.name.c_str (), rec.path.c_str ());
+      std::snprintf (item_buf, sizeof (item_buf), "%s (%s)", rec.name.c_str (),
+                     rec.path.c_str ());
 
       if (ImGui::Selectable (item_buf, selected)) {
         value = rec.id;
@@ -1727,7 +1738,7 @@ rsc::model_id::custom_inspect (const char *label,
 
       if (selected) {
         ImGui::SetItemDefaultFocus ();
-}
+      }
     }
 
     ImGui::EndCombo ();
@@ -1757,21 +1768,24 @@ rsc::resource_manager::resolve_path (const std::string &path) const
 
     // Try the installed/ packaged layout first (share/weasel/...)
     std::filesystem::path installed_path
-        = std::filesystem::path (m_wsl_resource_path) / "share/weasel" / sub_path;
+        = std::filesystem::path (m_wsl_resource_path) / "share/weasel"
+          / sub_path;
     if (std::filesystem::exists (installed_path)) {
       return installed_path.string ();
     }
 
-    // Fall back to the legacy / development layout directly under the resource path
-    std::filesystem::path base_path = std::filesystem::path (m_wsl_resource_path) / sub_path;
+    // Fall back to the legacy / development layout directly under the resource
+    // path
+    std::filesystem::path base_path
+        = std::filesystem::path (m_wsl_resource_path) / sub_path;
 
     // Apply shader extension replacement for known shader bytecode extensions,
     // swapping to the platform-native format (.spv -> .metal on macOS, etc.)
     std::string ext = base_path.extension ().string ();
-    bool has_non_shader_ext = (!ext.empty () && ext != ".hlsl" && ext != ".HLSL"
-                               && ext != ".spv" && ext != ".SPV"
-                               && ext != ".dxil" && ext != ".DXIL"
-                               && ext != ".metal" && ext != ".METAL");
+    bool has_non_shader_ext
+        = (!ext.empty () && ext != ".hlsl" && ext != ".HLSL" && ext != ".spv"
+           && ext != ".SPV" && ext != ".dxil" && ext != ".DXIL"
+           && ext != ".metal" && ext != ".METAL");
 
     if (!has_non_shader_ext) {
 #if defined(_WIN32)
@@ -1806,7 +1820,8 @@ rsc::resource_manager::get_resource_path (model_id id) const
 {
   if (const detail::model_record *rec = find_record (m_model_table, id.value)) {
     // If it's builtin:// or res:// already, return as is.
-    if (rec->path.rfind ("builtin://", 0) == 0 || rec->path.rfind ("res://", 0) == 0) {
+    if (rec->path.rfind ("builtin://", 0) == 0
+        || rec->path.rfind ("res://", 0) == 0) {
       return rec->path;
     }
 
@@ -1815,8 +1830,7 @@ rsc::resource_manager::get_resource_path (model_id id) const
       std::filesystem::path const root (m_active_project->root_path);
       std::filesystem::path const p (rec->path);
       if (rec->path.find (m_active_project->root_path) == 0) {
-        return "res://"
-               + std::filesystem::relative (p, root).generic_string ();
+        return "res://" + std::filesystem::relative (p, root).generic_string ();
       }
     }
     return rec->path;
@@ -1827,7 +1841,8 @@ rsc::resource_manager::get_resource_path (model_id id) const
 std::string
 rsc::resource_manager::get_resource_path (cubemap_id id) const
 {
-  if (const detail::cubemap_record *rec = find_record (m_cubemap_table, id.value)) {
+  if (const detail::cubemap_record *rec
+      = find_record (m_cubemap_table, id.value)) {
     return rec->path;
   }
   return "None";
@@ -1847,8 +1862,7 @@ rsc::resource_manager::get_resource_path (audio_id id) const
       std::filesystem::path const root (m_active_project->root_path);
       std::filesystem::path const p (rec->path);
       if (rec->path.find (m_active_project->root_path) == 0) {
-        return "res://"
-               + std::filesystem::relative (p, root).generic_string ();
+        return "res://" + std::filesystem::relative (p, root).generic_string ();
       }
     }
     return rec->path;
@@ -1863,27 +1877,27 @@ rsc::resource_manager::get_path (io::resource_ref ref) const
   case io::resource_type::model:
     if (auto i = info (model_id{ ref.id })) {
       return i->path;
-}
+    }
     break;
   case io::resource_type::image:
     if (auto i = info (image_id{ ref.id })) {
       return i->path;
-}
+    }
     break;
   case io::resource_type::cubemap:
     if (auto i = info (cubemap_id{ ref.id })) {
       return i->path;
-}
+    }
     break;
   case io::resource_type::scene:
     if (auto i = info (scene_id{ ref.id })) {
       return i->path;
-}
+    }
     break;
   case io::resource_type::audio:
     if (auto i = info (audio_id{ ref.id })) {
       return i->path;
-}
+    }
     break;
   }
   return "None";
@@ -1909,7 +1923,7 @@ bool
 rsc::audio_id::custom_inspect (const char *label,
                                comp::singl::runtime_context *runtime)
 {
-  rsc::resource_manager  const*res_mgr
+  rsc::resource_manager const *res_mgr
       = (runtime != nullptr) ? &runtime->resource_manager : nullptr;
   if (res_mgr == nullptr) {
     ImGui::TextDisabled ("No resource manager");
@@ -1974,7 +1988,7 @@ rsc::resource_manager::register_shader (const std::string &path)
   return shader_id{
     register_resource<std::unordered_map<entt::id_type, detail::shader_record>,
                       detail::shader_record> (m_shader_table, path,
-                                       shader_state::not_loaded)
+                                              shader_state::not_loaded)
   };
 }
 
@@ -2013,13 +2027,14 @@ rsc::resource_manager::shader_handle
 rsc::resource_manager::get (shader_id id)
 {
   return state (id) == shader_state::loaded ? m_shaders[id.value]
-                                             : shader_handle{};
+                                            : shader_handle{};
 }
 
 rsc::shader_state
 rsc::resource_manager::state (shader_id id) const
 {
-  if (const detail::shader_record *rec = find_record (m_shader_table, id.value)) {
+  if (const detail::shader_record *rec
+      = find_record (m_shader_table, id.value)) {
     return rec->state;
   }
   return shader_state::not_loaded;

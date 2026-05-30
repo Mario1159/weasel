@@ -41,10 +41,8 @@
 
 #include <unordered_map>
 
-
 namespace wsl
 {
-
 
 namespace sys
 {
@@ -59,7 +57,7 @@ physics_system::~physics_system () {}
 void
 physics_system::set_local_from_world (entt::registry &reg, entt::entity e,
                                       const glm::vec3 &world_pos,
-                                      const glm::quat &world_rot) 
+                                      const glm::quat &world_rot)
 {
   comp::transform &t = reg.get<comp::transform> (e);
 
@@ -67,7 +65,7 @@ physics_system::set_local_from_world (entt::registry &reg, entt::entity e,
       (h != nullptr) && h->parent != entt::null
       && reg.all_of<comp::world_transform> (h->parent)) {
 
-    const glm::mat4 &parent_wt
+    glm::mat4 const parent_wt
         = reg.get<comp::world_transform> (h->parent).value;
 
     glm::mat4 const inv_parent = glm::inverse (parent_wt);
@@ -79,11 +77,12 @@ physics_system::set_local_from_world (entt::registry &reg, entt::entity e,
     t.rotation = math::quatf (glm::inverse (parent_rot) * world_rot);
   } else {
     t.position = math::vec3f{ world_pos.x, world_pos.y, world_pos.z };
-    t.rotation = math::quatf{ world_rot.x, world_rot.y, world_rot.z, world_rot.w };
+    t.rotation
+        = math::quatf{ world_rot.x, world_rot.y, world_rot.z, world_rot.w };
   }
 
-  // CRITICAL: Update world_transform immediately so other systems (like rendering)
-  // see the new position in this same frame.
+  // CRITICAL: Update world_transform immediately so other systems (like
+  // rendering) see the new position in this same frame.
   if (auto *wt = reg.try_get<comp::world_transform> (e)) {
     wt->value = glm::translate (glm::mat4 (1.0F), world_pos)
                 * glm::mat4_cast (world_rot)
@@ -92,7 +91,7 @@ physics_system::set_local_from_world (entt::registry &reg, entt::entity e,
 }
 
 comp::singl::physics_manager *
-physics_system::get_registry_physics_manager (entt::registry &registry) 
+physics_system::get_registry_physics_manager (entt::registry &registry)
 {
   auto &ctx = registry.ctx ();
   if (!ctx.contains<comp::singl::physics_manager> ()) {
@@ -108,14 +107,14 @@ physics_system::register_signals (reg::sig::signal_hub &hub)
   // these signal types may still live in component namespaces,
   // but ownership is now explicitly the physics system.
   hub.declare_signal<comp::area::entered, physics_system, comp::area> (
-      +[](const void *sig) -> entt::entity {
-        return static_cast<const comp::area::entered *>(sig)->area_entity;
+      +[] (const void *sig) -> entt::entity {
+        return static_cast<const comp::area::entered *> (sig)->area_entity;
       });
   hub.declare_signal<comp::area::exited, physics_system, comp::area> (
-      +[](const void *sig) -> entt::entity {
-        return static_cast<const comp::area::exited *>(sig)->area_entity;
+      +[] (const void *sig) -> entt::entity {
+        return static_cast<const comp::area::exited *> (sig)->area_entity;
       });
-  }
+}
 
 void
 physics_system::register_event_handlers (reg::sig::signal_hub &hub)
@@ -185,7 +184,8 @@ physics_system::on_init (entt::registry &registry)
 void
 physics_system::on_inactive (entt::registry &registry)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics != nullptr) {
     phys::engine &engine = physics->ensure_engine ();
 
@@ -252,18 +252,20 @@ physics_system::on_render_build_draw_data (entt::registry &registry)
   auto *scene = runtime.scene_manager.get_active ();
   if (scene == nullptr) {
     return;
-}
+  }
 
   comp::singl::editor_context::resolved_camera rc;
   if (!editor_ctx.resolve_game_view_camera (registry, scene, rc)) {
     return;
-}
+  }
 
-  wsl::debug::debug_renderer_interface *debug_renderer = editor_ctx.get_debug_renderer ();
+  wsl::debug::debug_renderer_interface *debug_renderer
+      = editor_ctx.get_debug_renderer ();
   debug_renderer->set_camera_pos (rc.world_pos);
   debug_renderer->begin_frame ();
 
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if ((physics != nullptr) && physics->show_debug) {
     phys::engine &engine = physics->ensure_engine ();
     editor::draw_physics_debug (engine, *debug_renderer);
@@ -289,12 +291,12 @@ physics_system::on_render_record_draw_cmd (entt::registry &registry)
   auto *scene = runtime.scene_manager.get_active ();
   if (scene == nullptr) {
     return;
-}
+  }
 
   comp::singl::editor_context::resolved_camera rc;
   if (!editor_ctx.resolve_game_view_camera (registry, scene, rc)) {
     return;
-}
+  }
 
   editor_ctx.get_debug_renderer ()->end_frame (rc.vp);
 }
@@ -303,7 +305,8 @@ void
 physics_system::update_character_controllers (entt::registry &registry,
                                               double dt)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }
@@ -319,7 +322,7 @@ physics_system::update_character_controllers (entt::registry &registry,
 
     if (character == nullptr) {
       continue;
-}
+    }
 
     JPH::Vec3 vel = char_body.desired_velocity;
     vel.SetY (vel.GetY () + engine.get_gravity ());
@@ -340,7 +343,8 @@ physics_system::update_character_controllers (entt::registry &registry,
 void
 physics_system::step_world (entt::registry &registry, double dt)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }
@@ -359,7 +363,8 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
     return;
   }
   auto &runtime = *ctx.get<comp::singl::runtime_context *> ();
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }
@@ -368,7 +373,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
   auto events = engine.drain_sensor_events ();
   if (events.empty ()) {
     return;
-}
+  }
 
   struct bid_hash
   {
@@ -384,7 +389,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
   {
     auto view = registry.view<comp::rigid_body> ();
     for (entt::entity const e : view) {
-      comp::rigid_body  const&rb = view.get<comp::rigid_body> (e);
+      comp::rigid_body const &rb = view.get<comp::rigid_body> (e);
       if (!rb.body_id.IsInvalid ()) {
         body_to_entity[rb.body_id] = e;
       }
@@ -394,7 +399,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
   {
     auto view = registry.view<comp::area> ();
     for (entt::entity const e : view) {
-      comp::area  const&a = view.get<comp::area> (e);
+      comp::area const &a = view.get<comp::area> (e);
       if (!a.body_id.IsInvalid ()) {
         body_to_entity[a.body_id] = e;
       }
@@ -404,7 +409,8 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
   {
     auto view = registry.view<comp::character_body> ();
     for (entt::entity const e : view) {
-      comp::character_body  const&character = view.get<comp::character_body> (e);
+      comp::character_body const &character
+          = view.get<comp::character_body> (e);
       const phys::body_id body_id = character.get_id ();
       if (!body_id.IsInvalid ()) {
         body_to_entity[body_id] = e;
@@ -416,7 +422,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
     auto it_area = body_to_entity.find (ev.sensor);
     if (it_area == body_to_entity.end ()) {
       continue;
-}
+    }
 
     entt::entity const area_ent = it_area->second;
     entt::entity other_ent = entt::null;
@@ -442,7 +448,8 @@ void
 physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
                                                  double /*dt*/)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }
@@ -452,19 +459,19 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
   auto view = registry.view<comp::transform, comp::rigid_body> ();
 
   for (entt::entity const e : view) {
-    comp::rigid_body  const&rb = view.get<comp::rigid_body> (e);
+    comp::rigid_body const &rb = view.get<comp::rigid_body> (e);
     if (rb.body_id.IsInvalid ()) {
       continue;
-}
+    }
 
-    comp::transform  const&t = view.get<comp::transform> (e);
+    comp::transform const &t = view.get<comp::transform> (e);
 
     // Dynamic bodies should not be reset by their transform during gameplay,
     // as physics is the source of truth. Transform -> Physics sync should only
     // happen for Kinematic/Static bodies or when explicitly moved in editor.
     if (rb.motion_type.value == phys::motion_type::Dynamic) {
       continue;
-}
+    }
 
     glm::vec3 world_pos = t.position;
     glm::quat world_rot = t.rotation;
@@ -474,8 +481,9 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
     if (auto *h = registry.try_get<comp::hierarchy> (e);
         (h != nullptr) && h->parent != entt::null) {
       if (auto *wt = registry.try_get<comp::world_transform> (e)) {
-        world_pos = glm::vec3 (wt->value[3]);
-        world_rot = glm::quat_cast (wt->value);
+        glm::mat4 const wm = wt->value;
+        world_pos = glm::vec3 (wm[3]);
+        world_rot = glm::quat_cast (wm);
       }
     }
 
@@ -487,7 +495,8 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
 void
 physics_system::recreate_all_bodies (entt::registry &registry)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }
@@ -530,7 +539,8 @@ physics_system::recreate_all_bodies (entt::registry &registry)
       comp::character_body &c = view.get<comp::character_body> (e);
       if (c.get () == nullptr) {
         if (auto *wt = registry.try_get<comp::world_transform> (e); wt) {
-          c.recreate (engine, to_jolt (glm::vec3 (wt->value[3])));
+          c.recreate (engine, to_jolt (glm::vec3 (
+                                  static_cast<glm::mat4> (wt->value)[3])));
         } else if (auto *t = registry.try_get<comp::transform> (e); t) {
           c.recreate (engine, to_jolt ((glm::vec3)t->position));
         }
@@ -543,7 +553,8 @@ void
 physics_system::sync_rigid_bodies_to_transforms (entt::registry &registry,
                                                  double /*dt*/)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }
@@ -555,16 +566,16 @@ physics_system::sync_rigid_bodies_to_transforms (entt::registry &registry,
   auto view = registry.view<comp::transform, comp::rigid_body> ();
 
   for (entt::entity const e : view) {
-    comp::rigid_body  const&rb = view.get<comp::rigid_body> (e);
+    comp::rigid_body const &rb = view.get<comp::rigid_body> (e);
 
     if (rb.body_id.IsInvalid ()) {
       continue;
-}
+    }
 
     JPH::BodyLockRead const lock (lock_interface, rb.body_id);
     if (!lock.Succeeded ()) {
       continue;
-}
+    }
 
     const JPH::Body &body = lock.GetBody ();
 
@@ -583,7 +594,7 @@ physics_system::sync_characters_to_transforms (entt::registry &registry,
     comp::character_body &c = view.get<comp::character_body> (e);
     if (c.get () == nullptr) {
       continue;
-}
+    }
 
     set_local_from_world (registry, e, to_glm (c.get ()->GetPosition ()),
                           to_glm (c.get ()->GetRotation ()));
@@ -594,7 +605,8 @@ void
 physics_system::on_rigid_body_removed (entt::registry &registry,
                                        entt::entity entity)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }
@@ -608,7 +620,8 @@ physics_system::on_rigid_body_removed (entt::registry &registry,
 void
 physics_system::on_area_removed (entt::registry &registry, entt::entity entity)
 {
-  comp::singl::physics_manager *physics = get_registry_physics_manager (registry);
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
   if (physics == nullptr) {
     return;
   }

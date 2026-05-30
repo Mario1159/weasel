@@ -8,7 +8,6 @@
 #include <entt/entity/fwd.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
 
-
 namespace wsl
 {
 
@@ -19,7 +18,7 @@ void
 transform_system::update_world_recursive (entt::registry &reg, entt::entity e,
                                           const glm::mat4 &parent_world) const
 {
-  comp::transform  const&tr = reg.get<comp::transform> (e);
+  comp::transform const &tr = reg.get<comp::transform> (e);
   comp::world_transform &wt = reg.get<comp::world_transform> (e);
 
   glm::mat4 const local = tr.model ();
@@ -28,7 +27,7 @@ transform_system::update_world_recursive (entt::registry &reg, entt::entity e,
   if (auto *h = reg.try_get<comp::hierarchy> (e)) {
     for (entt::entity child = h->first; child != entt::null;
          child = reg.get<comp::hierarchy> (child).next) {
-      update_world_recursive (reg, child, wt.value);
+      update_world_recursive (reg, child, static_cast<glm::mat4> (wt.value));
     }
   }
 }
@@ -64,7 +63,8 @@ transform_system::on_update (entt::registry &registry, double dt)
 }
 
 void
-transform_system::update_world_transforms (entt::registry &reg, double /*unused*/)
+transform_system::update_world_transforms (entt::registry &reg,
+                                           double /*unused*/)
 {
   // 1. Process roots (no hierarchy or parent == null)
   auto view = reg.view<comp::transform, comp::world_transform> ();

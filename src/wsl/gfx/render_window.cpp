@@ -9,6 +9,7 @@
 // (SV_Target0 scene, SV_Target1 bloom).
 
 #include "render_window.hpp"
+#include "wsl/log/log.hpp"
 
 #include "wsl/gfx/shader.hpp" // Shader loader, also used in scene_renderer.cpp.
 #include "wsl/rsc/resource_manager.hpp"
@@ -33,7 +34,7 @@ render_window::ensure_linear_sampler ()
 {
   if (linear_sampler != nullptr) {
     return linear_sampler;
-}
+  }
   SDL_GPUSamplerCreateInfo si{};
   si.min_filter = SDL_GPU_FILTER_LINEAR;
   si.mag_filter = SDL_GPU_FILTER_LINEAR;
@@ -64,8 +65,7 @@ render_window::create_fullscreen_pipe (const char *frag_shader_path,
   auto vert_id = m_res_mgr->register_shader (
       "engine://compiled_shaders/fullscreen.vert.slang.spv");
   SDL_GPUShader *vert = wsl::gfx::shader::load_from_manager (
-      ctx->gpu_device, m_res_mgr, vert_id,
-      SDL_GPU_SHADERSTAGE_VERTEX,
+      ctx->gpu_device, m_res_mgr, vert_id, SDL_GPU_SHADERSTAGE_VERTEX,
       /*num_uniform_buffers=*/0,
       /*num_samplers=*/0);
 
@@ -78,10 +78,10 @@ render_window::create_fullscreen_pipe (const char *frag_shader_path,
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (ctx->gpu_device, frag);
-}
+    }
     return nullptr;
   }
 
@@ -135,8 +135,7 @@ render_window::create_composite_pipe ()
       = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, handler);
 
   return create_fullscreen_pipe (
-      "engine://compiled_shaders/composite_tonemap.frag.slang.spv",
-      sc_fmt,
+      "engine://compiled_shaders/composite_tonemap.frag.slang.spv", sc_fmt,
       /*num_uniform_buffers=*/1, /*Composite cbuffer*/
       /*num_samplers=*/2 /*scene + bloom*/);
 }
@@ -154,10 +153,11 @@ render_window::create_downsample_pipe ()
 SDL_GPUGraphicsPipeline *
 render_window::create_blur_pipe ()
 {
-  return create_fullscreen_pipe ("engine://compiled_shaders/bloom_blur.frag.slang.spv",
-                                 SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
-                                 /*num_uniform_buffers=*/1, /*Blur cbuffer*/
-                                 /*num_samplers=*/1);
+  return create_fullscreen_pipe (
+      "engine://compiled_shaders/bloom_blur.frag.slang.spv",
+      SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
+      /*num_uniform_buffers=*/1, /*Blur cbuffer*/
+      /*num_samplers=*/1);
 }
 
 render_window::render_window (const char *name, int width, int height,
@@ -166,17 +166,20 @@ render_window::render_window (const char *name, int width, int height,
                               bool headless)
     : ctx (ctx), m_res_mgr (res_mgr)
 {
-  if (headless)
-    {
-      spdlog::debug ("render_window: headless mode, skipping window creation");
-      return;
-    }
+  if (headless) {
+    wsl::log::gfx ()->debug ("Headless mode, skipping window creation");
+    return;
+  }
 
   handler = SDL_CreateWindow (name, width, height, SDL_WINDOW_RESIZABLE);
   SDL_ShowWindow (handler);
   SDL_ClaimWindowForGPUDevice (ctx->gpu_device, handler);
   swapchain_format
       = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, handler);
+
+  wsl::log::gfx ()->debug ("Window: {} ({}x{}), swapchain format={:#x}", name,
+                           width, height,
+                           static_cast<unsigned> (swapchain_format));
 
   // Allocate initial resources based on current size.
   on_resize ();
@@ -189,28 +192,27 @@ render_window::render_window (const char *name, int width, int height,
 
 render_window::~render_window ()
 {
-  if (ctx->gpu_device == nullptr)
-    {
-      if (handler != nullptr)
-        SDL_DestroyWindow (handler);
-      return;
-    }
+  if (ctx->gpu_device == nullptr) {
+    if (handler != nullptr)
+      SDL_DestroyWindow (handler);
+    return;
+  }
 
   SDL_WaitForGPUIdle (ctx->gpu_device);
 
   if (pipe_downsample != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_downsample);
-}
+  }
   if (pipe_blur != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_blur);
-}
+  }
   if (pipe_composite != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_composite);
-}
+  }
 
   if (linear_sampler != nullptr) {
     SDL_ReleaseGPUSampler (ctx->gpu_device, linear_sampler);
-}
+  }
 
   destroy_texture (bloom_a);
   destroy_texture (bloom_b);
@@ -232,12 +234,11 @@ render_window::~render_window ()
 void
 render_window::get_size (uint32_t &width, uint32_t &height) const
 {
-  if (handler == nullptr)
-    {
-      width = 0;
-      height = 0;
-      return;
-    }
+  if (handler == nullptr) {
+    width = 0;
+    height = 0;
+    return;
+  }
 
   int w;
   int h;
@@ -249,19 +250,19 @@ render_window::get_size (uint32_t &width, uint32_t &height) const
 void
 render_window::get_size (int &width, int &height) const
 {
-  if (handler == nullptr)
-    {
-      width = 0;
-      height = 0;
-      return;
-    }
+  if (handler == nullptr) {
+    width = 0;
+    height = 0;
+    return;
+  }
   SDL_GetWindowSize (handler, &width, &height);
 }
 
 void
 render_window::create_depth_texture ()
 {
-  if (ctx->gpu_device == nullptr || handler == nullptr) return;
+  if (ctx->gpu_device == nullptr || handler == nullptr)
+    return;
 
   destroy_texture (depth_texture);
 
@@ -352,7 +353,9 @@ render_window::on_resize ()
 
   if (w <= 0 || h <= 0) {
     return;
-}
+  }
+
+  wsl::log::gfx ()->debug ("Resize: {}x{}", w, h);
 
   SDL_WaitForGPUIdle (ctx->gpu_device);
 
@@ -419,20 +422,20 @@ render_window::on_resize ()
 void
 render_window::postprocess_hdr_bloom ()
 {
-  if ((hdr_bloom_src == nullptr) || (hdr_scene == nullptr) || (bloom_a == nullptr) || (bloom_b == nullptr) || (present_tex.texture_data == nullptr)) {
+  if ((hdr_bloom_src == nullptr) || (hdr_scene == nullptr)
+      || (bloom_a == nullptr) || (bloom_b == nullptr)
+      || (present_tex.texture_data == nullptr)) {
     return;
-}
-  // spdlog::info("postprocess_hdr_bloom: present_to_swapchain={},
-  // present_tex={}",
-  //              present_to_swapchain, (void *)present_tex);
+  }
 
   ensure_linear_sampler ();
 
   // Pipelines must exist (created in ctor). If shader compilation failed,
   // skip post to avoid crashing.
-  if ((pipe_downsample == nullptr) || (pipe_blur == nullptr) || (pipe_composite == nullptr)) {
+  if ((pipe_downsample == nullptr) || (pipe_blur == nullptr)
+      || (pipe_composite == nullptr)) {
     return;
-}
+  }
 
   int ww;
   int hh;
@@ -551,8 +554,6 @@ render_window::postprocess_hdr_bloom ()
       SDL_EndGPURenderPass (pass);
     }
   }
-
-  // spdlog::info("swapchain.texture_data={}", (void*)swapchain.texture_data);
 
   // ---------- (4) Composite + tonemap: hdr_scene + bloom_a -> swapchain
   // ----------

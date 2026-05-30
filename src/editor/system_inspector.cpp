@@ -19,10 +19,11 @@
 namespace editor
 {
 
-system_inspector::system_inspector (wsl::comp::singl::runtime_context *runtime_ctx,
-                                    wsl::comp::singl::editor_context *editor_ctx,
-                                    ecs_selection *selection)
-    : m_runtime_ctx (runtime_ctx), m_editor_ctx (editor_ctx), m_selection (selection)
+system_inspector::system_inspector (
+    wsl::comp::singl::runtime_context *runtime_ctx,
+    wsl::comp::singl::editor_context *editor_ctx, ecs_selection *selection)
+    : m_runtime_ctx (runtime_ctx), m_editor_ctx (editor_ctx),
+      m_selection (selection)
 {
 }
 
@@ -43,8 +44,7 @@ static void
 draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
                   wsl::comp::singl::runtime_context *runtime_ctx,
                   wsl::comp::singl::editor_context *editor_ctx,
-                  editor::ecs_selection *selection,
-                  bool is_core = false)
+                  editor::ecs_selection *selection, bool is_core = false)
 {
   if (systems.empty ()) {
     return;
@@ -66,7 +66,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
   for (wsl::sys::ecs_system *system : systems) {
     if (system == nullptr) {
       continue;
-}
+    }
 
     const std::string &name = system->get_name ();
     ImSearch::SearchableItem (name.c_str (), [&] (const char *) {
@@ -79,11 +79,10 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
       // activation toggles
       float const avail = ImGui::GetContentRegionAvail ().x;
       float select_w = avail - (checkbox_w * 2.0F) - (gap * 2.0F) - pad_right;
-      select_w = std::max(select_w, 80.0f);
+      select_w = std::max (select_w, 80.0f);
 
       // Make selectable the same height as checkbox
-      if (ImGui::Selectable ("##system_row", is_selected,
-                             0,
+      if (ImGui::Selectable ("##system_row", is_selected, 0,
                              ImVec2 (select_w, row_h))) {
         if (selection) {
           selection->select_system (system);
@@ -91,12 +90,14 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
       }
 
       // DRAW ACTIVATION Toggles over the selectable (AllowItemOverlap style)
-      ImGui::SetCursorScreenPos (
-          ImVec2 (ImGui::GetItemRectMin ().x + 4.0F, ImGui::GetItemRectMin ().y));
+      ImGui::SetCursorScreenPos (ImVec2 (ImGui::GetItemRectMin ().x + 4.0F,
+                                         ImGui::GetItemRectMin ().y));
       ImGui::AlignTextToFramePadding ();
 
       if (is_core) {
-        ImGui::PushStyleColor (ImGuiCol_Text, editor_ctx->get_imgui_renderer ()->get_theme ().primary);
+        ImGui::PushStyleColor (
+            ImGuiCol_Text,
+            editor_ctx->get_imgui_renderer ()->get_theme ().primary);
       }
       ImGui::TextUnformatted (name.c_str ());
       if (is_core) {
@@ -108,18 +109,21 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
 
       // Editor activation (show/hide)
       bool const ed_active = system->is_active (); // approximation
-      wsl::rsc::image_id const ed_icon = ed_active ? editor_ctx->icon_show : editor_ctx->icon_hide;
+      wsl::rsc::image_id const ed_icon
+          = ed_active ? editor_ctx->icon_show : editor_ctx->icon_hide;
       auto ed_handle = editor_ctx->editor_resources.get (ed_icon);
-      
+
       ImGui::PushStyleColor (ImGuiCol_Button, ImVec4 (0, 0, 0, 0));
       if (ed_handle && (*ed_handle).texture) {
-        if (ImGui::ImageButton ("##ed_active_btn", (ImTextureID) (*ed_handle).texture,
+        if (ImGui::ImageButton ("##ed_active_btn",
+                                (ImTextureID)(*ed_handle).texture,
                                 ImVec2 (checkbox_w - 4, checkbox_w - 4))) {
           system->set_editor_active (!ed_active, registry, is_playing);
         }
       } else {
         editor_ctx->editor_resources.load (ed_icon);
-        if (ImGui::Button (ed_active ? "S##ed" : "H##ed", ImVec2 (checkbox_w, checkbox_w))) {
+        if (ImGui::Button (ed_active ? "S##ed" : "H##ed",
+                           ImVec2 (checkbox_w, checkbox_w))) {
           system->set_editor_active (!ed_active, registry, is_playing);
         }
       }
@@ -127,7 +131,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
 
       if (ImGui::IsItemHovered ()) {
         ImGui::SetTooltip ("Render/Active on Editor");
-}
+      }
 
       ImGui::SameLine (avail - checkbox_w - pad_right);
 
@@ -139,27 +143,31 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
         }
         if (ImGui::IsItemHovered ()) {
           ImGui::SetTooltip ("Active at Runtime (Live)");
-}
+        }
       } else {
         bool const rt_active = system->is_active (); // approximation
-        
+
         ImGui::PushStyleColor (ImGuiCol_Button, ImVec4 (0, 0, 0, 0));
         if (rt_active) {
-          auto rt_handle = editor_ctx->editor_resources.get (editor_ctx->icon_play);
+          auto rt_handle
+              = editor_ctx->editor_resources.get (editor_ctx->icon_play);
           if (rt_handle && (*rt_handle).texture) {
-            if (ImGui::ImageButton ("##rt_active_btn", (ImTextureID) (*rt_handle).texture,
+            if (ImGui::ImageButton ("##rt_active_btn",
+                                    (ImTextureID)(*rt_handle).texture,
                                     ImVec2 (checkbox_w - 4, checkbox_w - 4))) {
               system->set_init_on_startup (!rt_active, registry, is_playing);
             }
           } else {
             editor_ctx->editor_resources.load (editor_ctx->icon_play);
-            if (ImGui::Button (rt_active ? "P##rt" : " ##rt", ImVec2 (checkbox_w, checkbox_w))) {
+            if (ImGui::Button (rt_active ? "P##rt" : " ##rt",
+                               ImVec2 (checkbox_w, checkbox_w))) {
               system->set_init_on_startup (!rt_active, registry, is_playing);
             }
           }
         } else {
           // Empty box for unchecked runtime
-          if (ImGui::Button ("##rt_active_empty", ImVec2 (checkbox_w, checkbox_w))) {
+          if (ImGui::Button ("##rt_active_empty",
+                             ImVec2 (checkbox_w, checkbox_w))) {
             system->set_init_on_startup (!rt_active, registry, is_playing);
           }
         }
@@ -167,7 +175,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
 
         if (ImGui::IsItemHovered ()) {
           ImGui::SetTooltip ("Active at Runtime (Init on Startup)");
-}
+        }
       }
 
       ImGui::PopID ();
@@ -180,7 +188,7 @@ system_inspector::draw ()
 {
   if (m_runtime_ctx == nullptr) {
     return;
-}
+  }
 
   if (!ImGui::Begin ("Systems", &m_visible)) {
     ImGui::End ();
@@ -193,19 +201,20 @@ system_inspector::draw ()
   const bool has_scene = (scene != nullptr);
 
   ImGui::AlignTextToFramePadding ();
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().bold);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts ().bold);
   ImGui::TextUnformatted ("Systems");
   ImGui::PopFont ();
   ImGui::SameLine ();
 
   if (!has_scene) {
     ImGui::BeginDisabled ();
-}
+  }
 
   draw_add_system_ui ();
   ImGui::SameLine ();
 
-  const bool can_remove = (selection_ptr != nullptr) && (selection_ptr->selected_system != nullptr);
+  const bool can_remove = (selection_ptr != nullptr)
+                          && (selection_ptr->selected_system != nullptr);
   bool is_app_system = false;
   if (can_remove && has_scene) {
     auto app_systems = scene->get_systems ();
@@ -218,11 +227,10 @@ system_inspector::draw ()
 
   if (!is_app_system && has_scene) {
     ImGui::BeginDisabled ();
-}
+  }
 
-  if (ImGui::Button ("-##remove_system",
-                     ImVec2 (ImGui::GetFrameHeight (),
-                             ImGui::GetFrameHeight ()))) {
+  if (ImGui::Button ("-##remove_system", ImVec2 (ImGui::GetFrameHeight (),
+                                                 ImGui::GetFrameHeight ()))) {
     if (scene != nullptr) {
       scene->remove_system (selection_ptr->selected_system);
       selection_ptr->clear_all ();
@@ -231,25 +239,27 @@ system_inspector::draw ()
 
   if (!is_app_system && has_scene) {
     ImGui::EndDisabled ();
-}
+  }
 
   if (!has_scene) {
     ImGui::EndDisabled ();
-}
+  }
 
   ImGui::PushID ("SystemsSearchID");
   if (ImSearch::BeginSearch ()) {
     ImSearch::SearchBar ("Search");
 
     ImGui::BeginChild ("SystemsRegion", ImVec2 (0, 0), 1);
-    
+
     if (m_runtime_ctx->resource_manager.current_project ()) {
       // Core systems
-      draw_system_list (m_runtime_ctx->core_systems->to_vec (), m_runtime_ctx, m_editor_ctx, selection_ptr, true);
-      
+      draw_system_list (m_runtime_ctx->core_systems->to_vec (), m_runtime_ctx,
+                        m_editor_ctx, selection_ptr, true);
+
       // App systems
       if (has_scene) {
-        draw_system_list (scene->get_systems (), m_runtime_ctx, m_editor_ctx, selection_ptr, false);
+        draw_system_list (scene->get_systems (), m_runtime_ctx, m_editor_ctx,
+                          selection_ptr, false);
       } else {
         ImGui::TextDisabled ("(No active scene)");
       }
@@ -274,9 +284,8 @@ system_inspector::draw_add_system_ui ()
 {
   wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
 
-  if (ImGui::Button ("+##add_system",
-                     ImVec2 (ImGui::GetFrameHeight (),
-                             ImGui::GetFrameHeight ()))) {
+  if (ImGui::Button ("+##add_system", ImVec2 (ImGui::GetFrameHeight (),
+                                              ImGui::GetFrameHeight ()))) {
     ImGui::OpenPopup ("AddSystemPopup");
   }
 
@@ -286,17 +295,34 @@ system_inspector::draw_add_system_ui ()
       ImSearch::SearchBar ("Search Systems");
       ImGui::Separator ();
 
-      auto names = m_runtime_ctx->system_factory_registry.get_factory_names ();
+      auto systems = m_runtime_ctx->system_factory_registry.get_systems ();
+      auto scene_systems = scene->get_systems ();
 
-      for (const auto &name : names) {
-        ImSearch::SearchableItem (name.c_str (), [&, name] (const char *) {
-          if (ImGui::MenuItem (name.c_str ())) {
-            if (auto sys = m_runtime_ctx->system_factory_registry.create (name,
-                                                                        *scene)) {
-              scene->add_system_instance (std::move (sys));
-            }
+      for (const auto *desc : systems) {
+        if (!desc->runtime_registered) {
+          continue;
+        }
+
+        bool already_present = false;
+        for (const auto *sys : scene_systems) {
+          if (sys->get_type_id () == desc->type_id) {
+            already_present = true;
+            break;
           }
-        });
+        }
+        if (already_present) {
+          continue;
+        }
+
+        ImSearch::SearchableItem (
+            desc->display_name.c_str (), [&, desc] (const char *) {
+              if (ImGui::MenuItem (desc->display_name.c_str ())) {
+                if (auto sys = m_runtime_ctx->system_factory_registry.create (
+                        desc->display_name, *scene)) {
+                  scene->add_system_instance (std::move (sys));
+                }
+              }
+            });
       }
       ImSearch::Submit ();
       ImSearch::EndSearch ();

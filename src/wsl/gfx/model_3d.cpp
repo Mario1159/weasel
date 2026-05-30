@@ -1,10 +1,10 @@
 #include "model_3d.hpp"
+#include "wsl/log/log.hpp"
 
 #include "gfx/mesh.hpp"
 #include "render_context.hpp"
 
 #include <SDL3/SDL_gpu.h>
-#include <SDL3/SDL_log.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -17,7 +17,6 @@
 #include <numbers>
 #include <utility>
 #include <vector>
-
 
 namespace wsl
 {
@@ -76,7 +75,7 @@ make_single_primitive_model (gfx::primitive primitive)
 
   gfx::scene scene;
   gfx::node root;
-  root.mesh_lods.push_back (model->meshes.data());
+  root.mesh_lods.push_back (model->meshes.data ());
   scene.roots.push_back (std::move (root));
 
   model->scenes.push_back (std::move (scene));
@@ -161,7 +160,8 @@ build_cylinder_primitive (uint32_t radial_segments = 32)
     const float angle = u * tau;
     const float x = std::cos (angle) * radius;
     const float z = std::sin (angle) * radius;
-    const glm::vec2 uv (((x / radius) * 0.5F) + 0.5F, ((z / radius) * 0.5F) + 0.5F);
+    const glm::vec2 uv (((x / radius) * 0.5F) + 0.5F,
+                        ((z / radius) * 0.5F) + 0.5F);
 
     prim.vertices.push_back (make_vertex (
         { x, half_height, z }, { 0.0F, 1.0F, 0.0F }, uv, { 1.0F, 0.0F, 0.0F }));
@@ -182,7 +182,8 @@ build_cylinder_primitive (uint32_t radial_segments = 32)
     const float angle = u * tau;
     const float x = std::cos (angle) * radius;
     const float z = std::sin (angle) * radius;
-    const glm::vec2 uv (((x / radius) * 0.5F) + 0.5F, ((z / radius) * 0.5F) + 0.5F);
+    const glm::vec2 uv (((x / radius) * 0.5F) + 0.5F,
+                        ((z / radius) * 0.5F) + 0.5F);
 
     prim.vertices.push_back (make_vertex ({ x, -half_height, z },
                                           { 0.0F, -1.0F, 0.0F }, uv,
@@ -331,10 +332,12 @@ gfx::model_3d::build_gpu_buffers (gfx::render_context *ctx)
   m_index_count = static_cast<uint32_t> (indices.size ());
 
   if (m_vertex_count == 0 || m_index_count == 0) {
-    SDL_LogError (SDL_LOG_CATEGORY_GPU,
-                  "model_3d::build_gpu_buffers: empty model");
+    wsl::log::gfx ()->error ("Empty model in build_gpu_buffers");
     return;
   }
+
+  wsl::log::gfx ()->debug ("Building model: {} vertices, {} indices",
+                           m_vertex_count, m_index_count);
 
   destroy_gpu_buffers (ctx);
   m_device = ctx->gpu_device;

@@ -10,7 +10,10 @@
 #include <mutex>
 #include <string>
 
-namespace wsl::comp::singl { class editor_context; }
+namespace wsl::comp::singl
+{
+class editor_context;
+}
 
 namespace editor
 {
@@ -59,8 +62,7 @@ private:
 
   void add_log (spdlog::level::level_enum level, const std::string &category,
                 const std::string &text);
-  static ImVec4 level_color (spdlog::level::level_enum level) ;
-
+  static ImVec4 level_color (spdlog::level::level_enum level);
 
   bool is_level_visible (spdlog::level::level_enum level) const;
   bool is_category_visible (const std::string &category) const;
@@ -73,7 +75,7 @@ private:
 
   std::vector<std::shared_ptr<logger_sink>> m_sinks;
 
-  std::string m_current_category = "system";
+  std::string m_current_category = "All";
 
   bool m_show_trace = true;
   bool m_show_debug = true;

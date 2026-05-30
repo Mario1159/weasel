@@ -14,6 +14,7 @@
 #include "resource_inspector.hpp"
 #include "system_inspector.hpp"
 #include "job_manager.hpp"
+#include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_filesystem.h>
@@ -29,7 +30,6 @@
 #include <cmath>
 #include <imgui.h>
 #include <optional>
-#include <spdlog/spdlog.h>
 #include <string>
 
 namespace editor
@@ -48,7 +48,7 @@ open_gf2 ()
 }
 
 editor::root::root (wsl::comp::singl::runtime_context *runtime_ctx,
-                   wsl::comp::singl::editor_context *editor_ctx)
+                    wsl::comp::singl::editor_context *editor_ctx)
     : m_console_window (editor_ctx),
       m_interactive_console (runtime_ctx, editor_ctx),
       m_system_inspector_window (runtime_ctx, editor_ctx, &m_selection),
@@ -61,7 +61,8 @@ editor::root::root (wsl::comp::singl::runtime_context *runtime_ctx,
   this->m_runtime_ctx = runtime_ctx;
   this->m_editor_ctx = editor_ctx;
   if (const char *docs = SDL_GetUserFolder (SDL_FOLDER_DOCUMENTS)) {
-    std::snprintf (m_new_project_folder, sizeof (m_new_project_folder), "%s", docs);
+    std::snprintf (m_new_project_folder, sizeof (m_new_project_folder), "%s",
+                   docs);
   }
   load_recent_projects ();
 }
@@ -84,7 +85,7 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   wsl::comp::singl::runtime_context &runtime_ctx = *this->m_runtime_ctx;
   if (m_editor_ctx->game_fullscreen) {
     return;
-}
+  }
 
   if (m_selection.kind == selection_kind::entity) {
     m_editor_ctx->selected_entity = m_selection.selected_entity;
@@ -104,27 +105,27 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   if (m_show_welcome) {
     draw_welcome_tab ();
-}
+  }
 
   if (m_show_console) {
     m_console_window.draw ("Log", &m_show_console);
-}
+  }
 
   if (m_show_system_inspector) {
     m_system_inspector_window.draw ();
-}
+  }
 
   if (m_show_ecs_inspector) {
     m_ecs_inspector_window.draw ();
-}
+  }
 
   if (m_show_resources) {
     m_resource_inspector_window.draw ();
-}
+  }
 
   if (m_show_input_map) {
     m_input_map_window.draw (registry, this->m_runtime_ctx);
-}
+  }
 
   if (m_show_new_console) {
     m_interactive_console.draw ("Console", &m_show_new_console);
@@ -145,24 +146,25 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   }
 
   if (m_show_game_view) {
-    m_game_view_window.set_render_texture (this->m_runtime_ctx->window.present_tex);
+    m_game_view_window.set_render_texture (
+        this->m_runtime_ctx->window.present_tex);
     m_game_view_window.set_selection (&m_selection);
     m_game_view_window.draw (registry, rw);
   }
 
   // feed mono font and background color from renderer_imgui
-  m_text_editor_window.set_mono_font (m_editor_ctx->get_imgui_renderer()->get_fonts().mono);
-  m_text_editor_window.set_background_color (
-      ImGui::ColorConvertFloat4ToU32 (
-          m_editor_ctx->get_imgui_renderer ()->get_theme ().background2));
+  m_text_editor_window.set_mono_font (
+      m_editor_ctx->get_imgui_renderer ()->get_fonts ().mono);
+  m_text_editor_window.set_background_color (ImGui::ColorConvertFloat4ToU32 (
+      m_editor_ctx->get_imgui_renderer ()->get_theme ().background2));
   if (m_show_text_editor) {
     m_text_editor_window.draw ("Text Editor", &m_show_text_editor);
-}
+  }
 
   if (m_show_file_list) {
-    m_file_list_window.draw ("Files", &m_show_file_list,
-                           &runtime_ctx.resource_manager, &m_text_editor_window,
-                           &m_show_text_editor, this->m_runtime_ctx);
+    m_file_list_window.draw (
+        "Files", &m_show_file_list, &runtime_ctx.resource_manager,
+        &m_text_editor_window, &m_show_text_editor, this->m_runtime_ctx);
   }
 
   if (!m_waiting_for_file_dialog && m_dialog_result.has_value ()) {
@@ -172,10 +174,21 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
       runtime_ctx.editor_ctx->pending_project_load = *m_dialog_result;
       update_recent_projects (*m_dialog_result);
       m_show_welcome = false;
-      spdlog::debug ("Editor: queued load_project for {}", *m_dialog_result);
+      wsl::log::editor ()->debug ("Editor: queued load_project for {}",
+                                  *m_dialog_result);
     } else if (m_current_dialog_mode == dialog_mode::select_folder) {
       std::snprintf (m_new_project_folder, sizeof (m_new_project_folder), "%s",
                      m_dialog_result->c_str ());
+    } else if (m_current_dialog_mode == dialog_mode::load_scene) {
+      m_runtime_ctx->resource_manager.import_scene (*m_dialog_result);
+    } else if (m_current_dialog_mode == dialog_mode::save_scene) {
+      wsl::rsc::scene const *scene = m_runtime_ctx->scene_manager.get_active ();
+      if (scene != nullptr) {
+        std::filesystem::path const p (*m_dialog_result);
+        bool const is_prefab = p.extension () == ".prefab";
+        m_runtime_ctx->resource_manager.save_scene (*scene, *m_dialog_result,
+                                                    is_prefab);
+      }
     }
 
     m_dialog_result.reset ();
@@ -282,7 +295,7 @@ editor::root::draw_main_menu ()
 {
   if (!ImGui::BeginMainMenuBar ()) {
     return;
-}
+  }
 
   if (ImGui::BeginMenu ("File")) {
     if (ImGui::MenuItem ("New Project")) {
@@ -328,10 +341,49 @@ editor::root::draw_main_menu ()
   }
 
   if (ImGui::BeginMenu ("Scene")) {
-    ImGui::MenuItem ("New Scene");
-    ImGui::MenuItem ("Load Scene");
-    ImGui::MenuItem ("Save Scene");
-    ImGui::MenuItem ("Reload Scene");
+    if (ImGui::MenuItem ("New Scene")) {
+      m_resource_inspector_window.new_scene_dialog ();
+    }
+    if (ImGui::MenuItem ("Load Scene")) {
+      if (!m_waiting_for_file_dialog) {
+        SDL_DialogFileFilter filters[] = { { "Scene files", "scene;json" },
+                                           { "Prefab files", "prefab" },
+                                           { "All files", "*" } };
+        m_current_dialog_mode = dialog_mode::load_scene;
+        m_waiting_for_file_dialog = true;
+        m_dialog_result.reset ();
+        SDL_ShowOpenFileDialog (file_dialog_callback, this,
+                                m_runtime_ctx->window.handler, filters,
+                                SDL_arraysize (filters), nullptr, false);
+      }
+    }
+    if (ImGui::MenuItem ("Save Scene")) {
+      if (!m_waiting_for_file_dialog) {
+        SDL_DialogFileFilter filters[] = { { "Scene files", "scene;json" },
+                                           { "Prefab files", "prefab" },
+                                           { "All files", "*" } };
+        m_current_dialog_mode = dialog_mode::save_scene;
+        m_waiting_for_file_dialog = true;
+        m_dialog_result.reset ();
+        SDL_ShowSaveFileDialog (file_dialog_callback, this,
+                                m_runtime_ctx->window.handler, filters,
+                                SDL_arraysize (filters), nullptr);
+      }
+    }
+    if (ImGui::MenuItem ("Reload Scene")) {
+      auto *active_scene = m_runtime_ctx->scene_manager.get_active ();
+      if (active_scene != nullptr) {
+        for (const auto &info :
+             m_runtime_ctx->resource_manager.list_scenes ()) {
+          if (!info.is_prefab && info.name == active_scene->get_name ()) {
+            wsl::rsc::scene_id sid{ info.id };
+            m_runtime_ctx->resource_manager.unload (sid);
+            m_runtime_ctx->resource_manager.load (sid);
+            break;
+          }
+        }
+      }
+    }
     ImGui::EndMenu ();
   }
 
@@ -469,7 +521,7 @@ editor::root::open_project_file ()
   m_current_dialog_mode = dialog_mode::open_project;
   if (m_waiting_for_file_dialog) {
     return;
-}
+  }
 
   SDL_DialogFileFilter filters[]
       = { { "WSL Project", "json" }, { "All Files", "*" } };
@@ -477,8 +529,8 @@ editor::root::open_project_file ()
   m_waiting_for_file_dialog = true;
   m_dialog_result.reset ();
 
-  SDL_ShowOpenFileDialog (file_dialog_callback,        // callback
-                          this,                        // userdata
+  SDL_ShowOpenFileDialog (file_dialog_callback,          // callback
+                          this,                          // userdata
                           m_runtime_ctx->window.handler, // your SDL_Window*
                           filters, SDL_arraysize (filters),
                           nullptr, // default location
@@ -491,7 +543,7 @@ editor::root::save_project_file ()
 {
   if (m_waiting_for_file_dialog) {
     return;
-}
+  }
 
   SDL_DialogFileFilter filters[]
       = { { "Project Files", "project;json" }, { "All Files", "*" } };
@@ -506,7 +558,7 @@ editor::root::save_project_file ()
 
 void
 editor::root::file_dialog_callback (void *userdata, const char *const *filelist,
-                                   int /*unused*/)
+                                    int /*unused*/)
 {
   auto *self = static_cast<editor::root *> (userdata);
 
@@ -531,7 +583,7 @@ editor::root::open_project_folder_dialog ()
 
   if (m_waiting_for_file_dialog) {
     return;
-}
+  }
 
   m_waiting_for_file_dialog = true;
   m_dialog_result.reset ();
@@ -564,7 +616,7 @@ editor::root::apply_preferences_style ()
   t.background2 = m_pref_bg2;
   t.foreground = m_pref_fg;
 
-  m_editor_ctx->get_imgui_renderer()->apply_editor_style (t);
+  m_editor_ctx->get_imgui_renderer ()->apply_editor_style (t);
 }
 
 void
@@ -573,7 +625,7 @@ editor::root::draw_preferences_popup ()
   bool open = true; // controls the X button on the modal
 
   // Optional: center it
-  ImGuiViewport  const*vp = ImGui::GetMainViewport ();
+  ImGuiViewport const *vp = ImGui::GetMainViewport ();
   ImGui::SetNextWindowPos (vp->GetCenter (), ImGuiCond_Appearing,
                            ImVec2 (0.5F, 0.5F));
 
@@ -611,7 +663,7 @@ editor::root::draw_preferences_popup ()
 
         if (ImGui::Button ("Apply")) {
           apply_preferences_style ();
-}
+        }
         ImGui::SameLine ();
         if (ImGui::Button ("Close")) {
           ImGui::CloseCurrentPopup ();
@@ -652,16 +704,16 @@ void
 editor::root::draw_build_settings_popup ()
 {
   bool open = true;
-  ImGuiViewport  const*vp = ImGui::GetMainViewport ();
+  ImGuiViewport const *vp = ImGui::GetMainViewport ();
   ImGui::SetNextWindowPos (vp->GetCenter (), ImGuiCond_Appearing,
                            ImVec2 (0.5F, 0.5F));
 
   if (ImGui::BeginPopupModal ("Build Settings", &open,
                               ImGuiWindowFlags_AlwaysAutoResize)) {
-    
+
     ImGui::TextUnformatted ("WSL Source Path");
     ImGui::SetNextItemWidth (400.0F);
-    
+
     char buf[512];
     std::strncpy (buf, m_editor_ctx->wsl_library_path.c_str (), sizeof (buf));
     if (ImGui::InputText ("##wsl_path", buf, sizeof (buf))) {
@@ -670,9 +722,12 @@ editor::root::draw_build_settings_popup ()
 
     ImGui::TextUnformatted ("WSL Resource Path");
     ImGui::SetNextItemWidth (400.0F);
-    
+
     char res_buf[512];
-    std::strncpy (res_buf, m_runtime_ctx->resource_manager.get_engine_resource_path ().c_str (), sizeof (res_buf));
+    std::strncpy (
+        res_buf,
+        m_runtime_ctx->resource_manager.get_engine_resource_path ().c_str (),
+        sizeof (res_buf));
     if (ImGui::InputText ("##wsl_res_path", res_buf, sizeof (res_buf))) {
       m_runtime_ctx->resource_manager.set_engine_resource_path (res_buf);
     }
@@ -703,15 +758,16 @@ editor::root::draw_welcome_tab ()
     if (m_editor_ctx->icon_welcome_bg.value != entt::null) {
       if (m_editor_ctx->editor_resources.state (m_editor_ctx->icon_welcome_bg)
           == wsl::rsc::image_state::loaded) {
-        auto handle = m_editor_ctx->editor_resources.get (m_editor_ctx->icon_welcome_bg);
+        auto handle = m_editor_ctx->editor_resources.get (
+            m_editor_ctx->icon_welcome_bg);
         if (handle) {
           ImVec2 const window_pos = ImGui::GetWindowPos ();
           ImVec2 const window_size = ImGui::GetWindowSize ();
           float const img_size = std::min (window_size.x, window_size.y) * 0.7F;
           ImVec2 const p_min = ImVec2 (window_pos.x + window_size.x - img_size,
-                                 window_pos.y + window_size.y - img_size);
+                                       window_pos.y + window_size.y - img_size);
           ImVec2 const p_max = ImVec2 (window_pos.x + window_size.x,
-                                 window_pos.y + window_size.y);
+                                       window_pos.y + window_size.y);
           ImGui::GetWindowDrawList ()->AddImage (
               (ImTextureID)handle->texture, p_min, p_max, ImVec2 (0, 0),
               ImVec2 (1, 1), ImColor (255, 255, 255, 255));
@@ -719,7 +775,7 @@ editor::root::draw_welcome_tab ()
       }
     }
 
-    ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().title);
+    ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts ().title);
     ImGui::Text ("weasel");
     ImGui::PopFont ();
 
@@ -793,9 +849,11 @@ editor::root::draw_welcome_tab ()
         std::string label = p.parent_path ().filename ().string ();
         if (label.empty ()) {
           label = path;
-}
+        }
 
-        if (ImGui::Selectable (label.c_str (), false, 0, ImVec2 (ImGui::GetContentRegionAvail ().x - 25, 0))) {
+        if (ImGui::Selectable (
+                label.c_str (), false, 0,
+                ImVec2 (ImGui::GetContentRegionAvail ().x - 25, 0))) {
           m_selection = {};
           m_runtime_ctx->editor_ctx->selected_entity = entt::null;
           m_runtime_ctx->editor_ctx->pending_project_load = path;
@@ -815,7 +873,8 @@ editor::root::draw_welcome_tab ()
       }
 
       if (!project_to_remove.empty ()) {
-        auto it = std::find (m_recent_projects.begin (), m_recent_projects.end (), project_to_remove);
+        auto it = std::find (m_recent_projects.begin (),
+                             m_recent_projects.end (), project_to_remove);
         if (it != m_recent_projects.end ()) {
           m_recent_projects.erase (it);
           save_recent_projects ();
@@ -829,8 +888,10 @@ editor::root::draw_welcome_tab ()
 void
 editor::root::update_recent_projects (const std::string &path)
 {
-  std::string path_copy = path; // Make a copy because path might be a reference to a vector element
-  auto it = std::find (m_recent_projects.begin (), m_recent_projects.end (), path_copy);
+  std::string path_copy = path; // Make a copy because path might be a reference
+                                // to a vector element
+  auto it = std::find (m_recent_projects.begin (), m_recent_projects.end (),
+                       path_copy);
   if (it != m_recent_projects.end ()) {
     m_recent_projects.erase (it);
   }
@@ -895,11 +956,12 @@ editor::root::draw_status_bar ()
 
   // 0. FPS counter (left-anchored)
   {
-    ImGuiIO  const&io = ImGui::GetIO ();
+    ImGuiIO const &io = ImGui::GetIO ();
     char fps_buf[32];
     snprintf (fps_buf, sizeof (fps_buf), "%.1f FPS", io.Framerate);
-    float const text_y_offset = ((height - progress_bar_height - ImGui::GetTextLineHeight ()) * 0.5F)
-                          + progress_bar_height;
+    float const text_y_offset
+        = ((height - progress_bar_height - ImGui::GetTextLineHeight ()) * 0.5F)
+          + progress_bar_height;
     ImGui::SetCursorPos (ImVec2 (10.0F, text_y_offset));
     ImGui::TextDisabled ("%s", fps_buf);
   }
@@ -917,11 +979,13 @@ editor::root::draw_status_bar ()
     }
 
     ImVec2 const min = ImGui::GetWindowPos ();
-    ImVec2 const max = ImVec2 (min.x + viewport->Size.x, min.y + progress_bar_height);
+    ImVec2 const max
+        = ImVec2 (min.x + viewport->Size.x, min.y + progress_bar_height);
     ImGui::GetWindowDrawList ()->AddRectFilled (
         min, max, ImGui::GetColorU32 (ImGuiCol_FrameBg));
 
-    ImVec2 const progress_max = ImVec2 (min.x + (viewport->Size.x * progress), max.y);
+    ImVec2 const progress_max
+        = ImVec2 (min.x + (viewport->Size.x * progress), max.y);
     ImGui::GetWindowDrawList ()->AddRectFilled (
         min, progress_max, ImGui::GetColorU32 (ImGuiCol_PlotHistogram));
   }

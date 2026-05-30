@@ -23,19 +23,19 @@ struct transform : world_component
   transform () = default;
 
   explicit transform (const math::vec3f &position_value)
-    : position (position_value)
+      : position (position_value)
   {
   }
 
   explicit transform (const glm::vec3 &position_value)
-    : position (position_value)
+      : position (position_value)
   {
   }
 
   transform (const math::vec3f &position_value,
-             const math::quatf &rotation_value,
-             const math::vec3f &scale_value)
-    : position (position_value), rotation (rotation_value), scale (scale_value)
+             const math::quatf &rotation_value, const math::vec3f &scale_value)
+      : position (position_value), rotation (rotation_value),
+        scale (scale_value)
   {
   }
 
@@ -86,8 +86,7 @@ struct transform : world_component
         .custom<comp::meta_info> (meta_info{
             "Position", "Local position relative to parent entity", "" })
 
-        .data<&comp::transform::set_rotation_xyz,
-              &comp::transform::get_rotation_xyz> ("rotation"_hs)
+        .data<&comp::transform::rotation> ("rotation"_hs)
         .custom<comp::meta_info> (
             meta_info{ "Rotation", "Euler XYZ in degrees", "" })
 

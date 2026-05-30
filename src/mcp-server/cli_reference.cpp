@@ -1,400 +1,382 @@
 #include "cli_reference.hpp"
 
-namespace {
+namespace
+{
 
 const std::vector<cli_command_info> g_cli_reference = {
   // === CLI Subcommands ===
-  {
-    "--project",
+  { "--project",
     "cli",
     "Path to the project to load at startup.",
     "weasel-cli --project <path> [--interactive]",
-    {"<path> – Path to the project directory or wslpro.json file."},
-    {"weasel-cli --project ./mygame --interactive"}
-  },
-  {
-    "--interactive",
+    { "<path> – Path to the project directory or wslpro.json file." },
+    { "weasel-cli --project ./mygame --interactive" } },
+  { "--interactive",
     "cli",
     "Start the interactive REPL after loading the project.",
     "weasel-cli --project <path> --interactive",
     {},
-    {"weasel-cli --project ./mygame --interactive"}
-  },
-  {
-    "--attach",
+    { "weasel-cli --project ./mygame --interactive" } },
+  { "--attach",
     "cli",
     "Attach to a running editor server for the project.",
     "weasel-cli --project <path> --attach",
     {},
-    {"weasel-cli --project ./mygame --attach"}
-  },
-  {
-    "--scene",
+    { "weasel-cli --project ./mygame --attach" } },
+  { "--scene",
     "cli",
     "Path to a scene file (.wscn.json) to load before running a command.",
     "weasel-cli --project <path> --scene <scene_path>",
-    {"<scene_path> – Path to the .wscn.json scene file."},
-    {"weasel-cli --project ./mygame --scene rsc/scenes/level1.wscn.json"}
-  },
-  {
-    "create-project",
+    { "<scene_path> – Path to the .wscn.json scene file." },
+    { "weasel-cli --project ./mygame --scene rsc/scenes/level1.wscn.json" } },
+  { "create-project",
     "cli",
     "Create a new Weasel Engine project on disk.",
     "weasel-cli create-project <path> <name> [--no-subdir]",
-    {
-      "<path> – Directory where the project will be created.",
+    { "<path> – Directory where the project will be created.",
       "<name> – Human-readable project name.",
-      "--no-subdir – Don't create a project-name subdirectory."
-    },
-    {
-      "weasel-cli create-project ./mygame MyGame",
-      "weasel-cli --create-project ./mygame MyGame"
-    }
-  },
-  {
-    "create-scene",
+      "--no-subdir – Don't create a project-name subdirectory." },
+    { "weasel-cli create-project ./mygame MyGame",
+      "weasel-cli --create-project ./mygame MyGame" } },
+  { "create-scene",
     "cli",
     "Create a new scene file for a project.",
     "weasel-cli create-scene <path> <name> [systems...]",
-    {
-      "<path> – File path for the new scene (.wscn.json).",
+    { "<path> – File path for the new scene (.wscn.json).",
       "<name> – Scene name.",
-      "[systems...] – Optional system names to attach."
-    },
-    {
-      "weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn.json Level1",
-      "weasel-cli --create-scene ./mygame/rsc/scenes/level1.wscn.json Level1"
-    }
-  },
-  {
-    "validate-project",
+      "[systems...] – Optional system names to attach." },
+    { "weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn.json Level1",
+      "weasel-cli --create-scene ./mygame/rsc/scenes/level1.wscn.json "
+      "Level1" } },
+  { "validate-project",
     "cli",
     "Validate a project file (wslpro.json).",
     "weasel-cli validate-project <path>",
-    {"<path> – Path to the project's wslpro.json file."},
-    {"weasel-cli validate-project ./mygame/wslpro.json", "weasel-cli --validate-project ./mygame/wslpro.json"}
-  },
-  {
-    "validate-scene",
+    { "<path> – Path to the project's wslpro.json file." },
+    { "weasel-cli validate-project ./mygame/wslpro.json",
+      "weasel-cli --validate-project ./mygame/wslpro.json" } },
+  { "validate-scene",
     "cli",
     "Validate a scene file against a project.",
     "weasel-cli validate-scene <scene_path> <proj_path>",
-    {
-      "<scene_path> – Path to the scene .wscn.json file.",
-      "<proj_path> – Path to the project's wslpro.json file."
-    },
-    {"weasel-cli validate-scene ./mygame/rsc/scenes/main.wscn.json ./mygame/wslpro.json", "weasel-cli --validate-scene ./mygame/rsc/scenes/main.wscn.json ./mygame/wslpro.json"}
-  },
+    { "<scene_path> – Path to the scene .wscn.json file.",
+      "<proj_path> – Path to the project's wslpro.json file." },
+    { "weasel-cli validate-scene ./mygame/rsc/scenes/main.wscn.json "
+      "./mygame/wslpro.json",
+      "weasel-cli --validate-scene ./mygame/rsc/scenes/main.wscn.json "
+      "./mygame/wslpro.json" } },
 
-  {
-    "proj",
+  { "proj",
     "cli",
     "Run a project REPL command without entering the interactive shell.",
     "weasel-cli proj <new|load|info|save> [args...]",
-    {
-      "<new|load|info|save> – Project subcommand."
-    },
-    {"weasel-cli proj load ./mygame", "weasel-cli proj info"}
-  },
-  {
-    "scene",
+    { "<new|load|info|save> – Project subcommand." },
+    { "weasel-cli proj load ./mygame", "weasel-cli proj info" } },
+  { "scene",
     "cli",
     "Run a scene REPL command without entering the interactive shell.",
     "weasel-cli scene <new|load|save|ls|status> [args...]",
-    {
-      "<new|load|save|ls|status> – Scene subcommand."
-    },
-    {"weasel-cli scene ls", "weasel-cli scene status"}
-  },
-  {
-    "ent",
+    { "<new|load|save|ls|status> – Scene subcommand." },
+    { "weasel-cli scene ls", "weasel-cli scene status" } },
+  { "ent",
     "cli",
-    "Run an entity REPL command without entering the interactive shell. 'ent new' creates an entity with Transform, WorldTransform, and Hierarchy by default.",
+    "Run an entity REPL command without entering the interactive shell. 'ent "
+    "new' creates an entity with Transform, WorldTransform, and Hierarchy by "
+    "default.",
     "weasel-cli ent <new|ls|rm|ren|inspect> [args...]",
-    {
-      "<new|ls|rm|ren|inspect> – Entity subcommand.",
-      "ent new [--empty] [name] – Create entity (default components added unless --empty is specified)."
-    },
-    {"weasel-cli ent ls", "weasel-cli ent new Player", "weasel-cli ent new --empty"}
-  },
-  {
-    "comp",
+    { "<new|ls|rm|ren|inspect> – Entity subcommand.",
+      "ent new [--empty] [name] – Create entity (default components added "
+      "unless --empty is specified)." },
+    { "weasel-cli ent ls", "weasel-cli ent new Player",
+      "weasel-cli ent new --empty" } },
+  { "comp",
     "cli",
     "Run a component REPL command without entering the interactive shell.",
-    "weasel-cli comp <ls|avail|add|rm|set> [args...]",
-    {
-      "<ls|avail|add|rm|set> – Component subcommand."
-    },
-    {"weasel-cli comp avail", "weasel-cli comp add 42 transform", "weasel-cli comp rm 42 rigid_body", "weasel-cli comp set 42 transform position '[1,2,3]'"}
-  },
-  {
-    "sys",
+    "weasel-cli comp <ls|avail|add|rm|set|singl> [args...]",
+    { "<ls|avail|add|rm|set|singl> – Component subcommand." },
+    { "weasel-cli comp avail", "weasel-cli comp add 42 transform",
+      "weasel-cli comp rm 42 rigid_body",
+      "weasel-cli comp set 42 transform position '[1,2,3]'" } },
+  { "sys",
     "cli",
     "Run a system REPL command without entering the interactive shell.",
     "weasel-cli sys <ls|avail|add>",
-    {
-      "<ls|avail> – List registered systems.",
-      "add <name> – Add a system to the active scene."
-    },
-    {"weasel-cli sys ls", "weasel-cli sys avail"}
-  },
+    { "<ls> – List per-scene system instances.",
+      "<avail> – List globally registered system types.",
+      "add <name> – Add a system to the active scene." },
+    { "weasel-cli sys ls", "weasel-cli sys avail" } },
 
   // === REPL Commands ===
-  {
-    "proj new",
+  { "proj new",
     "repl",
     "Create and load a new project in the REPL.",
     "proj new <name> <path>",
-    {
-      "<name> – Project name.",
-      "<path> – Directory to create the project in."
-    },
-    {"proj new MyGame ./projects"}
-  },
-  {
-    "proj load",
+    { "<name> – Project name.",
+      "<path> – Directory to create the project in." },
+    { "proj new MyGame ./projects" } },
+  { "proj load",
     "repl",
     "Load an existing project into the REPL.",
     "proj load <path>",
-    {"<path> – Path to the project directory or wslpro.json."},
-    {"proj load ./mygame"}
-  },
-  {
-    "proj info",
+    { "<path> – Path to the project directory or wslpro.json." },
+    { "proj load ./mygame" } },
+  { "proj info",
     "repl",
     "Display metadata for the currently loaded project.",
     "proj info",
     {},
-    {"proj info"}
-  },
-  {
-    "proj save",
+    { "proj info" } },
+  { "proj save",
     "repl",
     "Save the currently loaded project metadata.",
     "proj save",
     {},
-    {"proj save"}
-  },
-  {
-    "scene new",
+    { "proj save" } },
+  { "scene new",
     "repl",
-    "Create a new empty scene and set it as active. No per-scene systems are added by default — use 'sys add' to attach systems. Core singleton components (Runtime Context, Scene Manager, Resource Manager, UI Manager, Rendering Manager, Physics Manager) are automatically present in every scene.",
+    "Create a new empty scene and set it as active. No per-scene systems are "
+    "added by default — use 'sys add' to attach systems. Core singleton "
+    "components (Runtime Context, Scene Manager, Resource Manager, UI Manager, "
+    "Rendering Manager, Physics Manager) are automatically present in every "
+    "scene.",
     "scene new <name>",
-    {"<name> – Name for the new scene."},
-    {"scene new Level1"}
-  },
-  {
-    "scene load",
+    { "<name> – Name for the new scene." },
+    { "scene new Level1" } },
+  { "scene load",
     "repl",
     "Load a scene from disk into the active runtime.",
     "scene load <path>",
-    {"<path> – Path to the .wscn.json scene file."},
-    {"scene load rsc/scenes/level1.wscn.json"}
-  },
-  {
-    "scene save",
+    { "<path> – Path to the .wscn.json scene file." },
+    { "scene load rsc/scenes/level1.wscn.json" } },
+  { "scene save",
     "repl",
     "Save the active scene to disk. When a project is loaded, the default "
     "path is {project_root}/{scenes_path}/{scene_name}.wscn.json. "
     "Without a project, defaults to {scene_name}.wscn.json in the CWD.",
     "scene save [path]",
-    {
-      "[path] – Optional override path. Default: project's scenes_path + scene name.",
-      "When a project is loaded, saves to the project's configured scenes_path.",
-      "Without a project, saves to the current working directory."
-    },
-    {"scene save", "scene save ./backup.wscn.json"}
-  },
-  {
-    "scene ls",
+    { "[path] – Optional override path. Default: project's scenes_path + scene "
+      "name.",
+      "When a project is loaded, saves to the project's configured "
+      "scenes_path.",
+      "Without a project, saves to the current working directory." },
+    { "scene save", "scene save ./backup.wscn.json" } },
+  { "scene ls",
     "repl",
     "List all scene assets in the loaded project.",
     "scene ls",
     {},
-    {"scene ls"}
-  },
-  {
-    "scene status",
+    { "scene ls" } },
+  { "scene status",
     "repl",
     "Show statistics for the active scene.",
     "scene status",
     {},
-    {"scene status"}
-  },
-  {
-    "ent new",
+    { "scene status" } },
+  { "ent new",
     "repl",
-    "Create a new entity in the active scene. By default adds Transform, WorldTransform, and Hierarchy components. Use --empty to create a bare entity.",
+    "Create a new entity in the active scene. By default adds Transform, "
+    "WorldTransform, and Hierarchy components. Use --empty to create a bare "
+    "entity.",
     "ent new [--empty] [name]",
-    {
-      "[name] – Optional entity name.",
-      "--empty – Create an empty entity without default components (Transform, WorldTransform, Hierarchy)."
-    },
-    {"ent new", "ent new Player", "ent new --empty", "ent new --empty MyBareEntity"}
-  },
-  {
-    "ent ls",
+    { "[name] – Optional entity name.",
+      "--empty – Create an empty entity without default components (Transform, "
+      "WorldTransform, Hierarchy)." },
+    { "ent new", "ent new Player", "ent new --empty",
+      "ent new --empty MyBareEntity" } },
+  { "ent ls",
     "repl",
     "List all entities in the active scene.",
     "ent ls",
     {},
-    {"ent ls"}
-  },
-  {
-    "ent rm",
+    { "ent ls" } },
+  { "ent rm",
     "repl",
     "Remove (destroy) an entity by its numeric ID.",
     "ent rm <id>",
-    {"<id> – Numeric entity ID."},
-    {"ent rm 42"}
-  },
-  {
-    "ent ren",
+    { "<id> – Numeric entity ID." },
+    { "ent rm 42" } },
+  { "ent ren",
     "repl",
     "Rename an existing entity.",
     "ent ren <id> <new_name>",
-    {
-      "<id> – Numeric entity ID.",
-      "<new_name> – New name for the entity."
-    },
-    {"ent ren 42 Hero"}
-  },
-  {
-    "ent inspect",
+    { "<id> – Numeric entity ID.", "<new_name> – New name for the entity." },
+    { "ent ren 42 Hero" } },
+  { "ent inspect",
     "repl",
     "Display detailed information about an entity.",
     "ent inspect <id>",
-    {"<id> – Numeric entity ID."},
-    {"ent inspect 42"}
-  },
-  {
-    "comp ls",
+    { "<id> – Numeric entity ID." },
+    { "ent inspect 42" } },
+  { "comp ls",
     "repl",
     "List components attached to an entity.",
     "comp ls <id>",
-    {"<id> – Numeric entity ID."},
-    {"comp ls 42"}
-  },
-  {
-    "comp avail",
+    { "<id> – Numeric entity ID." },
+    { "comp ls 42" } },
+  { "comp avail",
     "repl",
     "List all registered component types available in the runtime.",
     "comp avail",
     {},
-    {"comp avail"}
-  },
-  {
-    "comp add",
+    { "comp avail" } },
+  { "comp add",
     "repl",
     "Add a component to an entity by type name.",
     "comp add <id> <type>",
-    {
-      "<id> – Numeric entity ID.",
-      "<type> – Component type name (e.g. transform, camera, model_instance_3d)."
-    },
-    {"comp add 42 transform"}
-  },
-  {
-    "comp rm",
+    { "<id> – Numeric entity ID.", "<type> – Component type name (e.g. "
+                                   "transform, camera, model_instance_3d)." },
+    { "comp add 42 transform" } },
+  { "comp rm",
     "repl",
-    "Remove a component from an entity. The entity must have the component already attached.",
+    "Remove a component from an entity. The entity must have the component "
+    "already attached.",
     "comp rm <id> <type>",
-    {
-      "<id> – Numeric entity ID.",
-      "<type> – Component type name (e.g. rigid_body, camera, transform)."
-    },
-    {"comp rm 42 camera", "comp rm 42 rigid_body"}
-  },
-  {
-    "comp set",
+    { "<id> – Numeric entity ID.",
+      "<type> – Component type name (e.g. rigid_body, camera, transform)." },
+    { "comp rm 42 camera", "comp rm 42 rigid_body" } },
+  { "comp set",
     "repl",
     "Set a property on an entity's component. Uses EnTT meta property names "
     "(NOT serialization/JSON names). Only works on components that have been "
     "initialized with register_meta(). Supports nested property paths "
     "(dot-separated) and JSON-compatible values.",
     "comp set <id> <type> <property> <value>",
-    {
-      "<id> – Numeric entity ID.",
-      "<type> – Component type name (e.g. transform, rigid_body). Short names, display names, and fully qualified C++ names all work.",
-      "<property> – EnTT meta property name (e.g. motion_type, not 'Motion Type'). Use dot notation for nested fields (e.g. motion_type.value, collision_layer.value). These differ from serialization names in some cases.",
-      "<value> – New value as JSON: numbers (1.5), strings (\\\"text\\\"), booleans (true/false), arrays ([1,2,3]), or enum names (Box, Sphere, Static, Dynamic, Kinematic)."
-    },
-    {"comp set 42 transform position '[1.0, 2.0, 3.0]'", "comp set 42 rigid_body shape Box", "comp set 42 rigid_body radius 0.5", "comp set 42 rigid_body motion_type.value 2"}
-  },
-  {
-    "sig",
+    { "<id> – Numeric entity ID.",
+      "<type> – Component type name (e.g. transform, rigid_body). Short names, "
+      "display names, and fully qualified C++ names all work.",
+      "<property> – EnTT meta property name (e.g. motion_type, not 'Motion "
+      "Type'). Use dot notation for nested fields (e.g. motion_type.value, "
+      "collision_layer.value). These differ from serialization names in some "
+      "cases.",
+      "<value> – New value as JSON: numbers (1.5), strings (\\\"text\\\"), "
+      "booleans (true/false), arrays ([1,2,3]), or enum names (Box, Sphere, "
+      "Static, Dynamic, Kinematic)." },
+    { "comp set 42 transform position '[1.0, 2.0, 3.0]'",
+      "comp set 42 rigid_body shape Box", "comp set 42 rigid_body radius 0.5",
+      "comp set 42 rigid_body motion_type.value 2" } },
+  { "comp create",
+    "repl",
+    "Generate a C++ world component template file (header and optionally "
+    "source) in the project's components directory.",
+    "comp create <name> [--source]",
+    { "<name> – Component name (e.g. health, movement).",
+      "--source – Also generate a .cpp source file." },
+    { "comp create health", "comp create movement --source" } },
+  { "comp singl ls",
+    "repl",
+    "List singleton components registered in the active scene, showing their "
+    "state (present/absent).",
+    "comp singl ls",
+    {},
+    { "comp singl ls" } },
+  { "comp singl add",
+    "repl",
+    "Add a value-owned singleton component to the active scene. Bound "
+    "singletons (core engine) cannot be added via CLI.",
+    "comp singl add <name>",
+    { "<name> – Singleton display name or C++ type name." },
+    { "comp singl add \"Physics Manager\"",
+      "comp singl add \"Rendering Manager\"" } },
+  { "comp singl create",
+    "repl",
+    "Generate a C++ singleton component template file (header and optionally "
+    "source) in the project's singletons directory.",
+    "comp singl create <name> [--source]",
+    { "<name> – Singleton name (e.g. game_state, global_settings).",
+      "--source – Also generate a .cpp source file." },
+    { "comp singl create game_state",
+      "comp singl create global_settings --source" } },
+  { "sig",
     "repl",
     "Signal management (not yet fully implemented).",
     "sig <subcommand> [args...]",
     {},
-    {}
-  },
-  {
-    "sys add",
+    {} },
+  { "sys add",
     "repl",
-    "Add a system to the active scene by registered name. Scenes start with no per-scene systems — you must add them explicitly. Available system types: Transform (recomputes world transforms from hierarchy), Physics (steps Jolt physics simulation), 3D Render (draws models), Audio (3D audio playback), Lighting (uploads light UBO data), Skybox (renders cubemap background), Shadow (shadow-map depth passes), UI (renders ImGui overlay). System names are case-sensitive.",
+    "Add a system to the active scene by registered name. Scenes start with no "
+    "per-scene systems — you must add them explicitly. Available system types: "
+    "Transform (recomputes world transforms from hierarchy), Physics (steps "
+    "Jolt physics simulation), 3D Render (draws models), Audio (3D audio "
+    "playback), Lighting (uploads light UBO data), Skybox (renders cubemap "
+    "background), Shadow (shadow-map depth passes), UI (renders ImGui "
+    "overlay). System names are case-sensitive.",
     "sys add <name>",
-    {
-      "<name> – System name. Available: Transform, Physics, 3D Render, Audio, Lighting, Skybox, Shadow, UI. Names are case-sensitive."
-    },
-    {"sys add Transform", "sys add Physics", "sys add 3D Render"}
-  },
-  {
-    "sys ls",
+    { "<name> – System name. Available: Transform, Physics, 3D Render, Audio, "
+      "Lighting, Skybox, Shadow, UI. Names are case-sensitive." },
+    { "sys add Transform", "sys add Physics", "sys add 3D Render" } },
+  { "sys create",
     "repl",
-    "List per-scene systems currently active in the active scene. Scenes start empty — use 'sys add' to attach systems. Note: global core systems (transform, physics, render, etc.) always run regardless of per-scene system list.",
+    "Generate a C++ system template file (header and optionally source) in the "
+    "project's systems directory. Appends 'system' to the name automatically "
+    "if missing.",
+    "sys create <name> [--source]",
+    { "<name> – System name (e.g. gravity, custom_render).",
+      "--source – Also generate a .cpp source file." },
+    { "sys create gravity", "sys create custom_render --source" } },
+  { "sys ls",
+    "repl",
+    "List systems currently attached to the active scene. Scenes start empty "
+    "— use 'sys add' to attach systems. Note: global core systems always run "
+    "regardless of per-scene system list.",
     "sys ls",
     {},
-    {"sys ls"}
-  },
-  {
-    "sys avail",
+    { "sys ls" } },
+  { "sys avail",
     "repl",
     "List all registered system types available via 'sys add'.",
     "sys avail",
     {},
-    {"sys avail"}
-  },
-  {
-    "check",
+    { "sys avail" } },
+  { "rsc ls",
+    "repl",
+    "List registered resources. Optionally filter by type (models, images, "
+    "cubemaps, scenes, audio, fonts, shaders, layouts).",
+    "rsc ls [type]",
+    { "[type] – Optional resource type filter (model, image, cubemap, scene, "
+      "audio, font, shader, layout)." },
+    { "rsc ls", "rsc ls models" } },
+  { "rsc add",
+    "repl",
+    "Register and load a resource into the manager.",
+    "rsc add <type> <path>",
+    { "<type> – Resource type: model, image, cubemap, scene, audio, font, "
+      "shader, layout.",
+      "<path> – Path to the resource file." },
+    { "rsc add model builtin://cube",
+      "rsc add image ./rsc/textures/grass.png" } },
+  { "rsc rm",
+    "repl",
+    "Unload a registered resource by path.",
+    "rsc rm <type> <path>",
+    { "<type> – Resource type: model, image, cubemap, scene, audio, shader.",
+      "<path> – Path of the resource to unload." },
+    { "rsc rm model builtin://cube" } },
+  { "rsc load",
+    "repl",
+    "Load an already-registered resource by path.",
+    "rsc load <type> <path>",
+    { "<type> – Resource type: model, image, cubemap, scene, audio, shader.",
+      "<path> – Path of the resource to load." },
+    { "rsc load model builtin://cube" } },
+  { "rsc info",
+    "repl",
+    "Display metadata (id, path, name, state) for a registered resource.",
+    "rsc info <type> <path>",
+    { "<type> – Resource type: model, image, cubemap, scene, audio, font, "
+      "shader, layout.",
+      "<path> – Path of the resource to inspect." },
+    { "rsc info model builtin://cube" } },
+  { "check",
     "repl",
     "Run a validation check on a target.",
     "check <target>",
-    {"<target> – Target to validate (e.g. project, scene)."},
-    {"check project"}
-  },
-  {
-    "help",
-    "repl",
-    "Show the REPL help message.",
-    "help",
-    {},
-    {"help"}
-  },
-  {
-    "exit",
-    "repl",
-    "Exit the REPL session.",
-    "exit",
-    {},
-    {"exit"}
-  },
-  {
-    "quit",
-    "repl",
-    "Alias for exit.",
-    "quit",
-    {},
-    {"quit"}
-  },
-  {
-    "cls",
-    "repl",
-    "Clear the terminal screen.",
-    "cls",
-    {},
-    {"cls"}
-  }
+    { "<target> – Target to validate (e.g. project, scene)." },
+    { "check project" } },
+  { "help", "repl", "Show the REPL help message.", "help", {}, { "help" } },
+  { "exit", "repl", "Exit the REPL session.", "exit", {}, { "exit" } },
+  { "quit", "repl", "Alias for exit.", "quit", {}, { "quit" } },
+  { "cls", "repl", "Clear the terminal screen.", "cls", {}, { "cls" } }
 };
 
 } // namespace

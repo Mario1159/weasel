@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-using wsl::cli::command_executor;
 using wsl::cli::cli_handler;
+using wsl::cli::command_executor;
 
 namespace
 {
@@ -19,14 +19,15 @@ struct exec_fixture
   command_executor exec;
 
   exec_fixture ()
-    : rtc ("Weasel CLI Test", 0, 0,
-           cli_handler::default_engine_resource_path (), true)
-    , exec (rtc)
+      : rtc ("Weasel CLI Test", 0, 0,
+             cli_handler::default_engine_resource_path (), true),
+        exec (rtc)
   {
     rtc.set_editor_ctx (nullptr);
   }
 
-  std::string execute (const std::string& cmd)
+  std::string
+  execute (const std::string &cmd)
   {
     return exec.execute (cmd);
   }
@@ -138,7 +139,8 @@ TEST_CASE ("scene new creates and activates a scene")
 {
   exec_fixture fx;
   auto out = fx.execute ("scene new MyScene");
-  CHECK (out.find ("Scene 'MyScene' created and set as active") != std::string::npos);
+  CHECK (out.find ("Scene 'MyScene' created and set as active")
+         != std::string::npos);
 }
 
 TEST_CASE ("scene with no subcommand prints usage")
@@ -285,20 +287,25 @@ TEST_CASE ("comp add with unknown component type")
 
 // ===== sys commands =====
 
-TEST_CASE ("sys ls lists registered systems")
+TEST_CASE ("sys ls lists per-scene systems")
 {
   exec_fixture fx;
+  fx.execute ("scene new TestScene");
+  // Empty scene: expect "no systems" message
   auto out = fx.execute ("sys ls");
-  CHECK (out.find ("Registered Systems") != std::string::npos);
+  CHECK (out.find ("No per-scene systems") != std::string::npos);
+  // Add a system and verify it shows up
+  fx.execute ("sys add Transform");
+  out = fx.execute ("sys ls");
+  CHECK (out.find ("Scene systems") != std::string::npos);
   CHECK (out.find ("Transform") != std::string::npos);
-  CHECK (out.find ("Physics") != std::string::npos);
 }
 
 TEST_CASE ("sys avail lists registered systems")
 {
   exec_fixture fx;
   auto out = fx.execute ("sys avail");
-  CHECK (out.find ("Registered Systems") != std::string::npos);
+  CHECK (out.find ("Available system types") != std::string::npos);
   CHECK (out.find ("Transform") != std::string::npos);
 }
 

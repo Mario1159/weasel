@@ -1,21 +1,18 @@
 #include "render_context.hpp"
-#include "spdlog/spdlog.h"
+#include "wsl/log/log.hpp"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
-#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
-
 
 namespace wsl
 {
 
 gfx::render_context::render_context (bool headless)
 {
-  if (headless)
-    {
-      spdlog::debug ("render_context: headless mode, skipping GPU device creation");
-      return;
-    }
+  if (headless) {
+    wsl::log::gfx ()->debug ("Headless mode, skipping GPU device creation");
+    return;
+  }
 
 #if defined(__APPLE__)
   SDL_GPUShaderFormat shader_format = SDL_GPU_SHADERFORMAT_MSL;
@@ -26,44 +23,63 @@ gfx::render_context::render_context (bool headless)
 #endif
 
   int driver_count = SDL_GetNumGPUDrivers ();
-  spdlog::debug ("render_context: found {} GPU drivers", driver_count);
+  wsl::log::gfx ()->debug ("Found {} GPU drivers", driver_count);
 
   for (int i = 0; i < driver_count; i++) {
     const char *driver_name = SDL_GetGPUDriver (i);
     gpu_device = SDL_CreateGPUDevice (shader_format, false, driver_name);
     if (gpu_device != nullptr) {
-      spdlog::info ("render_context: created GPU device using driver: {}", driver_name);
+      wsl::log::gfx ()->info ("Created GPU device using driver: {}",
+                              driver_name);
       break;
     }
-    spdlog::warn ("render_context: failed to create GPU device with driver {}: {}", driver_name, SDL_GetError ());
+    wsl::log::gfx ()->warn ("Failed to create GPU device with driver {}: {}",
+                            driver_name, SDL_GetError ());
   }
 
   if (gpu_device == nullptr) {
     gpu_device = SDL_CreateGPUDevice (shader_format, false, nullptr);
     if (gpu_device != nullptr) {
-      spdlog::info ("render_context: created GPU device using default driver");
+      wsl::log::gfx ()->info ("Created GPU device using default driver");
     }
   }
 
   if (gpu_device == nullptr) {
-    SDL_Log ("render_context: CRITICAL: failed to create GPU device: %s", SDL_GetError ());
-    spdlog::critical ("render_context: CRITICAL: failed to create GPU device: {}", SDL_GetError ());
+    wsl::log::gfx ()->critical ("Failed to create GPU device: {}",
+                                SDL_GetError ());
+    return;
   }
-  spdlog::debug ("GPU DEVICE {}", (void *)gpu_device);
+
+  // Log usable GPU properties
+  char const *driver_cfg = "<<unknown>>";
+  switch (shader_format) {
+  case SDL_GPU_SHADERFORMAT_SPIRV:
+    driver_cfg = "SPIR-V";
+    break;
+  case SDL_GPU_SHADERFORMAT_MSL:
+    driver_cfg = "MSL";
+    break;
+  case SDL_GPU_SHADERFORMAT_DXIL:
+    driver_cfg = "DXIL";
+    break;
+  default:
+    break;
+  }
+  wsl::log::gfx ()->debug ("Shader target: {}, format: {}",
+                           SDL_GetGPUDeviceDriver (gpu_device), driver_cfg);
 }
 
 gfx::render_context::~render_context ()
 {
-  if (gpu_device != nullptr)
-    {
-      SDL_WaitForGPUIdle (gpu_device);
-      SDL_DestroyGPUDevice (gpu_device);
-      gpu_device = nullptr;
-      main_cmd = nullptr;
-      main_pass = nullptr;
-      ui_pass = nullptr;
-      SDL_PumpEvents ();
-    }
+  if (gpu_device != nullptr) {
+    SDL_WaitForGPUIdle (gpu_device);
+    SDL_DestroyGPUDevice (gpu_device);
+    gpu_device = nullptr;
+    main_cmd = nullptr;
+    main_pass = nullptr;
+    ui_pass = nullptr;
+    SDL_PumpEvents ();
+  }
 }
 
 SDL_GPUDevice *

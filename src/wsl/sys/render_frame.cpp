@@ -15,7 +15,6 @@
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
-
 namespace wsl
 {
 
@@ -29,8 +28,8 @@ sys::render_submission::reset ()
 
 bool
 sys::build_render_frame (entt::registry &registry,
-                          comp::singl::runtime_context &runtime_ctx,
-                          render_submission &out)
+                         comp::singl::runtime_context &runtime_ctx,
+                         render_submission &out)
 {
   out.reset ();
 
@@ -44,7 +43,8 @@ sys::build_render_frame (entt::registry &registry,
   if (runtime_ctx.editor_ctx != nullptr) {
     auto &editor_ctx = *runtime_ctx.editor_ctx;
     wsl::comp::singl::editor_context::resolved_camera resolved_camera;
-    if (!editor_ctx.resolve_game_view_camera (registry, scene, resolved_camera)) {
+    if (!editor_ctx.resolve_game_view_camera (registry, scene,
+                                              resolved_camera)) {
       return false;
     }
 
@@ -60,24 +60,30 @@ sys::build_render_frame (entt::registry &registry,
     runtime_ctx.window.get_size (w, h);
     float const aspect = (w > 0 && h > 0) ? (float)w / (float)h : 1.0F;
 
-    if (scene->camera != entt::null && registry.all_of<comp::camera, comp::world_transform> (scene->camera)) {
+    if (scene->camera != entt::null
+        && registry.all_of<comp::camera, comp::world_transform> (
+            scene->camera)) {
       const auto &cam = registry.get<comp::camera> (scene->camera);
-      const auto &wt = registry.get<comp::world_transform> (scene->camera);
+      const comp::world_transform &wt
+          = registry.get<comp::world_transform> (scene->camera);
+      glm::mat4 const wtm = wt.value;
 
       out.view.valid = true;
       out.view.aspect_ratio = aspect;
-      out.view.world_position = glm::vec3 (wt.value[3]);
-      out.view.view = glm::inverse (wt.value);
+      out.view.world_position = glm::vec3 (wtm[3]);
+      out.view.view = glm::inverse (wtm);
       out.view.proj = glm::perspective (glm::radians (cam.fov), aspect,
-                                         cam.near, cam.far);
+                                        cam.near, cam.far);
       out.view.view_proj = out.view.proj * out.view.view;
     } else {
       // Standalone Fallback: Look at origin from (0,0,5)
       out.view.valid = true;
       out.view.aspect_ratio = aspect;
       out.view.world_position = glm::vec3 (0, 0, 5);
-      out.view.view = glm::lookAt (out.view.world_position, glm::vec3 (0), glm::vec3 (0, 1, 0));
-      out.view.proj = glm::perspective (glm::radians (60.0F), aspect, 0.1F, 1000.0F);
+      out.view.view = glm::lookAt (out.view.world_position, glm::vec3 (0),
+                                   glm::vec3 (0, 1, 0));
+      out.view.proj
+          = glm::perspective (glm::radians (60.0F), aspect, 0.1F, 1000.0F);
       out.view.view_proj = out.view.proj * out.view.view;
     }
   }
@@ -105,7 +111,7 @@ sys::build_render_frame (entt::registry &registry,
     out.draw_commands.push_back (gfx::scene_renderer::draw_command{
         .model = &(*model),
         .scene_index = instance.scene_index,
-        .transform = world.value,
+        .transform = static_cast<glm::mat4> (world.value),
         .entity = entity,
         .draw_outline = (entity == selected_entity),
     });

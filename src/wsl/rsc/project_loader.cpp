@@ -26,7 +26,6 @@
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/model_instance_3d.hpp"
 
-
 namespace wsl
 {
 
@@ -57,7 +56,8 @@ rsc::project_loader::create (const project &proj) const
   const fs::path project_file = fs::path (proj.root_path) / manifest_file;
   std::ofstream file (project_file);
   if (!file) {
-    wsl::log::resources ()->error ("Failed to create project file: {}", project_file.string ());
+    wsl::log::rsc ()->error ("Failed to create project file: {}",
+                             project_file.string ());
     return false;
   }
 
@@ -75,16 +75,19 @@ rsc::project_loader::create (const project &proj) const
     const rsc::model_id builtin_cube_id
         = m_runtime_ctx->resource_manager.register_model ("builtin://cube");
     const rsc::cubemap_id builtin_skybox_id
-        = m_runtime_ctx->resource_manager.register_cubemap ("builtin/skybox_procedural");
+        = m_runtime_ctx->resource_manager.register_cubemap (
+            "builtin/skybox_procedural");
     temp_scene.add_resource (io::resource_type::model, builtin_cube_id.value);
-    temp_scene.add_resource (io::resource_type::cubemap, builtin_skybox_id.value);
+    temp_scene.add_resource (io::resource_type::cubemap,
+                             builtin_skybox_id.value);
 
     auto sample_cube = reg.create ();
     temp_scene.set_entity_name (sample_cube, "Sample Cube");
     reg.emplace<comp::hierarchy> (sample_cube);
     reg.emplace<comp::transform> (sample_cube, glm::vec3 (0.0F, 0.0F, 0.0F));
     reg.emplace<comp::world_transform> (sample_cube);
-    auto &sample_cube_model = reg.emplace<comp::model_instance_3d> (sample_cube);
+    auto &sample_cube_model
+        = reg.emplace<comp::model_instance_3d> (sample_cube);
     sample_cube_model.id = builtin_cube_id;
     sample_cube_model.scene_index = 0;
 
@@ -92,8 +95,8 @@ rsc::project_loader::create (const project &proj) const
     auto cam_entity = reg.create ();
     temp_scene.set_entity_name (cam_entity, "Scene Default Camera");
     reg.emplace<comp::hierarchy> (cam_entity);
-    auto &cam_transform
-        = reg.emplace<comp::transform> (cam_entity, glm::vec3 (0.0F, 0.0F, 5.0F));
+    auto &cam_transform = reg.emplace<comp::transform> (
+        cam_entity, glm::vec3 (0.0F, 0.0F, 5.0F));
     auto &cam_world_transform = reg.emplace<comp::world_transform> (cam_entity);
     cam_world_transform.value = cam_transform.model ();
     reg.emplace<comp::camera> (cam_entity);
@@ -118,7 +121,8 @@ rsc::project_loader::create (const project &proj) const
              << "#include <wsl/rsc/project_loader.hpp>\n\n"
              << "class " << sanitized_name << "_app : public wsl::app {\n"
              << "public:\n"
-             << "    " << sanitized_name << "_app() : wsl::app(\"" << proj.name << "\", 1280, 720, \n"
+             << "    " << sanitized_name << "_app() : wsl::app(\"" << proj.name
+             << "\", 1280, 720, \n"
              << "#ifdef WSL_RESOURCE_PATH\n"
              << "        WSL_RESOURCE_PATH\n"
              << "#else\n"
@@ -140,58 +144,69 @@ rsc::project_loader::create (const project &proj) const
   const fs::path cmake_file = fs::path (proj.root_path) / "CMakeLists.txt";
   std::ofstream cmake_out (cmake_file);
   if (cmake_out) {
-    cmake_out << "cmake_minimum_required(VERSION 3.22)\n"
-              << "project(" << proj.name << " LANGUAGES C CXX)\n\n"
-              << "set(CMAKE_CXX_STANDARD 20)\n"
-              << "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n"
-              << "# Weasel Engine dependency\n"
-              << "# CMake looks for WeaselConfig.cmake in standard install prefixes.\n"
-              << "# If the engine is installed elsewhere, set Weasel_DIR to the directory\n"
-              << "# containing WeaselConfig.cmake (e.g. /path/to/prefix/lib/cmake/Weasel).\n"
-              << "find_package(Weasel REQUIRED)\n\n"
-              << "file(GLOB_RECURSE SOURCES\n"
-              << "    \"src/*.cpp\"\n"
-              << "    \"" << proj.components_path << "/*.cpp\"\n"
-              << "    \"" << proj.systems_path << "/*.cpp\"\n"
-              << "    \"" << proj.singletons_path << "/*.cpp\"\n"
-              << ")\n\n"
-              << "add_executable(${PROJECT_NAME} ${SOURCES})\n"
-              << "target_link_libraries(${PROJECT_NAME} PRIVATE wsl)\n\n"
-              << "if(NOT DEFINED Weasel_RESOURCE_PATH OR Weasel_RESOURCE_PATH STREQUAL \"\")\n"
-              << "  set(Weasel_RESOURCE_PATH \"${Weasel_DIR}\")\n"
-              << "endif()\n"
-              << "target_compile_definitions(${PROJECT_NAME} PRIVATE WSL_RESOURCE_PATH=\"${Weasel_RESOURCE_PATH}\")\n\n"
-              << "# --- Installation and Packaging ---\n"
-              << "install(TARGETS ${PROJECT_NAME}\n"
-              << "    RUNTIME DESTINATION bin\n"
-              << ")\n\n"
-              << "# Install project resources\n"
-              << "install(DIRECTORY src DESTINATION share/${PROJECT_NAME})\n"
-              << "install(DIRECTORY audio DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
-              << "install(DIRECTORY textures DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
-              << "install(DIRECTORY rml DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
-              << "install(DIRECTORY otf DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
-              << "install(DIRECTORY scenes DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
-              << "install(DIRECTORY shaders DESTINATION share/${PROJECT_NAME} OPTIONAL)\n\n"
-              << "set(CPACK_PACKAGE_NAME \"${PROJECT_NAME}\")\n"
-              << "set(CPACK_PACKAGE_VERSION \"0.1.0\")\n"
-              << "set(CPACK_GENERATOR \"TGZ;DEB;RPM\")\n\n"
-              << "include(CPack)\n";
+    cmake_out
+        << "cmake_minimum_required(VERSION 3.22)\n"
+        << "project(" << proj.name << " LANGUAGES C CXX)\n\n"
+        << "set(CMAKE_CXX_STANDARD 20)\n"
+        << "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n"
+        << "# Weasel Engine dependency\n"
+        << "# CMake looks for WeaselConfig.cmake in standard install "
+           "prefixes.\n"
+        << "# If the engine is installed elsewhere, set Weasel_DIR to the "
+           "directory\n"
+        << "# containing WeaselConfig.cmake (e.g. "
+           "/path/to/prefix/lib/cmake/Weasel).\n"
+        << "find_package(Weasel REQUIRED)\n\n"
+        << "file(GLOB_RECURSE SOURCES\n"
+        << "    \"src/*.cpp\"\n"
+        << "    \"" << proj.components_path << "/*.cpp\"\n"
+        << "    \"" << proj.systems_path << "/*.cpp\"\n"
+        << "    \"" << proj.singletons_path << "/*.cpp\"\n"
+        << ")\n\n"
+        << "add_executable(${PROJECT_NAME} ${SOURCES})\n"
+        << "target_link_libraries(${PROJECT_NAME} PRIVATE wsl)\n\n"
+        << "if(NOT DEFINED Weasel_RESOURCE_PATH OR Weasel_RESOURCE_PATH "
+           "STREQUAL \"\")\n"
+        << "  set(Weasel_RESOURCE_PATH \"${Weasel_DIR}\")\n"
+        << "endif()\n"
+        << "target_compile_definitions(${PROJECT_NAME} PRIVATE "
+           "WSL_RESOURCE_PATH=\"${Weasel_RESOURCE_PATH}\")\n\n"
+        << "# --- Installation and Packaging ---\n"
+        << "install(TARGETS ${PROJECT_NAME}\n"
+        << "    RUNTIME DESTINATION bin\n"
+        << ")\n\n"
+        << "# Install project resources\n"
+        << "install(DIRECTORY src DESTINATION share/${PROJECT_NAME})\n"
+        << "install(DIRECTORY audio DESTINATION share/${PROJECT_NAME} "
+           "OPTIONAL)\n"
+        << "install(DIRECTORY textures DESTINATION share/${PROJECT_NAME} "
+           "OPTIONAL)\n"
+        << "install(DIRECTORY rml DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
+        << "install(DIRECTORY otf DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
+        << "install(DIRECTORY scenes DESTINATION share/${PROJECT_NAME} "
+           "OPTIONAL)\n"
+        << "install(DIRECTORY shaders DESTINATION share/${PROJECT_NAME} "
+           "OPTIONAL)\n\n"
+        << "set(CPACK_PACKAGE_NAME \"${PROJECT_NAME}\")\n"
+        << "set(CPACK_PACKAGE_VERSION \"0.1.0\")\n"
+        << "set(CPACK_GENERATOR \"TGZ;DEB;RPM\")\n\n"
+        << "include(CPack)\n";
   }
 
-  wsl::log::resources ()->debug ("Created project manifest at {}", project_file.string ());
+  wsl::log::rsc ()->debug ("Created project manifest at {}",
+                           project_file.string ());
   return true;
 }
 
 std::shared_ptr<rsc::project>
-rsc::project_loader::load (const std::string &path) 
+rsc::project_loader::load (const std::string &path)
 {
 
   std::shared_ptr<project> proj = std::make_shared<project> ();
 
   std::ifstream file (path, std::ios::binary);
   if (!file) {
-    wsl::log::resources ()->error ("Failed to open project file: {}", path);
+    wsl::log::rsc ()->error ("Failed to open project file: {}", path);
     return {};
   }
 
@@ -200,7 +215,8 @@ rsc::project_loader::load (const std::string &path)
       cereal::JSONInputArchive archive (file);
       archive (cereal::make_nvp ("project", *proj));
     } catch (const std::exception &e) {
-      wsl::log::resources ()->error ("Failed to parse project file '{}': {}", path, e.what ());
+      wsl::log::rsc ()->error ("Failed to parse project file '{}': {}", path,
+                               e.what ());
       return {};
     }
   } else {
@@ -208,7 +224,8 @@ rsc::project_loader::load (const std::string &path)
       cereal::BinaryInputArchive archive (file);
       archive (cereal::make_nvp ("project", *proj));
     } catch (const std::exception &e) {
-      wsl::log::resources ()->error ("Failed to parse project file '{}': {}", path, e.what ());
+      wsl::log::rsc ()->error ("Failed to parse project file '{}': {}", path,
+                               e.what ());
       return {};
     }
   }
@@ -216,11 +233,11 @@ rsc::project_loader::load (const std::string &path)
   // Ensure root_path is absolute and points to the manifest's directory
   proj->root_path = fs::absolute (fs::path (path).parent_path ()).string ();
 
-  wsl::log::resources ()->debug ("Loaded project: {}", proj->name);
+  wsl::log::rsc ()->debug ("Loaded project: {}", proj->name);
   return proj;
 }
 rsc::project_assets
-rsc::project_loader::scan_assets (const project &proj) 
+rsc::project_loader::scan_assets (const project &proj)
 {
 
   project_assets assets;
@@ -234,13 +251,13 @@ rsc::project_loader::scan_assets (const project &proj)
             std::vector<std::string> &out) {
           if (!fs::exists (dir)) {
             return;
-}
+          }
 
           for (const fs::directory_entry &entry :
                fs::recursive_directory_iterator (dir)) {
             if (!entry.is_regular_file ()) {
               continue;
-}
+            }
 
             std::string const ext = entry.path ().extension ().string ();
 
@@ -259,12 +276,14 @@ rsc::project_loader::scan_assets (const project &proj)
   scan_dir (resolve (proj.cubemaps_path), { ".tar", ".hdr", ".png" },
             assets.cubemaps);
   scan_dir (resolve (proj.scenes_path),
-           { ".wscn.json", ".scene", ".json", ".prefab" }, assets.scenes);
-  scan_dir (resolve (proj.audio_path), { ".wav", ".mp3", ".ogg" }, assets.audio);
+            { ".wscn.json", ".scene", ".json", ".prefab" }, assets.scenes);
+  scan_dir (resolve (proj.audio_path), { ".wav", ".mp3", ".ogg" },
+            assets.audio);
   scan_dir (resolve (proj.ui_layouts_path), { ".rml", ".rcss" },
             assets.ui_layouts);
   scan_dir (resolve (proj.fonts_path), { ".otf", ".ttf" }, assets.fonts);
-  scan_dir (resolve (proj.shaders_path), { ".hlsl", ".spv", ".dxil", ".metal" }, assets.shaders);
+  scan_dir (resolve (proj.shaders_path), { ".hlsl", ".spv", ".dxil", ".metal" },
+            assets.shaders);
 
   std::sort (assets.models.begin (), assets.models.end ());
   std::sort (assets.images.begin (), assets.images.end ());
@@ -275,7 +294,7 @@ rsc::project_loader::scan_assets (const project &proj)
   std::sort (assets.fonts.begin (), assets.fonts.end ());
   std::sort (assets.shaders.begin (), assets.shaders.end ());
 
-  wsl::log::resources ()->debug ("Project assets scanned.");
+  wsl::log::rsc ()->debug ("Project assets scanned.");
   return assets;
 }
 

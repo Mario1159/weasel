@@ -32,7 +32,6 @@
 #include <limits>
 #include <utility>
 
-
 namespace editor
 {
 
@@ -50,7 +49,7 @@ draw_hsplitter (const char *id, float &top_height, float thickness = 6.0F)
   // Nice cursor while hovering
   if (ImGui::IsItemHovered ()) {
     ImGui::SetMouseCursor (ImGuiMouseCursor_ResizeNS);
-}
+  }
 
   if (ImGui::IsItemActive ()) {
     top_height += ImGui::GetIO ().MouseDelta.y;
@@ -60,7 +59,7 @@ draw_hsplitter (const char *id, float &top_height, float thickness = 6.0F)
   ImU32 col = ImGui::GetColorU32 (ImGuiCol_Separator);
   if (ImGui::IsItemHovered () || ImGui::IsItemActive ()) {
     col = ImGui::GetColorU32 (ImGuiCol_SeparatorHovered);
-}
+  }
 
   ImVec2 const min = ImGui::GetItemRectMin ();
   ImVec2 const max = ImGui::GetItemRectMax ();
@@ -108,7 +107,7 @@ ray_aabb_intersect (const glm::vec3 &ray_origin, const glm::vec3 &ray_dir,
     if (std::abs (rd) < 1e-8F) {
       if (ro < mn || ro > mx) {
         return false;
-}
+      }
       continue;
     }
 
@@ -118,14 +117,14 @@ ray_aabb_intersect (const glm::vec3 &ray_origin, const glm::vec3 &ray_dir,
 
     if (t1 > t2) {
       std::swap (t1, t2);
-}
+    }
 
     tmin = std::max (tmin, t1);
     tmax = std::min (tmax, t2);
 
     if (tmin > tmax) {
       return false;
-}
+    }
   }
 
   t_hit = tmin;
@@ -166,9 +165,11 @@ pick_entity_from_game_view (
 
   if (runtime_ctx == nullptr) {
     return entt::null;
-}
+  }
 
-  auto view = registry.view<wsl::comp::world_transform, wsl::comp::model_instance_3d> ();
+  auto view
+      = registry
+            .view<wsl::comp::world_transform, wsl::comp::model_instance_3d> ();
 
   pick_ray const ray = make_mouse_ray (mouse_pos, img_min, img_size, rc);
 
@@ -176,21 +177,22 @@ pick_entity_from_game_view (
   float best_t = std::numeric_limits<float>::max ();
 
   for (entt::entity const entity : view) {
-    wsl::comp::world_transform  const&world = view.get<wsl::comp::world_transform> (entity);
-    wsl::comp::model_instance_3d  const&instance
+    wsl::comp::world_transform const &world
+        = view.get<wsl::comp::world_transform> (entity);
+    wsl::comp::model_instance_3d const &instance
         = view.get<wsl::comp::model_instance_3d> (entity);
 
     auto model = runtime_ctx->resource_manager.get (instance.id);
     if (!model) {
       continue;
-}
+    }
 
     // You need this helper on model_3d (recommended).
     glm::vec3 local_min;
     glm::vec3 local_max;
     if (!model->get_scene_bounds (instance.scene_index, local_min, local_max)) {
       continue;
-}
+    }
 
     glm::vec3 world_min;
     glm::vec3 world_max;
@@ -243,13 +245,13 @@ extract_trs (const glm::mat4 &m, glm::vec3 &pos, glm::quat &rot,
 
   if (scale.x != 0.0F) {
     x /= scale.x;
-}
+  }
   if (scale.y != 0.0F) {
     y /= scale.y;
-}
+  }
   if (scale.z != 0.0F) {
     z /= scale.z;
-}
+  }
 
   glm::mat3 const rot_m (x, y, z);
   rot = glm::quat_cast (rot_m);
@@ -268,7 +270,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 {
   if (!visible) {
     return;
-}
+  }
 
   if (!ImGui::Begin ("Game View", &visible,
                      ImGuiWindowFlags_NoScrollbar
@@ -293,9 +295,11 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   const float avail_w = ImGui::GetContentRegionAvail ().x;
   const float max_height = (avail_w - 24.0F - (10.0F * spacing)) / 8.0F;
 
-  m_toolbar_height = std::clamp (m_toolbar_height, 20.0F, std::max (20.0F, max_height));
+  m_toolbar_height
+      = std::clamp (m_toolbar_height, 20.0F, std::max (20.0F, max_height));
 
-  if ((m_editor_ctx != nullptr) && (m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running) {
+  if ((m_editor_ctx != nullptr) && (m_runtime_ctx != nullptr)
+      && !m_runtime_ctx->is_running) {
     m_editor_ctx->tick_editor_camera_anim (ImGui::GetIO ().DeltaTime);
   }
 
@@ -314,13 +318,13 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   if (size.y <= 0.0F) {
     size.y = 1.0F;
-}
+  }
 
   if (size.x / size.y > aspect) {
     size.x = size.y * aspect;
   } else {
     size.y = size.x / aspect;
-}
+  }
 
   ImVec2 const cursor = ImGui::GetCursorPos ();
   ImVec2 const offset ((avail.x - size.x) * 0.5F, (avail.y - size.y) * 0.5F);
@@ -328,7 +332,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   // --- Image rect in screen space ---
   ImVec2 const win_pos = ImGui::GetWindowPos ();
   ImVec2 const img_min (win_pos.x + cursor.x + offset.x,
-                  win_pos.y + cursor.y + offset.y);
+                        win_pos.y + cursor.y + offset.y);
   ImVec2 const img_size = size;
 
   if (m_editor_ctx != nullptr) {
@@ -342,11 +346,12 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   // ---------- View gizmo (ENGINE DEFAULT camera only, paused) ----------
   bool show_view_gizmo = false;
-  if ((m_editor_ctx != nullptr) && (m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running) {
-    wsl::comp::singl::editor_context  const&ed = *this->m_editor_ctx;
-    show_view_gizmo
-        = (ed.game_view_camera_mode
-           == wsl::comp::singl::editor_context::game_view_cam_mode::engine_default);
+  if ((m_editor_ctx != nullptr) && (m_runtime_ctx != nullptr)
+      && !m_runtime_ctx->is_running) {
+    wsl::comp::singl::editor_context const &ed = *this->m_editor_ctx;
+    show_view_gizmo = (ed.game_view_camera_mode
+                       == wsl::comp::singl::editor_context::game_view_cam_mode::
+                           engine_default);
   }
 
   if (show_view_gizmo) {
@@ -363,7 +368,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
     // ImViewGuizmo expects center pos
     ImVec2 const rotate_center (img_min.x + img_size.x - half - pad,
-                          img_min.y + half + pad);
+                                img_min.y + half + pad);
 
     ImVec2 const tool_anchor = rotate_center;
 
@@ -376,9 +381,11 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
     if ((m_selection != nullptr) && m_selection->kind == selection_kind::entity
         && m_selection->selected_entity != entt::null
-        && registry.all_of<wsl::comp::world_transform> (m_selection->selected_entity)) {
+        && registry.all_of<wsl::comp::world_transform> (
+            m_selection->selected_entity)) {
       const wsl::comp::world_transform &wt
-          = registry.get<wsl::comp::world_transform> (m_selection->selected_entity);
+          = registry.get<wsl::comp::world_transform> (
+              m_selection->selected_entity);
       pivot = extract_translation (wt.value);
     }
 
@@ -426,8 +433,9 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   }
 
   // ---------- Resolve the SAME camera used to render the Game View ----------
-  auto *scene
-      = ((m_runtime_ctx) != nullptr) ? m_runtime_ctx->scene_manager.get_active () : nullptr;
+  auto *scene = ((m_runtime_ctx) != nullptr)
+                    ? m_runtime_ctx->scene_manager.get_active ()
+                    : nullptr;
 
   wsl::comp::singl::editor_context::resolved_camera rc{};
   bool have_cam = false;
@@ -447,8 +455,9 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
     block_picking = ImGuizmo::IsUsing () || ImGuizmo::IsOver ();
   }
 
-  if (!m_runtime_ctx->is_running && have_cam && (m_selection != nullptr) && img_hovered
-      && !block_picking && ImGui::IsMouseClicked (ImGuiMouseButton_Left)) {
+  if (!m_runtime_ctx->is_running && have_cam && (m_selection != nullptr)
+      && img_hovered && !block_picking
+      && ImGui::IsMouseClicked (ImGuiMouseButton_Left)) {
 
     entt::entity const picked = pick_entity_from_game_view (
         registry, m_runtime_ctx, rc, img_min, img_size, ImGui::GetMousePos ());
@@ -483,58 +492,59 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
     glm::mat4 view = rc.view;
     glm::mat4 proj = rc.proj;
 
-    if (m_show_grid)
-      {
-        glm::vec3 const forward = -glm::vec3 (view[0][2], view[1][2], view[2][2]);
-        float const tilt = std::abs (forward.y);
+    if (m_show_grid) {
+      glm::vec3 const forward = -glm::vec3 (view[0][2], view[1][2], view[2][2]);
+      float const tilt = std::abs (forward.y);
 
-        // Distance to the point the camera is looking at on the ground.
-        float const ground_t = (tilt > 0.01F) ? (std::abs (rc.world_pos.y) / tilt) : 500.0F;
+      // Distance to the point the camera is looking at on the ground.
+      float const ground_t
+          = (tilt > 0.01F) ? (std::abs (rc.world_pos.y) / tilt) : 500.0F;
 
-        /*!
-         * The visibility radius scales with the distance to the look-at point.
-         * Formula: d * sqrt(d) + 10, capped at 250 units.
-         */
-        float const base_fog_radius = std::min (250.0F, (ground_t * std::sqrt (ground_t)) + 10.0F);
+      /*!
+       * The visibility radius scales with the distance to the look-at point.
+       * Formula: d * sqrt(d) + 10, capped at 250 units.
+       */
+      float const base_fog_radius
+          = std::min (250.0F, (ground_t * std::sqrt (ground_t)) + 10.0F);
 
-        glm::vec3 const flat_fwd = (glm::length (glm::vec2 (forward.x, forward.z)) > 0.001F)
-                                 ? glm::normalize (glm::vec3 (forward.x, 0.0F, forward.z))
-                                 : glm::vec3 (0, 0, 0);
+      glm::vec3 const flat_fwd
+          = (glm::length (glm::vec2 (forward.x, forward.z)) > 0.001F)
+                ? glm::normalize (glm::vec3 (forward.x, 0.0F, forward.z))
+                : glm::vec3 (0, 0, 0);
 
-        // Shift fog center towards gaze to keep focus area solid.
-        float const shift_dist = std::min (ground_t, base_fog_radius * 0.5F);
-        glm::vec3 const fog_center
-            = glm::vec3 (rc.world_pos.x, 0, rc.world_pos.z) + flat_fwd * shift_dist;
+      // Shift fog center towards gaze to keep focus area solid.
+      float const shift_dist = std::min (ground_t, base_fog_radius * 0.5F);
+      glm::vec3 const fog_center = glm::vec3 (rc.world_pos.x, 0, rc.world_pos.z)
+                                   + flat_fwd * shift_dist;
 
-        // Update editor context with grid parameters for the 3D pass.
-        m_editor_ctx->grid_visible = true;
-        m_editor_ctx->grid_camera_pos = rc.world_pos;
-        m_editor_ctx->grid_fog_center = fog_center;
-        m_editor_ctx->grid_fog_radius = base_fog_radius;
+      // Update editor context with grid parameters for the 3D pass.
+      m_editor_ctx->grid_visible = true;
+      m_editor_ctx->grid_camera_pos = rc.world_pos;
+      m_editor_ctx->grid_fog_center = fog_center;
+      m_editor_ctx->grid_fog_radius = base_fog_radius;
 
-        /*
-        // Debug Grid Parameters (Top-Left overlay)
-        ImGui::SetCursorScreenPos (ImVec2 (img_min.x + 10, img_min.y + 10));
-        ImGui::BeginGroup ();
-        ImGui::TextColored (ImVec4 (1, 1, 0, 1), "--- Grid Debug ---");
-        ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Tilt:       %.3f", tilt);
-        ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Gaze Dist:  %.1f", ground_t);
-        ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Fog Radius: %.1f", base_fog_radius);
-        ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Fog Shift:  %.1f", shift_dist);
-        ImGui::EndGroup ();
-        */
-      }
-    else
-      {
-        m_editor_ctx->grid_visible = false;
-      }
+      /*
+      // Debug Grid Parameters (Top-Left overlay)
+      ImGui::SetCursorScreenPos (ImVec2 (img_min.x + 10, img_min.y + 10));
+      ImGui::BeginGroup ();
+      ImGui::TextColored (ImVec4 (1, 1, 0, 1), "--- Grid Debug ---");
+      ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Tilt:       %.3f", tilt);
+      ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Gaze Dist:  %.1f", ground_t);
+      ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Fog Radius: %.1f",
+      base_fog_radius); ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Fog Shift:
+      %.1f", shift_dist); ImGui::EndGroup ();
+      */
+    } else {
+      m_editor_ctx->grid_visible = false;
+    }
     if ((m_selection != nullptr) && m_selection->kind == selection_kind::entity
         && !block_entity_gizmo) {
       entt::entity const e = m_selection->selected_entity;
 
-      if (registry.all_of<wsl::comp::transform, wsl::comp::world_transform> (e)) {
+      if (registry.all_of<wsl::comp::transform, wsl::comp::world_transform> (
+              e)) {
         wsl::comp::transform &tr = registry.get<wsl::comp::transform> (e);
-        wsl::comp::world_transform  const&wt
+        wsl::comp::world_transform const &wt
             = registry.get<wsl::comp::world_transform> (e);
 
         glm::mat4 world = wt.value;
@@ -552,7 +562,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
                 && registry.all_of<wsl::comp::world_transform> (h->parent)) {
               const wsl::comp::world_transform &pwt
                   = registry.get<wsl::comp::world_transform> (h->parent);
-              local = glm::inverse (pwt.value) * world;
+              local = glm::inverse (static_cast<glm::mat4> (pwt.value)) * world;
             }
           }
 
@@ -571,13 +581,13 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
     if (ImGui::IsWindowFocused (ImGuiFocusedFlags_RootAndChildWindows)) {
       if (ImGui::IsKeyPressed (ImGuiKey_W)) {
         m_current_op = ImGuizmo::TRANSLATE;
-}
+      }
       if (ImGui::IsKeyPressed (ImGuiKey_E)) {
         m_current_op = ImGuizmo::ROTATE;
-}
+      }
       if (ImGui::IsKeyPressed (ImGuiKey_R)) {
         m_current_op = ImGuizmo::SCALE;
-}
+      }
     }
   }
 
@@ -592,16 +602,16 @@ draw_icon_button (wsl::comp::singl::editor_context *editor_ctx,
 {
   if (size < 0) {
     size = ImGui::GetFrameHeight ();
-}
+  }
 
   if (!enabled) {
     ImGui::BeginDisabled ();
-}
+  }
 
   if (active) {
     ImGui::PushStyleColor (ImGuiCol_Button,
                            ImGui::GetStyleColorVec4 (ImGuiCol_ButtonHovered));
-}
+  }
 
   const float padding = 4.0F;
   const ImVec2 image_size (size - (padding * 2.0F), size - (padding * 2.0F));
@@ -612,33 +622,35 @@ draw_icon_button (wsl::comp::singl::editor_context *editor_ctx,
     if (ImGui::Button ("??", ImVec2 (size, size))) {
       if (clicked != nullptr) {
         *clicked = true;
-}
+      }
     }
   } else {
     ImGui::PushStyleVar (ImGuiStyleVar_FramePadding, ImVec2 (padding, padding));
-    if (ImGui::ImageButton (tooltip, (ImTextureID) (*handle).texture, image_size)) {
+    if (ImGui::ImageButton (tooltip, (ImTextureID)(*handle).texture,
+                            image_size)) {
       if (clicked != nullptr) {
         *clicked = true;
-}
+      }
     }
     ImGui::PopStyleVar ();
   }
 
   if (active) {
     ImGui::PopStyleColor ();
-}
+  }
 
   if (ImGui::IsItemHovered (ImGuiHoveredFlags_AllowWhenDisabled)) {
     ImGui::SetTooltip ("%s", tooltip);
-}
+  }
 
   if (!enabled) {
     ImGui::EndDisabled ();
-}
+  }
 }
 
 void
-game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window & /*unused*/)
+game_view::draw_camera_header (entt::registry &registry,
+                               wsl::gfx::render_window & /*unused*/)
 {
   wsl::comp::singl::runtime_context &runtime_ctx = *this->m_runtime_ctx;
 
@@ -661,8 +673,8 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
   if (runtime_ctx.in_play_session) {
     if (runtime_ctx.is_running) {
       bool do_pause = false;
-      draw_icon_button (m_editor_ctx, m_editor_ctx->icon_pause, "Pause", &do_pause,
-                        true, false, btn_size);
+      draw_icon_button (m_editor_ctx, m_editor_ctx->icon_pause, "Pause",
+                        &do_pause, true, false, btn_size);
       if (do_pause) {
         runtime_ctx.set_running (false);
       }
@@ -691,8 +703,8 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
       ImGui::SetWindowFocus ();
     }
     ImGui::SameLine ();
-    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_stop, "Stop", nullptr, false,
-                      false, btn_size);
+    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_stop, "Stop", nullptr,
+                      false, false, btn_size);
   }
 
   // ===================== gizmo mode buttons =====================
@@ -705,12 +717,12 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
       m_current_op = (ImGuizmo::OPERATION)0; // hide
     } else {
       m_current_op = op;
-}
+    }
   };
 
   if (runtime_ctx.is_running) {
     ImGui::BeginDisabled ();
-}
+  }
 
   const bool tr_on = (m_current_op == ImGuizmo::TRANSLATE);
   const bool rot_on = (m_current_op == ImGuizmo::ROTATE);
@@ -721,7 +733,7 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
                     &clicked_tr, !runtime_ctx.is_running, tr_on, btn_size);
   if (clicked_tr) {
     toggle_op (ImGuizmo::TRANSLATE);
-}
+  }
 
   ImGui::SameLine ();
 
@@ -730,7 +742,7 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
                     &clicked_rot, !runtime_ctx.is_running, rot_on, btn_size);
   if (clicked_rot) {
     toggle_op (ImGuizmo::ROTATE);
-}
+  }
 
   ImGui::SameLine ();
 
@@ -739,7 +751,7 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
                     &clicked_scl, !runtime_ctx.is_running, scl_on, btn_size);
   if (clicked_scl) {
     toggle_op (ImGuizmo::SCALE);
-}
+  }
 
   ImGui::SameLine ();
   ImGui::Dummy (ImVec2 (8.0F, 0.0F));
@@ -762,15 +774,17 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
 
   ImGui::SameLine ();
 
-  bool const can_focus
-      = (!runtime_ctx.is_running && (m_editor_ctx != nullptr) && (m_selection != nullptr)
-         && m_selection->kind == selection_kind::entity
-         && m_selection->selected_entity != entt::null
-         && registry.all_of<wsl::comp::world_transform> (m_selection->selected_entity));
+  bool const can_focus = (!runtime_ctx.is_running && (m_editor_ctx != nullptr)
+                          && (m_selection != nullptr)
+                          && m_selection->kind == selection_kind::entity
+                          && m_selection->selected_entity != entt::null
+                          && registry.all_of<wsl::comp::world_transform> (
+                              m_selection->selected_entity));
 
   bool clicked_focus = false;
-  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_focus_cam, "Focus on Selection (F)",
-                    &clicked_focus, can_focus, false, btn_size);
+  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_focus_cam,
+                    "Focus on Selection (F)", &clicked_focus, can_focus, false,
+                    btn_size);
 
   if (clicked_focus && can_focus) {
     wsl::comp::singl::editor_context &ed = *this->m_editor_ctx;
@@ -779,7 +793,8 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
     ed.game_view_camera_entity = entt::null;
 
     const wsl::comp::world_transform &wt
-        = registry.get<wsl::comp::world_transform> (m_selection->selected_entity);
+        = registry.get<wsl::comp::world_transform> (
+            m_selection->selected_entity);
     glm::vec3 const target = extract_translation (wt.value);
 
     m_orbit_pivot = target;
@@ -800,7 +815,7 @@ game_view::draw_camera_header (entt::registry &registry, wsl::gfx::render_window
 
   if (runtime_ctx.is_running) {
     ImGui::EndDisabled ();
-}
+  }
 
   ImGui::EndGroup ();
 }

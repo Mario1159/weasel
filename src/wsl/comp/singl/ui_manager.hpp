@@ -1,5 +1,6 @@
 #pragma once
 
+#include "editor/ui_system_interface.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/Math.h>
 #include <RmlUi_Platform_SDL.h>
@@ -15,7 +16,6 @@
 #include "wsl/gfx/render_context.hpp"
 #include "wsl/gfx/render_window.hpp"
 #include "wsl/rsc/resource_manager.hpp"
-
 
 namespace wsl
 {
@@ -36,15 +36,24 @@ public:
   ~ui_manager ();
 
   static void register_meta ();
-  bool custom_inspect (const char *label, comp::singl::runtime_context *runtime);
+  bool custom_inspect (const char *label,
+                       comp::singl::runtime_context *runtime);
 
   void prepare_scene (entt::registry &registry);
   Rml::DataModelConstructor ensure_data_model (entt::registry &registry,
                                                const std::string &name);
   void clear_scene_bindings ();
   void load_font (const std::string &path);
-  std::size_t binding_generation () const { return m_binding_generation; }
-  entt::registry *prepared_registry () const { return m_prepared_registry; }
+  std::size_t
+  binding_generation () const
+  {
+    return m_binding_generation;
+  }
+  entt::registry *
+  prepared_registry () const
+  {
+    return m_prepared_registry;
+  }
 
   template <class Archive>
   void
@@ -53,8 +62,7 @@ public:
     archive (cereal::make_nvp ("active_document_id", active_document_id.value));
   }
 
-
-  SystemInterface_SDL system_interface;
+  editor::ui_system_interface system_interface;
   RenderInterface_SDL_GPU render_interface;
   Rml::Context *context = nullptr;
   Rml::ElementDocument *active_document_instance = nullptr;

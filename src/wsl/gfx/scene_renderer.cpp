@@ -8,6 +8,7 @@
 #include "render_context.hpp"
 #include "shader.hpp"
 #include "wsl/rsc/resource_manager.hpp"
+#include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
@@ -29,8 +30,6 @@
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
-#include <spdlog/spdlog.h>
-
 #include <cstring>
 #include <glm/gtc/random.hpp>
 #include <utility>
@@ -142,7 +141,7 @@ gfx::scene_renderer::create_1x1_cubemap (uint8_t red, uint8_t green,
 
   void *mapped = SDL_MapGPUTransferBuffer (m_ctx->gpu_device, upload, false);
   if (mapped != nullptr) {
-    std::memcpy (mapped, px, static_cast<size_t>(4 * 6));
+    std::memcpy (mapped, px, static_cast<size_t> (4 * 6));
     SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, upload);
   }
 
@@ -210,8 +209,8 @@ gfx::scene_renderer::create_default_texture ()
       || (m_default_normal_tex == nullptr) || (m_default_mr_tex == nullptr)
       || (m_default_sampler == nullptr) || (m_default_cubemap_tex == nullptr)
       || (m_default_brdf_lut_tex == nullptr)) {
-    spdlog::error ("Failed creating default textures/sampler: {}",
-                   SDL_GetError ());
+    wsl::log::gfx ()->error ("Failed creating default textures/sampler: {}",
+                             SDL_GetError ());
   }
   // Keep legacy "m_default_texture" valid for older code paths
   // (preview_bg bind + IBL fallbacks).
@@ -254,7 +253,7 @@ gfx::scene_renderer::render_node (gfx::node &n, const glm::mat4 &view_proj)
 {
 
   if (!n.mesh_lods.empty ()) {
-    gfx::mesh  const*m = select_lod (n);
+    gfx::mesh const *m = select_lod (n);
     if (m != nullptr) {
       render_mesh (n.world_transform, view_proj, *m);
     }
@@ -514,10 +513,10 @@ gfx::scene_renderer::draw_debug_lines (const std::vector<debug_vertex> &verts,
     } else {
       if (vert != nullptr) {
         SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+      }
       if (frag != nullptr) {
         SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+      }
     }
   }
 
@@ -546,10 +545,11 @@ gfx::scene_renderer::draw_debug_lines (const std::vector<debug_vertex> &verts,
   SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer (m_ctx->gpu_device);
   SDL_GPUCopyPass *cp = SDL_BeginGPUCopyPass (cmd);
 
-  SDL_GPUTransferBufferLocation const src{ .transfer_buffer = upload, .offset = 0 };
-  SDL_GPUBufferRegion const dstreg{ .buffer = vb,
-                              .offset = 0,
-                              .size = static_cast<Uint32> ((Uint64)bytes) };
+  SDL_GPUTransferBufferLocation const src{ .transfer_buffer = upload,
+                                           .offset = 0 };
+  SDL_GPUBufferRegion const dstreg{
+    .buffer = vb, .offset = 0, .size = static_cast<Uint32> ((Uint64)bytes)
+  };
   SDL_UploadToGPUBuffer (cp, &src, &dstreg, true);
 
   SDL_EndGPUCopyPass (cp);
@@ -566,7 +566,7 @@ gfx::scene_renderer::draw_debug_lines (const std::vector<debug_vertex> &verts,
   SDL_BindGPUVertexBuffers (m_ctx->main_pass, 0, &binding, 1);
   if (m_pipeline_debug_lines != nullptr) {
     SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_debug_lines);
-}
+  }
 
   SDL_DrawGPUPrimitives (m_ctx->main_pass, (Uint32)verts.size (), 1, 0, 0);
 
@@ -723,10 +723,10 @@ gfx::scene_renderer::create_pipeline ()
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+    }
     return;
   }
 
@@ -850,18 +850,19 @@ gfx::scene_renderer::~scene_renderer ()
 
   if (m_vertex_transfer_buffer != nullptr) {
     SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_vertex_transfer_buffer);
-}
+  }
   if (m_index_transfer_buffer != nullptr) {
     SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_index_transfer_buffer);
-}
+  }
 }
 
 void
 gfx::scene_renderer::bind_pipeline ()
 {
-  if ((m_pipeline == nullptr) || (m_ctx == nullptr) || (m_ctx->main_pass == nullptr)) {
+  if ((m_pipeline == nullptr) || (m_ctx == nullptr)
+      || (m_ctx->main_pass == nullptr)) {
     return;
-}
+  }
 
   SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline);
 }
@@ -873,7 +874,7 @@ gfx::scene_renderer::draw_model (gfx::model_3d &model, size_t scene_index,
 {
   if (scene_index >= model.scenes.size ()) {
     return;
-}
+  }
 
   model.ensure_gpu_buffers (m_ctx);
   model.bind (m_ctx->main_pass);
@@ -882,7 +883,7 @@ gfx::scene_renderer::draw_model (gfx::model_3d &model, size_t scene_index,
 
   for (gfx::node &root : scene.roots) {
     update_node_world (root, model_matrix);
-}
+  }
 
   render_scene (scene, view_proj);
 }
@@ -923,7 +924,7 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
 
     if ((pipe == nullptr) || (m_ctx->main_pass == nullptr)) {
       continue;
-}
+    }
 
     SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, pipe);
 
@@ -944,7 +945,8 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
     float max_mip = 0.0F;
 
     // "Ready" means: all 3 IBL textures exist.
-    const bool ibl_ready = (m_active_env != nullptr) && (m_active_env->ibl_irradiance != nullptr)
+    const bool ibl_ready = (m_active_env != nullptr)
+                           && (m_active_env->ibl_irradiance != nullptr)
                            && (m_active_env->ibl_prefilter != nullptr)
                            && (m_active_env->ibl_brdf_lut != nullptr);
 
@@ -952,8 +954,9 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
       irr = m_active_env->ibl_irradiance;
       pre = m_active_env->ibl_prefilter;
       lut = m_active_env->ibl_brdf_lut;
-      ibl_samp = (m_active_env->ibl_sampler != nullptr) ? m_active_env->ibl_sampler
-                                           : m_active_env->sampler;
+      ibl_samp = (m_active_env->ibl_sampler != nullptr)
+                     ? m_active_env->ibl_sampler
+                     : m_active_env->sampler;
       max_mip = m_active_env->prefilter_max_mip;
     } else {
       // If IBL isn't ready, FORCE shader to use fallback u_Ambient.
@@ -966,8 +969,9 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
       // LUT can be left null if intensity=0, but binding a valid texture
       // is nicer. If you don't have a BRDF fallback texture yet, keep
       // intensity = 0 and leave lut null.
-      ibl_samp = (m_active_env != nullptr) && (m_active_env->sampler != nullptr) ? m_active_env->sampler
-                                                       : m_default_sampler;
+      ibl_samp = (m_active_env != nullptr) && (m_active_env->sampler != nullptr)
+                     ? m_active_env->sampler
+                     : m_default_sampler;
       max_mip = 0.0F;
     }
 
@@ -1006,8 +1010,9 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
     SDL_GPUSampler *samp
         = (prim.mat.sampler != nullptr) ? prim.mat.sampler : m_default_sampler;
 
-    texbind[0].texture = (prim.mat.base_color_tex != nullptr) ? prim.mat.base_color_tex
-                                                 : m_default_basecolor_tex;
+    texbind[0].texture = (prim.mat.base_color_tex != nullptr)
+                             ? prim.mat.base_color_tex
+                             : m_default_basecolor_tex;
     texbind[0].sampler = samp;
 
     texbind[1].texture = (prim.mat.metallic_roughness_tex != nullptr)
@@ -1015,60 +1020,70 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
                              : m_default_mr_tex;
     texbind[1].sampler = samp;
 
-    texbind[2].texture
-        = (prim.mat.normal_tex != nullptr) ? prim.mat.normal_tex : m_default_normal_tex;
+    texbind[2].texture = (prim.mat.normal_tex != nullptr)
+                             ? prim.mat.normal_tex
+                             : m_default_normal_tex;
     texbind[2].sampler = samp;
 
-    texbind[3].texture = (prim.mat.emissive_tex != nullptr) ? prim.mat.emissive_tex
-                                               : m_default_emissive_tex;
+    texbind[3].texture = (prim.mat.emissive_tex != nullptr)
+                             ? prim.mat.emissive_tex
+                             : m_default_emissive_tex;
     texbind[3].sampler = samp;
 
     // IBL samplers (t4..t6)
-    SDL_GPUSampler *use_ibl_samp = (ibl_samp != nullptr) ? ibl_samp : m_default_sampler;
+    SDL_GPUSampler *use_ibl_samp
+        = (ibl_samp != nullptr) ? ibl_samp : m_default_sampler;
 
-    texbind[4].texture = (irr != nullptr) ? (SDL_GPUTexture *)irr : m_default_cubemap_tex;
+    texbind[4].texture
+        = (irr != nullptr) ? (SDL_GPUTexture *)irr : m_default_cubemap_tex;
     texbind[4].sampler = use_ibl_samp;
 
-    texbind[5].texture = (pre != nullptr) ? (SDL_GPUTexture *)pre : m_default_cubemap_tex;
+    texbind[5].texture
+        = (pre != nullptr) ? (SDL_GPUTexture *)pre : m_default_cubemap_tex;
     texbind[5].sampler = use_ibl_samp;
 
-    texbind[6].texture = (lut != nullptr) ? (SDL_GPUTexture *)lut : m_default_brdf_lut_tex;
+    texbind[6].texture
+        = (lut != nullptr) ? (SDL_GPUTexture *)lut : m_default_brdf_lut_tex;
     texbind[6].sampler = use_ibl_samp;
 
-    texbind[7].texture
-        = (m_shadow_depth != nullptr) ? m_shadow_depth : m_default_basecolor_tex;
+    texbind[7].texture = (m_shadow_depth != nullptr) ? m_shadow_depth
+                                                     : m_default_basecolor_tex;
     texbind[7].sampler
         = (m_shadow_sampler != nullptr) ? m_shadow_sampler : m_default_sampler;
 
     SDL_GPUSampler *shadow_samp
         = (m_shadow_sampler != nullptr) ? m_shadow_sampler : m_default_sampler;
 
-    texbind[8].texture
-        = (m_spot_shadows[0].depth != nullptr) ? m_spot_shadows[0].depth : m_shadow_depth;
+    texbind[8].texture = (m_spot_shadows[0].depth != nullptr)
+                             ? m_spot_shadows[0].depth
+                             : m_shadow_depth;
     if (texbind[8].texture == nullptr) {
       texbind[8].texture = m_default_basecolor_tex;
-}
+    }
     texbind[8].sampler = shadow_samp;
 
-    texbind[9].texture
-        = (m_spot_shadows[1].depth != nullptr) ? m_spot_shadows[1].depth : m_shadow_depth;
+    texbind[9].texture = (m_spot_shadows[1].depth != nullptr)
+                             ? m_spot_shadows[1].depth
+                             : m_shadow_depth;
     if (texbind[9].texture == nullptr) {
       texbind[9].texture = m_default_basecolor_tex;
-}
+    }
     texbind[9].sampler = shadow_samp;
 
-    texbind[10].texture
-        = (m_spot_shadows[2].depth != nullptr) ? m_spot_shadows[2].depth : m_shadow_depth;
+    texbind[10].texture = (m_spot_shadows[2].depth != nullptr)
+                              ? m_spot_shadows[2].depth
+                              : m_shadow_depth;
     if (texbind[10].texture == nullptr) {
       texbind[10].texture = m_default_basecolor_tex;
-}
+    }
     texbind[10].sampler = shadow_samp;
 
-    texbind[11].texture
-        = (m_spot_shadows[3].depth != nullptr) ? m_spot_shadows[3].depth : m_shadow_depth;
+    texbind[11].texture = (m_spot_shadows[3].depth != nullptr)
+                              ? m_spot_shadows[3].depth
+                              : m_shadow_depth;
     if (texbind[11].texture == nullptr) {
       texbind[11].texture = m_default_basecolor_tex;
-}
+    }
     texbind[11].sampler = shadow_samp;
 
     texbind[12].texture = (m_point_shadows[0].depth_cube != nullptr)
@@ -1081,9 +1096,11 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
                               : m_default_cubemap_tex;
     texbind[13].sampler = shadow_samp;
 
-    texbind[14].texture = (m_ssao_blur != nullptr) ? m_ssao_blur : m_default_basecolor_tex;
-    texbind[14].sampler
-        = (m_ssao_linear_sampler != nullptr) ? m_ssao_linear_sampler : m_default_sampler;
+    texbind[14].texture
+        = (m_ssao_blur != nullptr) ? m_ssao_blur : m_default_basecolor_tex;
+    texbind[14].sampler = (m_ssao_linear_sampler != nullptr)
+                              ? m_ssao_linear_sampler
+                              : m_default_sampler;
 
     SDL_BindGPUFragmentSamplers (m_ctx->main_pass, 0, texbind, 15);
 
@@ -1099,37 +1116,37 @@ gfx::scene_renderer::destroy_default_resources ()
   if (m_default_sampler != nullptr) {
     SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_default_sampler),
         m_default_sampler = nullptr;
-}
+  }
 
   if (m_default_basecolor_tex != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_basecolor_tex),
         m_default_basecolor_tex = nullptr;
-}
+  }
 
   if (m_default_mr_tex != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_mr_tex),
         m_default_mr_tex = nullptr;
-}
+  }
 
   if (m_default_normal_tex != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_normal_tex),
         m_default_normal_tex = nullptr;
-}
+  }
 
   if (m_default_emissive_tex != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_emissive_tex),
         m_default_emissive_tex = nullptr;
-}
+  }
 
   if (m_default_cubemap_tex != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_cubemap_tex),
         m_default_cubemap_tex = nullptr;
-}
+  }
 
   if (m_default_brdf_lut_tex != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_brdf_lut_tex),
         m_default_brdf_lut_tex = nullptr;
-}
+  }
 
   m_default_texture = nullptr;
 }
@@ -1152,10 +1169,10 @@ gfx::scene_renderer::create_skybox_pipeline ()
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+    }
     return;
   }
 
@@ -1203,9 +1220,10 @@ gfx::scene_renderer::create_skybox_pipeline ()
 void
 gfx::scene_renderer::bind_skybox_pipeline ()
 {
-  if ((m_skybox_pipeline == nullptr) || (m_ctx == nullptr) || (m_ctx->main_pass == nullptr)) {
+  if ((m_skybox_pipeline == nullptr) || (m_ctx == nullptr)
+      || (m_ctx->main_pass == nullptr)) {
     return;
-}
+  }
 
   SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_skybox_pipeline);
 }
@@ -1216,7 +1234,7 @@ gfx::scene_renderer::draw_skybox (const gfx::cubemap &cubemap,
 {
   if ((cubemap.texture == nullptr) || (cubemap.sampler == nullptr)) {
     return;
-}
+  }
 
   // Reconstruct the camera's world orientation from the view matrix.
   // The view matrix is inverse(camera_transform). For a rotation-only
@@ -1262,10 +1280,10 @@ gfx::scene_renderer::create_unlit_pipeline ()
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+    }
     return;
   }
 
@@ -1365,7 +1383,7 @@ gfx::scene_renderer::bind_preview_bg_pipeline (SDL_GPURenderPass *pass)
 {
   if ((m_pipeline_preview_bg == nullptr) || (pass == nullptr)) {
     return;
-}
+  }
 
   SDL_BindGPUGraphicsPipeline (pass, m_pipeline_preview_bg);
 
@@ -1394,10 +1412,10 @@ gfx::scene_renderer::create_preview_bg_pipeline ()
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+    }
     return;
   }
 
@@ -1441,7 +1459,7 @@ gfx::scene_renderer::destroy_preview_bg_pipeline ()
 {
   if (m_pipeline_preview_bg == nullptr) {
     return;
-}
+  }
   SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_preview_bg);
   m_pipeline_preview_bg = nullptr;
 }
@@ -1482,9 +1500,10 @@ capture_view_for_face (int face)
 void
 gfx::scene_renderer::create_ibl_pipelines ()
 {
-  if ((m_ibl_irradiance_pipe != nullptr) && (m_ibl_prefilter_pipe != nullptr) && (m_ibl_brdf_lut_pipe != nullptr)) {
+  if ((m_ibl_irradiance_pipe != nullptr) && (m_ibl_prefilter_pipe != nullptr)
+      && (m_ibl_brdf_lut_pipe != nullptr)) {
     return;
-}
+  }
 
   // Fullscreen triangle vertex shader (no vertex buffers)
   auto vert_id = m_res_mgr->register_shader (
@@ -1518,19 +1537,20 @@ gfx::scene_renderer::create_ibl_pipelines ()
       /*num_uniform_buffers=*/0,
       /*num_samplers=*/0);
 
-  if ((vert == nullptr) || (frag_irr == nullptr) || (frag_pre == nullptr) || (frag_lut == nullptr)) {
+  if ((vert == nullptr) || (frag_irr == nullptr) || (frag_pre == nullptr)
+      || (frag_lut == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag_irr != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag_irr);
-}
+    }
     if (frag_pre != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag_pre);
-}
+    }
     if (frag_lut != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag_lut);
-}
+    }
     return;
   }
 
@@ -1578,8 +1598,10 @@ gfx::scene_renderer::create_ibl_pipelines ()
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag_pre);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag_lut);
 
-  if ((m_ibl_irradiance_pipe == nullptr) || (m_ibl_prefilter_pipe == nullptr) || (m_ibl_brdf_lut_pipe == nullptr)) {
-    spdlog::error ("IBL: failed to create bake pipelines: {}", SDL_GetError ());
+  if ((m_ibl_irradiance_pipe == nullptr) || (m_ibl_prefilter_pipe == nullptr)
+      || (m_ibl_brdf_lut_pipe == nullptr)) {
+    wsl::log::gfx ()->error ("IBL: failed to create bake pipelines: {}",
+                             SDL_GetError ());
   }
 }
 
@@ -1607,7 +1629,7 @@ gfx::scene_renderer::bake_equirect_to_cube (gfx::cubemap &env,
 {
   if ((env.texture == nullptr) || (equi_tex == nullptr)) {
     return;
-}
+  }
 
   if (m_equi_to_cube_pipe == nullptr) {
     auto vert_id = m_res_mgr->register_shader (
@@ -1628,10 +1650,10 @@ gfx::scene_renderer::bake_equirect_to_cube (gfx::cubemap &env,
     if ((vert == nullptr) || (frag == nullptr)) {
       if (vert != nullptr) {
         SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+      }
       if (frag != nullptr) {
         SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+      }
       return;
     }
 
@@ -1679,7 +1701,7 @@ gfx::scene_renderer::bake_equirect_to_cube (gfx::cubemap &env,
       capture_face = 1;
     } else if (face == 1) {
       capture_face = 0;
-}
+    }
 
     glm::mat4 const view = capture_view_for_face (capture_face);
     glm::mat4 inv_vp = glm::inverse (capture_proj () * view);
@@ -1701,11 +1723,11 @@ gfx::scene_renderer::bake_procedural_skybox (gfx::cubemap &env,
 {
   if (env.texture == nullptr) {
     return;
-}
+  }
 
   if (m_last_baked_sun_dir == sun_dir) {
     return;
-}
+  }
 
   m_last_baked_sun_dir = sun_dir;
 
@@ -1728,10 +1750,10 @@ gfx::scene_renderer::bake_procedural_skybox (gfx::cubemap &env,
     if ((vert == nullptr) || (frag == nullptr)) {
       if (vert != nullptr) {
         SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+      }
       if (frag != nullptr) {
         SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+      }
       return;
     }
 
@@ -1784,7 +1806,7 @@ gfx::scene_renderer::bake_procedural_skybox (gfx::cubemap &env,
         capture_face = 1;
       } else if (face == 1) {
         capture_face = 0;
-}
+      }
 
       glm::mat4 const view = capture_view_for_face (capture_face);
       glm::mat4 inv_vp = glm::inverse (capture_proj () * view);
@@ -1807,16 +1829,19 @@ gfx::scene_renderer::bake_procedural_skybox (gfx::cubemap &env,
 void
 gfx::scene_renderer::bake_ibl (gfx::cubemap &env)
 {
-  if ((env.texture == nullptr) || (env.sampler == nullptr) || (env.ibl_irradiance == nullptr) || (env.ibl_prefilter == nullptr)
+  if ((env.texture == nullptr) || (env.sampler == nullptr)
+      || (env.ibl_irradiance == nullptr) || (env.ibl_prefilter == nullptr)
       || (env.ibl_brdf_lut == nullptr)) {
-    spdlog::warn ("IBL: bake_ibl called with missing textures/samplers");
+    wsl::log::gfx ()->warn (
+        "IBL: bake_ibl called with missing textures/samplers");
     return;
   }
 
   create_ibl_pipelines ();
-  if ((m_ibl_irradiance_pipe == nullptr) || (m_ibl_prefilter_pipe == nullptr) || (m_ibl_brdf_lut_pipe == nullptr)) {
+  if ((m_ibl_irradiance_pipe == nullptr) || (m_ibl_prefilter_pipe == nullptr)
+      || (m_ibl_brdf_lut_pipe == nullptr)) {
     return;
-}
+  }
 
   SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer (m_ctx->gpu_device);
 
@@ -1858,7 +1883,8 @@ gfx::scene_renderer::bake_ibl (gfx::cubemap &env)
         } ip{};
 
         ip.face_index = (face == 2) ? 3 : (face == 3) ? 2 : face;
-        ip.env_intensity = 1.0F; // start with 1.0; you can expose this as a knob
+        ip.env_intensity
+            = 1.0F; // start with 1.0; you can expose this as a knob
 
         SDL_PushGPUFragmentUniformData (cmd, 0, &ip, sizeof (ip));
 
@@ -1877,7 +1903,7 @@ gfx::scene_renderer::bake_ibl (gfx::cubemap &env)
     struct alignas (16) prefilter_params
     {
       int face_index;      // 0..5
-      float roughness;    // 0..1
+      float roughness;     // 0..1
       float env_intensity; // usually 1.0 (or exposure)
       float pad0;
     } pp{};
@@ -1947,7 +1973,8 @@ gfx::scene_renderer::bake_ibl (gfx::cubemap &env)
 
   SDL_SubmitGPUCommandBuffer (cmd);
 
-  spdlog::debug ("IBL: baked irradiance + prefilter + BRDF LUT");
+  wsl::log::gfx ()->trace (
+      "Baked IBL environment (irradiance + prefilter + BRDF LUT)");
 }
 
 void
@@ -1983,8 +2010,8 @@ gfx::scene_renderer::create_shadow_resources (uint32_t size)
 
   m_shadow_depth = SDL_CreateGPUTexture (m_ctx->gpu_device, &ti);
   if (m_shadow_depth == nullptr) {
-    spdlog::error ("Failed to create shadow depth texture: {}",
-                   SDL_GetError ());
+    wsl::log::gfx ()->error ("Failed to create shadow depth texture: {}",
+                             SDL_GetError ());
     return;
   }
 
@@ -1999,7 +2026,8 @@ gfx::scene_renderer::create_shadow_resources (uint32_t size)
 
   m_shadow_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &sinfo);
   if (m_shadow_sampler == nullptr) {
-    spdlog::error ("Failed to create shadow sampler: {}", SDL_GetError ());
+    wsl::log::gfx ()->error ("Failed to create shadow sampler: {}",
+                             SDL_GetError ());
   }
 
   for (int i = 0; i < max_shadowed_spots; ++i) {
@@ -2041,6 +2069,10 @@ gfx::scene_renderer::create_shadow_resources (uint32_t size)
 
   create_shadow_pipeline ();
   create_point_shadow_pipeline ();
+
+  wsl::log::gfx ()->debug ("Shadow maps: {}x{} ({} spot + {} point)",
+                           m_shadow_size, m_shadow_size, max_shadowed_spots,
+                           max_shadowed_points);
 }
 
 void
@@ -2059,11 +2091,11 @@ gfx::scene_renderer::destroy_shadow_resources ()
   if (m_shadow_sampler != nullptr) {
     SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_shadow_sampler),
         m_shadow_sampler = nullptr;
-}
+  }
   if (m_shadow_depth != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_shadow_depth),
         m_shadow_depth = nullptr;
-}
+  }
 
   for (shadow_map_2d &s : m_spot_shadows) {
     if (s.depth != nullptr) {
@@ -2116,10 +2148,10 @@ gfx::scene_renderer::create_shadow_pipeline ()
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+    }
     return;
   }
 
@@ -2179,8 +2211,8 @@ gfx::scene_renderer::create_shadow_pipeline ()
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
 
   if ((m_shadow_pipe == nullptr) || (m_shadow_pipe_double_sided == nullptr)) {
-    spdlog::error ("Failed to create shadow m_pipeline(s): {}",
-                   SDL_GetError ());
+    wsl::log::gfx ()->error ("Failed to create shadow m_pipeline(s): {}",
+                             SDL_GetError ());
   }
 }
 
@@ -2188,7 +2220,7 @@ glm::mat4
 gfx::scene_renderer::make_light_vp_from_camera (
     const glm::mat4 &cam_view, const glm::mat4 &cam_proj,
     const glm::vec3 &light_dir_world, float shadow_near, float shadow_far,
-    float z_padding) 
+    float z_padding)
 {
   glm::mat4 const inv_vp = glm::inverse (cam_proj * cam_view);
 
@@ -2200,7 +2232,8 @@ gfx::scene_renderer::make_light_vp_from_camera (
   for (int z = 0; z < 2; ++z) {
     for (int y = 0; y < 2; ++y) {
       for (int x = 0; x < 2; ++x) {
-        glm::vec4 const p_ndc ((x != 0) ? 1.0F : -1.0F, (y != 0) ? 1.0F : -1.0F, z_ndc[z], 1.0F);
+        glm::vec4 const p_ndc ((x != 0) ? 1.0F : -1.0F, (y != 0) ? 1.0F : -1.0F,
+                               z_ndc[z], 1.0F);
 
         glm::vec4 p_ws = inv_vp * p_ndc;
         p_ws /= p_ws.w;
@@ -2212,13 +2245,13 @@ gfx::scene_renderer::make_light_vp_from_camera (
   glm::vec3 center (0.0F);
   for (const glm::vec3 &p : frustum_ws) {
     center += p;
-}
+  }
   center /= 8.0F;
 
   float radius = 0.0F;
   for (const glm::vec3 &p : frustum_ws) {
     radius = std::max (radius, glm::length (p - center));
-}
+  }
 
   radius = std::ceil (radius * 16.0F) / 16.0F;
 
@@ -2267,9 +2300,10 @@ gfx::scene_renderer::make_light_vp_from_camera (
 void
 gfx::scene_renderer::render_shadow_map (gfx::scene &s)
 {
-  if (!m_shadows_enabled || (m_shadow_depth == nullptr) || (m_shadow_pipe == nullptr)) {
+  if (!m_shadows_enabled || (m_shadow_depth == nullptr)
+      || (m_shadow_pipe == nullptr)) {
     return;
-}
+  }
 
   SDL_GPUDepthStencilTargetInfo ds{};
   ds.texture = m_shadow_depth;
@@ -2285,7 +2319,7 @@ gfx::scene_renderer::render_shadow_map (gfx::scene &s)
       = SDL_BeginGPURenderPass (m_ctx->main_cmd, nullptr, 0, &ds);
   if (pass == nullptr) {
     return;
-}
+  }
 
   SDL_BindGPUGraphicsPipeline (pass, m_shadow_pipe);
 
@@ -2297,7 +2331,7 @@ gfx::scene_renderer::render_shadow_map (gfx::scene &s)
   std::function<void (gfx::node &)> draw_node;
   draw_node = [&] (gfx::node &n) {
     if (!n.mesh_lods.empty ()) {
-      gfx::mesh  const*m = select_lod (n);
+      gfx::mesh const *m = select_lod (n);
       if (m) {
         struct alignas (16) shadow_matrices
         {
@@ -2317,12 +2351,12 @@ gfx::scene_renderer::render_shadow_map (gfx::scene &s)
 
     for (gfx::node &c : n.children) {
       draw_node (c);
-}
+    }
   };
 
   for (gfx::node &root : s.roots) {
     draw_node (root);
-}
+  }
 
   SDL_EndGPURenderPass (pass);
 }
@@ -2336,7 +2370,7 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
 {
   if (scene_index >= model.scenes.size ()) {
     return;
-}
+  }
 
   model.ensure_gpu_buffers (m_ctx);
   model.bind (pass);
@@ -2344,11 +2378,11 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
   gfx::scene &scene = model.scenes[scene_index];
   for (gfx::node &root : scene.roots) {
     update_node_world (root, model_matrix);
-}
+  }
 
   std::function<void (gfx::node &)> draw_node = [&] (gfx::node &n) {
     if (!n.mesh_lods.empty ()) {
-      gfx::mesh  const*m = select_lod (n);
+      gfx::mesh const *m = select_lod (n);
       if (m) {
         struct alignas (16) shadow_matrices
         {
@@ -2364,7 +2398,7 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
                                               : m_shadow_pipe;
           if (!pipe || !m_shadow_pass) {
             continue;
-}
+          }
 
           SDL_BindGPUGraphicsPipeline (m_shadow_pass, pipe);
 
@@ -2376,20 +2410,21 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
     }
     for (gfx::node &c : n.children) {
       draw_node (c);
-}
+    }
   };
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
-}
+  }
 }
 
 void
 gfx::scene_renderer::begin_shadow_pass ()
 {
-  if (!m_shadows_enabled || (m_shadow_depth == nullptr) || (m_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)) {
+  if (!m_shadows_enabled || (m_shadow_depth == nullptr)
+      || (m_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)) {
     return;
-}
+  }
 
   SDL_GPUDepthStencilTargetInfo ds{};
   ds.texture = m_shadow_depth;
@@ -2425,7 +2460,7 @@ gfx::scene_renderer::end_shadow_pass ()
 {
   if (m_shadow_pass == nullptr) {
     return;
-}
+  }
   SDL_EndGPURenderPass (m_shadow_pass);
   m_shadow_pass = nullptr;
 }
@@ -2460,10 +2495,10 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
 {
   if (m_shadow_pass == nullptr) {
     return;
-}
+  }
   if (scene_index >= model.scenes.size ()) {
     return;
-}
+  }
 
   model.ensure_gpu_buffers (m_ctx);
   model.bind (m_shadow_pass);
@@ -2471,11 +2506,11 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
   gfx::scene &scene = model.scenes[scene_index];
   for (gfx::node &root : scene.roots) {
     update_node_world (root, model_matrix);
-}
+  }
 
   std::function<void (gfx::node &)> draw_node = [&] (gfx::node &n) {
     if (!n.mesh_lods.empty ()) {
-      gfx::mesh  const*m = select_lod (n);
+      gfx::mesh const *m = select_lod (n);
       if (m) {
         struct alignas (16) shadow_matrices
         {
@@ -2491,7 +2526,7 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
                                               : m_shadow_pipe;
           if (!pipe || !m_shadow_pass) {
             continue;
-}
+          }
 
           SDL_BindGPUGraphicsPipeline (m_shadow_pass, pipe);
 
@@ -2503,12 +2538,12 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
     }
     for (gfx::node &c : n.children) {
       draw_node (c);
-}
+    }
   };
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
-}
+  }
 }
 
 void
@@ -2516,10 +2551,11 @@ gfx::scene_renderer::begin_spot_shadow_pass (int index)
 {
   if (index < 0 || index >= max_shadowed_spots) {
     return;
-}
-  if ((m_spot_shadows[index].depth == nullptr) || (m_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)) {
+  }
+  if ((m_spot_shadows[index].depth == nullptr) || (m_shadow_pipe == nullptr)
+      || (m_shadow_pass != nullptr)) {
     return;
-}
+  }
 
   SDL_GPUDepthStencilTargetInfo ds{};
   ds.texture = m_spot_shadows[index].depth;
@@ -2557,10 +2593,10 @@ gfx::scene_renderer::draw_model_spot_shadow (gfx::model_3d &model,
 {
   if (m_shadow_pass == nullptr) {
     return;
-}
+  }
   if (scene_index >= model.scenes.size ()) {
     return;
-}
+  }
 
   model.ensure_gpu_buffers (m_ctx);
   model.bind (m_shadow_pass);
@@ -2568,11 +2604,11 @@ gfx::scene_renderer::draw_model_spot_shadow (gfx::model_3d &model,
   gfx::scene &scene = model.scenes[scene_index];
   for (gfx::node &root : scene.roots) {
     update_node_world (root, model_matrix);
-}
+  }
 
   std::function<void (gfx::node &)> draw_node = [&] (gfx::node &n) {
     if (!n.mesh_lods.empty ()) {
-      gfx::mesh  const*m = select_lod (n);
+      gfx::mesh const *m = select_lod (n);
       if (m) {
         struct alignas (16) shadow_matrices
         {
@@ -2588,7 +2624,7 @@ gfx::scene_renderer::draw_model_spot_shadow (gfx::model_3d &model,
                                               : m_shadow_pipe;
           if (!pipe || !m_shadow_pass) {
             continue;
-}
+          }
 
           SDL_BindGPUGraphicsPipeline (m_shadow_pass, pipe);
 
@@ -2601,12 +2637,12 @@ gfx::scene_renderer::draw_model_spot_shadow (gfx::model_3d &model,
 
     for (gfx::node &c : n.children) {
       draw_node (c);
-}
+    }
   };
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
-}
+  }
 }
 
 void
@@ -2614,7 +2650,7 @@ gfx::scene_renderer::end_spot_shadow_pass ()
 {
   if (m_shadow_pass == nullptr) {
     return;
-}
+  }
 
   SDL_EndGPURenderPass (m_shadow_pass);
   m_shadow_pass = nullptr;
@@ -2623,7 +2659,7 @@ gfx::scene_renderer::end_spot_shadow_pass ()
 glm::mat4
 gfx::scene_renderer::make_point_light_view_proj (const glm::vec3 &light_pos,
                                                  int face, float near_plane,
-                                                 float far_plane) 
+                                                 float far_plane)
 {
   static const glm::vec3 targets[6]
       = { { +1, 0, 0 }, { -1, 0, 0 }, { 0, +1, 0 },
@@ -2649,14 +2685,14 @@ gfx::scene_renderer::begin_point_shadow_pass (int index, int face)
 {
   if (index < 0 || index >= max_shadowed_points) {
     return;
-}
+  }
   if (face < 0 || face >= 6) {
     return;
-}
-  if ((m_point_shadows[index].depth_cube == nullptr) || (m_point_shadow_pipe == nullptr)
-      || (m_shadow_pass != nullptr)) {
+  }
+  if ((m_point_shadows[index].depth_cube == nullptr)
+      || (m_point_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)) {
     return;
-}
+  }
 
   SDL_GPUDepthStencilTargetInfo ds{};
   ds.texture = m_point_shadows[index].depth_cube;
@@ -2692,7 +2728,7 @@ gfx::scene_renderer::end_point_shadow_pass ()
 {
   if (m_shadow_pass == nullptr) {
     return;
-}
+  }
   SDL_EndGPURenderPass (m_shadow_pass);
   m_shadow_pass = nullptr;
 }
@@ -2704,10 +2740,10 @@ gfx::scene_renderer::draw_model_point_shadow (
 {
   if (m_shadow_pass == nullptr) {
     return;
-}
+  }
   if (scene_index >= model.scenes.size ()) {
     return;
-}
+  }
 
   model.ensure_gpu_buffers (m_ctx);
   model.bind (m_shadow_pass);
@@ -2715,11 +2751,11 @@ gfx::scene_renderer::draw_model_point_shadow (
   gfx::scene &scene = model.scenes[scene_index];
   for (gfx::node &root : scene.roots) {
     update_node_world (root, model_matrix);
-}
+  }
 
   std::function<void (gfx::node &)> draw_node = [&] (gfx::node &n) {
     if (!n.mesh_lods.empty ()) {
-      gfx::mesh  const*m = select_lod (n);
+      gfx::mesh const *m = select_lod (n);
       if (m) {
         struct alignas (16) shadow_matrices
         {
@@ -2743,7 +2779,7 @@ gfx::scene_renderer::draw_model_point_shadow (
                                               : m_point_shadow_pipe;
           if (!pipe || !m_shadow_pass) {
             continue;
-}
+          }
 
           SDL_BindGPUGraphicsPipeline (m_shadow_pass, pipe);
 
@@ -2756,12 +2792,12 @@ gfx::scene_renderer::draw_model_point_shadow (
 
     for (gfx::node &c : n.children) {
       draw_node (c);
-}
+    }
   };
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
-}
+  }
 }
 
 void
@@ -2782,10 +2818,10 @@ gfx::scene_renderer::create_point_shadow_pipeline ()
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+    }
     return;
   }
 
@@ -2842,9 +2878,10 @@ gfx::scene_renderer::create_point_shadow_pipeline ()
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
 
-  if ((m_point_shadow_pipe == nullptr) || (m_point_shadow_pipe_double_sided == nullptr)) {
-    spdlog::error ("Failed to create point shadow m_pipeline(s): {}",
-                   SDL_GetError ());
+  if ((m_point_shadow_pipe == nullptr)
+      || (m_point_shadow_pipe_double_sided == nullptr)) {
+    wsl::log::gfx ()->error ("Failed to create point shadow m_pipeline(s): {}",
+                             SDL_GetError ());
   }
 }
 
@@ -2877,7 +2914,7 @@ gfx::scene_renderer::create_ssao_noise_texture ()
 {
   if (m_ssao_noise_tex != nullptr) {
     return;
-}
+  }
 
   std::array<glm::vec4, 16> noise{};
   for (glm::vec4 &n : noise) {
@@ -2896,7 +2933,8 @@ gfx::scene_renderer::create_ssao_noise_texture ()
 
   m_ssao_noise_tex = SDL_CreateGPUTexture (m_ctx->gpu_device, &ti);
   if (m_ssao_noise_tex == nullptr) {
-    spdlog::error ("Failed to create SSAO noise texture: {}", SDL_GetError ());
+    wsl::log::gfx ()->error ("Failed to create SSAO noise texture: {}",
+                             SDL_GetError ());
     return;
   }
 
@@ -2908,7 +2946,7 @@ gfx::scene_renderer::create_ssao_noise_texture ()
       = SDL_CreateGPUTransferBuffer (m_ctx->gpu_device, &tb);
   if (upload == nullptr) {
     return;
-}
+  }
 
   void *mapped = SDL_MapGPUTransferBuffer (m_ctx->gpu_device, upload, false);
   std::memcpy (mapped, noise.data (), sizeof (noise));
@@ -2946,10 +2984,11 @@ gfx::scene_renderer::create_ssao_resources (uint32_t w, uint32_t h)
 {
   if (w == 0 || h == 0) {
     return;
-}
+  }
 
-  if (m_ssao_width == w && m_ssao_height == h && (m_ssao_normal_depth != nullptr)
-      && (m_ssao_depth != nullptr) && (m_ssao_raw != nullptr) && (m_ssao_blur != nullptr)) {
+  if (m_ssao_width == w && m_ssao_height == h
+      && (m_ssao_normal_depth != nullptr) && (m_ssao_depth != nullptr)
+      && (m_ssao_raw != nullptr) && (m_ssao_blur != nullptr)) {
     return;
   }
 
@@ -3017,10 +3056,18 @@ gfx::scene_renderer::create_ssao_resources (uint32_t w, uint32_t h)
   point.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   m_ssao_point_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &point);
 
-  if ((m_ssao_normal_depth == nullptr) || (m_ssao_depth == nullptr) || (m_ssao_raw == nullptr) || (m_ssao_blur == nullptr)
-      || (m_ssao_linear_sampler == nullptr) || (m_ssao_point_sampler == nullptr)) {
-    spdlog::error ("Failed to create SSAO resources: {}", SDL_GetError ());
+  if ((m_ssao_normal_depth == nullptr) || (m_ssao_depth == nullptr)
+      || (m_ssao_raw == nullptr) || (m_ssao_blur == nullptr)
+      || (m_ssao_linear_sampler == nullptr)
+      || (m_ssao_point_sampler == nullptr)) {
+    wsl::log::gfx ()->error ("Failed to create SSAO resources: {}",
+                             SDL_GetError ());
   }
+
+  wsl::log::gfx ()->debug (
+      "SSAO targets: normal/depth {}x{} -> AO {}x{} ({} kernel samples)",
+      m_ssao_width, m_ssao_height, m_ssao_width, m_ssao_height,
+      m_ssao_kernel.size ());
 }
 
 void
@@ -3256,9 +3303,10 @@ gfx::scene_renderer::begin_ssao_prepass (const glm::mat4 &view,
   (void)view;
   (void)proj;
 
-  if (!ssao_enabled || (m_ssao_normal_depth == nullptr) || (m_ssao_depth == nullptr) || (m_ssao_prepass != nullptr)) {
+  if (!ssao_enabled || (m_ssao_normal_depth == nullptr)
+      || (m_ssao_depth == nullptr) || (m_ssao_prepass != nullptr)) {
     return;
-}
+  }
 
   SDL_GPUColorTargetInfo ct{};
   ct.texture = m_ssao_normal_depth;
@@ -3303,7 +3351,7 @@ gfx::scene_renderer::end_ssao_prepass ()
 {
   if (m_ssao_prepass == nullptr) {
     return;
-}
+  }
   SDL_EndGPURenderPass (m_ssao_prepass);
   m_ssao_prepass = nullptr;
 }
@@ -3316,7 +3364,7 @@ gfx::scene_renderer::draw_model_ssao (gfx::model_3d &model, size_t scene_index,
 {
   if ((m_ssao_prepass == nullptr) || scene_index >= model.scenes.size ()) {
     return;
-}
+  }
 
   model.ensure_gpu_buffers (m_ctx);
   model.bind (m_ssao_prepass);
@@ -3324,11 +3372,11 @@ gfx::scene_renderer::draw_model_ssao (gfx::model_3d &model, size_t scene_index,
   gfx::scene &scene = model.scenes[scene_index];
   for (gfx::node &root : scene.roots) {
     update_node_world (root, model_matrix);
-}
+  }
 
   std::function<void (gfx::node &)> draw_node = [&] (gfx::node &n) {
     if (!n.mesh_lods.empty ()) {
-      gfx::mesh  const*m = select_lod (n);
+      gfx::mesh const *m = select_lod (n);
       if (m) {
         glm::mat3 n3
             = glm::transpose (glm::inverse (glm::mat3 (n.world_transform)));
@@ -3353,7 +3401,7 @@ gfx::scene_renderer::draw_model_ssao (gfx::model_3d &model, size_t scene_index,
                                               : m_ssao_prepass_pipe;
           if (!pipe || !m_ssao_prepass) {
             continue;
-}
+          }
 
           SDL_BindGPUGraphicsPipeline (m_ssao_prepass, pipe);
 
@@ -3366,20 +3414,21 @@ gfx::scene_renderer::draw_model_ssao (gfx::model_3d &model, size_t scene_index,
 
     for (gfx::node &c : n.children) {
       draw_node (c);
-}
+    }
   };
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
-}
+  }
 }
 
 void
 gfx::scene_renderer::run_ssao_pass (const glm::mat4 &proj)
 {
-  if (!ssao_enabled || (m_ssao_pipe == nullptr) || (m_ssao_normal_depth == nullptr) || (m_ssao_raw == nullptr)) {
+  if (!ssao_enabled || (m_ssao_pipe == nullptr)
+      || (m_ssao_normal_depth == nullptr) || (m_ssao_raw == nullptr)) {
     return;
-}
+  }
 
   glm::mat4 const inv_proj = glm::inverse (proj);
 
@@ -3405,7 +3454,7 @@ gfx::scene_renderer::run_ssao_pass (const glm::mat4 &proj)
 
   for (int i = 0; i < 64; ++i) {
     kernel_block.samples[i] = m_ssao_kernel[i];
-}
+  }
 
   SDL_GPUColorTargetInfo ct{};
   ct.texture = m_ssao_raw;
@@ -3421,7 +3470,7 @@ gfx::scene_renderer::run_ssao_pass (const glm::mat4 &proj)
   if ((m_ssao_pipe == nullptr) || (pass == nullptr)) {
     if (pass != nullptr) {
       SDL_EndGPURenderPass (pass);
-}
+    }
     return;
   }
 
@@ -3445,9 +3494,10 @@ gfx::scene_renderer::run_ssao_pass (const glm::mat4 &proj)
 void
 gfx::scene_renderer::run_ssao_blur_pass ()
 {
-  if (!ssao_enabled || (m_ssao_blur_pipe == nullptr) || (m_ssao_raw == nullptr) || (m_ssao_blur == nullptr)) {
+  if (!ssao_enabled || (m_ssao_blur_pipe == nullptr) || (m_ssao_raw == nullptr)
+      || (m_ssao_blur == nullptr)) {
     return;
-}
+  }
 
   struct alignas (16) ssao_blur_params
   {
@@ -3470,7 +3520,7 @@ gfx::scene_renderer::run_ssao_blur_pass ()
   if ((m_ssao_blur_pipe == nullptr) || (pass == nullptr)) {
     if (pass != nullptr) {
       SDL_EndGPURenderPass (pass);
-}
+    }
     return;
   }
 
@@ -3600,7 +3650,7 @@ gfx::scene_renderer::draw_model_outline (gfx::model_3d &model,
 {
   if (scene_index >= model.scenes.size ()) {
     return;
-}
+  }
 
   model.ensure_gpu_buffers (m_ctx);
   model.bind (m_ctx->main_pass);
@@ -3609,11 +3659,11 @@ gfx::scene_renderer::draw_model_outline (gfx::model_3d &model,
 
   for (gfx::node &root : scene.roots) {
     update_node_world (root, model_matrix);
-}
+  }
 
   std::function<void (gfx::node &)> draw_node = [&] (gfx::node &n) {
     if (!n.mesh_lods.empty ()) {
-      gfx::mesh  const*m = select_lod (n);
+      gfx::mesh const *m = select_lod (n);
       if (m) {
         struct alignas (16) outline_matrices
         {
@@ -3653,7 +3703,7 @@ gfx::scene_renderer::draw_model_outline (gfx::model_3d &model,
                                               : m_pipeline_outline;
           if (!pipe || !m_ctx->main_pass) {
             continue;
-}
+          }
 
           SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, pipe);
 
@@ -3666,12 +3716,12 @@ gfx::scene_renderer::draw_model_outline (gfx::model_3d &model,
 
     for (gfx::node &child : n.children) {
       draw_node (child);
-}
+    }
   };
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
-}
+  }
 }
 
 void
@@ -3692,10 +3742,10 @@ gfx::scene_renderer::create_grid_pipeline ()
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
-}
+    }
     if (frag != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
-}
+    }
     return;
   }
 
@@ -3757,12 +3807,12 @@ gfx::scene_renderer::destroy_grid_pipeline ()
 }
 
 void
-gfx::scene_renderer::draw_grid (const glm::vec3 & /*unused*/, const glm::vec3 &fog_center,
-                                float fog_radius)
+gfx::scene_renderer::draw_grid (const glm::vec3 & /*unused*/,
+                                const glm::vec3 &fog_center, float fog_radius)
 {
   if ((m_pipeline_grid == nullptr) || (m_ctx->main_pass == nullptr)) {
     return;
-}
+  }
 
   SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_grid);
 

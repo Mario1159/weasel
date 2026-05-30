@@ -13,6 +13,7 @@
 #include "phys/physics_engine.hpp"
 #include "rsc/resource_ids.hpp"
 #include "sys/system.hpp"
+#include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_init.h>
@@ -25,9 +26,7 @@
 #include <entt/meta/factory.hpp>
 #include <imgui.h>
 #include <memory>
-#include <spdlog/spdlog.h>
 #include <utility>
-
 
 namespace wsl
 {
@@ -122,10 +121,10 @@ comp::singl::runtime_context::custom_inspect (
 
     auto view = registry.view<comp::camera> ();
     for (entt::entity const e : view) {
-      comp::camera  const&cam = view.get<comp::camera> (e);
+      comp::camera const &cam = view.get<comp::camera> (e);
       if (cam.only_for_editor) {
         continue;
-}
+      }
 
       const std::string &name = scene->get_entity_name (e);
       bool const selected = (e == current_cam);
@@ -138,7 +137,7 @@ comp::singl::runtime_context::custom_inspect (
 
       if (selected) {
         ImGui::SetItemDefaultFocus ();
-}
+      }
     }
     ImGui::EndCombo ();
   }
@@ -159,20 +158,17 @@ comp::singl::runtime_context::custom_inspect (
 comp::singl::runtime_context::sdl_init_guard::sdl_init_guard (bool headless)
     : is_headless (headless)
 {
-  if (headless)
-    {
-      spdlog::debug ("runtime_context: headless mode, skipping SDL initialization");
-      return;
-    }
+  if (headless) {
+    wsl::log::core ()->trace ("Headless mode, skipping SDL initialization");
+    return;
+  }
 
-  if (!SDL_Init (SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO))
-    {
-      spdlog::critical ("Failed to initialize SDL: {}", SDL_GetError ());
-    }
-  else
-    {
-      spdlog::debug ("SDL initialized successfully");
-    }
+  if (!SDL_Init (SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO)) {
+    wsl::log::core ()->critical ("Failed to initialize SDL: {}",
+                                 SDL_GetError ());
+  } else {
+    wsl::log::core ()->trace ("SDL initialized successfully");
+  }
 }
 
 comp::singl::runtime_context::sdl_init_guard::~sdl_init_guard ()
@@ -181,25 +177,21 @@ comp::singl::runtime_context::sdl_init_guard::~sdl_init_guard ()
     SDL_Quit ();
 }
 
-comp::singl::runtime_context::runtime_context (const char *name, int width,
-                                               int height,
-                                               const std::string &engine_res_path,
-                                               bool headless)
-    : world (this),
-      scene_manager (world),
-      signal_hub (dispatcher, signal_db),
+comp::singl::runtime_context::runtime_context (
+    const char *name, int width, int height, const std::string &engine_res_path,
+    bool headless)
+    : world (this), scene_manager (world), signal_hub (dispatcher, signal_db),
       reg_queries (component_registry, system_factory_registry, signal_hub),
-      runtime_project_module (this),
-      sdl_init_guard_ (headless),
-      render_ctx (headless),
-      resource_manager (this, engine_res_path),
+      runtime_project_module (this), sdl_init_guard_ (headless),
+      render_ctx (headless), resource_manager (this, engine_res_path),
       resource_manager_view (&resource_manager),
       window (name, width, height, &render_ctx, &resource_manager, headless),
       ui_manager (render_ctx, window, &resource_manager)
 {
   system_factory_registry.set_signal_hub (&signal_hub);
   if (!headless)
-    spdlog::debug ("runtime_context: GPU device status: {}", (void*)render_ctx.gpu_device);
+    wsl::log::core ()->trace ("GPU device status: {}",
+                              (void *)render_ctx.gpu_device);
   current_input_map = &app_input_map;
 
   signal_hub.resolve_active_registry = [this] () -> entt::registry * {
@@ -228,14 +220,20 @@ comp::singl::runtime_context::runtime_context (const char *name, int width,
     return nullptr;
   };
 
-  dispatcher.sink<wsl::event::scene_changed> ().connect<&runtime_context::on_scene_changed> (this);
+  dispatcher.sink<wsl::event::scene_changed> ()
+      .connect<&runtime_context::on_scene_changed> (this);
 
   core_systems = std::make_unique<sys::core_systems> ();
   core_systems->init (this, nullptr);
+
+  wsl::log::core ()->debug (
+      "Runtime context initialized (window={}x{}, engine_res_path='{}')", width,
+      height, engine_res_path);
 }
 
 comp::singl::runtime_context::~runtime_context ()
 {
+  wsl::log::core ()->debug ("Shutting down runtime context");
   // The main resource manager depends on the runtime world, core systems, and
   // GPU device still being alive. Shut it down explicitly before member
   // destruction starts.
@@ -321,6 +319,9 @@ comp::singl::runtime_context::set_running (bool value)
 
   is_running = value;
 
+  wsl::log::core ()->debug ("Runtime {}",
+                            value ? "started (play)" : "stopped (pause)");
+
   if (auto *scene = scene_manager.get_active ()) {
     if (is_running) {
       scene->resume ();
@@ -345,8 +346,9 @@ comp::singl::runtime_context::stop ()
   set_running (false);
   in_play_session = false;
 
-  // Ensure GPU is idle before we start destroying renderers and restoring states.
-  // This prevents VRAM exhaustion from deferred releases during rapid play/stop cycles.
+  // Ensure GPU is idle before we start destroying renderers and restoring
+  // states. This prevents VRAM exhaustion from deferred releases during rapid
+  // play/stop cycles.
   if (render_ctx.gpu_device != nullptr) {
     SDL_WaitForGPUIdle (render_ctx.gpu_device);
   }
@@ -372,8 +374,7 @@ comp::singl::runtime_context::stop ()
       && play_session_origin_scene_id.value != entt::null) {
     if (resource_manager.activate_scene (play_session_origin_scene_id)) {
       restored_origin_scene = true;
-    } else if (rsc::scene *loaded_scene
-               = resource_manager.find_loaded_scene (
+    } else if (rsc::scene *loaded_scene = resource_manager.find_loaded_scene (
                    play_session_origin_scene_id)) {
       scene_manager.set_active (loaded_scene);
       restored_origin_scene = true;
@@ -383,6 +384,8 @@ comp::singl::runtime_context::stop ()
   scene_save_states.clear ();
   play_session_origin_scene_id = rsc::scene_id{ entt::null };
   play_session_origin_scene = nullptr;
+
+  wsl::log::core ()->debug ("Play session stopped");
 }
 
 comp::singl::rendering_manager *

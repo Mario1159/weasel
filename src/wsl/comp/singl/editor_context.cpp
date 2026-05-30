@@ -7,6 +7,7 @@
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/rsc/scene.hpp"
+#include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_keycode.h>
 #include <SDL3/SDL_scancode.h>
@@ -27,7 +28,6 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
-#include <spdlog/spdlog.h>
 #include <unistd.h>
 #include <vector>
 
@@ -38,62 +38,55 @@ namespace wsl::comp::singl
 {
 
 editor_context::editor_context (wsl::comp::singl::runtime_context &runtime_ctx)
-    : runtime_ctx (runtime_ctx),
-      editor_resources (runtime_ctx)
+    : runtime_ctx (runtime_ctx), editor_resources (runtime_ctx)
 {
-  spdlog::debug ("editor_context: core constructor started");
+  wsl::log::editor ()->trace ("Core constructor started");
   editor_resources.set_editor_context (this);
 
   // Only override the engine resource path with compile-time paths if the
   // current path (set by the launcher) does not already contain resources.
   // This allows installed / archived builds to work without recompilation.
   {
-    const std::string &current_path = runtime_ctx.resource_manager.get_engine_resource_path ();
-    bool has_dev_resources
-        = std::filesystem::exists (std::filesystem::path (current_path) / "compiled_shaders");
-    bool has_packaged_resources
-        = std::filesystem::exists (std::filesystem::path (current_path) / "share/weasel/compiled_shaders");
+    const std::string &current_path
+        = runtime_ctx.resource_manager.get_engine_resource_path ();
+    bool has_dev_resources = std::filesystem::exists (
+        std::filesystem::path (current_path) / "compiled_shaders");
+    bool has_packaged_resources = std::filesystem::exists (
+        std::filesystem::path (current_path) / "share/weasel/compiled_shaders");
 
-    if (!has_dev_resources && !has_packaged_resources)
-      {
-        // Try to derive the install prefix from the executable path.
-        // On Linux /usr/local/bin/weasel -> prefix /usr/local ->
-        // /usr/local/share/weasel/compiled_shaders
-        char exe_buf[PATH_MAX];
-        ssize_t len = readlink ("/proc/self/exe", exe_buf, sizeof (exe_buf) - 1);
-        if (len != -1)
-          {
-            exe_buf[len] = '\0';
-            std::filesystem::path exe_path (exe_buf);
-            std::filesystem::path prefix
-                = exe_path.parent_path ().parent_path ();
-            if (std::filesystem::exists (prefix / "share/weasel/compiled_shaders"))
-              {
-                runtime_ctx.resource_manager.set_engine_resource_path (
-                    prefix.string ());
-              }
-            else
-              {
+    if (!has_dev_resources && !has_packaged_resources) {
+      // Try to derive the install prefix from the executable path.
+      // On Linux /usr/local/bin/weasel -> prefix /usr/local ->
+      // /usr/local/share/weasel/compiled_shaders
+      char exe_buf[PATH_MAX];
+      ssize_t len = readlink ("/proc/self/exe", exe_buf, sizeof (exe_buf) - 1);
+      if (len != -1) {
+        exe_buf[len] = '\0';
+        std::filesystem::path exe_path (exe_buf);
+        std::filesystem::path prefix = exe_path.parent_path ().parent_path ();
+        if (std::filesystem::exists (prefix
+                                     / "share/weasel/compiled_shaders")) {
+          runtime_ctx.resource_manager.set_engine_resource_path (
+              prefix.string ());
+        } else {
 #ifdef WEASEL_BUILD_DIR
-                runtime_ctx.resource_manager.set_engine_resource_path (
-                    WEASEL_BUILD_DIR);
+          runtime_ctx.resource_manager.set_engine_resource_path (
+              WEASEL_BUILD_DIR);
 #elif defined(WEASEL_SOURCE_DIR)
-                runtime_ctx.resource_manager.set_engine_resource_path (
-                    WEASEL_SOURCE_DIR);
+          runtime_ctx.resource_manager.set_engine_resource_path (
+              WEASEL_SOURCE_DIR);
 #endif
-              }
-          }
-        else
-          {
+        }
+      } else {
 #ifdef WEASEL_BUILD_DIR
-            runtime_ctx.resource_manager.set_engine_resource_path (
-                WEASEL_BUILD_DIR);
+        runtime_ctx.resource_manager.set_engine_resource_path (
+            WEASEL_BUILD_DIR);
 #elif defined(WEASEL_SOURCE_DIR)
-            runtime_ctx.resource_manager.set_engine_resource_path (
-                WEASEL_SOURCE_DIR);
+        runtime_ctx.resource_manager.set_engine_resource_path (
+            WEASEL_SOURCE_DIR);
 #endif
-          }
       }
+    }
   }
 
 #ifdef WEASEL_SOURCE_DIR
@@ -102,50 +95,53 @@ editor_context::editor_context (wsl::comp::singl::runtime_context &runtime_ctx)
 
   // Register engine/builtin fonts
   const std::vector<std::string> engine_fonts = {
-    "engine://otf/fanwood.otf",
-    "engine://otf/splinesans-regular.otf",
-    "engine://otf/splinesans-bold.otf",
-    "engine://otf/splinesans-light.otf",
-    "engine://otf/splinesans-medium.otf",
-    "engine://otf/splinesans-semibold.otf"
+    "engine://otf/fanwood.otf",           "engine://otf/splinesans-regular.otf",
+    "engine://otf/splinesans-bold.otf",   "engine://otf/splinesans-light.otf",
+    "engine://otf/splinesans-medium.otf", "engine://otf/splinesans-semibold.otf"
   };
 
-  for (const auto& f : engine_fonts) {
-    editor_resources.register_font(f);
+  for (const auto &f : engine_fonts) {
+    editor_resources.register_font (f);
   }
 
   // Register editor icons
   icon_signal = editor_resources.register_image ("engine://icons/signal.svg");
-  icon_singleton = editor_resources.register_image ("engine://icons/singleton.svg");
+  icon_singleton
+      = editor_resources.register_image ("engine://icons/singleton.svg");
   icon_system = editor_resources.register_image ("engine://icons/system.svg");
   icon_entity = editor_resources.register_image ("engine://icons/entity.svg");
-  icon_inspector = editor_resources.register_image ("engine://icons/inspector.svg");
+  icon_inspector
+      = editor_resources.register_image ("engine://icons/inspector.svg");
 
   icon_show = editor_resources.register_image ("engine://icons/show.svg");
   icon_hide = editor_resources.register_image ("engine://icons/hide.svg");
   editor_resources.load (icon_show);
   editor_resources.load (icon_hide);
 
-  icon_focus_cam = editor_resources.register_image ("engine://icons/focus_cam.svg");
-  icon_reset_cam = editor_resources.register_image ("engine://icons/reset_cam.svg");
+  icon_focus_cam
+      = editor_resources.register_image ("engine://icons/focus_cam.svg");
+  icon_reset_cam
+      = editor_resources.register_image ("engine://icons/reset_cam.svg");
   icon_play = editor_resources.register_image ("engine://icons/play.svg");
   editor_resources.load (icon_play);
   icon_pause = editor_resources.register_image ("engine://icons/pause.svg");
   icon_stop = editor_resources.register_image ("engine://icons/stop.svg");
-  icon_translate = editor_resources.register_image ("engine://icons/translate.svg");  icon_rotate = editor_resources.register_image ("engine://icons/rotate.svg");
+  icon_translate
+      = editor_resources.register_image ("engine://icons/translate.svg");
+  icon_rotate = editor_resources.register_image ("engine://icons/rotate.svg");
   icon_scale = editor_resources.register_image ("engine://icons/scale.svg");
   icon_refresh = editor_resources.register_image ("engine://icons/refresh.svg");
   editor_resources.load (icon_refresh);
   icon_grid = editor_resources.register_image ("engine://icons/grid.svg");
   editor_resources.load (icon_grid);
-  icon_welcome_bg = editor_resources.register_image ("engine://icons/welcome_bg.svg");
+  icon_welcome_bg
+      = editor_resources.register_image ("engine://icons/welcome_bg.svg");
   editor_resources.load (icon_welcome_bg);
 
   // Default editor bindings
-  editor_input_map.bindings["toggle_game_focus"] = wsl::input::key_binding{
-    .mod = SDL_KMOD_NONE,
-    .scancode = SDL_SCANCODE_F1
-  };
+  editor_input_map.bindings["toggle_game_focus"]
+      = wsl::input::key_binding{ .mod = SDL_KMOD_NONE,
+                                 .scancode = SDL_SCANCODE_F1 };
 }
 
 editor_context::~editor_context () = default;
@@ -165,34 +161,40 @@ editor_context::get_debug_renderer () const
 void
 editor_context::re_register_editor_resources ()
 {
-  spdlog::debug("re_register_editor_resources: called");
+  wsl::log::editor ()->trace ("Re-registering editor resources");
 
   // Re-register all editor icons after a project load clears resources
   icon_signal = editor_resources.register_image ("engine://icons/signal.svg");
-  icon_singleton = editor_resources.register_image ("engine://icons/singleton.svg");
+  icon_singleton
+      = editor_resources.register_image ("engine://icons/singleton.svg");
   icon_system = editor_resources.register_image ("engine://icons/system.svg");
   icon_entity = editor_resources.register_image ("engine://icons/entity.svg");
-  icon_inspector = editor_resources.register_image ("engine://icons/inspector.svg");
+  icon_inspector
+      = editor_resources.register_image ("engine://icons/inspector.svg");
 
   icon_show = editor_resources.register_image ("engine://icons/show.svg");
   icon_hide = editor_resources.register_image ("engine://icons/hide.svg");
   editor_resources.load (icon_show);
   editor_resources.load (icon_hide);
 
-  icon_focus_cam = editor_resources.register_image ("engine://icons/focus_cam.svg");
-  icon_reset_cam = editor_resources.register_image ("engine://icons/reset_cam.svg");
+  icon_focus_cam
+      = editor_resources.register_image ("engine://icons/focus_cam.svg");
+  icon_reset_cam
+      = editor_resources.register_image ("engine://icons/reset_cam.svg");
   icon_play = editor_resources.register_image ("engine://icons/play.svg");
   editor_resources.load (icon_play);
   icon_pause = editor_resources.register_image ("engine://icons/pause.svg");
   icon_stop = editor_resources.register_image ("engine://icons/stop.svg");
-  icon_translate = editor_resources.register_image ("engine://icons/translate.svg");
+  icon_translate
+      = editor_resources.register_image ("engine://icons/translate.svg");
   icon_rotate = editor_resources.register_image ("engine://icons/rotate.svg");
   icon_scale = editor_resources.register_image ("engine://icons/scale.svg");
   icon_refresh = editor_resources.register_image ("engine://icons/refresh.svg");
   editor_resources.load (icon_refresh);
   icon_grid = editor_resources.register_image ("engine://icons/grid.svg");
   editor_resources.load (icon_grid);
-  icon_welcome_bg = editor_resources.register_image ("engine://icons/welcome_bg.svg");
+  icon_welcome_bg
+      = editor_resources.register_image ("engine://icons/welcome_bg.svg");
   editor_resources.load (icon_welcome_bg);
 }
 
@@ -209,8 +211,8 @@ editor_context::register_meta ()
 }
 
 bool
-editor_context::custom_inspect (const char *label,
-                                wsl::comp::singl::runtime_context *runtime_ctx_ptr)
+editor_context::custom_inspect (
+    const char *label, wsl::comp::singl::runtime_context *runtime_ctx_ptr)
 {
   (void)label;
   (void)runtime_ctx_ptr;
@@ -223,7 +225,7 @@ editor_context::custom_inspect (const char *label,
 
   if (ImGui::TreeNode ("Editor Camera")) {
     ImGui::DragFloat3 ("Position", &editor_cam_pos.x, 0.1F);
-    
+
     glm::vec3 euler = glm::degrees (glm::eulerAngles (editor_cam_rot));
     if (ImGui::DragFloat3 ("Rotation (Euler)", &euler.x, 0.1F)) {
       editor_cam_rot = glm::quat (glm::radians (euler));
@@ -266,7 +268,7 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
 
   if (scene == nullptr) {
     return false;
-}
+  }
 
   bool const running = runtime_ctx.is_running;
 
@@ -290,17 +292,19 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
     out.world_pos = editor_cam_pos;
     out.view = glm::mat4_cast (glm::inverse (editor_cam_rot));
     out.view = glm::translate (out.view, -editor_cam_pos);
-    out.proj = glm::perspective (glm::radians (editor_camera.fov),
-                                 out.aspect_ratio, editor_camera.near,
-                                 editor_camera.far);
+    out.proj
+        = glm::perspective (glm::radians (editor_camera.fov), out.aspect_ratio,
+                            editor_camera.near, editor_camera.far);
     out.valid = true;
   } else {
-    if (registry.valid (out.entity) && registry.all_of<wsl::comp::camera> (out.entity)) {
+    if (registry.valid (out.entity)
+        && registry.all_of<wsl::comp::camera> (out.entity)) {
       const auto &cam = registry.get<wsl::comp::camera> (out.entity);
       if (registry.all_of<wsl::comp::world_transform> (out.entity)) {
         const auto &wt = registry.get<wsl::comp::world_transform> (out.entity);
-        out.world_pos = glm::vec3 (wt.value[3]);
-        out.view = glm::inverse (wt.value);
+        glm::mat4 const wtm = wt.value;
+        out.world_pos = glm::vec3 (wtm[3]);
+        out.view = glm::inverse (wtm);
         out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
                                      cam.near, cam.far);
         out.valid = true;
@@ -337,11 +341,11 @@ editor_context::focus_editor_camera_to_point (const glm::vec3 &target_world_pos)
   glm::vec3 dir = glm::normalize (editor_cam_pos - target_world_pos);
   if (glm::length (dir) < 0.001F) {
     dir = glm::vec3 (0, 0, 1);
-}
+  }
 
   glm::vec3 const new_pos = target_world_pos + dir * 5.0F;
-  glm::quat const new_rot = make_look_at_quat (new_pos, target_world_pos,
-                                         glm::vec3 (0, 1, 0));
+  glm::quat const new_rot
+      = make_look_at_quat (new_pos, target_world_pos, glm::vec3 (0, 1, 0));
 
   m_cam_anim.begin (new_pos, new_rot);
 }
@@ -354,8 +358,7 @@ editor_context::cancel_editor_camera_anim ()
 
 glm::quat
 editor_context::make_look_at_quat (const glm::vec3 &cam_pos,
-                                   const glm::vec3 &target,
-                                   const glm::vec3 &up) 
+                                   const glm::vec3 &target, const glm::vec3 &up)
 {
   glm::mat4 const m = glm::lookAt (cam_pos, target, up);
   return glm::inverse (glm::quat_cast (m));

@@ -5,9 +5,8 @@
 #include "renderer_imgui.hpp"
 #include "physics_debug_renderer.hpp"
 #include "engine_ui.hpp"
+#include "wsl/log/log.hpp"
 #include <filesystem>
-#include <spdlog/spdlog.h>
-
 namespace editor
 {
 
@@ -21,10 +20,7 @@ editor_app::editor_app (const std::string &name, int width, int height,
   m_server->set_editor_app (this);
 }
 
-editor_app::~editor_app ()
-{
-  m_server->stop ();
-}
+editor_app::~editor_app () { m_server->stop (); }
 
 std::string
 editor_app::execute_command (const std::string &command)
@@ -76,28 +72,24 @@ editor_app::on_update (double dt)
   wsl::editor_app::on_update (dt);
 
   // Start or restart the editor server when a project becomes loaded
-  if (auto current_proj = m_runtime_context->resource_manager.current_project ())
-    {
-      std::string proj_root
-          = std::filesystem::weakly_canonical (current_proj->root_path).string ();
-      if (m_project_path != proj_root)
-        {
-          m_project_path = proj_root;
-          if (m_server)
-            {
-              if (m_server->is_running ())
-                {
-                  m_server->stop ();
-                }
-              spdlog::info ("editor_app: starting server for project: {}",
-                            m_project_path);
-              if (!m_server->start (m_project_path))
-                {
-                  spdlog::error ("editor_app: failed to start editor server");
-                }
-            }
+  if (auto current_proj
+      = m_runtime_context->resource_manager.current_project ()) {
+    std::string proj_root
+        = std::filesystem::weakly_canonical (current_proj->root_path).string ();
+    if (m_project_path != proj_root) {
+      m_project_path = proj_root;
+      if (m_server) {
+        if (m_server->is_running ()) {
+          m_server->stop ();
         }
+        wsl::log::editor ()->info ("Starting server for project: {}",
+                                   m_project_path);
+        if (!m_server->start (m_project_path)) {
+          wsl::log::editor ()->error ("Failed to start editor server");
+        }
+      }
     }
+  }
 
   // Poll editor server for incoming commands
   m_server->poll ();

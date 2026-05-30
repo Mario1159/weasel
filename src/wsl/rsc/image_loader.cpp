@@ -1,16 +1,15 @@
 #include "image_loader.hpp"
 #include "gfx/image.hpp"
 #include "stb_image.h"
+#include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
-#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_surface.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3_image/SDL_image.h>
-#include <spdlog/spdlog.h>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -54,8 +53,8 @@ image_loader::load_cpu (const std::string &path)
     int channels;
     float *data = stbi_loadf (path.c_str (), &w, &h, &channels, 4);
     if (data == nullptr) {
-      SDL_Log ("stbi_loadf failed for %s: %s", path.c_str (),
-               stbi_failure_reason ());
+      wsl::log::rsc ()->error ("stbi_loadf failed for {}: {}", path,
+                               stbi_failure_reason ());
       return {};
     }
 
@@ -86,39 +85,42 @@ image_loader::load_cpu (const std::string &path)
     const int desired_px = SVG_TARGET_LOGICAL_PX * SVG_RASTER_SCALE;
 
     // Read SVG file into memory
-    std::ifstream ifs(path, std::ios::binary);
+    std::ifstream ifs (path, std::ios::binary);
     if (!ifs) {
-      SDL_Log("Failed to open SVG %s", path.c_str());
+      wsl::log::rsc ()->error ("Failed to open SVG: {}", path);
       return {};
     }
 
-    std::string svg_src((std::istreambuf_iterator<char>(ifs)),
-                        std::istreambuf_iterator<char>());
+    std::string svg_src ((std::istreambuf_iterator<char> (ifs)),
+                         std::istreambuf_iterator<char> ());
 
-    SDL_IOStream *io = SDL_IOFromConstMem(svg_src.data(), svg_src.size());
+    SDL_IOStream *io = SDL_IOFromConstMem (svg_src.data (), svg_src.size ());
     if (io == nullptr) {
-      SDL_Log("SDL_IOFromConstMem failed for %s: %s", path.c_str(), SDL_GetError());
+      wsl::log::rsc ()->error ("SDL_IOFromConstMem failed for {}: {}", path,
+                               SDL_GetError ());
       return {};
     }
 
     // IMG_LoadSizedSVG_IO rasterizes at the requested pixel size.
-    SDL_Surface *svg_surf = IMG_LoadSizedSVG_IO(io, desired_px, desired_px);
+    SDL_Surface *svg_surf = IMG_LoadSizedSVG_IO (io, desired_px, desired_px);
     // IMG_LoadSizedSVG_IO does NOT close the SDL_IOStream; close it explicitly.
-    SDL_CloseIO(io);
+    SDL_CloseIO (io);
 
     if (svg_surf == nullptr) {
-      SDL_Log("IMG_LoadSizedSVG_IO failed for %s: %s", path.c_str(), SDL_GetError());
+      wsl::log::rsc ()->error ("IMG_LoadSizedSVG_IO failed for {}: {}", path,
+                               SDL_GetError ());
       return {};
     }
 
-    auto cpu = std::make_shared<raw::image_cpu>();
+    auto cpu = std::make_shared<raw::image_cpu> ();
     cpu->surface = svg_surf;
     return cpu;
   }
 
   SDL_Surface *surf = IMG_Load (path.c_str ());
   if (surf == nullptr) {
-    SDL_Log ("Failed to load image %s: %s", path.c_str (), SDL_GetError ());
+    wsl::log::rsc ()->error ("Failed to load image {}: {}", path,
+                             SDL_GetError ());
     return {};
   }
 
@@ -142,34 +144,37 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
 
   SDL_Surface *rgba = SDL_ConvertSurface (cpu.surface, convert_format);
   if (rgba == nullptr) {
-    SDL_Log ("Surface conversion failed: %s", SDL_GetError ());
+    wsl::log::rsc ()->error ("Surface conversion failed: {}", SDL_GetError ());
     return {};
   }
 
-  // Convert to premultiplied alpha in-place for nicer compositing when GPU uses premultiplied blending.
-  // Use SDL helpers to be correct with pixel formats.
+  // Convert to premultiplied alpha in-place for nicer compositing when GPU uses
+  // premultiplied blending. Use SDL helpers to be correct with pixel formats.
   if (convert_format == SDL_PIXELFORMAT_RGBA32) {
-    SDL_LockSurface(rgba);
+    SDL_LockSurface (rgba);
     const int w = rgba->w;
     const int h = rgba->h;
     const int pitch = rgba->pitch;
-    const SDL_PixelFormatDetails *fmt_details = SDL_GetPixelFormatDetails(rgba->format);
-    const SDL_Palette *fmt_palette = nullptr; // non-indexed formats don't need a palette
+    const SDL_PixelFormatDetails *fmt_details
+        = SDL_GetPixelFormatDetails (rgba->format);
+    const SDL_Palette *fmt_palette
+        = nullptr; // non-indexed formats don't need a palette
     for (int y = 0; y < h; ++y) {
-      uint8_t *row = static_cast<uint8_t *>(rgba->pixels) + y * pitch;
+      uint8_t *row = static_cast<uint8_t *> (rgba->pixels) + y * pitch;
       for (int x = 0; x < w; ++x) {
         uint32_t pixel = *(uint32_t *)(row + x * 4);
         uint8_t r, g, b, a;
-        SDL_GetRGBA(pixel, fmt_details, fmt_palette, &r, &g, &b, &a);
-        if (a == 255) continue;
-        uint8_t pr = static_cast<uint8_t>((int(r) * int(a) + 127) / 255);
-        uint8_t pg = static_cast<uint8_t>((int(g) * int(a) + 127) / 255);
-        uint8_t pb = static_cast<uint8_t>((int(b) * int(a) + 127) / 255);
-        uint32_t mapped = SDL_MapRGBA(fmt_details, fmt_palette, pr, pg, pb, a);
+        SDL_GetRGBA (pixel, fmt_details, fmt_palette, &r, &g, &b, &a);
+        if (a == 255)
+          continue;
+        uint8_t pr = static_cast<uint8_t> ((int (r) * int (a) + 127) / 255);
+        uint8_t pg = static_cast<uint8_t> ((int (g) * int (a) + 127) / 255);
+        uint8_t pb = static_cast<uint8_t> ((int (b) * int (a) + 127) / 255);
+        uint32_t mapped = SDL_MapRGBA (fmt_details, fmt_palette, pr, pg, pb, a);
         *(uint32_t *)(row + x * 4) = mapped;
       }
     }
-    SDL_UnlockSurface(rgba);
+    SDL_UnlockSurface (rgba);
   }
 
   const Uint32 width = rgba->w;
@@ -197,16 +202,17 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    default_sampler = SDL_CreateGPUSampler(device, &sampler_info);
+    default_sampler = SDL_CreateGPUSampler (device, &sampler_info);
     if (default_sampler == nullptr) {
-      SDL_Log("Failed to create default sampler: %s", SDL_GetError());
+      wsl::log::rsc ()->warn ("Failed to create default sampler: {}",
+                              SDL_GetError ());
       // continue without sampler
     }
   }
 
-  // If the surface is HDR (16 bytes per pixel / float), avoid CPU mip generation
-  // because SDL_BlitSurfaceScaled doesn't reliably support float surfaces on
-  // all backends. Upload only level 0 in that case.
+  // If the surface is HDR (16 bytes per pixel / float), avoid CPU mip
+  // generation because SDL_BlitSurfaceScaled doesn't reliably support float
+  // surfaces on all backends. Upload only level 0 in that case.
   if (bytes_per_pixel == 16) {
     SDL_GPUTextureCreateInfo info{};
     info.type = SDL_GPU_TEXTURETYPE_2D;
@@ -296,7 +302,6 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     return {};
   }
 
-
   SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer (device);
   SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass (cmd);
 
@@ -313,7 +318,8 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     } else {
       level_surf = SDL_CreateSurface ((int)lw, (int)lh, convert_format);
       if (level_surf == nullptr) {
-        SDL_Log ("Failed to create mip surface: %s", SDL_GetError ());
+        wsl::log::rsc ()->error ("Failed to create mip surface: {}",
+                                 SDL_GetError ());
         // abort mip generation; cleanup and return
         SDL_EndGPUCopyPass (copy);
         SDL_SubmitGPUCommandBuffer (cmd);
@@ -324,18 +330,21 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
 
       // Use SDL_ScaleSurface to produce a properly scaled surface for the mip
       // level. SDL_ScaleSurface allocates a new surface we own and can upload.
-      SDL_Surface *scaled = SDL_ScaleSurface(rgba, (int)lw, (int)lh, SDL_SCALEMODE_LINEAR);
+      SDL_Surface *scaled
+          = SDL_ScaleSurface (rgba, (int)lw, (int)lh, SDL_SCALEMODE_LINEAR);
       if (scaled == nullptr) {
-        SDL_Log("SDL_ScaleSurface failed: %s", SDL_GetError());
-        SDL_DestroySurface(level_surf);
-        SDL_EndGPUCopyPass(copy);
-        SDL_SubmitGPUCommandBuffer(cmd);
-        SDL_ReleaseGPUTexture(device, texture);
-        SDL_DestroySurface(rgba);
+        wsl::log::rsc ()->error ("SDL_ScaleSurface failed: {}",
+                                 SDL_GetError ());
+        SDL_DestroySurface (level_surf);
+        SDL_EndGPUCopyPass (copy);
+        SDL_SubmitGPUCommandBuffer (cmd);
+        SDL_ReleaseGPUTexture (device, texture);
+        SDL_DestroySurface (rgba);
         return {};
       }
       // Replace level_surf with the scaled result
-      if (level_surf != nullptr && level_surf != rgba) SDL_DestroySurface(level_surf);
+      if (level_surf != nullptr && level_surf != rgba)
+        SDL_DestroySurface (level_surf);
       level_surf = scaled;
     }
 
@@ -346,8 +355,10 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
 
     SDL_GPUTransferBuffer *tb = SDL_CreateGPUTransferBuffer (device, &tb_info);
     if (tb == nullptr) {
-      SDL_Log ("Failed to create transfer buffer: %s", SDL_GetError ());
-      if (level != 0) SDL_DestroySurface (level_surf);
+      wsl::log::rsc ()->error ("Failed to create transfer buffer: {}",
+                               SDL_GetError ());
+      if (level != 0)
+        SDL_DestroySurface (level_surf);
       SDL_EndGPUCopyPass (copy);
       SDL_SubmitGPUCommandBuffer (cmd);
       SDL_ReleaseGPUTexture (device, texture);
@@ -385,7 +396,8 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     SDL_UploadToGPUTexture (copy, &src_info, &dst, false);
 
     SDL_ReleaseGPUTransferBuffer (device, tb);
-    if (level != 0) SDL_DestroySurface (level_surf);
+    if (level != 0)
+      SDL_DestroySurface (level_surf);
   }
 
   SDL_EndGPUCopyPass (copy);

@@ -43,7 +43,8 @@ namespace fs = std::filesystem;
 namespace
 {
 
-constexpr std::string_view k_generated_module_file = "runtime_module.generated.cpp";
+constexpr std::string_view k_generated_module_file
+    = "runtime_module.generated.cpp";
 
 bool
 is_cpp_file (const fs::path &path)
@@ -68,29 +69,28 @@ load_compile_command ()
   std::ifstream input (compile_commands_path);
   if (!input) {
     wsl::log::cmake ()->error ("Runtime build could not open {}",
-                   compile_commands_path.string ());
+                               compile_commands_path.string ());
     return std::nullopt;
   }
 
   std::string const content ((std::istreambuf_iterator<char> (input)),
-                      std::istreambuf_iterator<char> ());
+                             std::istreambuf_iterator<char> ());
 
   rapidjson::Document doc;
   if (doc.Parse (content.c_str ()).HasParseError ()) {
     wsl::log::cmake ()->error ("Runtime build could not parse {}",
-                   compile_commands_path.string ());
+                               compile_commands_path.string ());
     return std::nullopt;
   }
 
   if (!doc.IsArray () || doc.Empty ()) {
     wsl::log::cmake ()->error ("Runtime build: {} is empty or not an array",
-                   compile_commands_path.string ());
+                               compile_commands_path.string ());
     return std::nullopt;
   }
 
   const std::string src_dir = std::string (WEASEL_SOURCE_DIR) + "/src/";
-  wsl::log::cmake ()->debug ("load_compile_command: looking for files starting with: {}",
-                              src_dir);
+  wsl::log::cmake ()->trace ("Looking for files starting with: {}", src_dir);
 
   int checked = 0;
   for (const auto &entry : doc.GetArray ()) {
@@ -102,20 +102,20 @@ load_compile_command ()
     const std::string file = entry["file"].GetString ();
     checked++;
     if (checked <= 3) {
-      wsl::log::cmake ()->debug ("load_compile_command: checking file: {}", file);
+      wsl::log::cmake ()->trace ("Checking file: {}", file);
     }
     if (file.compare (0, src_dir.length (), src_dir) == 0) {
-      wsl::log::cmake ()->debug ("load_compile_command: Found compile command for: {}",
-                                  file);
+      wsl::log::cmake ()->trace ("Found compile command for: {}", file);
       return std::make_pair (entry["directory"].GetString (),
                              entry["command"].GetString ());
     }
   }
-  wsl::log::cmake ()->debug (
-      "load_compile_command: checked {} entries, found none matching", checked);
+  wsl::log::cmake ()->trace ("Checked {} entries, found none matching",
+                             checked);
 
-  wsl::log::cmake ()->error ("Runtime build: no suitable compile command found in {}",
-                 compile_commands_path.string ());
+  wsl::log::cmake ()->error (
+      "Runtime build: no suitable compile command found in {}",
+      compile_commands_path.string ());
   return std::nullopt;
 }
 
@@ -200,15 +200,16 @@ void
 write_runtime_meta_context_sync (std::ostream &output)
 {
   const std::uintptr_t shared_meta_ctx = shared_meta_context_address ();
-  wsl::log::cmake ()->debug ("write_runtime_meta_context_sync: shared_meta_ctx address: {}",
-                             shared_meta_ctx);
+  wsl::log::cmake ()->trace (
+      "write_runtime_meta_context_sync: shared_meta_ctx address: {}",
+      shared_meta_ctx);
 
   output << "namespace {\n";
   output << "[[maybe_unused]] const bool weasel_runtime_meta_context_synced = "
-             "[]() {\n";
+            "[]() {\n";
   output << "  wsl::reg::runtime::runtime_detail::sync_runtime_state (\n";
   output << "      reinterpret_cast<void *> (static_cast<std::uintptr_t> ("
-       << shared_meta_ctx << "ULL)));\n";
+         << shared_meta_ctx << "ULL)));\n";
   output << "  return true;\n";
   output << "}();\n";
   output << "} // namespace\n\n";
@@ -227,24 +228,24 @@ apply_interpreted_registrations (runtime_module_registration_context &ctx)
 {
   std::size_t registered_count = 0;
 
-  for (runtime_registrar::registration_fn fn
-       : runtime_registrar::component_registrations ()) {
+  for (runtime_registrar::registration_fn fn :
+       runtime_registrar::component_registrations ()) {
     if (fn != nullptr) {
       fn (ctx);
       ++registered_count;
     }
   }
 
-  for (runtime_registrar::registration_fn fn
-       : runtime_registrar::singleton_registrations ()) {
+  for (runtime_registrar::registration_fn fn :
+       runtime_registrar::singleton_registrations ()) {
     if (fn != nullptr) {
       fn (ctx);
       ++registered_count;
     }
   }
 
-  for (runtime_registrar::registration_fn fn
-       : runtime_registrar::system_registrations ()) {
+  for (runtime_registrar::registration_fn fn :
+       runtime_registrar::system_registrations ()) {
     if (fn != nullptr) {
       fn (ctx);
       ++registered_count;
@@ -256,16 +257,16 @@ apply_interpreted_registrations (runtime_module_registration_context &ctx)
 
 } // anonymous namespace
 
-// Member function definitions - inside namespace runtime, outside anonymous namespace
+// Member function definitions - inside namespace runtime, outside anonymous
+// namespace
 
-runtime_project_module::runtime_project_module (comp::singl::runtime_context *runtime_ctx)
+runtime_project_module::runtime_project_module (
+    comp::singl::runtime_context *runtime_ctx)
     : m_runtime_ctx (runtime_ctx)
 {
 }
 
-runtime_project_module::~runtime_project_module ()
-{
-}
+runtime_project_module::~runtime_project_module () {}
 
 void
 runtime_project_module::gather_files (const fs::path &base, source_set &out)
@@ -303,12 +304,13 @@ runtime_project_module::write_generated_translation_unit (
   std::ofstream output (generated_path);
   if (!output) {
     wsl::log::cmake ()->error ("Failed to write runtime module source: {}",
-                   generated_path.string ());
+                               generated_path.string ());
     return false;
   }
 
   output << "#include \""
-         << (fs::path (WEASEL_SOURCE_DIR) / "src/wsl/reg/runtime_project_module_api.hpp")
+         << (fs::path (WEASEL_SOURCE_DIR)
+             / "src/wsl/reg/runtime_project_module_api.hpp")
                 .generic_string ()
          << "\"\n";
   output << "#include <cstdint>\n\n";
@@ -344,14 +346,16 @@ runtime_project_module::initialize_interpreter ()
 
   const auto command_base = make_shared_command_base (compile_command->second);
   if (!command_base) {
-    wsl::log::cmake ()->error ("Runtime interpretation could not derive compiler "
-                   "arguments from compile_commands.json");
+    wsl::log::cmake ()->error (
+        "Runtime interpretation could not derive compiler "
+        "arguments from compile_commands.json");
     return false;
   }
 
   std::vector<std::string> all_args = split_command_line (*command_base);
   if (all_args.empty ()) {
-    wsl::log::cmake ()->error ("Runtime interpretation could not parse compiler arguments");
+    wsl::log::cmake ()->error (
+        "Runtime interpretation could not parse compiler arguments");
     return false;
   }
 
@@ -381,14 +385,15 @@ runtime_project_module::initialize_interpreter ()
   for (const auto &a : m_interpreter_args_storage) {
     args_str += a + " ";
   }
-  wsl::log::cmake ()->debug ("interpret: compiler args: {}", args_str);
+  wsl::log::cmake ()->trace ("Compiler args: {}", args_str);
 
   // Check if entt is in the args
   bool has_entt = false;
   for (size_t i = 0; i < m_interpreter_args_storage.size (); ++i) {
     if (m_interpreter_args_storage[i] == "-isystem"
         && i + 1 < m_interpreter_args_storage.size ()
-        && m_interpreter_args_storage[i + 1].find ("entt") != std::string::npos) {
+        && m_interpreter_args_storage[i + 1].find ("entt")
+               != std::string::npos) {
       has_entt = true;
       break;
     }
@@ -397,7 +402,7 @@ runtime_project_module::initialize_interpreter ()
       break;
     }
   }
-  wsl::log::cmake ()->debug ("interpret: entt in args: {}", has_entt);
+  wsl::log::cmake ()->trace ("entt in args: {}", has_entt);
 
   ::clang::IncrementalCompilerBuilder builder;
   builder.SetCompilerArgs (m_interpreter_args);
@@ -412,7 +417,7 @@ runtime_project_module::initialize_interpreter ()
   }
   if (!ci) {
     wsl::log::cmake ()->error ("Failed to create IncrementalCompiler: {}",
-                   ::llvm::toString (ci.takeError ()));
+                               ::llvm::toString (ci.takeError ()));
     return false;
   }
 
@@ -424,8 +429,9 @@ runtime_project_module::initialize_interpreter ()
 
   auto expected_interpreter = ::clang::Interpreter::create (std::move (*ci));
   if (!expected_interpreter) {
-    wsl::log::cmake ()->error ("Failed to create Interpreter: {}",
-                   ::llvm::toString (expected_interpreter.takeError ()));
+    wsl::log::cmake ()->error (
+        "Failed to create Interpreter: {}",
+        ::llvm::toString (expected_interpreter.takeError ()));
     return false;
   }
   m_interpreter = std::move (*expected_interpreter);
@@ -436,21 +442,21 @@ runtime_project_module::initialize_interpreter ()
   auto &ci_ref = *m_interpreter->getCompilerInstance ();
   auto &header_search_opts = ci_ref.getHeaderSearchOpts ();
 
-  header_search_opts.AddPath (WEASEL_SOURCE_DIR, ::clang::frontend::Angled, false,
-                            false);
-  header_search_opts.AddPath (weasel_src_include, ::clang::frontend::Angled, false,
-                            false);
-  header_search_opts.AddPath (WEASEL_BUILD_DIR, ::clang::frontend::Angled, false,
-                             false);
+  header_search_opts.AddPath (WEASEL_SOURCE_DIR, ::clang::frontend::Angled,
+                              false, false);
+  header_search_opts.AddPath (weasel_src_include, ::clang::frontend::Angled,
+                              false, false);
+  header_search_opts.AddPath (WEASEL_BUILD_DIR, ::clang::frontend::Angled,
+                              false, false);
 
   const fs::path entt_include
       = fs::path (WEASEL_BUILD_DIR) / "_deps" / "entt-src" / "src";
-  header_search_opts.AddPath (entt_include.string (),
-                             ::clang::frontend::Angled, false, false);
+  header_search_opts.AddPath (entt_include.string (), ::clang::frontend::Angled,
+                              false, false);
 
   if (!m_loaded_project_root.empty ()) {
     header_search_opts.AddPath (m_loaded_project_root.string (),
-                              ::clang::frontend::Angled, false, false);
+                                ::clang::frontend::Angled, false, false);
   }
 
   return true;
@@ -459,29 +465,29 @@ runtime_project_module::initialize_interpreter ()
 bool
 runtime_project_module::interpret (const fs::path &generated_path)
 {
-  wsl::log::cmake ()->debug ("interpret: clearing previous registrations");
+  wsl::log::cmake ()->trace ("Clearing previous registrations");
   runtime_registrar::component_registrations ().clear ();
   runtime_registrar::singleton_registrations ().clear ();
   runtime_registrar::system_registrations ().clear ();
 
-  wsl::log::cmake ()->debug ("interpret: initializing interpreter");
+  wsl::log::cmake ()->trace ("Initializing interpreter");
   if (!initialize_interpreter ()) {
-    wsl::log::cmake ()->error ("interpret: failed to initialize interpreter");
+    wsl::log::cmake ()->error ("Failed to initialize interpreter");
     return false;
   }
 
-  wsl::log::cmake ()->debug ("interpret: loading file {}", generated_path.string ());
+  wsl::log::cmake ()->trace ("Loading file {}", generated_path.string ());
 
   std::ifstream file (generated_path);
   std::string const code ((std::istreambuf_iterator<char> (file)),
-                     std::istreambuf_iterator<char> ());
+                          std::istreambuf_iterator<char> ());
 
-  wsl::log::cmake ()->debug ("interpret: generated code content:\n{}", code);
+  wsl::log::cmake ()->trace ("Generated code content:\n{}", code);
 
   auto error = m_interpreter->ParseAndExecute (code);
   if (error) {
     wsl::log::cmake ()->error ("Clang Interpreter failed to interpret {}",
-                   generated_path.string ());
+                               generated_path.string ());
     llvm::consumeError (std::move (error));
     return false;
   }
@@ -492,21 +498,21 @@ runtime_project_module::interpret (const fs::path &generated_path)
 void
 runtime_project_module::finalize_load ()
 {
-  wsl::log::cmake ()->debug ("finalize_load: clearing runtime registries");
+  wsl::log::cmake ()->trace ("Clearing runtime registries");
   clear_runtime_registries (*m_runtime_ctx);
   runtime_registrar::set_active_runtime_context (m_runtime_ctx);
 
   runtime_module_registration_context ctx{
-      m_runtime_ctx->component_registry,
-      m_runtime_ctx->singleton_registry,
-      m_runtime_ctx->system_factory_registry,
+    m_runtime_ctx->component_registry,
+    m_runtime_ctx->singleton_registry,
+    m_runtime_ctx->system_factory_registry,
   };
 
-  wsl::log::cmake ()->debug ("finalize_load: registering new entries");
+  wsl::log::cmake ()->trace ("Registering new entries");
   const std::size_t registered_count = apply_interpreted_registrations (ctx);
 
   wsl::log::cmake ()->debug ("Clang Interpreter runtime registered {} entries",
-                 registered_count);
+                             registered_count);
 }
 
 void
@@ -516,7 +522,7 @@ runtime_project_module::unload ()
     return;
   }
 
-  wsl::log::cmake ()->debug ("runtime_project_module: unloading module");
+  wsl::log::cmake ()->trace ("Unloading module");
 
   if (m_runtime_ctx != nullptr) {
     clear_runtime_registries (*m_runtime_ctx);
@@ -538,19 +544,25 @@ runtime_project_module::compile_and_load (const rsc::project &project)
 {
   const fs::path project_root = fs::weakly_canonical (project.root_path);
 
-  wsl::log::cmake ()->debug ("Runtime module: compile_and_load started for project root: {}",
-                 project_root.string ());
+  wsl::log::cmake ()->trace ("Compile and load started for project root: {}",
+                             project_root.string ());
 
   source_set sources;
-  wsl::log::cmake ()->debug (
+  wsl::log::cmake ()->trace (
       "Gathering files from components, systems and singletons paths...");
-  wsl::log::cmake ()->debug ("  components_path: {}", (project_root / project.components_path).string ());
-  wsl::log::cmake ()->debug ("  systems_path: {}", (project_root / project.systems_path).string ());
-  wsl::log::cmake ()->debug ("  singletons_path: {}", (project_root / project.singletons_path).string ());
+  wsl::log::cmake ()->trace (
+      "  components_path: {}",
+      (project_root / project.components_path).string ());
+  wsl::log::cmake ()->trace ("  systems_path: {}",
+                             (project_root / project.systems_path).string ());
+  wsl::log::cmake ()->trace (
+      "  singletons_path: {}",
+      (project_root / project.singletons_path).string ());
   gather_files (project_root / project.components_path, sources);
   gather_files (project_root / project.systems_path, sources);
   gather_files (project_root / project.singletons_path, sources);
-  wsl::log::cmake ()->debug ("Gathered {} headers and {} sources", sources.headers.size (), sources.sources.size ());
+  wsl::log::cmake ()->trace ("Gathered {} headers and {} sources",
+                             sources.headers.size (), sources.sources.size ());
 
   const fs::path build_dir = project_root / "build" / "weasel_runtime";
   fs::create_directories (build_dir);
@@ -560,14 +572,14 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   m_loaded_project_root = project_root;
 
   wsl::log::cmake ()->debug ("Writing generated translation unit to: {}",
-                 generated_path.string ());
+                             generated_path.string ());
   if (!write_generated_translation_unit (generated_path, sources)) {
     m_last_status = "Failed to generate the runtime module source file.";
     wsl::log::cmake ()->error ("{}", m_last_status);
     return false;
   }
 
-  wsl::log::cmake ()->debug ("Starting runtime interpretation...");
+  wsl::log::cmake ()->trace ("Starting runtime interpretation...");
   if (!interpret (generated_path)) {
     m_last_status
         = "Runtime interpretation failed. Check the console for details.";
@@ -577,7 +589,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
 
   m_module_loaded = true;
   m_last_status = "Runtime systems/components interpreted and registered.";
-  wsl::log::cmake ()->debug ("{}", m_last_status);
+  wsl::log::cmake ()->trace ("{}", m_last_status);
   return true;
 }
 

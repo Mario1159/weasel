@@ -5,7 +5,6 @@
 
 #include <entt/entity/entity.hpp>
 
-
 namespace wsl
 {
 
@@ -38,6 +37,7 @@ public:
    */
   void set_active (scene *scene_ptr);
   scene &create_scene (const std::string &name, bool make_active = false);
+  scene &create_default_scene (const std::string &name, bool make_active);
   void destroy_scene (scene *scene_ptr);
 
   /*!

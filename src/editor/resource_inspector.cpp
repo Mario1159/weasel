@@ -36,13 +36,13 @@ format_size (uintmax_t size)
 {
   if (size == 0) {
     return "0 B";
-}
+  }
   if (size < 1024) {
     return std::to_string (size) + " B";
-}
-  if (size < static_cast<uintmax_t>(1024 * 1024)) {
+  }
+  if (size < static_cast<uintmax_t> (1024 * 1024)) {
     return std::to_string (size / 1024) + " KB";
-}
+  }
   char buf[64];
   std::snprintf (buf, sizeof (buf), "%.2f MB",
                  (double)size / (1024.0 * 1024.0));
@@ -166,7 +166,7 @@ resource_inspector::draw ()
 {
   if (!m_visible || (m_runtime_ctx == nullptr)) {
     return;
-}
+  }
 
   if (!ImGui::Begin ("Resources")) {
     ImGui::End ();
@@ -185,7 +185,7 @@ resource_inspector::draw ()
   static active_tab tab = active_tab::models;
 
   // ---------- Splitter state ----------
-  ImGuiIO  const&io = ImGui::GetIO ();
+  ImGuiIO const &io = ImGui::GetIO ();
   const float splitter_w = 6.0F;
   const float min_left_w = 220.0F;
   const float min_right_w = 260.0F;
@@ -202,12 +202,13 @@ resource_inspector::draw ()
   if (!m_show_preview) {
     effective_left_w = avail.x;
   } else {
-    effective_left_w = std::max (min_left_w,
-                                 std::min (left_w, avail.x - min_right_w - splitter_w));
-}
+    effective_left_w = std::max (
+        min_left_w, std::min (left_w, avail.x - min_right_w - splitter_w));
+  }
 
   // ================= LEFT PANEL =================
-  ImGui::BeginChild ("ResourceInspector_Left", ImVec2 (effective_left_w, 0.0F), 1);
+  ImGui::BeginChild ("ResourceInspector_Left", ImVec2 (effective_left_w, 0.0F),
+                     1);
 
   if (ImGui::BeginTabBar ("ResourceTabs")) {
 
@@ -266,7 +267,7 @@ resource_inspector::draw ()
       ImU32 col = ImGui::GetColorU32 (ImGuiCol_Separator);
       if (ImGui::IsItemHovered () || ImGui::IsItemActive ()) {
         col = ImGui::GetColorU32 (ImGuiCol_SeparatorHovered);
-}
+      }
 
       auto *dl = ImGui::GetWindowDrawList ();
       dl->AddRectFilled (
@@ -276,14 +277,14 @@ resource_inspector::draw ()
       // Drag behavior
       if (ImGui::IsItemActive ()) {
         left_w += io.MouseDelta.x;
-        left_w = std::max (min_left_w,
-                           std::min (left_w, avail.x - min_right_w - splitter_w));
+        left_w = std::max (
+            min_left_w, std::min (left_w, avail.x - min_right_w - splitter_w));
       }
 
       // Nice cursor while hovering
       if (ImGui::IsItemHovered ()) {
         ImGui::SetMouseCursor (ImGuiMouseCursor_ResizeEW);
-}
+      }
     }
 
     ImGui::SameLine (0.0F, 0.0F);
@@ -354,9 +355,10 @@ resource_inspector::draw ()
     wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
     const bool selected_scene_loaded
         = tab == active_tab::scenes && m_selected_scene != entt::null
-          && m_runtime_ctx->resource_manager.state (wsl::rsc::scene_id{ m_selected_scene })
+          && m_runtime_ctx->resource_manager.state (
+                 wsl::rsc::scene_id{ m_selected_scene })
                  == wsl::rsc::scene_state::loaded;
-    wsl::rsc::scene  const*selected_loaded_scene
+    wsl::rsc::scene const *selected_loaded_scene
         = tab == active_tab::scenes && m_selected_scene != entt::null
               ? m_runtime_ctx->resource_manager.find_loaded_scene (
                     wsl::rsc::scene_id{ m_selected_scene })
@@ -364,31 +366,40 @@ resource_inspector::draw ()
 
     // ---- Buttons ----
     if (tab == active_tab::scenes) {
+      if (ImGui::Button ("New Scene")) {
+        new_scene_dialog ();
+      }
+      ImGui::SameLine ();
+
       if (!has_selection) {
         ImGui::BeginDisabled ();
-}
+      }
 
-      auto s_info = m_runtime_ctx->resource_manager.info (wsl::rsc::scene_id{ m_selected_scene });
+      auto s_info = m_runtime_ctx->resource_manager.info (
+          wsl::rsc::scene_id{ m_selected_scene });
       bool const is_prefab = s_info && s_info->is_prefab;
 
       if (!has_selection) {
         ImGui::Button ("Load Scene");
       } else if (is_prefab) {
         if (ImGui::Button ("Instantiate Prefab")) {
-          m_runtime_ctx->resource_manager.instantiate_prefab (wsl::rsc::scene_id{ m_selected_scene });
+          m_runtime_ctx->resource_manager.instantiate_prefab (
+              wsl::rsc::scene_id{ m_selected_scene });
         }
       } else if (!selected_scene_loaded) {
         if (ImGui::Button ("Load Scene")) {
-          m_runtime_ctx->resource_manager.load (wsl::rsc::scene_id{ m_selected_scene });
+          m_runtime_ctx->resource_manager.load (
+              wsl::rsc::scene_id{ m_selected_scene });
         }
       } else {
-        const bool is_active = selected_loaded_scene != nullptr
-                               && selected_loaded_scene
-                                      == m_runtime_ctx->scene_manager.get_active ();
+        const bool is_active
+            = selected_loaded_scene != nullptr
+              && selected_loaded_scene
+                     == m_runtime_ctx->scene_manager.get_active ();
 
         if (is_active) {
           ImGui::BeginDisabled ();
-}
+        }
 
         if (ImGui::Button (is_active ? "Active Scene" : "Set Active")) {
           m_runtime_ctx->resource_manager.activate_scene (
@@ -397,21 +408,22 @@ resource_inspector::draw ()
 
         if (is_active) {
           ImGui::EndDisabled ();
-}
+        }
 
         ImGui::SameLine ();
         if (ImGui::Button ("Unload Scene")) {
-          m_runtime_ctx->resource_manager.unload (wsl::rsc::scene_id{ m_selected_scene });
+          m_runtime_ctx->resource_manager.unload (
+              wsl::rsc::scene_id{ m_selected_scene });
         }
       }
 
       if (!has_selection) {
         ImGui::EndDisabled ();
-}
+      }
     } else {
       if ((scene == nullptr) || !has_selection) {
         ImGui::BeginDisabled ();
-}
+      }
 
       if ((scene != nullptr) && has_selection) {
         bool const in_scene = scene->has_resource (type, selected_id);
@@ -424,9 +436,11 @@ resource_inspector::draw ()
             // preview-owned
             switch (type) {
             case wsl::rsc::io::resource_type::model:
-              m_runtime_ctx->resource_manager.load (wsl::rsc::model_id{ selected_id });
-              m_runtime_ctx->resource_manager.release_preview_ownership_if_matches (
+              m_runtime_ctx->resource_manager.load (
                   wsl::rsc::model_id{ selected_id });
+              m_runtime_ctx->resource_manager
+                  .release_preview_ownership_if_matches (
+                      wsl::rsc::model_id{ selected_id });
               break;
             case wsl::rsc::io::resource_type::image:
             case wsl::rsc::io::resource_type::cubemap:
@@ -442,8 +456,9 @@ resource_inspector::draw ()
 
             // If it is not the current temp preview, unload it now
             if (type != wsl::rsc::io::resource_type::model
-                  || m_runtime_ctx->resource_manager.current_preview_model ().value
-                         != selected_id) {
+                || m_runtime_ctx->resource_manager.current_preview_model ()
+                           .value
+                       != selected_id) {
 
               switch (type) {
               case wsl::rsc::io::resource_type::model:
@@ -466,14 +481,14 @@ resource_inspector::draw ()
 
       if ((scene == nullptr) || !has_selection) {
         ImGui::EndDisabled ();
-}
+      }
     }
 
     ImGui::SameLine ();
 
     if (!can_import) {
       ImGui::BeginDisabled ();
-}
+    }
 
     if (ImGui::Button ("Import")) {
       ImGui::OpenPopup ("ImportPopup");
@@ -483,52 +498,52 @@ resource_inspector::draw ()
       if (tab == active_tab::models) {
         if (ImGui::MenuItem ("Import Model (.gltf, .glb)")) {
           import_model_dialog ();
-}
+        }
       } else if (tab == active_tab::images) {
         if (ImGui::MenuItem ("Import Image (.png, .jpg, ...)")) {
           import_image_dialog ();
-}
+        }
         if (ImGui::MenuItem ("Import Cubemap (.tar, .png, .hdr)")) {
           import_cubemap_dialog ();
-}
+        }
       } else if (tab == active_tab::scenes) {
         if (ImGui::MenuItem ("Import Scene (.json)")) {
           import_scene_dialog ();
-}
+        }
       } else if (tab == active_tab::audio) {
         if (ImGui::MenuItem ("Import Audio (.wav, .mp3, .ogg)")) {
           import_audio_dialog ();
-}
+        }
       }
       ImGui::EndPopup ();
     }
 
     if (!can_import) {
       ImGui::EndDisabled ();
-}
+    }
 
     ImGui::SameLine ();
 
     if (!can_export) {
       ImGui::BeginDisabled ();
-}
+    }
 
     if (ImGui::Button ("Export")) {
       if (tab == active_tab::scenes) {
         save_scene_dialog ();
-}
+      }
     }
 
     if (!can_export) {
       ImGui::EndDisabled ();
-}
+    }
 
     ImGui::Separator ();
 
     // ---- Preview ----
     ImVec2 const preview_size = ImGui::GetContentRegionAvail ();
 
-    SDL_GPUTexture  const*preview_tex = nullptr;
+    SDL_GPUTexture const *preview_tex = nullptr;
 
     bool const should_show_checkerboard = true;
 
@@ -543,12 +558,13 @@ resource_inspector::draw ()
       entt::id_type model_to_preview = entt::null;
       if (tab == active_tab::models) {
         model_to_preview = m_selected_model;
-}
+      }
 
-      m_editor_ctx->get_imgui_renderer()->request_model_preview (
+      m_editor_ctx->get_imgui_renderer ()->request_model_preview (
           m_runtime_ctx, &m_runtime_ctx->resource_manager, model_to_preview,
           (uint32_t)child_avail.x, (uint32_t)child_avail.y);
-      preview_tex = m_editor_ctx->get_imgui_renderer()->get_model_preview_texture ();
+      preview_tex
+          = m_editor_ctx->get_imgui_renderer ()->get_model_preview_texture ();
     }
 
     auto *dl = ImGui::GetWindowDrawList ();
@@ -561,22 +577,23 @@ resource_inspector::draw ()
     for (float y = 0; y < child_avail.y; y += check_size) {
       for (float x = 0; x < child_avail.x; x += check_size) {
         bool const dark = (static_cast<int> (x / check_size)
-                     + static_cast<int> (y / check_size))
-                        % 2
-                    == 0;
+                           + static_cast<int> (y / check_size))
+                              % 2
+                          == 0;
         ImU32 const color = dark ? color_a : color_b;
 
         ImVec2 const p_min (child_min.x + x, child_min.y + y);
-        ImVec2 const p_max (child_min.x + std::min (x + check_size, child_avail.x),
-                      child_min.y + std::min (y + check_size, child_avail.y));
+        ImVec2 const p_max (
+            child_min.x + std::min (x + check_size, child_avail.x),
+            child_min.y + std::min (y + check_size, child_avail.y));
         dl->AddRectFilled (p_min, p_max, color);
       }
     }
 
     if (preview_tex != nullptr) {
       ImGui::Image ((ImTextureID)preview_tex, child_avail);
-      if ((preview_tex != nullptr) && tab == active_tab::models && (m_editor_ctx != nullptr)
-          && m_selected_model != entt::null) {
+      if ((preview_tex != nullptr) && tab == active_tab::models
+          && (m_editor_ctx != nullptr) && m_selected_model != entt::null) {
         // Must be called once per ImGui frame for the gizmo to reset hover
         // state properly
         ImViewGuizmo::SetContext (0x52455350U); // 'RESP' context
@@ -588,7 +605,8 @@ resource_inspector::draw ()
 
         glm::vec3 cam_pos;
         glm::quat cam_rot;
-        m_editor_ctx->get_imgui_renderer()->preview_get_camera (cam_pos, cam_rot);
+        m_editor_ctx->get_imgui_renderer ()->preview_get_camera (cam_pos,
+                                                                 cam_rot);
 
         const float gizmo_diameter = 256.0F * style.scale;
         const float half = gizmo_diameter * 0.5F;
@@ -598,14 +616,14 @@ resource_inspector::draw ()
         bool modified = false;
 
         ImVec2 const tool_anchor (child_min.x + child_avail.x - half - pad,
-                            child_min.y + half + pad);
+                                  child_min.y + half + pad);
 
         const float inset = half * 0.6F;
         ImVec2 const rotate_center (child_min.x + child_avail.x - inset - pad,
-                              child_min.y + inset + pad);
+                                    child_min.y + inset + pad);
 
-        modified |= ImViewGuizmo::Rotate (cam_pos, cam_rot, pivot, rotate_center,
-                                          0.01F);
+        modified |= ImViewGuizmo::Rotate (cam_pos, cam_rot, pivot,
+                                          rotate_center, 0.01F);
 
         ImVec2 btn_pos (tool_anchor.x + half
                             - ((style.toolButtonRadius * style.scale) * 2.0F),
@@ -617,8 +635,8 @@ resource_inspector::draw ()
         modified |= ImViewGuizmo::Pan (cam_pos, cam_rot, btn_pos, 0.01F);
 
         if (modified || ImViewGuizmo::IsUsing ()) {
-          m_editor_ctx->get_imgui_renderer()->preview_set_camera_from_gizmo (cam_pos,
-                                                                    cam_rot);
+          m_editor_ctx->get_imgui_renderer ()->preview_set_camera_from_gizmo (
+              cam_pos, cam_rot);
         }
       }
     } else if (tab == active_tab::audio) {
@@ -635,7 +653,8 @@ resource_inspector::draw ()
         ImGui::Button ("Stop", ImVec2 (95, 40));
         ImGui::EndDisabled ();
       } else {
-        MIX_Audio *audio = mgr.get (wsl::rsc::audio_id{ static_cast<entt::id_type>(m_selected_audio) });
+        MIX_Audio *audio = mgr.get (wsl::rsc::audio_id{
+            static_cast<entt::id_type> (m_selected_audio) });
 
         if (audio == nullptr) {
           if (ImGui::Button ("Load Audio", ImVec2 (200, 40))) {
@@ -679,46 +698,60 @@ resource_inspector::draw ()
       case active_tab::models:
         if (m_selected_model != entt::null) {
           if (auto rec = mgr.info (wsl::rsc::model_id{ m_selected_model })) {
-            info = "Model\nName: " + rec->name + "\nPath: " + rec->path + "\nState: " + to_string (rec->state) + "\nID: " + make_hex (m_selected_model);
+            info = "Model\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nState: " + to_string (rec->state)
+                   + "\nID: " + make_hex (m_selected_model);
           }
         } else if (m_selected_cubemap != entt::null) {
-          if (auto rec = mgr.info (wsl::rsc::cubemap_id{ m_selected_cubemap })) {
-            info = "Cubemap\nName: " + rec->name + "\nPath: " + rec->path + "\nState: " + to_string (rec->state) + "\nID: " + make_hex (m_selected_cubemap);
+          if (auto rec
+              = mgr.info (wsl::rsc::cubemap_id{ m_selected_cubemap })) {
+            info = "Cubemap\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nState: " + to_string (rec->state)
+                   + "\nID: " + make_hex (m_selected_cubemap);
           }
         }
         break;
       case active_tab::images:
         if (m_selected_image != entt::null) {
           if (auto rec = mgr.info (wsl::rsc::image_id{ m_selected_image })) {
-            info = "Image\nName: " + rec->name + "\nPath: " + rec->path + "\nState: " + to_string (rec->state) + "\nID: " + make_hex (m_selected_image);
+            info = "Image\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nState: " + to_string (rec->state)
+                   + "\nID: " + make_hex (m_selected_image);
           }
         }
         break;
       case active_tab::scenes:
         if (m_selected_scene != entt::null) {
           if (auto rec = mgr.info (wsl::rsc::scene_id{ m_selected_scene })) {
-            info = "Scene\nName: " + rec->name + "\nPath: " + rec->path + "\nState: " + to_string (rec->state) + "\nID: " + make_hex (m_selected_scene);
+            info = "Scene\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nState: " + to_string (rec->state)
+                   + "\nID: " + make_hex (m_selected_scene);
           }
         }
         break;
       case active_tab::audio:
         if (m_selected_audio != entt::null) {
           if (auto rec = mgr.info (wsl::rsc::audio_id{ m_selected_audio })) {
-            info = "Audio\nName: " + rec->name + "\nPath: " + rec->path + "\nState: " + to_string (rec->state) + "\nID: " + make_hex (m_selected_audio);
+            info = "Audio\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nState: " + to_string (rec->state)
+                   + "\nID: " + make_hex (m_selected_audio);
           }
         }
         break;
       case active_tab::ui_layouts:
         if (m_selected_ui_layout != entt::null) {
-          if (auto rec = mgr.info (wsl::rsc::ui_layout_id{ m_selected_ui_layout })) {
-            info = "UI Layout\nName: " + rec->name + "\nPath: " + rec->path + "\nID: " + make_hex (m_selected_ui_layout);
+          if (auto rec
+              = mgr.info (wsl::rsc::ui_layout_id{ m_selected_ui_layout })) {
+            info = "UI Layout\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nID: " + make_hex (m_selected_ui_layout);
           }
         }
         break;
       case active_tab::fonts:
         if (m_selected_font != entt::null) {
           if (auto rec = mgr.info (wsl::rsc::font_id{ m_selected_font })) {
-            info = "Font\nName: " + rec->name + "\nPath: " + rec->path + "\nID: " + make_hex (m_selected_font);
+            info = "Font\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nID: " + make_hex (m_selected_font);
           }
         }
         break;
@@ -733,21 +766,26 @@ resource_inspector::draw ()
             std::string const line = info.substr (start, i - start);
             max_w = std::max (max_w, ImGui::CalcTextSize (line.c_str ()).x);
             start = i + 1;
-            if (i != info.size ()) { lines++;
-}
+            if (i != info.size ()) {
+              lines++;
+            }
           }
         }
         float const line_h = ImGui::GetTextLineHeight () * text_scale;
         ImVec2 const text_size (max_w * text_scale, lines * line_h);
         const float margin = 8.0F;
         const float box_pad = 6.0F;
-        ImVec2 const text_pos (child_min.x + margin, child_min.y + child_avail.y - margin - text_size.y);
+        ImVec2 const text_pos (child_min.x + margin, child_min.y + child_avail.y
+                                                         - margin
+                                                         - text_size.y);
         ImVec2 const box_min (text_pos.x - box_pad, text_pos.y - box_pad);
-        ImVec2 const box_max (text_pos.x + text_size.x + box_pad, text_pos.y + text_size.y + box_pad);
+        ImVec2 const box_max (text_pos.x + text_size.x + box_pad,
+                              text_pos.y + text_size.y + box_pad);
         auto *dl2 = ImGui::GetWindowDrawList ();
         dl2->AddRectFilled (box_min, box_max, IM_COL32 (0, 0, 0, 160), 4.0F);
         dl2->AddRect (box_min, box_max, IM_COL32 (255, 255, 255, 40), 4.0F);
-        dl2->AddText (nullptr, ImGui::GetFontSize () * text_scale, text_pos, IM_COL32 (255, 255, 255, 230), info.c_str ());
+        dl2->AddText (nullptr, ImGui::GetFontSize () * text_scale, text_pos,
+                      IM_COL32 (255, 255, 255, 230), info.c_str ());
       }
     }
     ImGui::EndChild (); // PreviewChild
@@ -765,47 +803,67 @@ resource_inspector::draw_models ()
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
     if (m_show_preview) {
-      ImGui::PushStyleColor (ImGuiCol_Button, ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
+      ImGui::PushStyleColor (ImGuiCol_Button,
+                             ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
       pushed = true;
     }
     if (ImGui::Button (m_show_preview ? "P##toggle" : "P", ImVec2 (24, 24))) {
       m_show_preview = !m_show_preview;
-}
+    }
     if (pushed) {
       ImGui::PopStyleColor ();
-}
+    }
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();
     ImGui::Separator ();
 
-    static ImGuiTableFlags const flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
+    static ImGuiTableFlags const flags
+        = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable
+          | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter
+          | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY
+          | ImGuiTableFlags_RowBg;
     if (ImGui::BeginTable ("ModelTable", 5, flags)) {
       ImGui::TableSetupColumn ("Name", ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableSetupColumn ("Type", ImGuiTableColumnFlags_WidthFixed, 100.0F);
+      ImGui::TableSetupColumn ("Type", ImGuiTableColumnFlags_WidthFixed,
+                               100.0F);
       ImGui::TableSetupColumn ("Size", ImGuiTableColumnFlags_WidthFixed, 80.0F);
       ImGui::TableSetupColumn ("LODs", ImGuiTableColumnFlags_WidthFixed, 50.0F);
-      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed, 80.0F);
+      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed,
+                               80.0F);
       ImGui::TableHeadersRow ();
       auto models = mgr.list_models ();
-      struct entry { entt::id_type id; std::string name, path, type, state_str; uintmax_t size; int lods; };
+      struct entry
+      {
+        entt::id_type id;
+        std::string name, path, type, state_str;
+        uintmax_t size;
+        int lods;
+      };
       std::vector<entry> entries;
-      const bool has_project = (m_runtime_ctx->resource_manager.current_project () != nullptr);
+      const bool has_project
+          = (m_runtime_ctx->resource_manager.current_project () != nullptr);
       for (const auto &m : models) {
-        if (!has_project && (m.path.find ("builtin://") != std::string::npos ||
-                             m.path.find ("engine://") != std::string::npos)) {
+        if (!has_project
+            && (m.path.find ("builtin://") != std::string::npos
+                || m.path.find ("engine://") != std::string::npos)) {
           continue;
-}
+        }
 
         int lod_count = 0;
         if (m.state == wsl::rsc::model_state::loaded) {
           auto handle = mgr.get (wsl::rsc::model_id{ m.id });
-          if (handle && !handle->lod_groups.empty ()) { lod_count = (int)handle->lod_groups[0].levels.size ();
-}
+          if (handle && !handle->lod_groups.empty ()) {
+            lod_count = (int)handle->lod_groups[0].levels.size ();
+          }
         }
         uintmax_t fsize = 0;
-        try { fsize = std::filesystem::file_size (mgr.resolve_path (m.path)); } catch (...) {}
-        entries.push_back ({ m.id, m.name, m.path, "gltf model", to_string (m.state), fsize, lod_count });
+        try {
+          fsize = std::filesystem::file_size (mgr.resolve_path (m.path));
+        } catch (...) {
+        }
+        entries.push_back ({ m.id, m.name, m.path, "gltf model",
+                             to_string (m.state), fsize, lod_count });
       }
       for (const auto &e : entries) {
         ImSearch::SearchableItem (e.name.c_str (), [&] (const char *) {
@@ -813,25 +871,47 @@ resource_inspector::draw_models ()
           ImGui::TableNextRow ();
           ImGui::TableNextColumn ();
           bool const selected = (m_selected_model == e.id);
-          if (ImGui::Selectable (e.name.c_str (), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) {
+          if (ImGui::Selectable (e.name.c_str (), selected,
+                                 ImGuiSelectableFlags_SpanAllColumns
+                                     | ImGuiSelectableFlags_AllowOverlap)) {
             m_selected_model = e.id;
             m_selected_cubemap = entt::null;
             m_selected_lod_group = -1;
             m_selected_lod_level = -1;
-            wsl::rsc::scene  const*scene = m_runtime_ctx->scene_manager.get_active ();
-            const bool pinned = (scene && scene->has_resource (wsl::rsc::io::resource_type::model, e.id));
-            if (!pinned) { { m_runtime_ctx->resource_manager.load_preview_model_low_lod (wsl::rsc::model_id{ e.id });
-            } } else { m_runtime_ctx->resource_manager.load (wsl::rsc::model_id{ e.id }); m_runtime_ctx->resource_manager.release_preview_ownership_if_matches (wsl::rsc::model_id{ e.id }); }
+            wsl::rsc::scene const *scene
+                = m_runtime_ctx->scene_manager.get_active ();
+            const bool pinned = (scene
+                                 && scene->has_resource (
+                                     wsl::rsc::io::resource_type::model, e.id));
+            if (!pinned) {
+              {
+                m_runtime_ctx->resource_manager.load_preview_model_low_lod (
+                    wsl::rsc::model_id{ e.id });
+              }
+            } else {
+              m_runtime_ctx->resource_manager.load (wsl::rsc::model_id{ e.id });
+              m_runtime_ctx->resource_manager
+                  .release_preview_ownership_if_matches (
+                      wsl::rsc::model_id{ e.id });
+            }
           }
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (e.type.c_str ());
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (format_size (e.size).c_str ());
-          ImGui::TableNextColumn (); if (e.lods > 0) { ImGui::Text ("%d", e.lods); } else { ImGui::Text ("-");
-}
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (e.state_str.c_str ());
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (e.type.c_str ());
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (format_size (e.size).c_str ());
+          ImGui::TableNextColumn ();
+          if (e.lods > 0) {
+            ImGui::Text ("%d", e.lods);
+          } else {
+            ImGui::Text ("-");
+          }
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (e.state_str.c_str ());
           ImGui::PopID ();
         });
       }
-      ImSearch::Submit (); ImGui::EndTable ();
+      ImSearch::Submit ();
+      ImGui::EndTable ();
     }
     ImSearch::EndSearch ();
   }
@@ -846,67 +926,112 @@ resource_inspector::draw_images ()
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
     if (m_show_preview) {
-      ImGui::PushStyleColor (ImGuiCol_Button, ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
+      ImGui::PushStyleColor (ImGuiCol_Button,
+                             ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
       pushed = true;
     }
     if (ImGui::Button (m_show_preview ? "P##toggle" : "P", ImVec2 (24, 24))) {
       m_show_preview = !m_show_preview;
-}
+    }
     if (pushed) {
       ImGui::PopStyleColor ();
-}
+    }
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();
     ImGui::Separator ();
 
-    static ImGuiTableFlags const flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
+    static ImGuiTableFlags const flags
+        = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable
+          | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter
+          | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY
+          | ImGuiTableFlags_RowBg;
     if (ImGui::BeginTable ("TextureTable", 4, flags)) {
       ImGui::TableSetupColumn ("Name", ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableSetupColumn ("Type", ImGuiTableColumnFlags_WidthFixed, 100.0F);
+      ImGui::TableSetupColumn ("Type", ImGuiTableColumnFlags_WidthFixed,
+                               100.0F);
       ImGui::TableSetupColumn ("Size", ImGuiTableColumnFlags_WidthFixed, 80.0F);
-      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed, 80.0F);
+      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed,
+                               80.0F);
       ImGui::TableHeadersRow ();
       auto images = mgr.list_images ();
       auto cubemaps = mgr.list_cubemaps ();
-      struct entry { entt::id_type id; std::string name, path, type, state_str; bool is_cubemap; uintmax_t size; };
+      struct entry
+      {
+        entt::id_type id;
+        std::string name, path, type, state_str;
+        bool is_cubemap;
+        uintmax_t size;
+      };
       std::vector<entry> entries;
-      const bool has_project = (m_runtime_ctx->resource_manager.current_project () != nullptr);
+      const bool has_project
+          = (m_runtime_ctx->resource_manager.current_project () != nullptr);
       for (const auto &img : images) {
-        uintmax_t fsize = 0; try { fsize = std::filesystem::file_size (mgr.resolve_path (img.path)); } catch (...) {}
-        entries.push_back ({ img.id, img.name, img.path, "image", to_string (img.state), false, fsize });
+        uintmax_t fsize = 0;
+        try {
+          fsize = std::filesystem::file_size (mgr.resolve_path (img.path));
+        } catch (...) {
+        }
+        entries.push_back ({ img.id, img.name, img.path, "image",
+                             to_string (img.state), false, fsize });
       }
       for (const auto &c : cubemaps) {
-        if (!has_project && (c.path.find ("builtin/") != std::string::npos ||
-                             c.path.find ("engine/") != std::string::npos)) {
+        if (!has_project
+            && (c.path.find ("builtin/") != std::string::npos
+                || c.path.find ("engine/") != std::string::npos)) {
           continue;
-}
+        }
 
-        uintmax_t fsize = 0; try { fsize = std::filesystem::file_size (mgr.resolve_path (c.path)); } catch (...) {}
-        std::string type = "cubemap"; std::filesystem::path const p (c.path); std::string ext = p.extension ().string ();
-        for (auto &ch : ext) { ch = (char)std::tolower (ch);
-}
-        if (ext == ".tar") { type = "tar cubemap"; } else if (ext == ".hdr") { type = "hdr cubemap"; } else if (ext == ".png") { type = "png cubemap";
-}
-        entries.push_back ({ c.id, c.name, c.path, type, to_string (c.state), true, fsize });
+        uintmax_t fsize = 0;
+        try {
+          fsize = std::filesystem::file_size (mgr.resolve_path (c.path));
+        } catch (...) {
+        }
+        std::string type = "cubemap";
+        std::filesystem::path const p (c.path);
+        std::string ext = p.extension ().string ();
+        for (auto &ch : ext) {
+          ch = (char)std::tolower (ch);
+        }
+        if (ext == ".tar") {
+          type = "tar cubemap";
+        } else if (ext == ".hdr") {
+          type = "hdr cubemap";
+        } else if (ext == ".png") {
+          type = "png cubemap";
+        }
+        entries.push_back (
+            { c.id, c.name, c.path, type, to_string (c.state), true, fsize });
       }
       for (const auto &e : entries) {
         ImSearch::SearchableItem (e.name.c_str (), [&] (const char *) {
           ImGui::PushID (e.is_cubemap ? (int)e.id + 2000000 : (int)e.id);
           ImGui::TableNextRow ();
           ImGui::TableNextColumn ();
-          bool const selected = e.is_cubemap ? (m_selected_cubemap == e.id) : (m_selected_image == e.id);
-          if (ImGui::Selectable (e.name.c_str (), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) {
-            if (e.is_cubemap) { m_selected_cubemap = e.id; m_selected_image = entt::null; }
-            else { m_selected_image = e.id; m_selected_cubemap = entt::null; }
+          bool const selected = e.is_cubemap ? (m_selected_cubemap == e.id)
+                                             : (m_selected_image == e.id);
+          if (ImGui::Selectable (e.name.c_str (), selected,
+                                 ImGuiSelectableFlags_SpanAllColumns
+                                     | ImGuiSelectableFlags_AllowOverlap)) {
+            if (e.is_cubemap) {
+              m_selected_cubemap = e.id;
+              m_selected_image = entt::null;
+            } else {
+              m_selected_image = e.id;
+              m_selected_cubemap = entt::null;
+            }
           }
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (e.type.c_str ());
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (format_size (e.size).c_str ());
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (e.state_str.c_str ());
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (e.type.c_str ());
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (format_size (e.size).c_str ());
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (e.state_str.c_str ());
           ImGui::PopID ();
         });
       }
-      ImSearch::Submit (); ImGui::EndTable ();
+      ImSearch::Submit ();
+      ImGui::EndTable ();
     }
     ImSearch::EndSearch ();
   }
@@ -921,43 +1046,61 @@ resource_inspector::draw_scenes ()
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
     if (m_show_preview) {
-      ImGui::PushStyleColor (ImGuiCol_Button, ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
+      ImGui::PushStyleColor (ImGuiCol_Button,
+                             ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
       pushed = true;
     }
     if (ImGui::Button (m_show_preview ? "P##toggle" : "P", ImVec2 (24, 24))) {
       m_show_preview = !m_show_preview;
-}
+    }
     if (pushed) {
       ImGui::PopStyleColor ();
-}
+    }
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();
     ImGui::Separator ();
 
-    static ImGuiTableFlags const flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
+    static ImGuiTableFlags const flags
+        = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable
+          | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter
+          | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY
+          | ImGuiTableFlags_RowBg;
     if (ImGui::BeginTable ("SceneTable", 3, flags)) {
       ImGui::TableSetupColumn ("Name", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn ("Type", ImGuiTableColumnFlags_WidthFixed, 80.0F);
-      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed, 100.0F);
+      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed,
+                               100.0F);
       ImGui::TableHeadersRow ();
       for (const auto &rec : mgr.list_scenes ()) {
         ImSearch::SearchableItem (rec.name.c_str (), [&] (const char *) {
-          ImGui::PushID ((int)rec.id); ImGui::TableNextRow (); ImGui::TableNextColumn ();
+          ImGui::PushID ((int)rec.id);
+          ImGui::TableNextRow ();
+          ImGui::TableNextColumn ();
           bool const selected = (m_selected_scene == rec.id);
-          if (ImGui::Selectable (rec.name.c_str (), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) { m_selected_scene = rec.id;
-}
-          if (ImGui::IsItemHovered () && ImGui::IsMouseDoubleClicked (0)) {
-            if (rec.is_prefab) { m_runtime_ctx->resource_manager.instantiate_prefab (wsl::rsc::scene_id{ rec.id });
-            } else { m_runtime_ctx->resource_manager.load (wsl::rsc::scene_id{ rec.id });
-}
+          if (ImGui::Selectable (rec.name.c_str (), selected,
+                                 ImGuiSelectableFlags_SpanAllColumns
+                                     | ImGuiSelectableFlags_AllowOverlap)) {
+            m_selected_scene = rec.id;
           }
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (rec.is_prefab ? "Prefab" : "Scene");
-          ImGui::TableNextColumn (); ImGui::TextUnformatted (to_string (rec.state));
+          if (ImGui::IsItemHovered () && ImGui::IsMouseDoubleClicked (0)) {
+            if (rec.is_prefab) {
+              m_runtime_ctx->resource_manager.instantiate_prefab (
+                  wsl::rsc::scene_id{ rec.id });
+            } else {
+              m_runtime_ctx->resource_manager.load (
+                  wsl::rsc::scene_id{ rec.id });
+            }
+          }
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (rec.is_prefab ? "Prefab" : "Scene");
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (to_string (rec.state));
           ImGui::PopID ();
         });
       }
-      ImSearch::Submit (); ImGui::EndTable ();
+      ImSearch::Submit ();
+      ImGui::EndTable ();
     }
     ImSearch::EndSearch ();
   }
@@ -967,59 +1110,113 @@ resource_inspector::draw_scenes ()
 void
 resource_inspector::import_model_dialog ()
 {
-  SDL_ShowOpenFileDialog ([] (void *userdata, const char *const *files, int) {
-    auto *self = static_cast<resource_inspector *> (userdata);
-    if (!files || !files[0]) { return;
-}
-    self->m_runtime_ctx->resource_manager.import_model (files[0]);
-  }, this, (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr, gltf_filters, SDL_arraysize (gltf_filters), nullptr, false);
+  SDL_ShowOpenFileDialog (
+      [] (void *userdata, const char *const *files, int) {
+        auto *self = static_cast<resource_inspector *> (userdata);
+        if (!files || !files[0]) {
+          return;
+        }
+        self->m_runtime_ctx->resource_manager.import_model (files[0]);
+      },
+      this,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      gltf_filters, SDL_arraysize (gltf_filters), nullptr, false);
 }
 
 void
 resource_inspector::import_image_dialog ()
 {
-  SDL_ShowOpenFileDialog ([] (void *userdata, const char *const *files, int) {
-    auto *self = static_cast<resource_inspector *> (userdata);
-    if (!files || !files[0]) { return;
-}
-    self->m_runtime_ctx->resource_manager.import_image (files[0]);
-  }, this, (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr, texture_filters, SDL_arraysize (texture_filters), nullptr, false);
+  SDL_ShowOpenFileDialog (
+      [] (void *userdata, const char *const *files, int) {
+        auto *self = static_cast<resource_inspector *> (userdata);
+        if (!files || !files[0]) {
+          return;
+        }
+        self->m_runtime_ctx->resource_manager.import_image (files[0]);
+      },
+      this,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      texture_filters, SDL_arraysize (texture_filters), nullptr, false);
 }
 
 void
 resource_inspector::import_scene_dialog ()
 {
-  SDL_ShowOpenFileDialog ([] (void *userdata, const char *const *files, int) {
-    auto *self = static_cast<resource_inspector *> (userdata);
-    if (!files || !files[0]) { return;
-}
-    self->m_runtime_ctx->resource_manager.import_scene (files[0]);
-  }, this, (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr, scene_filters, SDL_arraysize (scene_filters), nullptr, false);
+  SDL_ShowOpenFileDialog (
+      [] (void *userdata, const char *const *files, int) {
+        auto *self = static_cast<resource_inspector *> (userdata);
+        if (!files || !files[0]) {
+          return;
+        }
+        self->m_runtime_ctx->resource_manager.import_scene (files[0]);
+      },
+      this,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      scene_filters, SDL_arraysize (scene_filters), nullptr, false);
 }
 
 void
 resource_inspector::save_scene_dialog ()
 {
-  SDL_ShowSaveFileDialog ([] (void *userdata, const char *const *files, int) {
-    auto *self = static_cast<resource_inspector *> (userdata);
-    if (!files || !files[0]) { return;
+  SDL_ShowSaveFileDialog (
+      [] (void *userdata, const char *const *files, int) {
+        auto *self = static_cast<resource_inspector *> (userdata);
+        if (!files || !files[0]) {
+          return;
+        }
+        std::filesystem::path const p (files[0]);
+        bool const is_prefab = p.extension () == ".prefab";
+        wsl::rsc::scene const *scene
+            = self->m_runtime_ctx->scene_manager.get_active ();
+        if (scene) {
+          self->m_runtime_ctx->resource_manager.save_scene (*scene, files[0],
+                                                            is_prefab);
+        }
+      },
+      this,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      scene_filters, SDL_arraysize (scene_filters), nullptr);
 }
-    std::filesystem::path const p (files[0]); bool const is_prefab = p.extension () == ".prefab";
-    wsl::rsc::scene  const*scene = self->m_runtime_ctx->scene_manager.get_active ();
-    if (scene) { self->m_runtime_ctx->resource_manager.save_scene (*scene, files[0], is_prefab);
-}
-  }, this, (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr, scene_filters, SDL_arraysize (scene_filters), nullptr);
+
+void
+resource_inspector::new_scene_dialog ()
+{
+  SDL_ShowSaveFileDialog (
+      [] (void *userdata, const char *const *files, int) {
+        auto *self = static_cast<resource_inspector *> (userdata);
+        if (!files || !files[0]) {
+          return;
+        }
+        std::string const path (files[0]);
+        std::filesystem::path const p (path);
+        std::string const name = p.stem ().string ();
+        bool const is_prefab = p.extension () == ".prefab";
+
+        auto &scene = self->m_runtime_ctx->scene_manager.create_default_scene (
+            name, true);
+        self->m_runtime_ctx->resource_manager.save_scene (scene, path,
+                                                          is_prefab);
+        self->m_runtime_ctx->resource_manager.register_scene (path);
+      },
+      this,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      scene_filters, SDL_arraysize (scene_filters), nullptr);
 }
 
 void
 resource_inspector::import_cubemap_dialog ()
 {
-  SDL_ShowOpenFileDialog ([] (void *userdata, const char *const *files, int) {
-    auto *self = static_cast<resource_inspector *> (userdata);
-    if (!files || !files[0]) { return;
-}
-    self->m_runtime_ctx->resource_manager.import_cubemap (files[0]);
-  }, this, (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr, cubemap_filters, SDL_arraysize (cubemap_filters), nullptr, false);
+  SDL_ShowOpenFileDialog (
+      [] (void *userdata, const char *const *files, int) {
+        auto *self = static_cast<resource_inspector *> (userdata);
+        if (!files || !files[0]) {
+          return;
+        }
+        self->m_runtime_ctx->resource_manager.import_cubemap (files[0]);
+      },
+      this,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      cubemap_filters, SDL_arraysize (cubemap_filters), nullptr, false);
 }
 
 void
@@ -1030,15 +1227,16 @@ resource_inspector::draw_audio ()
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
     if (m_show_preview) {
-      ImGui::PushStyleColor (ImGuiCol_Button, ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
+      ImGui::PushStyleColor (ImGuiCol_Button,
+                             ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
       pushed = true;
     }
     if (ImGui::Button (m_show_preview ? "P##toggle" : "P", ImVec2 (24, 24))) {
       m_show_preview = !m_show_preview;
-}
+    }
     if (pushed) {
       ImGui::PopStyleColor ();
-}
+    }
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();
@@ -1048,8 +1246,9 @@ resource_inspector::draw_audio ()
         ImGui::PushID ((int)rec.id);
         bool const selected = (m_selected_audio == rec.id);
         std::string const text = rec.name + " (" + to_string (rec.state) + ")";
-        if (ImGui::Selectable (text.c_str (), selected)) { m_selected_audio = rec.id;
-}
+        if (ImGui::Selectable (text.c_str (), selected)) {
+          m_selected_audio = rec.id;
+        }
         ImGui::PopID ();
       });
     }
@@ -1061,12 +1260,17 @@ resource_inspector::draw_audio ()
 void
 resource_inspector::import_audio_dialog ()
 {
-  SDL_ShowOpenFileDialog ([] (void *userdata, const char *const *files, int) {
-    auto *self = static_cast<resource_inspector *> (userdata);
-    if (!files || !files[0]) { return;
-}
-    self->m_runtime_ctx->resource_manager.import_audio (files[0]);
-  }, this, (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr, audio_filters, SDL_arraysize (audio_filters), nullptr, false);
+  SDL_ShowOpenFileDialog (
+      [] (void *userdata, const char *const *files, int) {
+        auto *self = static_cast<resource_inspector *> (userdata);
+        if (!files || !files[0]) {
+          return;
+        }
+        self->m_runtime_ctx->resource_manager.import_audio (files[0]);
+      },
+      this,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      audio_filters, SDL_arraysize (audio_filters), nullptr, false);
 }
 
 void
@@ -1077,38 +1281,53 @@ resource_inspector::draw_ui_layouts ()
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
     if (m_show_preview) {
-      ImGui::PushStyleColor (ImGuiCol_Button, ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
+      ImGui::PushStyleColor (ImGuiCol_Button,
+                             ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
       pushed = true;
     }
     if (ImGui::Button (m_show_preview ? "P##toggle" : "P", ImVec2 (24, 24))) {
       m_show_preview = !m_show_preview;
-}
+    }
     if (pushed) {
       ImGui::PopStyleColor ();
-}
+    }
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();
     ImGui::Separator ();
 
-    static ImGuiTableFlags const flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
+    static ImGuiTableFlags const flags
+        = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable
+          | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter
+          | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY
+          | ImGuiTableFlags_RowBg;
     if (ImGui::BeginTable ("UITable", 2, flags)) {
       ImGui::TableSetupColumn ("Name", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn ("Type", ImGuiTableColumnFlags_WidthFixed, 80.0F);
       ImGui::TableHeadersRow ();
       for (const auto &rec : mgr.list_ui_layouts ()) {
         ImSearch::SearchableItem (rec.name.c_str (), [&] (const char *) {
-          ImGui::PushID ((int)rec.id); ImGui::TableNextRow (); ImGui::TableNextColumn ();
+          ImGui::PushID ((int)rec.id);
+          ImGui::TableNextRow ();
+          ImGui::TableNextColumn ();
           bool const selected = (m_selected_ui_layout == rec.id);
-          if (ImGui::Selectable (rec.name.c_str (), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) { m_selected_ui_layout = rec.id;
-}
-          ImGui::TableNextColumn (); std::filesystem::path const p (rec.path); std::string ext = p.extension ().string ();
-          if (!ext.empty () && ext[0] == '.') { ext = ext.substr (1);
-}
-          ImGui::TextUnformatted (ext.c_str ()); ImGui::PopID ();
+          if (ImGui::Selectable (rec.name.c_str (), selected,
+                                 ImGuiSelectableFlags_SpanAllColumns
+                                     | ImGuiSelectableFlags_AllowOverlap)) {
+            m_selected_ui_layout = rec.id;
+          }
+          ImGui::TableNextColumn ();
+          std::filesystem::path const p (rec.path);
+          std::string ext = p.extension ().string ();
+          if (!ext.empty () && ext[0] == '.') {
+            ext = ext.substr (1);
+          }
+          ImGui::TextUnformatted (ext.c_str ());
+          ImGui::PopID ();
         });
       }
-      ImSearch::Submit (); ImGui::EndTable ();
+      ImSearch::Submit ();
+      ImGui::EndTable ();
     }
     ImSearch::EndSearch ();
   }
@@ -1123,38 +1342,53 @@ resource_inspector::draw_fonts ()
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
     if (m_show_preview) {
-      ImGui::PushStyleColor (ImGuiCol_Button, ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
+      ImGui::PushStyleColor (ImGuiCol_Button,
+                             ImGui::GetStyle ().Colors[ImGuiCol_ButtonActive]);
       pushed = true;
     }
     if (ImGui::Button (m_show_preview ? "P##toggle" : "P", ImVec2 (24, 24))) {
       m_show_preview = !m_show_preview;
-}
+    }
     if (pushed) {
       ImGui::PopStyleColor ();
-}
+    }
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();
     ImGui::Separator ();
 
-    static ImGuiTableFlags const flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
+    static ImGuiTableFlags const flags
+        = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable
+          | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter
+          | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY
+          | ImGuiTableFlags_RowBg;
     if (ImGui::BeginTable ("FontTable", 2, flags)) {
       ImGui::TableSetupColumn ("Name", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn ("Type", ImGuiTableColumnFlags_WidthFixed, 80.0F);
       ImGui::TableHeadersRow ();
       for (const auto &rec : mgr.list_fonts ()) {
         ImSearch::SearchableItem (rec.name.c_str (), [&] (const char *) {
-          ImGui::PushID ((int)rec.id); ImGui::TableNextRow (); ImGui::TableNextColumn ();
+          ImGui::PushID ((int)rec.id);
+          ImGui::TableNextRow ();
+          ImGui::TableNextColumn ();
           bool const selected = (m_selected_font == rec.id);
-          if (ImGui::Selectable (rec.name.c_str (), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) { m_selected_font = rec.id;
-}
-          ImGui::TableNextColumn (); std::filesystem::path const p (rec.path); std::string ext = p.extension ().string ();
-          if (!ext.empty () && ext[0] == '.') { ext = ext.substr (1);
-}
-          ImGui::TextUnformatted (ext.c_str ()); ImGui::PopID ();
+          if (ImGui::Selectable (rec.name.c_str (), selected,
+                                 ImGuiSelectableFlags_SpanAllColumns
+                                     | ImGuiSelectableFlags_AllowOverlap)) {
+            m_selected_font = rec.id;
+          }
+          ImGui::TableNextColumn ();
+          std::filesystem::path const p (rec.path);
+          std::string ext = p.extension ().string ();
+          if (!ext.empty () && ext[0] == '.') {
+            ext = ext.substr (1);
+          }
+          ImGui::TextUnformatted (ext.c_str ());
+          ImGui::PopID ();
         });
       }
-      ImSearch::Submit (); ImGui::EndTable ();
+      ImSearch::Submit ();
+      ImGui::EndTable ();
     }
     ImSearch::EndSearch ();
   }

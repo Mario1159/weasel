@@ -82,7 +82,9 @@ private:
   {
     none,
     open_project,
-    select_folder
+    select_folder,
+    load_scene,
+    save_scene
   };
   dialog_mode m_current_dialog_mode = dialog_mode::none;
 
@@ -109,7 +111,8 @@ private:
   float m_pref_font_scale = 1.0F; // global scale
 
   // 5 engine colors
-  ImVec4 m_pref_primary = ImVec4 (0x68 / 255.F, 0x76 / 255.F, 0x3c / 255.F, 1.0F);
+  ImVec4 m_pref_primary
+      = ImVec4 (0x68 / 255.F, 0x76 / 255.F, 0x3c / 255.F, 1.0F);
   ImVec4 m_pref_secondary
       = ImVec4 (0xde / 255.F, 0xc1 / 255.F, 0x6b / 255.F, 1.0F);
   ImVec4 m_pref_bg1 = ImVec4 (0x09 / 255.F, 0x09 / 255.F, 0x0c / 255.F, 1.0F);

@@ -33,12 +33,14 @@ editor::logger::~logger ()
 {
   for (auto &sink : m_sinks) {
     auto loggers_list
-        = { wsl::log::system (), wsl::log::cmake (), wsl::log::resources () };
+        = { wsl::log::core (), wsl::log::gfx (),    wsl::log::rsc (),
+            wsl::log::sys (),  wsl::log::editor (), wsl::log::cli (),
+            wsl::log::phys (), wsl::log::net (),    wsl::log::cmake () };
     for (const auto &l : loggers_list) {
       if (l) {
-        l->sinks ().erase (std::remove (l->sinks ().begin (),
-                                             l->sinks ().end (), sink),
-                                l->sinks ().end ());
+        l->sinks ().erase (
+            std::remove (l->sinks ().begin (), l->sinks ().end (), sink),
+            l->sinks ().end ());
       }
     }
   }
@@ -59,9 +61,15 @@ editor::logger::attach_to_spdlog ()
     m_sinks.push_back (sink);
   };
 
-  create_sink (wsl::log::system ());
+  create_sink (wsl::log::core ());
+  create_sink (wsl::log::gfx ());
+  create_sink (wsl::log::rsc ());
+  create_sink (wsl::log::sys ());
+  create_sink (wsl::log::editor ());
+  create_sink (wsl::log::cli ());
+  create_sink (wsl::log::phys ());
+  create_sink (wsl::log::net ());
   create_sink (wsl::log::cmake ());
-  create_sink (wsl::log::resources ());
 }
 
 void
@@ -79,7 +87,7 @@ editor::logger::set_auto_scroll (bool value)
 
 void
 editor::logger::add_log (spdlog::level::level_enum level,
-                          const std::string &category, const std::string &text)
+                         const std::string &category, const std::string &text)
 {
   m_entries.push_back ({ level, category, text });
   m_scroll_to_bottom = true;
@@ -106,8 +114,9 @@ editor::logger::draw (const char *title, bool *open)
 
   ImGui::SetNextItemWidth (120);
   if (ImGui::BeginCombo ("##sink_select", m_current_category.c_str ())) {
-    const char *categories[] = { "system", "cmake", "resources" };
-    for (int i = 0; i < 3; ++i) {
+    const char *categories[] = { "All",    "core", "gfx",  "rsc", "sys",
+                                 "editor", "cli",  "phys", "net", "cmake" };
+    for (int i = 0; i < 10; ++i) {
       bool const is_selected = (m_current_category == categories[i]);
       if (ImGui::Selectable (categories[i], is_selected)) {
         m_current_category = categories[i];
@@ -142,7 +151,7 @@ editor::logger::draw (const char *title, bool *open)
                      ImGuiWindowFlags_HorizontalScrollbar
                          | ImGuiWindowFlags_NoMove);
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().mono);
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts ().mono);
 
   // Render visible lines
   for (size_t i = 0; i < m_entries.size (); ++i) {
@@ -216,9 +225,7 @@ editor::logger::level_color (spdlog::level::level_enum level)
   }
 }
 
-editor::logger::logger_sink::logger_sink (logger &owner) : m_owner (owner)
-{
-}
+editor::logger::logger_sink::logger_sink (logger &owner) : m_owner (owner) {}
 
 void
 editor::logger::logger_sink::sink_it_ (const spdlog::details::log_msg &msg)
@@ -257,7 +264,7 @@ editor::logger::is_level_visible (spdlog::level::level_enum level) const
 bool
 editor::logger::is_category_visible (const std::string &category) const
 {
-  return m_current_category == category;
+  return m_current_category == "All" || m_current_category == category;
 }
 
 } // namespace editor

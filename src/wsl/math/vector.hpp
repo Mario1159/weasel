@@ -150,12 +150,66 @@ struct quatf
 
   operator glm::quat () const { return glm::quat{ w, x, y, z }; }
 
+  bool
+  custom_inspect (const char *label)
+  {
+    auto draw_drag_with_stripe
+        = [] (const char *id, float &v, ImU32 stripe_col) -> bool {
+      ImGui::SetNextItemWidth (ImMax (1.0F, ImGui::CalcItemWidth ()));
+      bool const changed = ImGui::DragFloat (id, &v, 0.1F);
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      ImVec2 const mn = ImGui::GetItemRectMin ();
+      ImVec2 const mx = ImGui::GetItemRectMax ();
+      const float stripe_w = 3.0F;
+      dl->AddRectFilled (mn, ImVec2 (mn.x + stripe_w, mx.y), stripe_col);
+      return changed;
+    };
+
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const w = (full - spacing * 2.0F) / 3.0F;
+
+    glm::vec3 euler
+        = glm::degrees (glm::eulerAngles (static_cast<glm::quat> (*this)));
+
+    bool changed = false;
+
+    ImGui::SetNextItemWidth (w);
+    changed
+        |= draw_drag_with_stripe ("##x", euler.x, IM_COL32 (255, 0, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (w);
+    changed
+        |= draw_drag_with_stripe ("##y", euler.y, IM_COL32 (0, 200, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (w);
+    changed
+        |= draw_drag_with_stripe ("##z", euler.z, IM_COL32 (0, 128, 255, 255));
+
+    if (changed) {
+      glm::quat const q = glm::quat (glm::radians (euler));
+      quatf &self = const_cast<quatf &> (*this);
+      self.x = q.x;
+      self.y = q.y;
+      self.z = q.z;
+      self.w = q.w;
+    }
+
+    ImGui::PopID ();
+    return changed;
+  }
+
   static void
   register_meta ()
   {
     using namespace entt::literals;
     entt::meta_factory<quatf> ()
         .type (entt::type_hash<quatf>::value ())
+        .func<&quatf::custom_inspect> ("custom_inspect"_hs)
         .data<&quatf::x> ("x"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
         .data<&quatf::y> ("y"_hs)

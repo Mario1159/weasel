@@ -5,8 +5,15 @@
 #include <vector>
 #include <SDL3_mixer/SDL_mixer.h>
 
-namespace wsl::comp::singl { class runtime_context; class editor_context; }
-namespace wsl::rsc { class resource_manager; }
+namespace wsl::comp::singl
+{
+class runtime_context;
+class editor_context;
+}
+namespace wsl::rsc
+{
+class resource_manager;
+}
 
 namespace editor
 {
@@ -19,6 +26,7 @@ public:
   ~resource_inspector ();
 
   void draw ();
+  void new_scene_dialog ();
 
 private:
   void draw_models ();
@@ -35,7 +43,6 @@ private:
   void save_scene_dialog ();
   void import_cubemap_dialog ();
   void import_audio_dialog ();
-
 
   wsl::comp::singl::runtime_context *m_runtime_ctx;
   wsl::comp::singl::editor_context *m_editor_ctx;

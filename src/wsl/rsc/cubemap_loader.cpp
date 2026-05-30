@@ -1,4 +1,5 @@
 #include "cubemap_loader.hpp"
+#include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
@@ -20,10 +21,8 @@
 #include <cstring>
 #include <filesystem>
 #include <memory>
-#include <spdlog/spdlog.h>
 #include <string>
 #include <vector>
-
 
 namespace wsl
 {
@@ -32,7 +31,7 @@ namespace rsc
 {
 
 uint32_t
-cubemap_loader::mip_count_2d (uint32_t w, uint32_t h) 
+cubemap_loader::mip_count_2d (uint32_t w, uint32_t h)
 {
   uint32_t levels = 1;
   while (w > 1 || h > 1) {
@@ -52,45 +51,46 @@ static SDL_GPUTextureFormat ibl_lut_format
                                                 // .rg)
 
 int
-cubemap_loader::face_index_from_name (const std::string &name) 
+cubemap_loader::face_index_from_name (const std::string &name)
 {
   if (name == "px.png") {
     return 0;
-}
+  }
   if (name == "nx.png") {
     return 1;
-}
+  }
   if (name == "py.png") {
     return 2;
-}
+  }
   if (name == "ny.png") {
     return 3;
-}
+  }
   if (name == "pz.png") {
     return 4;
-}
+  }
   if (name == "nz.png") {
     return 5;
-}
+  }
   return -1;
 }
 
 bool
 cubemap_loader::load_rgba_image_from_memory (const uint8_t *data, size_t size,
                                              int &w, int &h,
-                                             std::vector<uint8_t> &pixels) 
+                                             std::vector<uint8_t> &pixels)
 {
 
   SDL_IOStream *io = SDL_IOFromConstMem (data, size);
   if (io == nullptr) {
-    spdlog::error ("Cubemap: SDL_IOFromConstMem failed");
+    wsl::log::rsc ()->error ("Cubemap: SDL_IOFromConstMem failed");
     return false;
   }
 
   // IMPORTANT: force PNG decoder
   SDL_Surface *surf = IMG_LoadTyped_IO (io, true, "PNG");
   if (surf == nullptr) {
-    spdlog::error ("Cubemap: IMG_LoadTyped_IO failed: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("Cubemap: IMG_LoadTyped_IO failed: {}",
+                             SDL_GetError ());
     return false;
   }
 
@@ -98,7 +98,7 @@ cubemap_loader::load_rgba_image_from_memory (const uint8_t *data, size_t size,
   SDL_DestroySurface (surf);
 
   if (rgba == nullptr) {
-    spdlog::error ("Cubemap: failed to convert surface to RGBA");
+    wsl::log::rsc ()->error ("Cubemap: failed to convert surface to RGBA");
     return false;
   }
 
@@ -107,7 +107,7 @@ cubemap_loader::load_rgba_image_from_memory (const uint8_t *data, size_t size,
   pixels.resize (size_t (w) * size_t (h) * 4);
 
   uint8_t *dst = pixels.data ();
-  uint8_t  const*src = static_cast<uint8_t *> (rgba->pixels);
+  uint8_t const *src = static_cast<uint8_t *> (rgba->pixels);
 
   for (int y = 0; y < h; ++y) {
     std::memcpy (dst + (size_t (y) * w * 4), src + (size_t (y) * rgba->pitch),
@@ -225,7 +225,8 @@ cubemap_loader::operator() (const std::string &path) const
       lut.height = lut_size;
       lut.layer_count_or_depth = 1;
       lut.num_levels = 1;
-      lut.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+      lut.usage
+          = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
       cube->ibl_brdf_lut = SDL_CreateGPUTexture (m_ctx->gpu_device, &lut);
 
       SDL_GPUSamplerCreateInfo iblsi = si;
@@ -240,15 +241,16 @@ cubemap_loader::operator() (const std::string &path) const
   std::string ext = p.extension ().string ();
   for (auto &c : ext) {
     c = (char)std::tolower (c);
-}
+  }
 
   if (ext == ".tar") {
     return load_from_tar (path);
-  } if (ext == ".png" || ext == ".hdr") {
+  }
+  if (ext == ".png" || ext == ".hdr") {
     return load_from_equirect (path);
   }
 
-  spdlog::error ("Cubemap: unsupported extension {}", ext);
+  wsl::log::rsc ()->error ("Cubemap: unsupported extension {}", ext);
   return {};
 }
 
@@ -266,7 +268,7 @@ cubemap_loader::load_from_tar (const std::string &path) const
   archive_read_support_filter_all (ar);
 
   if (archive_read_open_filename (ar, path.c_str (), 10240) != ARCHIVE_OK) {
-    spdlog::error ("Cubemap: failed to open archive {}", path);
+    wsl::log::rsc ()->error ("Cubemap: failed to open archive {}", path);
     archive_read_free (ar);
     return {};
   }
@@ -298,7 +300,7 @@ cubemap_loader::load_from_tar (const std::string &path) const
           = archive_read_data (ar, buffer.data () + offset, size - offset);
       if (r <= 0) {
         break;
-}
+      }
       offset += (size_t)r;
     }
 
@@ -306,7 +308,7 @@ cubemap_loader::load_from_tar (const std::string &path) const
     int ih = 0;
     if (!load_rgba_image_from_memory (buffer.data (), buffer.size (), iw, ih,
                                       face_pixels[idx])) {
-      spdlog::error ("Cubemap: failed to decode {}", name);
+      wsl::log::rsc ()->error ("Cubemap: failed to decode {}", name);
       archive_read_free (ar);
       return {};
     }
@@ -317,7 +319,7 @@ cubemap_loader::load_from_tar (const std::string &path) const
         w = iw;
         h = ih;
       } else if (iw != w || ih != h) {
-        spdlog::error ("Cubemap: face {} has mismatched size", name);
+        wsl::log::rsc ()->error ("Cubemap: face {} has mismatched size", name);
         archive_read_free (ar);
         return {};
       }
@@ -328,7 +330,7 @@ cubemap_loader::load_from_tar (const std::string &path) const
 
   for (int i = 0; i < 6; ++i) {
     if (!found[i]) {
-      spdlog::error ("Cubemap: missing face {}", i);
+      wsl::log::rsc ()->error ("Cubemap: missing face {}", i);
       return {};
     }
   }
@@ -347,7 +349,8 @@ cubemap_loader::load_from_tar (const std::string &path) const
 
   cube->texture = SDL_CreateGPUTexture (m_ctx->gpu_device, &ti);
   if (cube->texture == nullptr) {
-    spdlog::error ("Cubemap: SDL_CreateGPUTexture failed: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("Cubemap: SDL_CreateGPUTexture failed: {}",
+                             SDL_GetError ());
     return {};
   }
 
@@ -363,7 +366,8 @@ cubemap_loader::load_from_tar (const std::string &path) const
 
   cube->sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &si);
   if (cube->sampler == nullptr) {
-    spdlog::error ("Cubemap: SDL_CreateGPUSampler failed: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("Cubemap: SDL_CreateGPUSampler failed: {}",
+                             SDL_GetError ());
     return {};
   }
 
@@ -385,8 +389,8 @@ cubemap_loader::load_from_tar (const std::string &path) const
 
   cube->ibl_irradiance = SDL_CreateGPUTexture (m_ctx->gpu_device, &irr);
   if (cube->ibl_irradiance == nullptr) {
-    spdlog::error ("IBL: failed to create irradiance cubemap: {}",
-                   SDL_GetError ());
+    wsl::log::rsc ()->error ("IBL: failed to create irradiance cubemap: {}",
+                             SDL_GetError ());
     return {};
   }
 
@@ -405,8 +409,8 @@ cubemap_loader::load_from_tar (const std::string &path) const
 
   cube->ibl_prefilter = SDL_CreateGPUTexture (m_ctx->gpu_device, &pre);
   if (cube->ibl_prefilter == nullptr) {
-    spdlog::error ("IBL: failed to create prefilter cubemap: {}",
-                   SDL_GetError ());
+    wsl::log::rsc ()->error ("IBL: failed to create prefilter cubemap: {}",
+                             SDL_GetError ());
     return {};
   }
 
@@ -427,7 +431,8 @@ cubemap_loader::load_from_tar (const std::string &path) const
 
   cube->ibl_brdf_lut = SDL_CreateGPUTexture (m_ctx->gpu_device, &lut);
   if (cube->ibl_brdf_lut == nullptr) {
-    spdlog::error ("IBL: failed to create BRDF LUT: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("IBL: failed to create BRDF LUT: {}",
+                             SDL_GetError ());
     return {};
   }
 
@@ -442,13 +447,14 @@ cubemap_loader::load_from_tar (const std::string &path) const
 
   cube->ibl_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &iblsi);
   if (cube->ibl_sampler == nullptr) {
-    spdlog::error ("IBL: failed to create IBL sampler: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("IBL: failed to create IBL sampler: {}",
+                             SDL_GetError ());
     return {};
   }
 
-  spdlog::debug ("Cubemap loaded from archive {} (IBL allocated: irr {} pre "
-                 "{} mips {} lut {})",
-                 path, irr_size, pre_size, pre_mips, lut_size);
+  wsl::log::rsc ()->debug (
+      "Cubemap loaded from {} (irr {} pre {} mips {} lut {})", path, irr_size,
+      pre_size, pre_mips, lut_size);
 
   return cube;
 }
@@ -460,7 +466,7 @@ cubemap_loader::load_from_equirect (const std::string &path) const
   std::string ext = p.extension ().string ();
   for (auto &c : ext) {
     c = (char)std::tolower (c);
-}
+  }
 
   int w;
   int h;
@@ -471,16 +477,17 @@ cubemap_loader::load_from_equirect (const std::string &path) const
   if (ext == ".hdr") {
     pixels_to_free = stbi_loadf (path.c_str (), &w, &h, &channels, 4);
     if (pixels_to_free == nullptr) {
-      spdlog::error ("Cubemap: failed to load HDR equirect image {}: {}", path,
-                     stbi_failure_reason ());
+      wsl::log::rsc ()->error (
+          "Cubemap: failed to load HDR equirect image {}: {}", path,
+          stbi_failure_reason ());
       return {};
     }
     upload_size = size_t (w) * size_t (h) * 16;
   } else {
     SDL_Surface *surf = IMG_Load (path.c_str ());
     if (surf == nullptr) {
-      spdlog::error ("Cubemap: failed to load equirect image {}: {}", path,
-                     SDL_GetError ());
+      wsl::log::rsc ()->error ("Cubemap: failed to load equirect image {}: {}",
+                               path, SDL_GetError ());
       return {};
     }
 
@@ -489,7 +496,8 @@ cubemap_loader::load_from_equirect (const std::string &path) const
     SDL_DestroySurface (surf);
 
     if (rgba == nullptr) {
-      spdlog::error ("Cubemap: failed to convert equirect image to RGBA float");
+      wsl::log::rsc ()->error (
+          "Cubemap: failed to convert equirect image to RGBA float");
       return {};
     }
 
@@ -590,7 +598,8 @@ cubemap_loader::load_from_equirect (const std::string &path) const
     lut.height = lut_size;
     lut.layer_count_or_depth = 1;
     lut.num_levels = 1;
-    lut.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    lut.usage
+        = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
     cube->ibl_brdf_lut = SDL_CreateGPUTexture (m_ctx->gpu_device, &lut);
 
     SDL_GPUSamplerCreateInfo iblsi = si;
@@ -604,7 +613,6 @@ cubemap_loader::load_from_equirect (const std::string &path) const
 }
 
 cubemap_loader::cubemap_loader (gfx::render_context *ctx) : m_ctx (ctx) {}
-
 
 } // namespace rsc
 

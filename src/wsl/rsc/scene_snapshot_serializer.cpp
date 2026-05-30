@@ -1,4 +1,5 @@
 #include "scene_snapshot_serializer.hpp"
+#include "wsl/log/log.hpp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/archives/json.hpp>
@@ -19,10 +20,7 @@
 #include <utility>
 #include <vector>
 
-
 #include <entt/entity/snapshot.hpp>
-
-#include <spdlog/spdlog.h>
 
 #include "../comp/transform.hpp"
 #include "../comp/singl/physics_manager.hpp"
@@ -38,7 +36,6 @@
 #include "../reg/singleton_registry.hpp"
 #include "../reg/system_factory_registry.hpp"
 #include "sys/system.hpp"
-
 
 namespace wsl
 {
@@ -66,7 +63,8 @@ template <typename Archive>
 void
 scene_snapshot_serializer::save_scene (Archive &archive) const
 {
-  resource_manager::serialization_context::get () = &runtime_ctx->resource_manager;
+  resource_manager::serialization_context::get ()
+      = &runtime_ctx->resource_manager;
 
   scene_header header;
   header.scene_name = scene_ref.get_name ();
@@ -86,8 +84,8 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
 
   for (const resource_ref &ref : scene_ref.get_load_list ()) {
     std::string path = runtime_ctx->resource_manager.get_path (ref);
-    spdlog::debug ("SAVE_SCENE: serializing autoload type={} path={} id={}",
-                   (int)ref.type, path, ref.id);
+    wsl::log::rsc ()->trace ("Serializing autoload type={} path={}",
+                             (int)ref.type, path);
     header.autoload.push_back ({ ref.type, path });
   }
 
@@ -128,12 +126,12 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
 
     if (has && !header.is_prefab) {
       if constexpr (std::is_same_v<Archive, cereal::BinaryOutputArchive>) {
-        runtime_ctx->singleton_registry.save_singleton_binary (archive, registry,
-                                                              desc->type_id);
+        runtime_ctx->singleton_registry.save_singleton_binary (
+            archive, registry, desc->type_id);
       } else if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
         archive.setNextName ("data");
         runtime_ctx->singleton_registry.save_singleton_json (archive, registry,
-                                                            desc->type_id);
+                                                             desc->type_id);
       }
     }
   }
@@ -145,49 +143,47 @@ template <typename Archive>
 void
 scene_snapshot_serializer::load_scene (Archive &archive)
 {
-  resource_manager::serialization_context::get () = &runtime_ctx->resource_manager;
+  resource_manager::serialization_context::get ()
+      = &runtime_ctx->resource_manager;
 
-  spdlog::debug ("scene_snapshot_serializer: load_scene started");
+  wsl::log::rsc ()->trace ("Loading scene");
   scene_ref.stop_and_clear ();
   runtime_ctx->signal_hub.clear_connections ();
 
   scene_header header;
-  spdlog::debug ("scene_snapshot_serializer: loading header");
+  wsl::log::rsc ()->trace ("Loading header");
   archive (cereal::make_nvp ("header", header));
 
+  // Restore the scene name from the saved header
+  scene_ref.set_name (header.scene_name);
+
   // ---- RESTORE SYSTEMS ----
-  spdlog::debug ("scene_snapshot_serializer: restoring systems (count: {})",
-                 header.systems.size ());
+  wsl::log::rsc ()->trace ("Restoring {} systems", header.systems.size ());
   scene_ref.systems.clear ();
 
-  // Debug: Log all registered connectable handlers
-  spdlog::info ("Registered connectable handlers:");
-  if (runtime_ctx->signal_hub.db != nullptr) {
-    for (const auto &h : runtime_ctx->signal_hub.db->connectable_handlers) {
-      spdlog::info ("  Signal: {}, System: {}, Handler: '{}'", h.signal_type_id,
-                    h.system_type_id, h.handler_name);
-    }
-  }
+  wsl::log::rsc ()->debug (
+      "Registered {} connectable handlers",
+      runtime_ctx->signal_hub.db
+          ? runtime_ctx->signal_hub.db->connectable_handlers.size ()
+          : 0);
 
   reg::system_factory_registry &factory = runtime_ctx->system_factory_registry;
 
   for (const std::string &sys_name : header.systems) {
-    spdlog::debug ("scene_snapshot_serializer: creating system: {}", sys_name);
     if (std::unique_ptr<sys::ecs_system> sys
         = factory.create (sys_name, scene_ref)) {
       scene_ref.add_system_instance (std::move (sys), false);
-      spdlog::debug ("scene_snapshot_serializer: system {} added", sys_name);
     } else {
-      spdlog::warn ("Unknown system in scene: {}", sys_name);
+      wsl::log::rsc ()->warn ("Unknown system in scene: {}", sys_name);
     }
   }
 
-  spdlog::debug ("scene_snapshot_serializer: loading entities");
+  wsl::log::rsc ()->trace ("Loading entities");
   entt::snapshot_loader loader{ scene_ref.get_registry () };
 
   loader.get<entt::entity> (archive);
 
-  spdlog::debug ("scene_snapshot_serializer: loading components");
+  wsl::log::rsc ()->trace ("Loading components");
   for (const reg::component_registry::descriptor *desc :
        runtime_ctx->component_registry.get_world_components (
            reg::world_component_order::type_id)) {
@@ -206,15 +202,16 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       }
     } catch (const std::exception &e) {
       if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        spdlog::warn ("Component {} data not found or invalid in JSON scene: {}",
-                      desc->type_name, e.what ());
+        wsl::log::rsc ()->warn (
+            "Component {} data not found or invalid in JSON scene: {}",
+            desc->type_name, e.what ());
       } else {
         throw;
       }
     }
   }
 
-  spdlog::debug ("scene_snapshot_serializer: loading singletons");
+  wsl::log::rsc ()->trace ("Loading singletons");
   entt::registry &reg = scene_ref.get_registry ();
   for (const reg::singleton_registry::descriptor *desc :
        runtime_ctx->singleton_registry.get_singleton_components (
@@ -231,26 +228,26 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       if (has && !header.is_prefab) {
         if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>) {
           runtime_ctx->singleton_registry.load_singleton_binary (archive, reg,
-                                                                desc->type_id);
-        } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+                                                                 desc->type_id);
+        } else if constexpr (std::is_same_v<Archive,
+                                            cereal::JSONInputArchive>) {
           archive.setNextName ("data");
           runtime_ctx->singleton_registry.load_singleton_json (archive, reg,
-                                                              desc->type_id);
+                                                               desc->type_id);
         }
       }
     } catch (const std::exception &e) {
       if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        spdlog::warn ("Singleton {} data not found or invalid in JSON scene: {}",
-                      desc->type_name, e.what ());
+        wsl::log::rsc ()->warn (
+            "Singleton {} data not found or invalid in JSON scene: {}",
+            desc->type_name, e.what ());
       } else {
         throw;
       }
     }
   }
 
-  // restore names
-  spdlog::debug ("scene_snapshot_serializer: restoring names (count: {})",
-                 header.entity_names.size ());
+  wsl::log::rsc ()->trace ("Restoring {} names", header.entity_names.size ());
   for (const std::pair<uint32_t, std::string> &entry : header.entity_names) {
     entt::entity const e{ static_cast<entt::entity> (entry.first) };
     if (scene_ref.get_registry ().valid (e)) {
@@ -258,24 +255,26 @@ scene_snapshot_serializer::load_scene (Archive &archive)
     }
   }
 
-  // restore connections
-  spdlog::debug ("scene_snapshot_serializer: restoring connections (count: {})",
-                 header.connections.size ());
-  // runtime_ctx->signal_hub.clear_connections (); // DON'T CLEAR ALL, additive or handled by scene replacement
+  wsl::log::rsc ()->trace ("Restoring {} connections",
+                           header.connections.size ());
+  // runtime_ctx->signal_hub.clear_connections (); // DON'T CLEAR ALL, additive
+  // or handled by scene replacement
   for (const auto &conn : header.connections) {
     if (!runtime_ctx->signal_hub.connect (
             conn.signal_type_id, conn.system_type_id, conn.handler_name,
-            conn.source_entity, conn.target_entity, &scene_ref.get_registry ())) {
-      spdlog::warn (
-          "Failed to connect signal {} to system {} handler {} during scene load",
+            conn.source_entity, conn.target_entity,
+            &scene_ref.get_registry ())) {
+      wsl::log::rsc ()->warn (
+          "Failed to connect signal {} to system {} handler {} "
+          "during scene load",
           conn.signal_type_id, conn.system_type_id, conn.handler_name);
     }
   }
 
   for (const resource_ref_serialized &res : header.autoload) {
     entt::id_type const id = entt::hashed_string{ res.path.c_str () };
-    spdlog::debug ("LOAD_SCENE: autoload resource type={} path={} id={}",
-                   (int)res.type, res.path, id);
+    wsl::log::rsc ()->trace ("Autoload resource type={} path={}", (int)res.type,
+                             res.path);
     scene_ref.add_resource (res.type, id);
   }
 
@@ -284,10 +283,11 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   // -------------------------------------------------
   // RECREATE PHYSICS OBJECTS AFTER LOAD
   // -------------------------------------------------
-  spdlog::debug ("scene_snapshot_serializer: recreating physics objects");
+  wsl::log::rsc ()->debug ("Recreating physics objects");
   if (!reg.ctx ().contains<comp::singl::physics_manager> ()) {
-    spdlog::warn ("scene_snapshot_serializer: loaded scene is missing its "
-                  "physics manager; skipping physics object recreation");
+    wsl::log::rsc ()->warn (
+        "scene_snapshot_serializer: loaded scene is missing its "
+        "physics manager; skipping physics object recreation");
     return;
   }
 
@@ -302,13 +302,12 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   // Recreate rigid bodies
   {
     auto view = reg.view<comp::rigid_body> ();
-    spdlog::debug ("scene_snapshot_serializer: recreating {} rigid bodies",
-                   std::distance (view.begin (), view.end ()));
+    wsl::log::rsc ()->debug ("Recreating {} rigid bodies",
+                             std::distance (view.begin (), view.end ()));
     for (entt::entity e : view) {
       comp::rigid_body &rb = view.get<comp::rigid_body> (e);
-      spdlog::debug (
-          "scene_snapshot_serializer: creating rigid body for entity {}",
-          (uint32_t)e);
+      wsl::log::rsc ()->trace ("Creating rigid body for entity {}",
+                               (uint32_t)e);
 
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
       if (auto *t = reg.try_get<comp::transform> (e); t) {
@@ -322,16 +321,14 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   // Recreate character controllers
   {
     auto view = reg.view<comp::character_body, comp::world_transform> ();
-    spdlog::debug ("scene_snapshot_serializer: recreating {} characters",
-                   std::distance (view.begin (), view.end ()));
+    wsl::log::rsc ()->debug ("Recreating {} characters",
+                             std::distance (view.begin (), view.end ()));
     for (entt::entity e : view) {
       comp::character_body &cb = view.get<comp::character_body> (e);
       comp::world_transform &wt = view.get<comp::world_transform> (e);
 
-      spdlog::debug (
-          "scene_snapshot_serializer: creating character for entity {}",
-          (uint32_t)e);
-      glm::vec3 const pos = glm::vec3 (wt.value[3]);
+      wsl::log::rsc ()->trace ("Creating character for entity {}", (uint32_t)e);
+      glm::vec3 const pos = glm::vec3 (static_cast<glm::mat4> (wt.value)[3]);
       cb.recreate (engine, (math::vec3f)pos);
     }
   }
@@ -339,12 +336,11 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   // Recreate area sensors
   {
     auto view = reg.view<comp::area> ();
-    spdlog::debug ("scene_snapshot_serializer: recreating {} area sensors",
-                   std::distance (view.begin (), view.end ()));
+    wsl::log::rsc ()->debug ("Recreating {} area sensors",
+                             std::distance (view.begin (), view.end ()));
     for (entt::entity e : view) {
       comp::area &area = view.get<comp::area> (e);
-      spdlog::debug ("scene_snapshot_serializer: creating area for entity {}",
-                     (uint32_t)e);
+      wsl::log::rsc ()->trace ("Creating area for entity {}", (uint32_t)e);
 
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
       if (auto *t = reg.try_get<comp::transform> (e); t) {
@@ -354,7 +350,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       area.create_body (engine, scale);
     }
   }
-  spdlog::debug ("scene_snapshot_serializer: load_scene finished");
+  wsl::log::rsc ()->trace ("Scene load finished");
 }
 
 bool
@@ -373,7 +369,7 @@ scene_snapshot_serializer::save_binary (const std::string &path) const
 bool
 scene_snapshot_serializer::load_binary (const std::string &path)
 {
-  spdlog::debug ("PATH BIN {}", path);
+  wsl::log::rsc ()->trace ("Loading binary scene: {}", path);
   std::ifstream file (path, std::ios::binary);
   if (!file) {
     return false;
@@ -400,7 +396,7 @@ scene_snapshot_serializer::save_json (const std::string &path) const
 bool
 scene_snapshot_serializer::load_json (const std::string &path)
 {
-  spdlog::debug ("PATH JSON {}", path);
+  wsl::log::rsc ()->trace ("Loading JSON scene: {}", path);
   std::ifstream file (path);
   if (!file) {
     return false;

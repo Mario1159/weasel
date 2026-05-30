@@ -10,6 +10,7 @@
 #include "sys/skybox_system.hpp"
 #include "sys/system.hpp"
 #include "sys/transform_system.hpp"
+#include "wsl/log/log.hpp"
 #include <SDL3/SDL_events.h>
 #include <entt/entity/fwd.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -23,9 +24,7 @@
 #include "../comp/singl/runtime_context.hpp"
 #include "render_frame.hpp"
 
-#include <spdlog/spdlog.h>
 #include <utility>
-
 
 namespace wsl
 {
@@ -41,11 +40,10 @@ apply_rendering_manager (entt::registry &registry,
     return;
   }
 
-  auto &rendering
-      = registry.ctx ().get<comp::singl::rendering_manager> ();
-  auto &renderer = rendering.ensure_renderer (runtime_ctx.window,
-                                              runtime_ctx.render_ctx,
-                                              &runtime_ctx.resource_manager);
+  auto &rendering = registry.ctx ().get<comp::singl::rendering_manager> ();
+  auto &renderer
+      = rendering.ensure_renderer (runtime_ctx.window, runtime_ctx.render_ctx,
+                                   &runtime_ctx.resource_manager);
   renderer.ssao_enabled = rendering.ssao_enabled;
   renderer.ssao_radius = rendering.ssao_radius;
   renderer.ssao_bias = rendering.ssao_bias;
@@ -54,8 +52,9 @@ apply_rendering_manager (entt::registry &registry,
   renderer.bloom_threshold = rendering.bloom_threshold;
   renderer.bloom_knee = rendering.bloom_knee;
   renderer.bloom_intensity = rendering.bloom_intensity;
-  renderer.outline_color = glm::vec4 (
-      static_cast<glm::vec3> (rendering.outline_color), rendering.outline_alpha);
+  renderer.outline_color
+      = glm::vec4 (static_cast<glm::vec3> (rendering.outline_color),
+                   rendering.outline_alpha);
   renderer.outline_width = rendering.outline_width;
   renderer.set_shadow_map_bias (rendering.shadow_bias);
   renderer.set_shadow_map_strength (rendering.shadow_strength);
@@ -120,7 +119,8 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
     physics_sys = std::make_unique<physics_system> ("Jolt Physics System");
   }
   if (!render_ui_sys) {
-    render_ui_sys = std::make_unique<render_ui_system> ("Application UI System");
+    render_ui_sys
+        = std::make_unique<render_ui_system> ("Application UI System");
   }
   if (!lighting_sys) {
     lighting_sys = std::make_unique<lighting_system> ("Lighting System");
@@ -140,20 +140,23 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
 
   // Register system factories so CLI `sys add` can create them dynamically.
   if (m_runtime_ctx) {
-    auto& factory = m_runtime_ctx->system_factory_registry;
-    factory.register_system_type<transform_system>({"Transform"});
-    factory.register_system_type<physics_system>({"Physics"});
-    factory.register_system_type<render_3d_system>({"3D Render"});
-    factory.register_system_type<audio_system>({"Audio"});
-    factory.register_system_type<lighting_system>({"Lighting"});
-    factory.register_system_type<skybox_system>({"Skybox"});
-    factory.register_system_type<shadow_system>({"Shadow"});
-    factory.register_system_type<render_ui_system>({"UI"});
+    auto &factory = m_runtime_ctx->system_factory_registry;
+    factory.register_system_type<transform_system> ({ "Transform" });
+    factory.register_system_type<physics_system> ({ "Physics" });
+    factory.register_system_type<render_3d_system> ({ "3D Render" });
+    factory.register_system_type<audio_system> ({ "Audio" });
+    factory.register_system_type<lighting_system> ({ "Lighting" });
+    factory.register_system_type<skybox_system> ({ "Skybox" });
+    factory.register_system_type<shadow_system> ({ "Shadow" });
+    factory.register_system_type<render_ui_system> ({ "UI" });
   }
 
   register_debug_metadata ();
 
   sync_activation ();
+
+  wsl::log::sys ()->debug ("Initialized {} built-in systems",
+                           to_vec ().size ());
 }
 
 void
@@ -166,10 +169,11 @@ core_systems::sync_activation ()
   ensure_dummy_context_bindings ();
 
   rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
-  entt::registry *registry = (scene != nullptr) ? &scene->get_registry () : &m_dummy_registry;
+  entt::registry *registry
+      = (scene != nullptr) ? &scene->get_registry () : &m_dummy_registry;
 
   if ((m_bound_registry != nullptr) && m_bound_registry != registry) {
-    spdlog::debug ("core_systems: shutting down systems for old registry");
+    wsl::log::sys ()->trace ("Shutting down systems for old registry");
     for (sys::ecs_system *sys : to_vec ()) {
       if (sys == nullptr) {
         continue;
@@ -211,21 +215,31 @@ core_systems::update (double dt)
   }
 
   rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
-  entt::registry &registry = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
+  entt::registry &registry
+      = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
 
+  int active_count = 0;
   for (sys::ecs_system *sys : to_vec ()) {
     if (sys == nullptr) {
       continue;
     }
 
     sys->update (&registry, dt);
+    if (sys->is_active ()) {
+      ++active_count;
+    }
   }
 
   if (scene != nullptr) {
     for (auto &sys : scene->systems) {
       sys->update (&registry, dt);
+      active_count++;
     }
   }
+
+  wsl::log::sys ()->trace ("Update: {} active systems, dt={}s, scene='{}'",
+                           active_count, dt,
+                           scene ? scene->get_name ().c_str () : "(none)");
 }
 
 void
@@ -234,7 +248,8 @@ core_systems::event_handler (const SDL_Event &e)
   sync_activation ();
 
   rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
-  entt::registry &registry = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
+  entt::registry &registry
+      = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
 
   for (sys::ecs_system *sys : to_vec ()) {
     if (sys == nullptr) {
@@ -333,7 +348,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
   sync_activation ();
 
   rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
-  entt::registry &registry = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
+  entt::registry &registry
+      = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
 
   for (sys::ecs_system *sys : to_vec ()) {
     if (sys == nullptr) {
@@ -381,13 +397,18 @@ core_systems::render_impl (wsl::gfx::render_window &window,
   gfx::scene_renderer *renderer = nullptr;
   sys::render_submission submission{};
 
-  if ((scene != nullptr) && sys::build_render_frame (registry, *m_runtime_ctx, submission)) {
+  if ((scene != nullptr)
+      && sys::build_render_frame (registry, *m_runtime_ctx, submission)) {
     apply_rendering_manager (registry, *m_runtime_ctx);
 
     renderer = &m_runtime_ctx->get_active_scene_renderer ();
     renderer->begin_frame (submission.view);
     renderer->set_visible_draws (std::move (submission.draw_commands));
     renderer->set_environment (submission.environment);
+
+    wsl::log::sys ()->trace ("Render frame: {} visible draws, scene='{}'",
+                             submission.draw_commands.size (),
+                             scene->get_name ());
 
     // These systems open their own offscreen passes, so they must run before
     // the main scene render pass is active.

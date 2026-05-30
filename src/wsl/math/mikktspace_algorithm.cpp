@@ -254,9 +254,7 @@ bool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThres
 	iNrTSPaces = GenerateInitialVerticesIndexList(pTriInfos, piTriListIn, pContext, iNrTrianglesIn);
 
 	// make a welded index list of identical positions and attributes (pos, norm, texc)
-	//printf("gen welded index list begin\n");
 	GenerateSharedVerticesIndexList(piTriListIn, pContext, iNrTrianglesIn);
-	//printf("gen welded index list end\n");
 
 	// Mark all degenerate triangles
 	iTotTris = iNrTrianglesIn;
@@ -286,9 +284,7 @@ bool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThres
 
 	
 	// evaluate triangle level attributes and neighbor list
-	//printf("gen neighbors list begin\n");
 	InitTriInfo(pTriInfos, piTriListIn, pContext, iNrTrianglesIn);
-	//printf("gen neighbors list end\n");
 
 	
 	// based on the 4 rules, identify groups based on connectivity
@@ -303,10 +299,8 @@ bool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThres
 		free(pTriInfos);
 		return false;
 	}
-	//printf("gen 4rule groups begin\n");
 	iNrActiveGroups =
 		Build4RuleGroups(pTriInfos, pGroups, piGroupTrianglesBuffer, piTriListIn, iNrTrianglesIn);
-	//printf("gen 4rule groups end\n");
 
 	//
 
@@ -329,9 +323,7 @@ bool genTangSpace(const SMikkTSpaceContext * pContext, const float fAngularThres
 	// make tspaces, each group is split up into subgroups if necessary
 	// based on fAngularThreshold. Finally a tangent space is made for
 	// every resulting subgroup
-	//printf("gen tspaces begin\n");
 	bRes = GenerateTSpaces(psTspace, pTriInfos, pGroups, iNrActiveGroups, piTriListIn, fThresCos, pContext);
-	//printf("gen tspaces end\n");
 	
 	// clean up
 	free(pGroups);
@@ -1008,7 +1000,6 @@ static void InitTriInfo(STriInfo pTriInfos[], const int piTriListIn[], const SMi
 				// if this happens the quad has extremely bad mapping!!
 				if (bOrientA!=bOrientB)
 				{
-					//printf("found quad with bad mapping\n");
 					bool bChooseOrientFirstTri = false;
 					if ((pTriInfos[t+1].iFlag&GROUP_WITH_ANY)!=0) bChooseOrientFirstTri = true;
 					else if ( CalcTexArea(pContext, &piTriListIn[t*3+0]) >= CalcTexArea(pContext, &piTriListIn[(t+1)*3+0]) )

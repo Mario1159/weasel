@@ -15,7 +15,6 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/geometric.hpp>
 
-
 namespace wsl
 {
 
@@ -50,7 +49,8 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
   for (entt::entity const entity : dir_light_view) {
     const comp::world_transform &world
         = dir_light_view.get<comp::world_transform> (entity);
-    caster_direction_world = -glm::normalize (glm::vec3 (world.value[2]));
+    glm::mat4 const wm = world.value;
+    caster_direction_world = -glm::normalize (glm::vec3 (wm[2]));
     have_directional_caster = true;
     break;
   }
@@ -98,8 +98,9 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
       continue;
     }
 
-    const glm::vec3 position = glm::vec3 (world.value[3]);
-    const glm::vec3 direction = -glm::normalize (glm::vec3 (world.value[2]));
+    glm::mat4 const wm = world.value;
+    const glm::vec3 position = glm::vec3 (wm[3]);
+    const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
     const float outer_angle
         = std::acos (glm::clamp (light.outer_cos, -1.0F, 1.0F));
     const glm::mat4 light_vp = renderer->make_spot_light_vp (
@@ -147,7 +148,8 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
       continue;
     }
 
-    const glm::vec3 position = glm::vec3 (world.value[3]);
+    const glm::vec3 position
+        = glm::vec3 (static_cast<glm::mat4> (world.value)[3]);
 
     auto &shadow = point_shadows[point_index];
     shadow.light_pos = position;
@@ -158,9 +160,8 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
     shadow.strength = renderer->shadow_map_strength ();
 
     for (int face = 0; face < 6; ++face) {
-      const glm::mat4 light_vp
-          = renderer->make_point_light_view_proj (
-              position, face, shadow.near_plane, shadow.far_plane);
+      const glm::mat4 light_vp = renderer->make_point_light_view_proj (
+          position, face, shadow.near_plane, shadow.far_plane);
 
       renderer->begin_point_shadow_pass (static_cast<int> (point_index), face);
       for (const auto &draw : draws) {

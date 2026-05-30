@@ -1,4 +1,5 @@
 #include "jolt_runtime.hpp"
+#include "wsl/log/log.hpp"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/IssueReporting.h>
@@ -33,7 +34,7 @@ jolt_trace_impl (const char *in_fmt, ...)
   vsnprintf (buffer, sizeof (buffer), in_fmt, list);
   va_end (list);
 
-  std::cout << buffer << '\n';
+  wsl::log::phys ()->info ("{}", buffer);
 }
 
 } // namespace
@@ -64,6 +65,10 @@ phys::retain_jolt_runtime ()
   }
 
   JPH::RegisterTypes ();
+
+  if (g_jolt_runtime_refcount == 1) {
+    wsl::log::phys ()->debug ("Jolt physics runtime initialized");
+  }
 }
 
 void
@@ -80,6 +85,8 @@ phys::release_jolt_runtime ()
   JPH::UnregisterTypes ();
   delete JPH::Factory::sInstance;
   JPH::Factory::sInstance = nullptr;
+
+  wsl::log::phys ()->debug ("Jolt physics runtime released");
 }
 
 } // namespace wsl

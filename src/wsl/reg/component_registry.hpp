@@ -3,13 +3,13 @@
 #include "../comp/component_meta.hpp"
 
 #include "detail/registry_helpers.hpp"
+#include "wsl/log/log.hpp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/archives/json.hpp>
 #include <entt/entt.hpp>
 #include <entt/core/type_info.hpp>
 
-#include <spdlog/spdlog.h>
 #include <memory>
 #include <optional>
 #include <string>
@@ -17,7 +17,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
-
 
 namespace wsl
 {
@@ -48,7 +47,6 @@ struct world_component_registration_options
   //! Whether the registration was supplied by runtime project code.
   bool runtime_registered = false;
 };
-
 
 /*!
  * \brief Central registry for component types in the engine.
@@ -83,8 +81,7 @@ public:
     bool (*remove) (entt::registry &, entt::entity) = nullptr;
     //! Copies the component from a source entity to a destination entity.
     void (*copy) (entt::registry &src_reg, entt::entity src_ent,
-                  entt::registry &dst_reg, entt::entity dst_ent)
-        = nullptr;
+                  entt::registry &dst_reg, entt::entity dst_ent) = nullptr;
     //! Saves component data to a binary archive.
     void (*save_binary) (cereal::BinaryOutputArchive &, entt::registry &)
         = nullptr;
@@ -106,8 +103,9 @@ public:
    * \param options Registration options.
    */
   template <comp::world_component_type T>
-  void register_world_component (
-      const world_component_registration_options &options = {});
+  void
+  register_world_component (const world_component_registration_options &options
+                            = {});
 
   /*!
    * \brief Finds a registered world component by stable or internal type ID.
@@ -143,8 +141,8 @@ public:
    * \return Ordered descriptor list.
    */
   std::vector<const descriptor *>
-  get_world_components (
-      world_component_order order = world_component_order::display_name) const;
+  get_world_components (world_component_order order
+                        = world_component_order::display_name) const;
 
   /*!
    * \brief Returns the world components that may still be added to an entity.
@@ -157,13 +155,14 @@ public:
                                 entt::entity entity) const;
 
   /*!
-   * \brief Copies a single registered world component from one entity to another.
+   * \brief Copies a single registered world component from one entity to
+   * another.
    */
   bool copy_world_component (entt::registry &src_registry,
-                              entt::entity src_entity,
-                              entt::registry &dst_registry,
-                              entt::entity dst_entity,
-                              entt::id_type component_type_id) const;
+                             entt::entity src_entity,
+                             entt::registry &dst_registry,
+                             entt::entity dst_entity,
+                             entt::id_type component_type_id) const;
 
   /*!
    * \brief Saves one registered world component storage to a binary archive.
@@ -203,31 +202,52 @@ public:
    * \param type_id The stable type identifier.
    * \return Pointer to the descriptor if found, otherwise `nullptr`.
    */
-  const descriptor *find (entt::id_type type_id) const { return find_world_component (type_id); }
+  const descriptor *
+  find (entt::id_type type_id) const
+  {
+    return find_world_component (type_id);
+  }
 
   /*!
-   * \brief Converts an internal entt type identifier to a stable type identifier.
+   * \brief Converts an internal entt type identifier to a stable type
+   * identifier.
    * \param internal_id The internal type identifier.
    * \return The stable type identifier.
    */
-  entt::id_type to_stable_id (entt::id_type internal_id) const { return to_stable_world_component_id (internal_id); }
+  entt::id_type
+  to_stable_id (entt::id_type internal_id) const
+  {
+    return to_stable_world_component_id (internal_id);
+  }
 
   /*!
    * \brief Returns all registered descriptors in insertion order.
    * \return Vector of pointers to descriptors.
    */
-  std::vector<const descriptor *> ordered () const { return get_world_components (world_component_order::display_name); }
+  std::vector<const descriptor *>
+  ordered () const
+  {
+    return get_world_components (world_component_order::display_name);
+  }
 
   /*!
    * \brief Returns all registered descriptors sorted by type identifier.
    * \return Vector of pointers to descriptors.
    */
-  std::vector<const descriptor *> by_type_id () const { return get_world_components (world_component_order::type_id); }
+  std::vector<const descriptor *>
+  by_type_id () const
+  {
+    return get_world_components (world_component_order::type_id);
+  }
 
   /*!
    * \brief Clears all components registered at runtime.
    */
-  void clear_runtime_components () { clear_runtime_world_components (); }
+  void
+  clear_runtime_components ()
+  {
+    clear_runtime_world_components ();
+  }
 
 private:
   // Internal wrappers previously in rsc::detail. Moved here to avoid an
@@ -271,9 +291,8 @@ component_registry::register_world_component (
   const entt::id_type internal_id = entt::type_id<T> ().hash ();
   m_internal_to_stable[internal_id] = type_id;
 
-  spdlog::debug (
-      "component_registry: registering component '{}' with type_id {} (internal {})",
-      entt::type_name<T> ().value (), type_id, internal_id);
+  wsl::log::sys ()->trace ("Registering component '{}' (id={})",
+                           entt::type_name<T> ().value (), type_id);
 
   detail::ensure_meta_registered<T> (type_id, options.runtime_registered);
 
@@ -310,9 +329,8 @@ component_registry::register_world_component (
     return true;
   };
 
-  spdlog::debug (
-      "component_registry: registered component '{}' ({}) with type_id {}",
-      desc.display_name, desc.type_name, type_id);
+  wsl::log::sys ()->trace ("Registered component '{}' ({})", desc.display_name,
+                           desc.type_name);
 
   if constexpr (std::is_copy_constructible_v<T>) {
     desc.copy = +[] (entt::registry &src_reg, entt::entity src_ent,
@@ -330,14 +348,13 @@ component_registry::register_world_component (
                                          entt::type_name<T> ().value ()),
               component_registry::component_snapshot_wrapper<T>{ registry }));
         };
-  desc.load_binary
-      = +[] (cereal::BinaryInputArchive &archive,
-             entt::snapshot_loader &loader) {
-          archive (cereal::make_nvp (
-              detail::make_archive_name ("component_data_",
-                                         entt::type_name<T> ().value ()),
-              component_registry::component_loader_wrapper<T>{ loader }));
-        };
+  desc.load_binary = +[] (cereal::BinaryInputArchive &archive,
+                          entt::snapshot_loader &loader) {
+    archive (cereal::make_nvp (
+        detail::make_archive_name ("component_data_",
+                                   entt::type_name<T> ().value ()),
+        component_registry::component_loader_wrapper<T>{ loader }));
+  };
   desc.save_json
       = +[] (cereal::JSONOutputArchive &archive, entt::registry &registry) {
           archive (cereal::make_nvp (
@@ -346,8 +363,7 @@ component_registry::register_world_component (
               component_registry::component_snapshot_wrapper<T>{ registry }));
         };
   desc.load_json
-      = +[] (cereal::JSONInputArchive &archive,
-             entt::snapshot_loader &loader) {
+      = +[] (cereal::JSONInputArchive &archive, entt::snapshot_loader &loader) {
           archive (cereal::make_nvp (
               detail::make_archive_name ("component_data_",
                                          entt::type_name<T> ().value ()),
@@ -356,7 +372,6 @@ component_registry::register_world_component (
 
   m_descriptors[type_id] = std::move (desc);
 }
-
 
 } // namespace reg
 

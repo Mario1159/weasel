@@ -4,6 +4,7 @@
 #include "rsc/resource_manager.hpp"
 #include "rsc/resource_ref.hpp"
 #include "sys/system.hpp"
+#include "wsl/log/log.hpp"
 #include <SDL3/SDL_events.h>
 #include <algorithm>
 #include <entt/core/fwd.hpp>
@@ -25,7 +26,6 @@ using namespace entt::literals;
 #include "../comp/prefab_instance.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "../comp/singl/runtime_context.hpp"
-
 
 namespace wsl
 {
@@ -53,8 +53,15 @@ scene::set_name (std::string name)
 
 sys::ecs_system &
 scene::add_system_instance (std::unique_ptr<sys::ecs_system> sys,
-                                 bool initialize_if_running)
+                            bool initialize_if_running)
 {
+  entt::id_type new_type_id = sys->get_type_id ();
+  for (const auto &existing : systems) {
+    if (existing && existing->get_type_id () == new_type_id) {
+      return *existing;
+    }
+  }
+
   sys::ecs_system *system = sys.get ();
   systems.emplace_back (std::move (sys));
 
@@ -70,9 +77,10 @@ scene::add_system_instance (std::unique_ptr<sys::ecs_system> sys,
 void
 scene::remove_system (sys::ecs_system *system)
 {
-  auto it = std::find_if (
-      systems.begin (), systems.end (),
-      [system] (const std::unique_ptr<sys::ecs_system> &s) { return s.get () == system; });
+  auto it = std::find_if (systems.begin (), systems.end (),
+                          [system] (const std::unique_ptr<sys::ecs_system> &s) {
+                            return s.get () == system;
+                          });
 
   if (it != systems.end ()) {
     if (m_initialized) {
@@ -100,6 +108,8 @@ scene::init ()
 {
   m_initialized = true;
   refresh_system_states ();
+  wsl::log::sys ()->debug ("Scene '{}' initialized ({} systems)", m_name,
+                           systems.size ());
 }
 
 void
@@ -226,20 +236,23 @@ scene::add_resource (io::resource_type type, entt::id_type id)
 {
   for (const io::resource_ref &r : m_load_list) {
     if (r.type == type && r.id == id) {
-      spdlog::debug("add_resource: already in load_list type={} id={}", (int)type, id);
+      wsl::log::rsc ()->debug ("Resource type={} id={} already in load list",
+                               (int)type, id);
       return;
     }
   }
 
-  spdlog::debug("add_resource: adding to load_list type={} id={}", (int)type, id);
+  wsl::log::rsc ()->trace ("Adding resource (type={}) id={} to load list",
+                           (int)type, id);
   m_load_list.push_back ({ type, id });
 
   // If this scene is the active one, load immediately
   if (m_runtime_ctx != nullptr) {
-    scene const* active_scene = m_runtime_ctx->scene_manager.get_active ();
-    spdlog::debug("add_resource: active_scene={} this={}", (void*)active_scene, (void*)this);
+    scene const *active_scene = m_runtime_ctx->scene_manager.get_active ();
+    wsl::log::rsc ()->trace ("Active scene={} this={}", (void *)active_scene,
+                             (void *)this);
     if (active_scene == this) {
-      spdlog::debug("add_resource: calling resource_manager.load");
+      wsl::log::rsc ()->trace ("Calling resource_manager.load");
       rsc::resource_manager &res_mgr = m_runtime_ctx->resource_manager;
       res_mgr.load ({ type, id });
     }
@@ -262,7 +275,7 @@ scene::has_resource (io::resource_type type, entt::id_type id) const
   for (const io::resource_ref &r : m_load_list) {
     if (r.type == type && r.id == id) {
       return true;
-}
+    }
   }
   return false;
 }
@@ -287,7 +300,7 @@ scene::get_entity_name (entt::entity e) const
       = m_entity_names.find (e);
       it != m_entity_names.end ()) {
     return it->second;
-}
+  }
   return unnamed;
 }
 
@@ -310,8 +323,7 @@ scene::get_entity_names () const
 }
 
 scene::scene (comp::singl::runtime_context *runtime_ctx,
-                   comp::singl::editor_context *editor_ctx,
-                   const std::string &name)
+              comp::singl::editor_context *editor_ctx, const std::string &name)
     : m_name (name), m_runtime_ctx (runtime_ctx), m_editor_ctx (editor_ctx)
 {
   ensure_context_bindings ();
@@ -373,7 +385,7 @@ scene::get_systems ()
   std::vector<sys::ecs_system *> out;
   out.reserve (systems.size ());
 
-  for (std::unique_ptr<sys::ecs_system>  const&sys : systems) {
+  for (std::unique_ptr<sys::ecs_system> const &sys : systems) {
     out.push_back (sys.get ());
   }
 
@@ -382,8 +394,8 @@ scene::get_systems ()
 
 entt::entity
 scene::copy_entity (scene &src_scene, entt::entity src_entity,
-                         entt::entity dst_parent, bool is_instantiating_prefab,
-                         scene_id prefab_id)
+                    entt::entity dst_parent, bool is_instantiating_prefab,
+                    scene_id prefab_id)
 {
   entt::registry &src_reg = src_scene.get_registry ();
   entt::registry &dst_reg = get_registry ();
@@ -406,14 +418,15 @@ scene::copy_entity (scene &src_scene, entt::entity src_entity,
 
       // Fallback to meta-based generic copy
       entt::meta_type const type = entt::resolve (id);
-        if (type) {
-          auto comp_any = type.func ("get"_hs).invoke (src_reg, src_entity);
-          if (comp_any) {
-            type.func ("emplace_or_replace"_hs).invoke (dst_reg, dst_entity, comp_any);
-          }
+      if (type) {
+        auto comp_any = type.func ("get"_hs).invoke (src_reg, src_entity);
+        if (comp_any) {
+          type.func ("emplace_or_replace"_hs)
+              .invoke (dst_reg, dst_entity, comp_any);
         }
       }
     }
+  }
 
   if (is_instantiating_prefab) {
     dst_reg.emplace_or_replace<comp::prefab_instance> (dst_entity, prefab_id,

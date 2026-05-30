@@ -14,7 +14,6 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/geometric.hpp>
 
-
 namespace wsl
 {
 
@@ -80,7 +79,8 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
         = point_light_view.get<comp::point_light> (entity);
 
     gpu_point_light &gpu_light = lighting.points[lighting.counts.x++];
-    const glm::vec3 position = glm::vec3 (world.value[3]);
+    glm::mat4 const wm = world.value;
+    const glm::vec3 position = glm::vec3 (wm[3]);
 
     gpu_light.pos_radius = glm::vec4 (position, light.radius);
     gpu_light.color_intensity
@@ -117,7 +117,8 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
         = dir_light_view.get<comp::directional_light> (entity);
 
     gpu_dir_light &gpu_light = lighting.dirs[lighting.counts.y++];
-    const glm::vec3 direction = -glm::normalize (glm::vec3 (world.value[2]));
+    glm::mat4 const wm = world.value;
+    const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
 
     gpu_light.dir_pad = glm::vec4 (direction, 0.0F);
     gpu_light.color_intensity
@@ -137,8 +138,9 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
         = spot_light_view.get<comp::spot_light> (entity);
 
     gpu_spot_light &gpu_light = lighting.spots[lighting.counts.z++];
-    const glm::vec3 position = glm::vec3 (world.value[3]);
-    const glm::vec3 direction = -glm::normalize (glm::vec3 (world.value[2]));
+    glm::mat4 const wm = world.value;
+    const glm::vec3 position = glm::vec3 (wm[3]);
+    const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
 
     gpu_light.pos_pad = glm::vec4 (position, 0.0F);
     gpu_light.dir_pad = glm::vec4 (direction, 0.0F);

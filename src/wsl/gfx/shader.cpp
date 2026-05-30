@@ -1,14 +1,13 @@
 #include "shader.hpp"
+#include "wsl/log/log.hpp"
 #include "../rsc/resource_manager.hpp"
 #include "../rsc/shader_loader.hpp"
 #include "rsc/resource_ids.hpp"
 
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_iostream.h>
-#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <cstddef>
-
 
 namespace wsl
 {
@@ -17,18 +16,19 @@ namespace gfx
 {
 
 SDL_GPUShader *
-shader::load_from_manager (SDL_GPUDevice *device, rsc::resource_manager *res_mgr,
-                           rsc::shader_id id, SDL_GPUShaderStage stage,
-                           Uint32 num_uniform_buffers, Uint32 num_samplers)
+shader::load_from_manager (SDL_GPUDevice *device,
+                           rsc::resource_manager *res_mgr, rsc::shader_id id,
+                           SDL_GPUShaderStage stage, Uint32 num_uniform_buffers,
+                           Uint32 num_samplers)
 {
   if (res_mgr == nullptr) {
     return nullptr;
-}
+  }
 
   auto handle = res_mgr->load (id);
   if (!handle) {
     return nullptr;
-}
+  }
 
   SDL_GPUShaderCreateInfo info{};
   info.code = handle->bytecode.data ();
@@ -54,8 +54,7 @@ shader::load (SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage,
   size_t size = 0;
   void *data = SDL_LoadFile (path, &size);
   if (data == nullptr) {
-    SDL_LogError (SDL_LOG_CATEGORY_APPLICATION, "LoadShader: failed to open %s",
-                  path);
+    wsl::log::gfx ()->error ("Failed to open shader: {}", path);
     return nullptr;
   }
 
@@ -86,8 +85,7 @@ shader::load_ui_shader (SDL_GPUDevice *device, const char *path,
   size_t size = 0;
   void *data = SDL_LoadFile (path, &size);
   if (data == nullptr) {
-    SDL_LogError (SDL_LOG_CATEGORY_APPLICATION, "LoadShader: failed to open %s",
-                  path);
+    wsl::log::gfx ()->error ("Failed to open shader: {}", path);
     return nullptr;
   }
 
@@ -116,8 +114,7 @@ shader::load_skybox_shader (SDL_GPUDevice *device, const char *path,
   size_t size = 0;
   void *data = SDL_LoadFile (path, &size);
   if (data == nullptr) {
-    SDL_LogError (SDL_LOG_CATEGORY_APPLICATION,
-                  "LoadSkyboxShader: failed to open %s", path);
+    wsl::log::gfx ()->error ("Failed to open skybox shader: {}", path);
     return nullptr;
   }
 

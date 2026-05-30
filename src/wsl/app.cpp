@@ -35,7 +35,6 @@
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/factory.hpp>
 #include <memory>
-#include <spdlog/spdlog.h>
 #include <string>
 
 namespace wsl
@@ -46,31 +45,38 @@ app::app (const std::string &name, int width, int height,
 {
   wsl::log::init ();
 
-  m_runtime_context = std::make_unique<wsl::comp::singl::runtime_context> (name.c_str (), width, height, engine_res_path);
+  m_runtime_context = std::make_unique<wsl::comp::singl::runtime_context> (
+      name.c_str (), width, height, engine_res_path);
 
   if (m_runtime_context->render_ctx.gpu_device == nullptr) {
-    spdlog::critical ("CRITICAL: GPU device could not be initialized. Application will likely crash.");
+    wsl::log::core ()->critical (
+        "CRITICAL: GPU device could not be initialized. "
+        "Application will likely crash.");
   }
 
   register_components<
-      wsl::comp::hierarchy, wsl::comp::world_transform, wsl::comp::transform, wsl::math::vec3f, wsl::math::quatf,
-      wsl::rsc::model_id, wsl::comp::model_instance_3d, wsl::comp::camera, wsl::comp::point_light,
-      wsl::comp::spot_light, wsl::comp::directional_light,
-      wsl::comp::rigid_body, wsl::comp::area, wsl::comp::character_body,
-      wsl::comp::prefab_instance> ();
+      wsl::comp::hierarchy, wsl::comp::world_transform, wsl::comp::transform,
+      wsl::math::vec3f, wsl::math::quatf, wsl::math::mat33f, wsl::math::mat44f,
+      wsl::rsc::model_id, wsl::comp::model_instance_3d, wsl::comp::camera,
+      wsl::comp::point_light, wsl::comp::spot_light,
+      wsl::comp::directional_light, wsl::comp::rigid_body, wsl::comp::area,
+      wsl::comp::character_body, wsl::comp::prefab_instance> ();
 
   // Register primitive types for the inspector
   using namespace entt::literals;
-  entt::meta_factory<entt::entity> ().type (entt::type_hash<entt::entity>::value ());
+  entt::meta_factory<entt::entity> ().type (
+      entt::type_hash<entt::entity>::value ());
   entt::meta_factory<float> ().type (entt::type_hash<float>::value ());
   entt::meta_factory<int> ().type (entt::type_hash<int>::value ());
   entt::meta_factory<bool> ().type (entt::type_hash<bool>::value ());
   entt::meta_factory<uint32_t> ().type (entt::type_hash<uint32_t>::value ());
-  entt::meta_factory<std::string> ().type (entt::type_hash<std::string>::value ());
+  entt::meta_factory<std::string> ().type (
+      entt::type_hash<std::string>::value ());
 
-  wsl::comp::for_each_type<wsl::comp::component_types>::apply ([this]<typename T> () {
-    m_runtime_context->component_registry.register_world_component<T> ();
-  });
+  wsl::comp::for_each_type<wsl::comp::component_types>::apply (
+      [this]<typename T> () {
+        m_runtime_context->component_registry.register_world_component<T> ();
+      });
 
   wsl::comp::singl::runtime_context::register_meta ();
   wsl::comp::singl::ui_manager::register_meta ();
@@ -93,6 +99,14 @@ app::app (const std::string &name, int width, int height,
   m_runtime_context->singleton_registry
       .register_singleton_component<wsl::comp::singl::physics_manager> (
           { "Physics Manager", true });
+
+  wsl::log::core ()->info (
+      "App initialized ({} world components, {} singletons, {} engine systems)",
+      m_runtime_context->component_registry.get_world_components ().size (),
+      m_runtime_context->singleton_registry.get_singleton_components ().size (),
+      m_runtime_context->core_systems
+          ? m_runtime_context->core_systems->to_vec ().size ()
+          : 0);
 }
 
 app::~app () = default;
@@ -100,7 +114,7 @@ app::~app () = default;
 void
 app::set_project_path (const std::string &path)
 {
-  spdlog::debug("set_project_path: loading {}", path);
+  wsl::log::core ()->trace ("Loading project from {}", path);
   m_runtime_context->resource_manager.load_project (path);
 }
 
@@ -125,9 +139,8 @@ app::run ()
     return -1;
   }
 
-  spdlog::debug("app::run: calling on_init");
+  wsl::log::core ()->trace ("Entering main loop");
   on_init ();
-  spdlog::debug("app::run: on_init done, entering main loop");
 
   uint64_t last_time = SDL_GetTicks ();
   bool quit = false;
@@ -137,16 +150,18 @@ app::run ()
     double const dt = (current_time - last_time) / 1000.0;
     last_time = current_time;
 
+    on_update (dt);
+
     SDL_Event e;
     while (SDL_PollEvent (&e) != 0) {
       if (e.type == SDL_EVENT_QUIT) {
         quit = true;
       }
       if (e.type == SDL_EVENT_WINDOW_RESIZED
-          && e.window.windowID == SDL_GetWindowID (m_runtime_context->window.handler))
-        {
-          m_runtime_context->window.on_resize ();
-        }
+          && e.window.windowID
+                 == SDL_GetWindowID (m_runtime_context->window.handler)) {
+        m_runtime_context->window.on_resize ();
+      }
       m_runtime_context->scene_manager.handle_events (e);
       on_event (e);
     }
@@ -156,6 +171,7 @@ app::run ()
     on_render ();
   }
 
+  wsl::log::core ()->debug ("Exiting main loop");
   return 0;
 }
 

@@ -2,12 +2,11 @@
 
 #include "../reg/sig/signal_hub.hpp"
 #include "../comp/component_meta.hpp"
+#include "wsl/log/log.hpp"
 
 #include "entt/entity/fwd.hpp"
 #include <SDL3/SDL_events.h>
 #include <entt/entt.hpp>
-#include <spdlog/spdlog.h>
-
 #include <functional>
 #include <string>
 #include <utility>
@@ -90,7 +89,7 @@ public:
       return;
     }
 
-    spdlog::debug ("System: Initializing {}", get_name ());
+    wsl::log::sys ()->trace ("Initializing {}", get_name ());
     on_init (*registry);
     m_initialized = true;
   }
@@ -99,7 +98,7 @@ public:
   shutdown (entt::registry *registry)
   {
     if (m_active && (registry != nullptr)) {
-      spdlog::debug ("System: Shutting down {}", get_name ());
+      wsl::log::sys ()->trace ("Shutting down {}", get_name ());
       on_inactive (*registry);
     }
 
@@ -120,7 +119,7 @@ public:
 
     if (should_activate) {
       if (!m_active) {
-        spdlog::debug ("System: Activating {}", get_name ());
+        wsl::log::sys ()->trace ("Activating {}", get_name ());
       }
       init (registry);
       m_active = true;
@@ -128,7 +127,7 @@ public:
     }
 
     if (m_active) {
-      spdlog::debug ("System: Deactivating {}", get_name ());
+      wsl::log::sys ()->trace ("Deactivating {}", get_name ());
       on_inactive (*registry);
     }
 
@@ -325,7 +324,7 @@ protected:
   template <typename... Components, typename Fn>
   void
   register_iteration (reg::sig::signal_hub &hub, const char *iteration_name,
-                        Fn &&fn)
+                      Fn &&fn)
   {
     hub.template declare_iteration<Derived, Components...> (iteration_name);
 

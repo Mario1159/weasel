@@ -1,5 +1,6 @@
 #include "physics_engine.hpp"
 #include "jolt_runtime.hpp"
+#include "wsl/log/log.hpp"
 
 #include "Jolt/Core/TempAllocator.h"
 #include "Jolt/Physics/Body/BodyID.h"
@@ -22,7 +23,6 @@
 #include <thread>
 #include <vector>
 
-
 namespace wsl
 {
 
@@ -30,13 +30,15 @@ phys::engine::engine ()
 {
   phys::retain_jolt_runtime ();
 
-  m_temp_alloc = std::make_unique<JPH::TempAllocatorImpl> (10 * 1024 * 1024); // 10MB temp
+  m_temp_alloc = std::make_unique<JPH::TempAllocatorImpl> (10 * 1024
+                                                           * 1024); // 10MB temp
   m_job_sys = std::make_unique<JPH::JobSystemThreadPool> (
       JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers,
       std::max (1U, std::thread::hardware_concurrency () - 1));
 
   m_bp_layer_if = std::make_unique<broad_phase_layer_interface> ();
-  m_obj_vs_bp_layer_filter = std::make_unique<object_vs_broad_phase_layer_filter> ();
+  m_obj_vs_bp_layer_filter
+      = std::make_unique<object_vs_broad_phase_layer_filter> ();
   m_obj_layer_filter = std::make_unique<object_layer_pair_filter> ();
 
   const uint32_t max_bodies = 1024;
@@ -45,12 +47,18 @@ phys::engine::engine ()
   const uint32_t max_contact_constraints = 1024;
 
   m_phys_sys.Init (max_bodies, num_body_mutexes, max_body_pairs,
-                 max_contact_constraints, *m_bp_layer_if, *m_obj_vs_bp_layer_filter,
-                 *m_obj_layer_filter);
+                   max_contact_constraints, *m_bp_layer_if,
+                   *m_obj_vs_bp_layer_filter, *m_obj_layer_filter);
 
   m_contact_listener = std::make_unique<contact_listener_impl> (*this);
-  m_phys_sys.SetContactListener (m_contact_listener.get());
+  m_phys_sys.SetContactListener (m_contact_listener.get ());
   set_gravity (m_gravity_y);
+
+  wsl::log::phys ()->debug (
+      "Physics engine initialized (max_bodies={}, gravity={}, "
+      "fixed_step={}s, max_substeps={}, threads={})",
+      max_bodies, m_gravity_y, m_fixed_step, m_max_substeps,
+      std::max (1U, std::thread::hardware_concurrency () - 1));
 }
 
 phys::engine::~engine ()
@@ -70,13 +78,17 @@ phys::engine::step (double dt)
 
   int steps = 0;
   while (m_accumulator >= m_fixed_step && steps < m_max_substeps) {
-    m_phys_sys.Update (static_cast<float> (m_fixed_step), 1, m_temp_alloc.get(), m_job_sys.get());
+    m_phys_sys.Update (static_cast<float> (m_fixed_step), 1,
+                       m_temp_alloc.get (), m_job_sys.get ());
     m_accumulator -= m_fixed_step;
     steps++;
   }
+
+  if (steps > 0) {
+    wsl::log::phys ()->trace ("Physics step: {} sub-step(s), dt={}s", steps,
+                              dt);
+  }
 }
-
-
 
 void
 phys::engine::clear ()
@@ -97,6 +109,9 @@ phys::engine::clear ()
   }
 
   m_accumulator = 0.0;
+
+  wsl::log::phys ()->debug ("Cleared physics world ({} bodies removed)",
+                            all_bodies.size ());
 }
 
 JPH::PhysicsSystem &
@@ -139,7 +154,8 @@ void
 phys::engine::set_gravity (double gravity)
 {
   m_gravity_y = gravity;
-  m_phys_sys.SetGravity (JPH::Vec3 (0.0F, static_cast<float> (m_gravity_y), 0.0F));
+  m_phys_sys.SetGravity (
+      JPH::Vec3 (0.0F, static_cast<float> (m_gravity_y), 0.0F));
 }
 
 double
@@ -195,7 +211,7 @@ phys::engine::register_sensor (const JPH::BodyID &id)
 {
   if (!id.IsInvalid ()) {
     m_sensors.insert (id);
-}
+  }
 }
 
 void
@@ -203,7 +219,7 @@ phys::engine::unregister_sensor (const JPH::BodyID &id)
 {
   if (!id.IsInvalid ()) {
     m_sensors.erase (id);
-}
+  }
 }
 
 bool

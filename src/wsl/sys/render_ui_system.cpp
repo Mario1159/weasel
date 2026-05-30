@@ -1,9 +1,9 @@
 #include "render_ui_system.hpp"
+#include "wsl/log/log.hpp"
 
 #include <RmlUi/Core/Math.h>
 #include <RmlUi_Platform_SDL.h>
 #include <SDL3/SDL_events.h>
-#include <SDL3/SDL_log.h>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <string>
@@ -13,7 +13,6 @@
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/comp/singl/engine_resources.hpp"
-
 
 namespace wsl
 {
@@ -65,27 +64,31 @@ render_ui_system::on_update (entt::registry &registry, double /*unused*/)
     return;
   }
 
-  auto &runtime_ctx = *registry.ctx ().template get<comp::singl::runtime_context *> ();
+  auto &runtime_ctx
+      = *registry.ctx ().template get<comp::singl::runtime_context *> ();
   auto &ui = *registry.ctx ().template get<comp::singl::ui_manager *> ();
 
   ui.prepare_scene (registry);
 
-  const bool needs_reload = ui.needs_reload
-                            || ui.loaded_document_id.value
-                                   != ui.active_document_id.value;
+  const bool needs_reload
+      = ui.needs_reload
+        || ui.loaded_document_id.value != ui.active_document_id.value;
   if (needs_reload) {
     // Ensure all registered fonts are loaded into RmlUi
-    for (const auto& font : runtime_ctx.resource_manager.list_fonts()) {
-        std::string const resolved = runtime_ctx.resource_manager.resolve_path(font.path);
-        ui.load_font(resolved);
+    for (const auto &font : runtime_ctx.resource_manager.list_fonts ()) {
+      std::string const resolved
+          = runtime_ctx.resource_manager.resolve_path (font.path);
+      ui.load_font (resolved);
     }
 
     // Load engine fonts from editor context if available
     if (runtime_ctx.editor_ctx != nullptr) {
-        for (const auto& font : runtime_ctx.editor_ctx->editor_resources.list_fonts()) {
-            std::string const resolved = runtime_ctx.editor_ctx->editor_resources.resolve_path(font.path);
-            ui.load_font(resolved);
-        }
+      for (const auto &font :
+           runtime_ctx.editor_ctx->editor_resources.list_fonts ()) {
+        std::string const resolved
+            = runtime_ctx.editor_ctx->editor_resources.resolve_path (font.path);
+        ui.load_font (resolved);
+      }
     }
 
     if (ui.active_document_instance != nullptr) {
@@ -97,13 +100,14 @@ render_ui_system::on_update (entt::registry &registry, double /*unused*/)
     if (ui.active_document_id.value != entt::null) {
       if (auto info
           = runtime_ctx.resource_manager.info (ui.active_document_id)) {
-        std::string const resolved = runtime_ctx.resource_manager.resolve_path (info->path);
+        std::string const resolved
+            = runtime_ctx.resource_manager.resolve_path (info->path);
         ui.active_document_instance = ui.context->LoadDocument (resolved);
         if (ui.active_document_instance != nullptr) {
           ui.active_document_instance->Show ();
           ui.loaded_document_id = ui.active_document_id;
         } else {
-          SDL_Log ("Failed to load RML document: %s", resolved.c_str ());
+          wsl::log::sys ()->error ("Failed to load RML document: {}", resolved);
         }
       }
     }
@@ -112,13 +116,12 @@ render_ui_system::on_update (entt::registry &registry, double /*unused*/)
 
   if (ui.context != nullptr) {
     ui.context->Update ();
-}
+  }
 }
 
 void
 render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
 {
-  // spdlog::trace("render_ui_system: on_render_record_draw_cmd");
   auto &ctx = registry.ctx ();
   if (!ctx.template contains<comp::singl::runtime_context *> ()
       || !ctx.template contains<comp::singl::ui_manager *> ()) {
@@ -128,13 +131,13 @@ render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
   auto &runtime_ctx = *ctx.get<comp::singl::runtime_context *> ();
   auto &ui = *ctx.get<comp::singl::ui_manager *> ();
 
-
   if (ui.context == nullptr) {
     return;
-}
+  }
 
   int width, height;
-  if ((runtime_ctx.editor_ctx != nullptr) && !runtime_ctx.editor_ctx->game_fullscreen) {
+  if ((runtime_ctx.editor_ctx != nullptr)
+      && !runtime_ctx.editor_ctx->game_fullscreen) {
     // In editor mode, RmlUi should match the present_tex size
     width = (int)runtime_ctx.window.present_tex.width;
     height = (int)runtime_ctx.window.present_tex.height;
@@ -159,7 +162,7 @@ render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
 void
 render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
 {
-  // spdlog::trace("render_ui_system: on_event");
+
   auto &ctx = registry.ctx ();
   if (!ctx.template contains<comp::singl::runtime_context *> ()
       || !ctx.template contains<comp::singl::ui_manager *> ()) {
@@ -169,13 +172,12 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
   auto &runtime_ctx = *ctx.get<comp::singl::runtime_context *> ();
   auto &ui = *ctx.get<comp::singl::ui_manager *> ();
 
-
-
   if ((runtime_ctx.editor_ctx != nullptr) && !runtime_ctx.is_running) {
     return;
   }
 
-  if ((runtime_ctx.editor_ctx != nullptr) && !runtime_ctx.editor_ctx->game_fullscreen) {
+  if ((runtime_ctx.editor_ctx != nullptr)
+      && !runtime_ctx.editor_ctx->game_fullscreen) {
     SDL_Event adjusted_ev = ev;
     bool process = true;
 
@@ -187,7 +189,8 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
 
     if (img_w > 0 && img_h > 0) {
       float const scale_x = (float)runtime_ctx.window.present_tex.width / img_w;
-      float const scale_y = (float)runtime_ctx.window.present_tex.height / img_h;
+      float const scale_y
+          = (float)runtime_ctx.window.present_tex.height / img_h;
 
       if (ev.type == SDL_EVENT_MOUSE_MOTION) {
         adjusted_ev.motion.x = (ev.motion.x - img_x) * scale_x;

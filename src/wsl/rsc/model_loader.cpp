@@ -81,7 +81,7 @@ model_loader::generate_tangents_mikktspace_any (Prim &prim) const
 {
   if (prim.indices.empty () || prim.vertices.empty ()) {
     return;
-}
+  }
 
   struct mikkt_ctx
   {
@@ -143,7 +143,7 @@ model_loader::generate_tangents_mikktspace_any (Prim &prim) const
   if (!ok) {
     for (auto &v : prim.vertices) {
       v.tangent = glm::vec4 (1, 0, 0, 1);
-}
+    }
   }
 }
 
@@ -154,19 +154,19 @@ model_loader::generate_tangents_mikktspace (raw::cpu_primitive &prim) const
 }
 
 model_loader::lod_info
-model_loader::parse_lod_name (const std::string &name) 
+model_loader::parse_lod_name (const std::string &name)
 {
   lod_info info;
 
   auto pos = name.rfind ("_LOD");
   if (pos == std::string::npos) {
     return info;
-}
+  }
 
   std::string const base = name.substr (0, pos);
   std::string num = name.substr (pos + 4);
 
-  wsl::log::resources ()->debug ("MESH NAME: {}, NUM: {}", name, num);
+  wsl::log::rsc ()->debug ("MESH NAME: {}, NUM: {}", name, num);
 
   try {
     int const lod = std::stoi (num);
@@ -179,7 +179,7 @@ model_loader::parse_lod_name (const std::string &name)
 }
 
 glm::mat4
-model_loader::fastgltf_mat4_to_glm (const fastgltf::math::fmat4x4 &m) 
+model_loader::fastgltf_mat4_to_glm (const fastgltf::math::fmat4x4 &m)
 {
   return glm::mat4 (m[0][0], m[0][1], m[0][2], m[0][3], m[1][0], m[1][1],
                     m[1][2], m[1][3], m[2][0], m[2][1], m[2][2], m[2][3],
@@ -193,7 +193,7 @@ model_loader::get_uv_xform (const TexInfo &info) const
   raw::uv_xform xf{};
   if (!info.has_value ()) {
     return xf;
-}
+  }
 
   if (info->transform) {
     const auto &t = *info->transform;
@@ -264,7 +264,7 @@ model_loader::primitive_display_name (std::string_view path)
 }
 
 std::shared_ptr<gfx::model_3d>
-model_loader::load_primitive (primitive_model primitive) 
+model_loader::load_primitive (primitive_model primitive)
 {
   switch (primitive) {
   case primitive_model::quad:
@@ -288,10 +288,10 @@ model_loader::compute_node_local_transform (const fastgltf::Node &node) const
 
   if (const auto *trs = std::get_if<fastgltf::TRS> (&node.transform)) {
     glm::vec3 const t (trs->translation.x (), trs->translation.y (),
-                 trs->translation.z ());
+                       trs->translation.z ());
     glm::vec3 const s (trs->scale.x (), trs->scale.y (), trs->scale.z ());
-    glm::quat const r (trs->rotation.w (), trs->rotation.x (), trs->rotation.y (),
-                 trs->rotation.z ());
+    glm::quat const r (trs->rotation.w (), trs->rotation.x (),
+                       trs->rotation.y (), trs->rotation.z ());
 
     return glm::translate (glm::mat4 (1.F), t) * glm::mat4_cast (r)
            * glm::scale (glm::mat4 (1.F), s);
@@ -301,7 +301,8 @@ model_loader::compute_node_local_transform (const fastgltf::Node &node) const
     return fastgltf_mat4_to_glm (*m);
   }
 
-  wsl::log::resources ()->warn ("Node has no TRS or matrix transform, using identity.");
+  wsl::log::rsc ()->warn (
+      "Node has no TRS or matrix transform, using identity.");
   return glm::mat4 (1.F);
 }
 
@@ -387,7 +388,8 @@ model_loader::begin_upload (const raw::cpu_model &cpu,
 }
 
 void
-model_loader::upload_next_batch (upload_session &session, const raw::cpu_model &cpu,
+model_loader::upload_next_batch (upload_session &session,
+                                 const raw::cpu_model &cpu,
                                  size_t max_tasks) const
 {
   size_t tasks_done = 0;
@@ -469,14 +471,13 @@ model_loader::upload_next_batch (upload_session &session, const raw::cpu_model &
 }
 
 bool
-model_loader::is_upload_complete (const upload_session &session) 
+model_loader::is_upload_complete (const upload_session &session)
 {
   return session.next_task >= session.tasks.size ();
 }
 
 gfx::model_3d
-model_loader::finish_upload (upload_session &session,
-                             const raw::cpu_model &cpu) 
+model_loader::finish_upload (upload_session &session, const raw::cpu_model &cpu)
 {
   auto &model = session.gpu_model;
   const bool lowest_lod_only = session.options.lowest_lod_only;
@@ -551,7 +552,7 @@ model_loader::finish_upload (upload_session &session,
 
   model.rebuild_scene_bounds ();
 
-  wsl::log::resources ()->debug ("GPU LOD GROUP COUNT: {}", model.lod_groups.size ());
+  wsl::log::rsc ()->debug ("GPU LOD GROUP COUNT: {}", model.lod_groups.size ());
 
   return std::move (model);
 }
@@ -560,7 +561,7 @@ bool
 model_loader::extract_image_data (const fastgltf::Asset &asset,
                                   const fastgltf::Image &img,
                                   std::vector<uint8_t> &out,
-                                  const std::filesystem::path &base_path) 
+                                  const std::filesystem::path &base_path)
 {
 
   auto read_from_buffer = [&] (const auto &buffer_source,
@@ -592,7 +593,7 @@ model_loader::extract_image_data (const fastgltf::Asset &asset,
                            },
 
                            [&] (auto &&) -> bool {
-                             wsl::log::resources ()->error ("buffer data = UNKNOWN");
+                             wsl::log::rsc ()->error ("buffer data = UNKNOWN");
                              return false;
                            } },
                        buffer.data);
@@ -601,8 +602,8 @@ model_loader::extract_image_data (const fastgltf::Asset &asset,
   auto handle_uri = [&] (const fastgltf::sources::URI &uri) -> bool {
     std::ifstream file (base_path / uri.uri.fspath (), std::ios::binary);
     if (!file) {
-      wsl::log::resources ()->error ("FAILED to open image file: {}",
-                     (base_path / uri.uri.fspath ()).string ());
+      wsl::log::rsc ()->error ("FAILED to open image file: {}",
+                               (base_path / uri.uri.fspath ()).string ());
       return false;
     }
 
@@ -622,7 +623,8 @@ model_loader::extract_image_data (const fastgltf::Asset &asset,
   return std::visit (
       fastgltf::visitor{ handle_buffer_view, handle_uri, handle_embedded_vector,
                          [&] (auto &&) -> bool {
-                           wsl::log::resources ()->error ("source = UNKNOWN image source type");
+                           wsl::log::rsc ()->error (
+                               "source = UNKNOWN image source type");
                            return false;
                          } },
       img.data);
@@ -630,18 +632,18 @@ model_loader::extract_image_data (const fastgltf::Asset &asset,
 
 bool
 model_loader::decode_rgba_image (const std::vector<uint8_t> &bytes, int &w,
-                                 int &h, std::vector<uint8_t> &pixels) 
+                                 int &h, std::vector<uint8_t> &pixels)
 {
 
   SDL_IOStream *rw = SDL_IOFromConstMem (bytes.data (), (int)bytes.size ());
   if (rw == nullptr) {
-    wsl::log::resources ()->error ("SDL_IOFromConstMem FAILED: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("SDL_IOFromConstMem FAILED: {}", SDL_GetError ());
     return false;
   }
 
   SDL_Surface *surf = IMG_Load_IO (rw, 1);
   if (surf == nullptr) {
-    wsl::log::resources ()->error ("IMG_Load_IO FAILED: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("IMG_Load_IO FAILED: {}", SDL_GetError ());
     return false;
   }
 
@@ -649,14 +651,14 @@ model_loader::decode_rgba_image (const std::vector<uint8_t> &bytes, int &w,
   SDL_DestroySurface (surf);
 
   if (rgba == nullptr) {
-    wsl::log::resources ()->error ("SDL_ConvertSurface FAILED: {}", SDL_GetError ());
+    wsl::log::rsc ()->error ("SDL_ConvertSurface FAILED: {}", SDL_GetError ());
     return false;
   }
 
   w = rgba->w;
   h = rgba->h;
 
-  pixels.resize (static_cast<size_t>(w * h * 4));
+  pixels.resize (static_cast<size_t> (w * h * 4));
   std::memcpy (pixels.data (), rgba->pixels, pixels.size ());
 
   SDL_DestroySurface (rgba);
@@ -686,7 +688,7 @@ model_loader::load_cpu (const std::string &path) const
 
   auto asset = parser.loadGltf (file.get (), p.parent_path (), options);
   if (!asset) {
-    wsl::log::resources ()->error ("Failed to load glTF: {}", path);
+    wsl::log::rsc ()->error ("Failed to load glTF: {}", path);
     return {};
   }
 
@@ -715,7 +717,8 @@ model_loader::load_cpu (const std::string &path) const
           });
 
       // ---- normals ----
-      if (const auto *n = prim.findAttribute ("NORMAL"); n != prim.attributes.end ()) {
+      if (const auto *n = prim.findAttribute ("NORMAL");
+          n != prim.attributes.end ()) {
         const auto &acc = gltf.accessors[n->accessorIndex];
         fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3> (
             gltf, acc, [&] (auto v, size_t i) {
@@ -735,7 +738,7 @@ model_loader::load_cpu (const std::string &path) const
       } else {
         for (auto &v : out.vertices) {
           v.uv = glm::vec2 (0.0F);
-}
+        }
       }
 
       // ---- indices ----
@@ -748,7 +751,7 @@ model_loader::load_cpu (const std::string &path) const
         out.indices.resize (out.vertices.size ());
         for (size_t i = 0; i < out.indices.size (); ++i) {
           out.indices[i] = uint32_t (i);
-}
+        }
       }
 
       if (prim.materialIndex.has_value ()) {
@@ -773,14 +776,14 @@ model_loader::load_cpu (const std::string &path) const
           slot = {};
           if (!tex_info.has_value ()) {
             return;
-}
+          }
 
           slot.uv = get_uv_xform (tex_info);
 
           const auto &tex = gltf.textures[tex_info->textureIndex];
           if (!tex.imageIndex.has_value ()) {
             return;
-}
+          }
 
           const auto &img = gltf.images[*tex.imageIndex];
 
@@ -791,10 +794,10 @@ model_loader::load_cpu (const std::string &path) const
 
           if (!extract_image_data (gltf, img, image_bytes, base_path)) {
             return;
-}
+          }
           if (!decode_rgba_image (image_bytes, w, h, pixels)) {
             return;
-}
+          }
 
           auto cpu_tex = std::make_shared<raw::cpu_texture> ();
           cpu_tex->width = w;
@@ -821,7 +824,7 @@ model_loader::load_cpu (const std::string &path) const
     const auto &m = gltf.meshes[i];
     if (m.name.empty ()) {
       continue;
-}
+    }
 
     lod_info const info = parse_lod_name ((std::string)m.name);
     if (info.lod >= 0) {
@@ -836,12 +839,12 @@ model_loader::load_cpu (const std::string &path) const
     std::vector<int> indices;
     for (auto &[lod, idx] : lods) {
       indices.push_back (idx);
-}
+    }
 
     cpu->lod_groups.push_back (std::move (indices));
   }
 
-  wsl::log::resources ()->debug ("LOD GROUP COUNT: {}", cpu->lod_groups.size ());
+  wsl::log::rsc ()->debug ("LOD GROUP COUNT: {}", cpu->lod_groups.size ());
 
   // -------- scenes --------
   cpu->scenes.reserve (gltf.scenes.size ());
@@ -872,7 +875,7 @@ model_loader::load_cpu (const std::string &path) const
             }
             if (assigned_group) {
               break;
-}
+            }
           }
 
           if (!assigned_group) {
@@ -882,7 +885,7 @@ model_loader::load_cpu (const std::string &path) const
 
         for (size_t const child : src.children) {
           n.children.push_back (build_node (child));
-}
+        }
 
         return n;
       };
@@ -898,7 +901,7 @@ model_loader::load_cpu (const std::string &path) const
     cpu->default_scene = *gltf.defaultScene;
   } else {
     cpu->default_scene = 0;
-}
+  }
 
   return cpu;
 }
@@ -911,14 +914,14 @@ model_loader::operator() (const std::string &path) const
   }
 
   if (path.rfind ("builtin://", 0) == 0) {
-    wsl::log::resources ()->warn ("Unknown builtin model path '{}'", path);
+    wsl::log::rsc ()->warn ("Unknown builtin model path '{}'", path);
     return {};
   }
 
   auto cpu = load_cpu (path);
   if (!cpu) {
     return {};
-}
+  }
 
   auto gpu = upload_gpu (*cpu);
   return std::make_shared<gfx::model_3d> (std::move (gpu));
@@ -935,7 +938,7 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
 {
 
   if ((m_ctx == nullptr) || (m_ctx->gpu_device == nullptr)) {
-    wsl::log::resources ()->critical ("GPU context not initialized.");
+    wsl::log::rsc ()->critical ("GPU context not initialized.");
     return nullptr;
   }
 
@@ -951,7 +954,7 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
 
   SDL_GPUTexture *gpu_tex = SDL_CreateGPUTexture (m_ctx->gpu_device, &ti);
   if (gpu_tex == nullptr) {
-    wsl::log::resources ()->error ("SDL_CreateGPUTexture failed.");
+    wsl::log::rsc ()->error ("SDL_CreateGPUTexture failed.");
     return nullptr;
   }
 
@@ -970,17 +973,17 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
   SDL_GPUCopyPass *cp = SDL_BeginGPUCopyPass (cmd);
 
   SDL_GPUTextureTransferInfo const src{ upload, 0, (Uint32)tex.width,
-                                  (Uint32)tex.height };
+                                        (Uint32)tex.height };
 
   SDL_GPUTextureRegion const dst{ .texture = gpu_tex,
-                            .mip_level = 0,
-                            .layer = 0,
-                            .x = 0,
-                            .y = 0,
-                            .z = 0,
-                            .w = (Uint32)tex.width,
-                            .h = (Uint32)tex.height,
-                            .d = 1 };
+                                  .mip_level = 0,
+                                  .layer = 0,
+                                  .x = 0,
+                                  .y = 0,
+                                  .z = 0,
+                                  .w = (Uint32)tex.width,
+                                  .h = (Uint32)tex.height,
+                                  .d = 1 };
 
   SDL_UploadToGPUTexture (cp, &src, &dst, true);
   SDL_EndGPUCopyPass (cp);

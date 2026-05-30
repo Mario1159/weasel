@@ -1,4 +1,5 @@
 #include "ui_manager.hpp"
+#include "wsl/log/log.hpp"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/DataModelHandle.h>
@@ -8,7 +9,6 @@
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/factory.hpp>
 
-
 #include "comp/component_meta.hpp"
 #include "gfx/render_context.hpp"
 #include "gfx/render_window.hpp"
@@ -16,9 +16,7 @@
 #include "runtime_context.hpp"
 #include <filesystem>
 #include <imgui.h>
-#include <spdlog/spdlog.h>
 #include <string>
-
 
 namespace wsl
 {
@@ -28,17 +26,17 @@ namespace comp
 namespace singl
 {
 
-ui_manager::ui_manager (gfx::render_context &ctx, wsl::gfx::render_window &window,
+ui_manager::ui_manager (gfx::render_context &ctx,
+                        wsl::gfx::render_window &window,
                         wsl::rsc::resource_manager *res_mgr)
-    :  render_interface (ctx.gpu_device, window.handler)
+    : render_interface (ctx.gpu_device, window.handler)
 {
-  if (ctx.gpu_device == nullptr || window.handler == nullptr)
-    {
-      spdlog::debug ("ui_manager: headless mode, skipping RmlUi initialization");
-      return;
-    }
+  if (ctx.gpu_device == nullptr || window.handler == nullptr) {
+    wsl::log::editor ()->trace ("Headless mode, skipping RmlUi initialization");
+    return;
+  }
 
-  spdlog::debug ("ui_manager: using GPU device {}", (void*)ctx.gpu_device);
+  wsl::log::editor ()->trace ("Using GPU device {}", (void *)ctx.gpu_device);
   Rml::SetRenderInterface (&render_interface);
   Rml::SetSystemInterface (&system_interface);
   Rml::Initialise ();
@@ -58,7 +56,8 @@ ui_manager::ui_manager (gfx::render_context &ctx, wsl::gfx::render_window &windo
 
 ui_manager::~ui_manager ()
 {
-  if (context == nullptr) return;
+  if (context == nullptr)
+    return;
 
   if (active_document_instance != nullptr) {
     active_document_instance->Close ();
@@ -75,10 +74,9 @@ ui_manager::register_meta ()
   using namespace entt::literals;
   entt::meta_factory<comp::singl::ui_manager> ()
       .type (entt::type_hash<comp::singl::ui_manager>::value ())
-      .custom<comp::meta_info> (
-          comp::meta_info{ "UI Manager",
-                           "Runtime-owned RmlUi context and renderer used "
-                           "by the active scene." })
+      .custom<comp::meta_info> (comp::meta_info{
+          "UI Manager", "Runtime-owned RmlUi context and renderer used "
+                        "by the active scene." })
       .func<&comp::singl::ui_manager::custom_inspect> ("custom_inspect"_hs);
 }
 
@@ -180,7 +178,7 @@ ui_manager::load_font (const std::string &path)
   if (Rml::LoadFontFace (path)) {
     m_loaded_fonts.insert (path);
   } else {
-    spdlog::error ("ui_manager: failed to load font face from {}", path);
+    wsl::log::editor ()->error ("Failed to load font face from {}", path);
   }
 }
 
