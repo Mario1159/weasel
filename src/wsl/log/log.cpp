@@ -33,6 +33,8 @@ make_logger (const char *name, const char *info_color)
 void
 init ()
 {
+  if (s_core_logger)
+    return;
   s_core_logger = make_logger ("core", "\033[37m");
   s_gfx_logger = make_logger ("gfx", "\033[32m");
   s_rsc_logger = make_logger ("rsc", "\033[36m");

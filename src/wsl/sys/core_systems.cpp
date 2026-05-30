@@ -131,7 +131,7 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
   if (!transform_sys) {
     transform_sys = std::make_unique<transform_system> ("Transform System");
   }
-  if (shadow_sys) {
+  if (!shadow_sys) {
     shadow_sys = std::make_unique<shadow_system> ("Shadow System");
   }
   if (!audio_sys) {

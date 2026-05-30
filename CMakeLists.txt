@@ -546,6 +546,13 @@ target_link_libraries(weasel_cli_tests PRIVATE cli doctest)
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(weasel_cli_tests)
 
+# Add doctest-based tests for the MCP server
+add_executable(weasel_mcp_server_tests
+    "${CMAKE_SOURCE_DIR}/tests/mcp-server/test_mcp_server.cpp"
+)
+target_link_libraries(weasel_mcp_server_tests PRIVATE mcp_server_lib doctest)
+doctest_discover_tests(weasel_mcp_server_tests)
+
 # --- Installation ---
 # Only install our own targets/resources.  CPM dependencies (slang, ai-sdk-cpp,
 # etc.) have their own install() rules that break in CI (wrong paths, man pages,

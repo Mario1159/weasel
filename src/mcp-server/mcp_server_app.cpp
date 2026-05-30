@@ -1,6 +1,7 @@
 #include "mcp_server_app.hpp"
 #include "cli_reference.hpp"
 #include "component_info.hpp"
+#include "mcp_server_handlers.hpp"
 #include "mcp_stdio_server.hpp"
 #include "namespace_info.hpp"
 
@@ -18,6 +19,8 @@ build_text_response (const std::string &text)
 {
   return { { { "type", "text" }, { "text", text } } };
 }
+
+} // namespace
 
 mcp::json
 handle_list_commands (const mcp::json &params)
@@ -213,8 +216,6 @@ handle_cli_capabilities (const mcp::json &params)
 
   return build_text_response (oss.str ());
 }
-
-} // namespace
 
 mcp_server_app::mcp_server_app (const std::string &host, int port)
     : m_server (mcp::server::configuration{ host, port })

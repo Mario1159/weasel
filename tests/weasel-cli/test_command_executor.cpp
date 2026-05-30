@@ -3,6 +3,7 @@
 #include "cli/command_executor.hpp"
 #include "cli/cli_handler.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/log/log.hpp"
 
 #include <string>
 #include <vector>
@@ -23,6 +24,11 @@ struct exec_fixture
              cli_handler::default_engine_resource_path (), true),
         exec (rtc)
   {
+    static bool log_inited = false;
+    if (!log_inited) {
+      wsl::log::init ();
+      log_inited = true;
+    }
     rtc.set_editor_ctx (nullptr);
   }
 
