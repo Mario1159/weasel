@@ -1,5 +1,4 @@
 #include "mcp_stdio_server.hpp"
-#include "wsl/log/log.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -203,7 +202,7 @@ mcp_stdio_server::process_request (const mcp::request &req)
 void
 mcp_stdio_server::send_response (const mcp::json &response)
 {
-  wsl::log::net ()->trace ("{}", response.dump ());
+  std::cout << response.dump () << std::endl;
 }
 
 } // namespace wsl::mcp_server
