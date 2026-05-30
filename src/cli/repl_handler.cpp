@@ -1564,8 +1564,36 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     std::string set_msg;
     if (set_component_property (parent_val, prop_data, tokens[5], set_msg,
                                 &m_rtc.resource_manager)) {
-      // Write the modified VALUE copy back to the component
+      // Write the modified innermost parent back to wherever cur points
       std::memcpy (cur, parent_buf, parent_sz);
+
+      // Walk the chain in reverse to propagate changes up to the
+      // original component.  Each level makes a value copy of the
+      // parent, calls meta_data::set() to write the modified child
+      // into the copy, then memcpy's the copy back to the original
+      // parent_ptr (which points into the ECS registry storage).
+      void *modified = parent_buf;
+      size_t modified_sz = parent_sz;
+      for (size_t j = chain.size (); j-- > 0;) {
+        auto &cl = chain[j];
+
+        size_t psz = cl.parent_type.size_of ();
+        void *pcopy = std::malloc (psz);
+        std::memcpy (pcopy, cl.parent_ptr, psz);
+        entt::meta_any pv = cl.parent_type.from_void (pcopy, false);
+
+        auto cd = cl.parent_type.data (cl.acc_hash);
+        if (!cd)
+          break;
+        entt::meta_any cv = cd.type ().from_void (modified, false);
+        cd.set (pv, cv);
+
+        std::memcpy (cl.parent_ptr, pcopy, psz);
+        modified = cl.parent_ptr;
+        modified_sz = psz;
+        std::free (pcopy);
+      }
+
       m_output << "Set " << tokens[3] << "." << tokens[4] << " = " << tokens[5]
                << " (" << set_msg << ")\n";
     } else {
