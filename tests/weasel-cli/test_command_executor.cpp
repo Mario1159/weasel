@@ -201,7 +201,8 @@ TEST_CASE ("ent new with name creates named entity")
   exec_fixture fx;
   fx.execute ("scene new TestScene");
   auto out = fx.execute ("ent new Player");
-  CHECK (out.find ("Entity 0 created with Transform") != std::string::npos);
+  CHECK (out.find ("Entity 0 (Player) created with Transform")
+         != std::string::npos);
 }
 
 TEST_CASE ("ent new --empty creates empty entity")
@@ -217,7 +218,7 @@ TEST_CASE ("ent new --empty with name creates empty named entity")
   exec_fixture fx;
   fx.execute ("scene new TestScene");
   auto out = fx.execute ("ent new --empty MyEntity");
-  CHECK (out.find ("Entity 0 created (empty)") != std::string::npos);
+  CHECK (out.find ("Entity 0 (MyEntity) created (empty)") != std::string::npos);
 }
 
 TEST_CASE ("ent ls lists created entities")
@@ -297,22 +298,17 @@ TEST_CASE ("sys ls lists per-scene systems")
 {
   exec_fixture fx;
   fx.execute ("scene new TestScene");
-  // Empty scene: expect "no systems" message
+  // CLI runs in headless mode — no built-in engine systems are registered
   auto out = fx.execute ("sys ls");
   CHECK (out.find ("No per-scene systems") != std::string::npos);
-  // Add a system and verify it shows up
-  fx.execute ("sys add Transform");
-  out = fx.execute ("sys ls");
-  CHECK (out.find ("Scene systems") != std::string::npos);
-  CHECK (out.find ("Transform") != std::string::npos);
 }
 
 TEST_CASE ("sys avail lists registered systems")
 {
   exec_fixture fx;
   auto out = fx.execute ("sys avail");
-  CHECK (out.find ("Available system types") != std::string::npos);
-  CHECK (out.find ("Transform") != std::string::npos);
+  // CLI runs in headless mode — no built-in engine systems are registered
+  CHECK (out.find ("No registered scene systems") != std::string::npos);
 }
 
 TEST_CASE ("sys with unknown subcommand prints usage")

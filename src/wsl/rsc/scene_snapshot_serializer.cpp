@@ -291,6 +291,15 @@ scene_snapshot_serializer::load_scene (Archive &archive)
     return;
   }
 
+  // Skip physics recreation in headless/data-only contexts (e.g. CLI).
+  // The physics engine would be unnecessarily initialized and there are no
+  // rendering or simulation loops to consume the bodies.
+  if (runtime_ctx != nullptr && runtime_ctx->is_headless ()) {
+    wsl::log::rsc ()->debug (
+        "Headless mode, skipping physics object recreation");
+    return;
+  }
+
   comp::singl::physics_manager &physics
       = reg.ctx ().get<comp::singl::physics_manager> ();
   phys::engine &engine = physics.ensure_engine ();

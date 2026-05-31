@@ -63,7 +63,7 @@ public:
   }
 
   editor::ui_system_interface system_interface;
-  RenderInterface_SDL_GPU render_interface;
+  std::unique_ptr<RenderInterface_SDL_GPU> render_interface;
   Rml::Context *context = nullptr;
   Rml::ElementDocument *active_document_instance = nullptr;
 

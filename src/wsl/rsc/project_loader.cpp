@@ -231,7 +231,10 @@ rsc::project_loader::load (const std::string &path)
   }
 
   // Ensure root_path is absolute and points to the manifest's directory
-  proj->root_path = fs::absolute (fs::path (path).parent_path ()).string ();
+  auto manifest_dir = fs::path (path).parent_path ();
+  if (manifest_dir.empty ())
+    manifest_dir = fs::current_path ();
+  proj->root_path = fs::absolute (manifest_dir).string ();
 
   wsl::log::rsc ()->debug ("Loaded project: {}", proj->name);
   return proj;

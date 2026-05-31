@@ -740,6 +740,12 @@ command_executor::command_executor (wsl::comp::singl::runtime_context &rtc)
 {
 }
 
+void
+command_executor::set_current_project (std::shared_ptr<wsl::rsc::project> proj)
+{
+  m_current_project = std::move (proj);
+}
+
 std::string
 command_executor::execute (const std::string &line)
 {
@@ -779,6 +785,8 @@ command_executor::execute (const std::string &line)
     cmd_ent (tokens);
   else if (family == "comp")
     cmd_comp (tokens);
+  else if (family == "singl")
+    cmd_singl (tokens);
   else if (family == "sig")
     cmd_sig (tokens);
   else if (family == "sys")
@@ -902,10 +910,6 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     m_current_project = wsl::rsc::project_loader::load (tokens[2]);
     if (m_current_project) {
       m_output << "Project '" << m_current_project->name << "' loaded.\n";
-      const std::filesystem::path root (m_current_project->root_path);
-      if (std::filesystem::exists (root / m_current_project->systems_path)) {
-        m_rtc.runtime_project_module.compile_and_load (*m_current_project);
-      }
     } else
       m_output << "Failed to load project.\n";
   } else if (action == "info") {
@@ -1127,14 +1131,20 @@ command_executor::cmd_ent (const std::vector<std::string> &tokens)
       reg.emplace<wsl::comp::hierarchy> (e);
     }
 
-    if (tokens.size () > name_idx)
+    bool has_name = tokens.size () > name_idx;
+    if (has_name)
       scene->set_entity_name (e, tokens[name_idx]);
 
     if (empty_entity) {
-      m_output << "Entity " << (uint32_t)e << " created (empty).\n";
+      m_output << "Entity " << (uint32_t)e;
+      if (has_name)
+        m_output << " (" << tokens[name_idx] << ")";
+      m_output << " created (empty).\n";
     } else {
-      m_output << "Entity " << (uint32_t)e
-               << " created with Transform, WorldTransform, Hierarchy.\n";
+      m_output << "Entity " << (uint32_t)e;
+      if (has_name)
+        m_output << " (" << tokens[name_idx] << ")";
+      m_output << " created with Transform, WorldTransform, Hierarchy.\n";
     }
   } else if (action == "ls") {
     for (auto [e] : scene->get_registry ().storage<entt::entity> ().each ()) {
@@ -1252,130 +1262,6 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
         return;
       }
       m_output << "Created: " << source_path.string () << "\n";
-    }
-    return;
-  }
-
-  if (action == "singl") {
-    if (tokens.size () < 3) {
-      m_output << "Usage: comp singl <ls|add> [name]\n";
-      return;
-    }
-    const std::string &sub = tokens[2];
-    if (sub == "ls") {
-      auto singletons = m_rtc.singleton_registry.get_singleton_components ();
-      auto *scene = get_active_scene ();
-      m_output << "Singleton Components (" << singletons.size () << "):\n";
-      for (const auto *s : singletons) {
-        if (!s)
-          continue;
-        m_output << " - " << s->display_name;
-        if (!s->type_name.empty () && s->type_name != s->display_name)
-          m_output << " [" << s->type_name << "]";
-        if (s->core)
-          m_output << " [core]";
-        if (scene && s->contains (scene->get_registry ()))
-          m_output << " [present]";
-        else if (scene)
-          m_output << " [absent]";
-        m_output << "\n";
-      }
-    } else if (sub == "add") {
-      if (tokens.size () < 4) {
-        m_output << "Usage: comp singl add <name>\n";
-        return;
-      }
-      auto *scene = get_active_scene ();
-      if (!scene) {
-        m_output << "No active scene.\n";
-        return;
-      }
-      const auto *desc
-          = m_rtc.singleton_registry.find_singleton_component (tokens[3]);
-      if (!desc) {
-        m_output << "Unknown singleton component: " << tokens[3] << "\n";
-        return;
-      }
-      if (!desc->emplace_default) {
-        m_output << desc->display_name
-                 << " is a bound singleton and cannot be added via CLI.\n";
-        return;
-      }
-      if (desc->contains (scene->get_registry ())) {
-        m_output << desc->display_name << " is already present.\n";
-        return;
-      }
-      desc->emplace_default (scene->get_registry ());
-      m_output << "Added singleton: " << desc->display_name << "\n";
-    } else if (sub == "create") {
-      if (tokens.size () < 4) {
-        m_output << "Usage: comp singl create <name> [--source]\n";
-        return;
-      }
-      if (!m_current_project) {
-        m_output << "No project loaded.\n";
-        return;
-      }
-      bool header_only = true;
-      size_t name_idx = 3;
-      if (tokens.size () > 4 && tokens[4] == "--source") {
-        header_only = false;
-      } else if (tokens.size () > 4 && tokens[3] == "--source") {
-        header_only = false;
-        name_idx = 4;
-      }
-      const std::vector<std::string> raw_tokens
-          = tokenize_name (tokens[name_idx]);
-      if (raw_tokens.empty ()) {
-        m_output << "Invalid name: use letters or numbers.\n";
-        return;
-      }
-      const std::string file_stem = to_snake_case (raw_tokens);
-      const std::string class_name = to_pascal_case (raw_tokens);
-      const std::string display_name = to_title_case (raw_tokens);
-      if (class_name.empty ()
-          || (std::isdigit (static_cast<unsigned char> (class_name.front ()))
-              != 0)) {
-        m_output << "Class name must start with a letter.\n";
-        return;
-      }
-      std::filesystem::path base_dir
-          = std::filesystem::path (m_current_project->root_path)
-            / m_current_project->singletons_path;
-      std::filesystem::path header_path = base_dir / (file_stem + ".hpp");
-      std::filesystem::path source_path = base_dir / (file_stem + ".cpp");
-
-      std::error_code ec;
-      std::filesystem::create_directories (base_dir, ec);
-      if (ec) {
-        m_output << "Could not create target directory.\n";
-        return;
-      }
-      if (std::filesystem::exists (header_path)
-          || (!header_only && std::filesystem::exists (source_path))) {
-        m_output << "File already exists: " << (file_stem + ".hpp") << "\n";
-        return;
-      }
-
-      std::string header_text = make_singleton_header_template (
-          class_name, display_name, header_only);
-      if (!write_text_file (header_path, header_text)) {
-        m_output << "Failed to write header.\n";
-        return;
-      }
-      m_output << "Created: " << header_path.string () << "\n";
-
-      if (!header_only) {
-        std::string source_text = make_component_source_template (
-            header_path.filename ().string (), class_name, display_name, true);
-        if (!write_text_file (source_path, source_text)) {
-          m_output << "Failed to write source.\n";
-          return;
-        }
-        m_output << "Created: " << source_path.string () << "\n";
-      }
-    } else {
-      m_output << "Usage: comp singl <ls|add> [name]\n";
     }
     return;
   }
@@ -1601,6 +1487,281 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
                << set_msg << "\n";
     }
   }
+}
+
+void
+command_executor::cmd_singl (const std::vector<std::string> &tokens)
+{
+  if (tokens.size () < 2) {
+    m_output << "Usage: singl <ls|add|create|set> [args...]\n";
+    return;
+  }
+  const std::string &action = tokens[1];
+
+  // ── singl ls ──
+  if (action == "ls") {
+    auto singletons = m_rtc.singleton_registry.get_singleton_components ();
+    auto *scene = get_active_scene ();
+    m_output << "Singleton Components (" << singletons.size () << "):\n";
+    for (const auto *s : singletons) {
+      if (!s)
+        continue;
+      m_output << " - " << s->display_name;
+      if (!s->type_name.empty () && s->type_name != s->display_name)
+        m_output << " [" << s->type_name << "]";
+      if (s->core)
+        m_output << " [core]";
+      if (scene && s->contains (scene->get_registry ()))
+        m_output << " [present]";
+      else if (scene)
+        m_output << " [absent]";
+      m_output << "\n";
+
+      if (scene && s->contains (scene->get_registry ())) {
+        void *ptr = s->get_ptr (scene->get_registry ());
+        if (ptr) {
+          entt::meta_type meta = entt::resolve (s->type_id);
+          if (meta)
+            format_component_properties (m_output, meta, ptr, "    ");
+        }
+      }
+    }
+    return;
+  }
+
+  // ── singl add <name> ──
+  if (action == "add") {
+    if (tokens.size () < 3) {
+      m_output << "Usage: singl add <name>\n";
+      return;
+    }
+    auto *scene = get_active_scene ();
+    if (!scene) {
+      m_output << "No active scene.\n";
+      return;
+    }
+    const auto *desc
+        = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
+    if (!desc) {
+      m_output << "Unknown singleton component: " << tokens[2] << "\n";
+      return;
+    }
+    if (!desc->emplace_default) {
+      m_output << desc->display_name
+               << " is a bound singleton and cannot be added via CLI.\n";
+      return;
+    }
+    if (desc->contains (scene->get_registry ())) {
+      m_output << desc->display_name << " is already present.\n";
+      return;
+    }
+    desc->emplace_default (scene->get_registry ());
+    m_output << "Added singleton: " << desc->display_name << "\n";
+    return;
+  }
+
+  // ── singl create <name> [--source] ──
+  if (action == "create") {
+    if (tokens.size () < 3) {
+      m_output << "Usage: singl create <name> [--source]\n";
+      return;
+    }
+    if (!m_current_project) {
+      m_output << "No project loaded.\n";
+      return;
+    }
+    bool header_only = true;
+    size_t name_idx = 2;
+    if (tokens.size () > 3 && tokens[3] == "--source") {
+      header_only = false;
+    } else if (tokens.size () > 3 && tokens[2] == "--source") {
+      header_only = false;
+      name_idx = 3;
+    }
+    const std::vector<std::string> raw_tokens
+        = tokenize_name (tokens[name_idx]);
+    if (raw_tokens.empty ()) {
+      m_output << "Invalid name: use letters or numbers.\n";
+      return;
+    }
+    const std::string file_stem = to_snake_case (raw_tokens);
+    const std::string class_name = to_pascal_case (raw_tokens);
+    const std::string display_name = to_title_case (raw_tokens);
+    if (class_name.empty ()
+        || (std::isdigit (static_cast<unsigned char> (class_name.front ()))
+            != 0)) {
+      m_output << "Class name must start with a letter.\n";
+      return;
+    }
+    std::filesystem::path base_dir
+        = std::filesystem::path (m_current_project->root_path)
+          / m_current_project->singletons_path;
+    std::filesystem::path header_path = base_dir / (file_stem + ".hpp");
+    std::filesystem::path source_path = base_dir / (file_stem + ".cpp");
+
+    std::error_code ec;
+    std::filesystem::create_directories (base_dir, ec);
+    if (ec) {
+      m_output << "Could not create target directory.\n";
+      return;
+    }
+    if (std::filesystem::exists (header_path)
+        || (!header_only && std::filesystem::exists (source_path))) {
+      m_output << "File already exists: " << (file_stem + ".hpp") << "\n";
+      return;
+    }
+
+    std::string header_text = make_singleton_header_template (
+        class_name, display_name, header_only);
+    if (!write_text_file (header_path, header_text)) {
+      m_output << "Failed to write header.\n";
+      return;
+    }
+    m_output << "Created: " << header_path.string () << "\n";
+
+    if (!header_only) {
+      std::string source_text = make_component_source_template (
+          header_path.filename ().string (), class_name, display_name, true);
+      if (!write_text_file (source_path, source_text)) {
+        m_output << "Failed to write source.\n";
+        return;
+      }
+      m_output << "Created: " << source_path.string () << "\n";
+    }
+    return;
+  }
+
+  // ── singl set <name> <property> <value> ──
+  if (action == "set") {
+    if (tokens.size () < 5) {
+      m_output << "Usage: singl set <name> <property> <value>\n";
+      return;
+    }
+    auto *scene = get_active_scene ();
+    if (!scene) {
+      m_output << "No active scene.\n";
+      return;
+    }
+    const auto *desc
+        = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
+    if (!desc) {
+      m_output << "Unknown singleton component: " << tokens[2] << "\n";
+      return;
+    }
+    if (!desc->contains (scene->get_registry ())) {
+      m_output << desc->display_name
+               << " is not present in the active scene.\n";
+      return;
+    }
+    void *ptr = desc->get_ptr (scene->get_registry ());
+    if (!ptr) {
+      m_output << "Failed to access singleton data.\n";
+      return;
+    }
+    entt::meta_type meta = entt::resolve (desc->type_id);
+    if (!meta) {
+      m_output << "No reflection metadata for " << desc->display_name << "\n";
+      return;
+    }
+
+    std::string prop_path = tokens[3];
+    std::vector<std::string> segments;
+    size_t start = 0, dot;
+    while ((dot = prop_path.find ('.', start)) != std::string::npos) {
+      segments.push_back (prop_path.substr (start, dot - start));
+      start = dot + 1;
+    }
+    segments.push_back (prop_path.substr (start));
+
+    struct cl
+    {
+      void *parent_ptr;
+      entt::meta_type parent_type;
+      entt::id_type acc_hash;
+    };
+    std::vector<cl> chain;
+
+    void *cur = ptr;
+    entt::meta_type cur_meta = meta;
+    for (size_t i = 0; i + 1 < segments.size (); ++i) {
+      auto data = find_meta_data (cur_meta, segments[i]);
+      if (!data) {
+        m_output << "Unknown property: " << segments[i] << " in path "
+                 << prop_path << "\n";
+        return;
+      }
+      chain.push_back ({ cur, cur_meta,
+                         entt::hashed_string::value (segments[i].c_str (),
+                                                     segments[i].size ()) });
+      entt::meta_any p = cur_meta.from_void (cur);
+      if (!p) {
+        m_output << "Cannot access parent at " << segments[i] << "\n";
+        return;
+      }
+      entt::meta_any s = data.get (p);
+      if (!s) {
+        m_output << "Cannot access " << segments[i] << " (null or unset)\n";
+        return;
+      }
+      void *np = const_cast<void *> (s.base ().data ());
+      if (!np) {
+        m_output << "Cannot resolve field " << segments[i] << "\n";
+        return;
+      }
+      cur = np;
+      cur_meta = data.type ();
+    }
+
+    size_t parent_sz = cur_meta.size_of ();
+    void *parent_buf = std::malloc (parent_sz);
+    std::memcpy (parent_buf, cur, parent_sz);
+    entt::meta_any parent_val = cur_meta.from_void (parent_buf, true);
+
+    auto prop_data = find_meta_data (cur_meta, segments.back ());
+    if (!prop_data) {
+      m_output << "Unknown property: " << prop_path << "\n";
+      std::free (parent_buf);
+      return;
+    }
+
+    std::string set_msg;
+    if (set_component_property (parent_val, prop_data, tokens[4], set_msg,
+                                &m_rtc.resource_manager)) {
+      std::memcpy (cur, parent_buf, parent_sz);
+
+      void *modified = parent_buf;
+      size_t modified_sz = parent_sz;
+      for (size_t j = chain.size (); j-- > 0;) {
+        auto &cl = chain[j];
+
+        size_t psz = cl.parent_type.size_of ();
+        void *pcopy = std::malloc (psz);
+        std::memcpy (pcopy, cl.parent_ptr, psz);
+        entt::meta_any pv = cl.parent_type.from_void (pcopy, false);
+
+        auto cd = cl.parent_type.data (cl.acc_hash);
+        if (!cd)
+          break;
+        entt::meta_any cv = cd.type ().from_void (modified, false);
+        cd.set (pv, cv);
+
+        std::memcpy (cl.parent_ptr, pcopy, psz);
+        modified = cl.parent_ptr;
+        modified_sz = psz;
+        std::free (pcopy);
+      }
+
+      m_output << "Set " << desc->display_name << "." << tokens[3] << " = "
+               << tokens[4] << " (" << set_msg << ")\n";
+    } else {
+      m_output << "Failed to set " << desc->display_name << "." << tokens[3]
+               << ": " << set_msg << "\n";
+    }
+    std::free (parent_buf);
+    return;
+  }
+
+  m_output << "Usage: singl <ls|add|create|set> [args...]\n";
 }
 
 void
@@ -1861,7 +2022,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     auto items = list_fn ();
     m_output << "  " << label << " (" << items.size () << "):\n";
     for (auto &item : items) {
-      m_output << "    " << item.path << "\n";
+      m_output << "    " << item.name << "  [" << item.path << "]\n";
     }
   };
 
@@ -1869,8 +2030,8 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     auto items = list_fn ();
     m_output << "  " << label << " (" << items.size () << "):\n";
     for (auto &item : items) {
-      m_output << "    " << item.path << "  ["
-               << resource_state_str (item.state) << "]\n";
+      m_output << "    " << item.name << "  [" << item.path << "]  ("
+               << resource_state_str (item.state) << ")\n";
     }
   };
 
@@ -1878,15 +2039,91 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     auto item = info_fn (id);
     if (item) {
       m_output << "Type: " << label << "\n";
-      m_output << "  ID: " << item->id << "\n";
-      m_output << "  Path: " << item->path << "\n";
       m_output << "  Name: " << item->name << "\n";
+      m_output << "  Path: " << item->path << "\n";
       if constexpr (requires { item->state; }) {
         m_output << "  State: " << resource_state_str (item->state) << "\n";
       }
     } else {
       m_output << label << " not found.\n";
     }
+  };
+
+  // ── Resolve a name or path to a resource ID ──
+  auto find_model = [&] (const std::string &input) -> std::optional<model_id> {
+    if (auto id = mgr.find_model_by_path (input))
+      return id;
+    for (auto &info : mgr.list_models ())
+      if (info.name == input)
+        return model_id{ info.id };
+    return std::nullopt;
+  };
+
+  auto find_image = [&] (const std::string &input) -> std::optional<image_id> {
+    image_id id{ entt::hashed_string::value (input.c_str (), input.size ()) };
+    if (mgr.contains (id))
+      return id;
+    for (auto &info : mgr.list_images ())
+      if (info.name == input)
+        return image_id{ info.id };
+    return std::nullopt;
+  };
+
+  auto find_cubemap
+      = [&] (const std::string &input) -> std::optional<cubemap_id> {
+    cubemap_id id{ entt::hashed_string::value (input.c_str (), input.size ()) };
+    if (mgr.contains (id))
+      return id;
+    for (auto &info : mgr.list_cubemaps ())
+      if (info.name == input)
+        return cubemap_id{ info.id };
+    return std::nullopt;
+  };
+
+  auto find_scene = [&] (const std::string &input) -> std::optional<scene_id> {
+    scene_id id{ entt::hashed_string::value (input.c_str (), input.size ()) };
+    if (mgr.contains (id))
+      return id;
+    for (auto &info : mgr.list_scenes ())
+      if (info.name == input)
+        return scene_id{ info.id };
+    return std::nullopt;
+  };
+
+  auto find_audio = [&] (const std::string &input) -> std::optional<audio_id> {
+    audio_id id{ entt::hashed_string::value (input.c_str (), input.size ()) };
+    if (mgr.contains (id))
+      return id;
+    for (auto &info : mgr.list_audio ())
+      if (info.name == input)
+        return audio_id{ info.id };
+    return std::nullopt;
+  };
+
+  auto find_shader
+      = [&] (const std::string &input) -> std::optional<shader_id> {
+    shader_id id{ entt::hashed_string::value (input.c_str (), input.size ()) };
+    if (mgr.contains (id))
+      return id;
+    for (auto &info : mgr.list_shaders ())
+      if (info.name == input)
+        return shader_id{ info.id };
+    return std::nullopt;
+  };
+
+  auto find_layout
+      = [&] (const std::string &input) -> std::optional<ui_layout_id> {
+    for (auto &info : mgr.list_ui_layouts ())
+      if (info.name == input)
+        return ui_layout_id{ info.id };
+    return std::nullopt;
+  };
+
+  auto find_font = [&] (const std::string &input) -> std::optional<font_id> {
+    for (auto &info : mgr.list_fonts ())
+      if (info.name == input)
+        return font_id{ info.id };
+    return std::nullopt;
   };
 
   if (tokens.size () < 2 || tokens[1] == "ls") {
@@ -1922,158 +2159,316 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
       else
         m_output << "Unknown resource type: " << type << "\n";
     }
-  } else if (tokens[1] == "add") {
+    return;
+  }
+
+  const std::string &action = tokens[1];
+
+  // ── rsc add <type> <path> [--load] ──
+  if (action == "add") {
     if (tokens.size () < 4) {
-      m_output << "Usage: rsc add <type> <path>\n";
+      m_output << "Usage: rsc add <type> <path> [--load]\n";
       return;
     }
     const std::string &type = tokens[2];
     const std::string &path = tokens[3];
+    bool do_load = tokens.size () > 4 && tokens[4] == "--load";
+
+    auto add_and_maybe_load
+        = [&] (auto id, auto register_fn, auto load_fn, const char *label) {
+            id = register_fn (path);
+            m_output << "Registered " << label << ": " << path << "\n";
+            if (do_load) {
+              load_fn (id);
+              m_output << "Loaded " << label << ": " << path << "\n";
+            }
+          };
 
     if (type == "model" || type == "models") {
-      auto id = mgr.import_model (path, true);
-      m_output << "Added model: " << path << "  (id: " << id.value << ")\n";
+      add_and_maybe_load (
+          model_id{},
+          [&] (const std::string &p) { return mgr.register_model (p); },
+          [&] (model_id id) { mgr.load (id); }, "model");
     } else if (type == "image" || type == "images") {
-      mgr.import_image (path, true);
-      m_output << "Added image: " << path << "\n";
+      add_and_maybe_load (
+          image_id{},
+          [&] (const std::string &p) { return mgr.register_image (p); },
+          [&] (image_id id) { mgr.load (id); }, "image");
     } else if (type == "cubemap" || type == "cubemaps") {
-      mgr.import_cubemap (path, true);
-      m_output << "Added cubemap: " << path << "\n";
+      add_and_maybe_load (
+          cubemap_id{},
+          [&] (const std::string &p) { return mgr.register_cubemap (p); },
+          [&] (cubemap_id id) { mgr.load (id); }, "cubemap");
     } else if (type == "scene" || type == "scenes") {
-      mgr.import_scene (path, true);
-      m_output << "Added scene: " << path << "\n";
+      add_and_maybe_load (
+          scene_id{},
+          [&] (const std::string &p) { return mgr.register_scene (p); },
+          [&] (scene_id id) { mgr.load (id); }, "scene");
     } else if (type == "audio" || type == "audios") {
-      mgr.import_audio (path, true);
-      m_output << "Added audio: " << path << "\n";
+      add_and_maybe_load (
+          audio_id{},
+          [&] (const std::string &p) { return mgr.register_audio (p); },
+          [&] (audio_id id) { mgr.load (id); }, "audio");
     } else if (type == "font" || type == "fonts") {
       mgr.register_font (path);
-      m_output << "Added font: " << path << "\n";
+      m_output << "Registered font: " << path << "\n";
     } else if (type == "shader" || type == "shaders") {
       mgr.register_shader (path);
-      m_output << "Added shader: " << path << "\n";
+      m_output << "Registered shader: " << path << "\n";
+      if (do_load) {
+        shader_id id{ entt::hashed_string::value (path.c_str (),
+                                                  path.size ()) };
+        mgr.load (id);
+        m_output << "Loaded shader: " << path << "\n";
+      }
     } else if (type == "layout" || type == "layouts") {
       mgr.register_ui_layout (path);
-      m_output << "Added UI layout: " << path << "\n";
+      m_output << "Registered UI layout: " << path << "\n";
     } else {
       m_output << "Unknown resource type: " << type << "\n";
     }
-  } else if (tokens[1] == "rm") {
+    return;
+  }
+
+  // ── rsc rm <type> <name/path> ──
+  if (action == "rm") {
     if (tokens.size () < 4) {
-      m_output << "Usage: rsc rm <type> <path>\n";
+      m_output << "Usage: rsc rm <type> <name|path>\n";
       return;
     }
     const std::string &type = tokens[2];
-    const std::string &path = tokens[3];
+    const std::string &name = tokens[3];
 
-    if (type == "model" || type == "models") {
-      auto id = mgr.find_model_by_path (path);
+    auto do_rm = [&] (auto find_fn, const char *label) {
+      auto id = find_fn (name);
       if (id) {
         mgr.unload (*id);
-        m_output << "Removed model: " << path << "\n";
+        m_output << "Removed " << label << ": " << name << "\n";
       } else {
-        m_output << "Model not found: " << path << "\n";
+        m_output << label << " not found: " << name << "\n";
       }
-    } else if (type == "image" || type == "images") {
-      mgr.unload (mgr.register_image (path));
-      m_output << "Removed image: " << path << "\n";
-    } else if (type == "cubemap" || type == "cubemaps") {
-      mgr.unload (mgr.register_cubemap (path));
-      m_output << "Removed cubemap: " << path << "\n";
-    } else if (type == "scene" || type == "scenes") {
-      mgr.unload (mgr.register_scene (path));
-      m_output << "Removed scene: " << path << "\n";
-    } else if (type == "audio" || type == "audios") {
-      mgr.unload (mgr.register_audio (path));
-      m_output << "Removed audio: " << path << "\n";
-    } else if (type == "font" || type == "fonts") {
+    };
+
+    if (type == "model" || type == "models")
+      do_rm (find_model, "Model");
+    else if (type == "image" || type == "images")
+      do_rm (find_image, "Image");
+    else if (type == "cubemap" || type == "cubemaps")
+      do_rm (find_cubemap, "Cubemap");
+    else if (type == "scene" || type == "scenes")
+      do_rm (find_scene, "Scene");
+    else if (type == "audio" || type == "audios")
+      do_rm (find_audio, "Audio");
+    else if (type == "font" || type == "fonts")
       m_output << "Fonts are metadata-only and cannot be removed.\n";
-    } else if (type == "shader" || type == "shaders") {
-      mgr.unload (mgr.register_shader (path));
-      m_output << "Removed shader: " << path << "\n";
-    } else if (type == "layout" || type == "layouts") {
+    else if (type == "shader" || type == "shaders")
+      do_rm (find_shader, "Shader");
+    else if (type == "layout" || type == "layouts")
       m_output << "UI layouts are metadata-only and cannot be removed.\n";
-    } else {
+    else
       m_output << "Unknown resource type: " << type << "\n";
-    }
-  } else if (tokens[1] == "load") {
+    return;
+  }
+
+  // ── rsc load <type> <name/path> ──
+  if (action == "load") {
     if (tokens.size () < 4) {
-      m_output << "Usage: rsc load <type> <path>\n";
+      m_output << "Usage: rsc load <type> <name|path>\n";
       return;
     }
     const std::string &type = tokens[2];
-    const std::string &path = tokens[3];
+    const std::string &name = tokens[3];
 
     if (type == "model" || type == "models") {
-      auto id = mgr.find_model_by_path (path);
-      if (!id) {
-        id = mgr.register_model (path);
+      auto id = find_model (name);
+      if (id) {
+        mgr.load (*id);
+        m_output << "Loaded model: " << name << "\n";
+      } else {
+        m_output << "Model not found: " << name << "\n";
       }
-      mgr.load (*id);
-      m_output << "Loading model: " << path << "\n";
     } else if (type == "image" || type == "images") {
-      mgr.load (mgr.register_image (path));
-      m_output << "Loading image: " << path << "\n";
+      auto id = find_image (name);
+      if (id) {
+        mgr.load (*id);
+        m_output << "Loaded image: " << name << "\n";
+      } else {
+        m_output << "Image not found: " << name << "\n";
+      }
     } else if (type == "cubemap" || type == "cubemaps") {
-      mgr.load (mgr.register_cubemap (path));
-      m_output << "Loading cubemap: " << path << "\n";
+      auto id = find_cubemap (name);
+      if (id) {
+        mgr.load (*id);
+        m_output << "Loaded cubemap: " << name << "\n";
+      } else {
+        m_output << "Cubemap not found: " << name << "\n";
+      }
     } else if (type == "scene" || type == "scenes") {
-      mgr.load (mgr.register_scene (path));
-      m_output << "Loading scene: " << path << "\n";
+      auto id = find_scene (name);
+      if (id) {
+        mgr.load (*id);
+        m_output << "Loaded scene: " << name << "\n";
+      } else {
+        m_output << "Scene not found: " << name << "\n";
+      }
     } else if (type == "audio" || type == "audios") {
-      mgr.load (mgr.register_audio (path));
-      m_output << "Loading audio: " << path << "\n";
+      auto id = find_audio (name);
+      if (id) {
+        mgr.load (*id);
+        m_output << "Loaded audio: " << name << "\n";
+      } else {
+        m_output << "Audio not found: " << name << "\n";
+      }
     } else if (type == "font" || type == "fonts") {
       m_output << "Fonts are metadata-only and cannot be loaded.\n";
     } else if (type == "shader" || type == "shaders") {
-      mgr.load (mgr.register_shader (path));
-      m_output << "Loading shader: " << path << "\n";
+      auto id = find_shader (name);
+      if (id) {
+        mgr.load (*id);
+        m_output << "Loaded shader: " << name << "\n";
+      } else {
+        m_output << "Shader not found: " << name << "\n";
+      }
     } else if (type == "layout" || type == "layouts") {
       m_output << "UI layouts are metadata-only and cannot be loaded.\n";
     } else {
       m_output << "Unknown resource type: " << type << "\n";
     }
-  } else if (tokens[1] == "info") {
+    return;
+  }
+
+  // ── rsc unload <type> <name/path> ──
+  if (action == "unload") {
     if (tokens.size () < 4) {
-      m_output << "Usage: rsc info <type> <path>\n";
+      m_output << "Usage: rsc unload <type> <name|path>\n";
       return;
     }
     const std::string &type = tokens[2];
-    const std::string &path = tokens[3];
+    const std::string &name = tokens[3];
 
     if (type == "model" || type == "models") {
-      auto id = mgr.find_model_by_path (path);
+      auto id = find_model (name);
       if (id) {
-        show_info ("model", *id, [&] (model_id i) { return mgr.info (i); });
+        mgr.unload (*id);
+        m_output << "Unloaded model: " << name << "\n";
       } else {
-        m_output << "Model not found: " << path << "\n";
+        m_output << "Model not found: " << name << "\n";
       }
     } else if (type == "image" || type == "images") {
-      show_info ("image", mgr.register_image (path),
-                 [&] (image_id i) { return mgr.info (i); });
+      auto id = find_image (name);
+      if (id) {
+        mgr.unload (*id);
+        m_output << "Unloaded image: " << name << "\n";
+      } else {
+        m_output << "Image not found: " << name << "\n";
+      }
     } else if (type == "cubemap" || type == "cubemaps") {
-      show_info ("cubemap", mgr.register_cubemap (path),
-                 [&] (cubemap_id i) { return mgr.info (i); });
+      auto id = find_cubemap (name);
+      if (id) {
+        mgr.unload (*id);
+        m_output << "Unloaded cubemap: " << name << "\n";
+      } else {
+        m_output << "Cubemap not found: " << name << "\n";
+      }
     } else if (type == "scene" || type == "scenes") {
-      show_info ("scene", mgr.register_scene (path),
-                 [&] (scene_id i) { return mgr.info (i); });
+      auto id = find_scene (name);
+      if (id) {
+        mgr.unload (*id);
+        m_output << "Unloaded scene: " << name << "\n";
+      } else {
+        m_output << "Scene not found: " << name << "\n";
+      }
     } else if (type == "audio" || type == "audios") {
-      show_info ("audio", mgr.register_audio (path),
-                 [&] (audio_id i) { return mgr.info (i); });
+      auto id = find_audio (name);
+      if (id) {
+        mgr.unload (*id);
+        m_output << "Unloaded audio: " << name << "\n";
+      } else {
+        m_output << "Audio not found: " << name << "\n";
+      }
     } else if (type == "font" || type == "fonts") {
-      show_info ("font", mgr.register_font (path),
-                 [&] (font_id i) { return mgr.info (i); });
+      m_output << "Fonts are metadata-only and cannot be unloaded.\n";
     } else if (type == "shader" || type == "shaders") {
-      show_info ("shader", mgr.register_shader (path),
-                 [&] (shader_id i) { return mgr.info (i); });
+      auto id = find_shader (name);
+      if (id) {
+        mgr.unload (*id);
+        m_output << "Unloaded shader: " << name << "\n";
+      } else {
+        m_output << "Shader not found: " << name << "\n";
+      }
     } else if (type == "layout" || type == "layouts") {
-      show_info ("layout", mgr.register_ui_layout (path),
-                 [&] (ui_layout_id i) { return mgr.info (i); });
+      m_output << "UI layouts are metadata-only and cannot be unloaded.\n";
     } else {
       m_output << "Unknown resource type: " << type << "\n";
     }
-  } else {
-    m_output << "Usage: rsc <ls|add|rm|load|info> [args...]\n";
+    return;
   }
+
+  // ── rsc info <type> <name/path> ──
+  if (action == "info") {
+    if (tokens.size () < 4) {
+      m_output << "Usage: rsc info <type> <name|path>\n";
+      return;
+    }
+    const std::string &type = tokens[2];
+    const std::string &name = tokens[3];
+
+    if (type == "model" || type == "models") {
+      auto id = find_model (name);
+      if (id)
+        show_info ("model", *id, [&] (model_id i) { return mgr.info (i); });
+      else
+        m_output << "Model not found: " << name << "\n";
+    } else if (type == "image" || type == "images") {
+      auto id = find_image (name);
+      if (id)
+        show_info ("image", *id, [&] (image_id i) { return mgr.info (i); });
+      else
+        m_output << "Image not found: " << name << "\n";
+    } else if (type == "cubemap" || type == "cubemaps") {
+      auto id = find_cubemap (name);
+      if (id)
+        show_info ("cubemap", *id, [&] (cubemap_id i) { return mgr.info (i); });
+      else
+        m_output << "Cubemap not found: " << name << "\n";
+    } else if (type == "scene" || type == "scenes") {
+      auto id = find_scene (name);
+      if (id)
+        show_info ("scene", *id, [&] (scene_id i) { return mgr.info (i); });
+      else
+        m_output << "Scene not found: " << name << "\n";
+    } else if (type == "audio" || type == "audios") {
+      auto id = find_audio (name);
+      if (id)
+        show_info ("audio", *id, [&] (audio_id i) { return mgr.info (i); });
+      else
+        m_output << "Audio not found: " << name << "\n";
+    } else if (type == "font" || type == "fonts") {
+      auto id = find_font (name);
+      if (id)
+        show_info ("font", *id, [&] (font_id i) { return mgr.info (i); });
+      else
+        m_output << "Font not found: " << name << "\n";
+    } else if (type == "shader" || type == "shaders") {
+      auto id = find_shader (name);
+      if (id)
+        show_info ("shader", *id, [&] (shader_id i) { return mgr.info (i); });
+      else
+        m_output << "Shader not found: " << name << "\n";
+    } else if (type == "layout" || type == "layouts") {
+      auto id = find_layout (name);
+      if (id)
+        show_info ("layout", *id,
+                   [&] (ui_layout_id i) { return mgr.info (i); });
+      else
+        m_output << "Layout not found: " << name << "\n";
+    } else {
+      m_output << "Unknown resource type: " << type << "\n";
+    }
+    return;
+  }
+
+  m_output << "Usage: rsc <ls|add|rm|load|unload|info> [args...]\n";
 }
 
 void
@@ -2115,10 +2510,6 @@ command_executor::cmd_help ()
       << "  comp set <id> <type> <prop> <val>   Set a component property\n"
       << "  comp create <name> [--source]  Generate a world component "
          "template\n"
-      << "  comp singl ls              List singleton components in the scene\n"
-      << "  comp singl add <name>      Add a value-owned singleton\n"
-      << "  comp singl create <name> [--source]  Generate a singleton "
-         "template\n"
       << "    Type name: short name (transform), display name (Transform),\n"
       << "              or fully qualified (wsl::comp::transform)\n"
       << "    Value is JSON: numbers, strings, booleans, arrays, objects\n"
@@ -2131,6 +2522,12 @@ command_executor::cmd_help ()
       << "      comp set 42 rigid_body radius 0.5\n"
       << "      comp set 42 rigid_body motion_type.value 2\n"
       << "      comp set 42 model_instance_3d model_id builtin://cube\n\n"
+      << "Singleton:\n"
+      << "  singl ls                   List singleton components in the scene\n"
+      << "  singl add <name>           Add a value-owned singleton to the "
+         "active scene\n"
+      << "  singl create <name> [--source]  Generate a singleton template\n"
+      << "  singl set <name> <prop> <val>   Set a singleton property\n\n"
       << "System:\n"
       << "  sys ls                     List systems in the active scene\n"
       << "  sys avail                  List globally registered system types\n"
@@ -2138,12 +2535,15 @@ command_executor::cmd_help ()
          "3D Render)\n"
       << "  sys create <name> [--source]  Generate a system template\n\n"
       << "Resources:\n"
-      << "  rsc ls [type]              List resources (models, images, audio, "
-         "etc.)\n"
-      << "  rsc add <type> <path>      Register and load a resource\n"
-      << "  rsc rm <type> <path>       Unload a resource\n"
-      << "  rsc load <type> <path>     Load an already-registered resource\n"
-      << "  rsc info <type> <path>     Show resource metadata\n\n"
+      << "  rsc ls [type]              List registered resources\n"
+      << "  rsc add <type> <path> [--load]  Register a resource (name = "
+         "filename without extension)\n"
+      << "  rsc rm <type> <name>       Remove a registered resource\n"
+      << "  rsc load <type> <name>     Load a registered resource\n"
+      << "  rsc unload <type> <name>   Unload a registered resource\n"
+      << "  rsc info <type> <name>     Show resource metadata\n"
+      << "    Types: model, image, cubemap, scene, audio, font, shader, "
+         "layout\n\n"
       << "Other:\n"
       << "  help                       Show this help message\n"
       << "  cls                        Clear the terminal screen\n"
@@ -2263,18 +2663,32 @@ repl_handler::run (std::optional<std::string> initial_project,
   }
 }
 
+static bool
+is_exit_command (const std::string &line)
+{
+  // Tokenize the first word to detect exit/quit
+  std::size_t end = 0;
+  while (end < line.size ()
+         && !std::isspace (static_cast<unsigned char> (line[end])))
+    ++end;
+  std::string first = line.substr (0, end);
+  return first == "exit" || first == "quit";
+}
+
 void
 repl_handler::execute_command (const std::string &line)
 {
+  // Check for exit/quit before doing anything else
+  if (is_exit_command (line)) {
+    m_running = false;
+    return;
+  }
+
   // If attached to editor server, forward command remotely
   if (m_attach && m_editor_client.is_connected ()) {
     auto response = m_editor_client.execute_command (line);
     if (response) {
       wsl::log::cli ()->info ("{}", *response);
-      // Check if exit was requested
-      if (response->find ("exit") != std::string::npos) {
-        m_running = false;
-      }
     } else {
       wsl::log::cli ()->error ("Lost connection to editor server");
       m_running = false;
@@ -2287,10 +2701,6 @@ repl_handler::execute_command (const std::string &line)
   if (m_local_executor) {
     std::string output = m_local_executor->execute (line);
     wsl::log::cli ()->info ("{}", output);
-
-    if (output.find ("exit") != std::string::npos) {
-      m_running = false;
-    }
   }
 }
 

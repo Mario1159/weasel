@@ -27,7 +27,6 @@
 #include <unordered_map>
 #include <memory>
 
-
 namespace wsl
 {
 
@@ -61,7 +60,8 @@ public:
   static void register_meta ();
 
   /*! \brief ImGui inspector for runtime context state. */
-  bool custom_inspect (const char *label, comp::singl::runtime_context *runtime_ctx_ptr);
+  bool custom_inspect (const char *label,
+                       comp::singl::runtime_context *runtime_ctx_ptr);
 
   /*! \brief Returns the active rendering manager from the current scene. */
   rendering_manager *get_active_rendering_manager () const;
@@ -103,13 +103,32 @@ public:
   void set_editor_ctx (class editor_context *editor_ctx);
 
   /*! \brief Returns the application input map. */
-  wsl::input::action_map &get_app_input_map () { return app_input_map; }
+  wsl::input::action_map &
+  get_app_input_map ()
+  {
+    return app_input_map;
+  }
 
   /*! \brief Returns the application input map. */
-  const wsl::input::action_map &get_app_input_map () const { return app_input_map; }
+  const wsl::input::action_map &
+  get_app_input_map () const
+  {
+    return app_input_map;
+  }
 
   /*! \brief Returns current input map (may be null). */
-  wsl::input::action_map *get_current_input_map () const { return current_input_map; }
+  wsl::input::action_map *
+  get_current_input_map () const
+  {
+    return current_input_map;
+  }
+
+  /*! \brief Returns whether this context was created in headless mode. */
+  bool
+  is_headless () const
+  {
+    return m_headless;
+  }
 
   rsc::world world;
   rsc::scene_manager scene_manager;
@@ -141,6 +160,7 @@ public:
 
   comp::singl::ui_manager ui_manager;
 
+  bool m_headless = false;
   std::unique_ptr<sys::core_systems> core_systems;
 
   entt::entity game_camera = entt::null;

@@ -140,6 +140,7 @@ cli_handler::parse (int argc, char **argv)
 {
   CLI::App app{ "Weasel Engine Editor" };
   app.allow_extras ();
+  app.get_formatter ()->column_width (42);
 
   std::string project_to_load;
   auto *project_opt = app.add_option ("--project", project_to_load,
@@ -195,9 +196,7 @@ cli_handler::parse (int argc, char **argv)
   validate_scene->add_option ("proj_path", vs_proj_path, "Path to wslpro.json")
       ->required ();
 
-  auto *proj_cmd = app.add_subcommand (
-      "proj",
-      "Run a project REPL command without entering the interactive shell");
+  auto *proj_cmd = app.add_subcommand ("proj", "Manage project configuration");
   auto *proj_new = proj_cmd->add_subcommand ("new", "Create a project");
   std::string proj_new_path, proj_new_name;
   proj_new->add_option ("path", proj_new_path, "Project path")->required ();
@@ -216,9 +215,8 @@ cli_handler::parse (int argc, char **argv)
   auto *proj_save
       = proj_cmd->add_subcommand ("save", "Save the loaded project");
 
-  auto *scene_cmd = app.add_subcommand (
-      "scene",
-      "Run a scene REPL command without entering the interactive shell");
+  auto *scene_cmd
+      = app.add_subcommand ("scene", "Manage scenes in the loaded project");
   auto *scene_new
       = scene_cmd->add_subcommand ("new", "Create a new empty active scene");
   std::string scene_new_name;
@@ -241,9 +239,8 @@ cli_handler::parse (int argc, char **argv)
   auto *scene_status
       = scene_cmd->add_subcommand ("status", "Show active scene status");
 
-  auto *ent_cmd = app.add_subcommand (
-      "ent",
-      "Run an entity REPL command without entering the interactive shell");
+  auto *ent_cmd
+      = app.add_subcommand ("ent", "Manage entities in the active scene");
   auto *ent_new = ent_cmd->add_subcommand (
       "new", "Create a new entity with default components (Transform, "
              "WorldTransform, Hierarchy)");
@@ -273,9 +270,7 @@ cli_handler::parse (int argc, char **argv)
   std::string ent_inspect_id;
   ent_inspect->add_option ("id", ent_inspect_id, "Entity id")->required ();
 
-  auto *comp_cmd = app.add_subcommand (
-      "comp",
-      "Run a component REPL command without entering the interactive shell");
+  auto *comp_cmd = app.add_subcommand ("comp", "Manage components on entities");
   auto *comp_ls = comp_cmd->add_subcommand (
       "ls", "List registered components or an entity's components");
   std::string comp_ls_entity_id;
@@ -292,12 +287,39 @@ cli_handler::parse (int argc, char **argv)
   comp_add->add_option ("type", comp_add_type, "Component type name")
       ->required ();
 
+  auto *singl_cmd = app.add_subcommand ("singl", "Manage singleton components");
+  auto *singl_ls = singl_cmd->add_subcommand (
+      "ls", "List singleton components in the scene");
+  auto *singl_add = singl_cmd->add_subcommand (
+      "add", "Add a singleton to the active scene");
+  std::string singl_add_name;
+  singl_add->add_option ("name", singl_add_name, "Singleton name")->required ();
+  auto *singl_create = singl_cmd->add_subcommand (
+      "create", "Generate a singleton component template");
+  std::string singl_create_name;
+  bool singl_create_source = false;
+  singl_create->add_option ("name", singl_create_name, "Singleton name")
+      ->required ();
+  singl_create->add_flag ("--source", singl_create_source,
+                          "Also generate a .cpp source file");
+  auto *singl_set
+      = singl_cmd->add_subcommand ("set", "Set a singleton component property");
+  std::string singl_set_name, singl_set_prop, singl_set_val;
+  singl_set->add_option ("name", singl_set_name, "Singleton name")->required ();
+  singl_set->add_option ("property", singl_set_prop, "Property path")
+      ->required ();
+  singl_set->add_option ("value", singl_set_val, "Value (JSON or plain)")
+      ->required ();
+
   auto *sys_cmd = app.add_subcommand (
-      "sys",
-      "Run a system REPL command without entering the interactive shell");
+      "sys", "Manage systems attached to the active scene");
   auto *sys_ls = sys_cmd->add_subcommand ("ls", "List registered systems");
   auto *sys_avail
       = sys_cmd->add_subcommand ("avail", "List registered systems");
+  auto *sys_add
+      = sys_cmd->add_subcommand ("add", "Add a system to the active scene");
+  std::string sys_add_name;
+  sys_add->add_option ("name", sys_add_name, "System name")->required ();
 
   try {
     app.parse (argc, argv);
@@ -508,15 +530,37 @@ cli_handler::parse (int argc, char **argv)
   } else if (*comp_add) {
     repl_command = build_repl_command (
         { "comp", "add", comp_add_entity_id, comp_add_type });
+  } else if (*singl_ls) {
+    repl_command = build_repl_command ({ "singl", "ls" });
+  } else if (*singl_add) {
+    repl_command = build_repl_command ({ "singl", "add", singl_add_name });
+  } else if (*singl_create) {
+    std::vector<std::string> args{ "singl", "create", singl_create_name };
+    if (singl_create_source) {
+      args.push_back ("--source");
+    }
+    repl_command = build_repl_command (args);
+  } else if (*singl_set) {
+    repl_command = build_repl_command (
+        { "singl", "set", singl_set_name, singl_set_prop, singl_set_val });
   } else if (*sys_ls) {
     repl_command = build_repl_command ({ "sys", "ls" });
   } else if (*sys_avail) {
     repl_command = build_repl_command ({ "sys", "avail" });
+  } else if (*sys_add) {
+    repl_command = build_repl_command ({ "sys", "add", sys_add_name });
   }
 
   auto extras = app.remaining ();
   if (repl_command && !extras.empty ()) {
     wsl::log::cli ()->error ("Unexpected extra arguments after CLI subcommand");
+    return { true, 1, std::nullopt };
+  }
+
+  if ((*scene_load || *scene_save) && !attach) {
+    wsl::log::cli ()->error (
+        "scene load/save require --attach to connect to a persistent "
+        "editor server session");
     return { true, 1, std::nullopt };
   }
 

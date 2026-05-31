@@ -29,15 +29,16 @@ namespace singl
 ui_manager::ui_manager (gfx::render_context &ctx,
                         wsl::gfx::render_window &window,
                         wsl::rsc::resource_manager *res_mgr)
-    : render_interface (ctx.gpu_device, window.handler)
 {
   if (ctx.gpu_device == nullptr || window.handler == nullptr) {
     wsl::log::editor ()->trace ("Headless mode, skipping RmlUi initialization");
     return;
   }
 
+  render_interface = std::make_unique<RenderInterface_SDL_GPU> (ctx.gpu_device,
+                                                                window.handler);
   wsl::log::editor ()->trace ("Using GPU device {}", (void *)ctx.gpu_device);
-  Rml::SetRenderInterface (&render_interface);
+  Rml::SetRenderInterface (render_interface.get ());
   Rml::SetSystemInterface (&system_interface);
   Rml::Initialise ();
 

@@ -186,7 +186,7 @@ comp::singl::runtime_context::runtime_context (
       render_ctx (headless), resource_manager (this, engine_res_path),
       resource_manager_view (&resource_manager),
       window (name, width, height, &render_ctx, &resource_manager, headless),
-      ui_manager (render_ctx, window, &resource_manager)
+      ui_manager (render_ctx, window, &resource_manager), m_headless (headless)
 {
   system_factory_registry.set_signal_hub (&signal_hub);
   if (!headless)
@@ -223,8 +223,10 @@ comp::singl::runtime_context::runtime_context (
   dispatcher.sink<wsl::event::scene_changed> ()
       .connect<&runtime_context::on_scene_changed> (this);
 
-  core_systems = std::make_unique<sys::core_systems> ();
-  core_systems->init (this, nullptr);
+  if (!headless) {
+    core_systems = std::make_unique<sys::core_systems> ();
+    core_systems->init (this, nullptr);
+  }
 
   wsl::log::core ()->debug (
       "Runtime context initialized (window={}x{}, engine_res_path='{}')", width,

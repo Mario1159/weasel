@@ -178,29 +178,35 @@ TEST_CASE ("scene new <name> builds command")
 
 TEST_CASE ("scene load <path> builds command")
 {
-  const char *argv[] = { "weasel-cli", "scene", "load", "scene.wscn.json" };
-  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  const char *argv[] = { "weasel-cli", "-a",   "--project",      "proj",
+                         "scene",      "load", "scene.wscn.json" };
+  auto res = cli_handler ().parse (7, const_cast<char **> (argv));
   CHECK (res.should_exit == false);
   REQUIRE (res.command.has_value ());
   CHECK (*res.command == "scene load scene.wscn.json");
+  CHECK (res.attach == true);
 }
 
 TEST_CASE ("scene save without path builds command")
 {
-  const char *argv[] = { "weasel-cli", "scene", "save" };
-  auto res = cli_handler ().parse (3, const_cast<char **> (argv));
+  const char *argv[]
+      = { "weasel-cli", "-a", "--project", "proj", "scene", "save" };
+  auto res = cli_handler ().parse (6, const_cast<char **> (argv));
   CHECK (res.should_exit == false);
   REQUIRE (res.command.has_value ());
   CHECK (*res.command == "scene save");
+  CHECK (res.attach == true);
 }
 
 TEST_CASE ("scene save <path> builds command")
 {
-  const char *argv[] = { "weasel-cli", "scene", "save", "custom.wscn.json" };
-  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  const char *argv[] = { "weasel-cli", "-a",   "--project",       "proj",
+                         "scene",      "save", "custom.wscn.json" };
+  auto res = cli_handler ().parse (7, const_cast<char **> (argv));
   CHECK (res.should_exit == false);
   REQUIRE (res.command.has_value ());
   CHECK (*res.command == "scene save custom.wscn.json");
+  CHECK (res.attach == true);
 }
 
 TEST_CASE ("scene ls builds command")
@@ -352,6 +358,24 @@ TEST_CASE ("sys avail builds command")
   CHECK (res.should_exit == false);
   REQUIRE (res.command.has_value ());
   CHECK (*res.command == "sys avail");
+}
+
+TEST_CASE ("sys add <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "sys", "add", "Transform" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "sys add Transform");
+}
+
+TEST_CASE ("sys add with multi-word name is quoted")
+{
+  const char *argv[] = { "weasel-cli", "sys", "add", "3D Render" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "sys add \"3D Render\"");
 }
 
 // ===== Error Cases =====

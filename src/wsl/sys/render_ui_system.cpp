@@ -151,12 +151,17 @@ render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
     ui.context->SetDimensions (Rml::Vector2i{ width, height });
   }
 
-  ui.render_interface.BeginFrame (runtime_ctx.window.ctx->main_cmd,
-                                  runtime_ctx.window.present_tex.texture_data,
-                                  width, height);
+  if (ui.render_interface) {
+    ui.render_interface->BeginFrame (
+        runtime_ctx.window.ctx->main_cmd,
+        runtime_ctx.window.present_tex.texture_data, width, height);
+  }
 
   ui.context->Render ();
-  ui.render_interface.EndFrame ();
+
+  if (ui.render_interface) {
+    ui.render_interface->EndFrame ();
+  }
 }
 
 void

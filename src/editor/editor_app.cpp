@@ -26,6 +26,10 @@ std::string
 editor_app::execute_command (const std::string &command)
 {
   wsl::cli::command_executor executor (*m_runtime_context);
+  auto proj = m_runtime_context->resource_manager.current_project ();
+  if (proj) {
+    executor.set_current_project (std::move (proj));
+  }
   return executor.execute (command);
 }
 
