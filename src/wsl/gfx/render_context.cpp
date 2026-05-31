@@ -127,6 +127,13 @@ gfx::render_context::has_ui_render_pass () const
 void
 gfx::render_context::begin_frame ()
 {
+  // Reset pass handles BEFORE acquiring a new command buffer.
+  // This ensures that if a previous frame's end_main_render_pass was skipped or
+  // if begin_main_render_pass is not called this frame, we never hold a stale
+  // pass handle across frame boundaries.
+  main_pass = nullptr;
+  ui_pass = nullptr;
+
   main_cmd = SDL_AcquireGPUCommandBuffer (gpu_device);
 }
 
@@ -241,6 +248,10 @@ gfx::render_context::end_clear_render_pass ()
 void
 gfx::render_context::begin_ui_render_pass (SDL_GPUTexture *swapchain)
 {
+  if (swapchain == nullptr) {
+    ui_pass = nullptr;
+    return;
+  }
   SDL_GPUColorTargetInfo target_info = {};
   target_info.texture = swapchain;
   target_info.clear_color = { 0.0F, 0.0F, 0.0F, 0.0F };
@@ -255,6 +266,9 @@ gfx::render_context::begin_ui_render_pass (SDL_GPUTexture *swapchain)
 void
 gfx::render_context::end_ui_render_pass ()
 {
+  if (ui_pass == nullptr) {
+    return;
+  }
   SDL_EndGPURenderPass (ui_pass);
   ui_pass = nullptr;
 }

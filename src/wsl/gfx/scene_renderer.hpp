@@ -17,11 +17,13 @@
 #include <deque>
 #include <vector>
 
-
 namespace wsl
 {
 
-namespace rsc { class resource_manager; }
+namespace rsc
+{
+class resource_manager;
+}
 
 namespace gfx
 {
@@ -94,7 +96,8 @@ public:
   //! Replaces the visible draw list used by scene passes.
   void set_visible_draws (std::vector<draw_command> draws);
   //! Returns the visible draw list for the active frame.
-  [[nodiscard]] auto visible_draws () const -> const std::vector<draw_command> &;
+  [[nodiscard]] auto visible_draws () const
+      -> const std::vector<draw_command> &;
   //! Clears the visible draw list for the current frame.
   void clear_visible_draws ();
 
@@ -122,8 +125,13 @@ public:
                   float fog_radius);
 
   // Immediate debug line drawing (world-space lines rendered with depth/write)
-  struct debug_vertex { glm::vec3 pos; glm::vec4 color; };
-  void draw_debug_lines (const std::vector<debug_vertex> &verts, const glm::mat4 &vp);
+  struct debug_vertex
+  {
+    glm::vec3 pos;
+    glm::vec4 color;
+  };
+  void draw_debug_lines (const std::vector<debug_vertex> &verts,
+                         const glm::mat4 &vp);
 
   //! Uploads the frame lighting buffer.
   void upload_lighting (const lighting_ubo &lighting);
@@ -175,30 +183,32 @@ public:
   //! Returns the renderer-owned spot shadow slots.
   auto spot_shadow_maps () -> std::array<shadow_map_2d, 4> &;
   //! Returns the renderer-owned spot shadow slots.
-  [[nodiscard]] auto spot_shadow_maps () const -> const std::array<shadow_map_2d, 4> &;
+  [[nodiscard]] auto spot_shadow_maps () const
+      -> const std::array<shadow_map_2d, 4> &;
 
   //! Returns the renderer-owned point shadow slots.
   auto point_shadow_maps () -> std::array<point_shadow_map, 2> &;
   //! Returns the renderer-owned point shadow slots.
-  [[nodiscard]] auto point_shadow_maps () const -> const std::array<point_shadow_map, 2> &;
+  [[nodiscard]] auto point_shadow_maps () const
+      -> const std::array<point_shadow_map, 2> &;
 
   /*!
    * \brief Builds a directional light matrix derived from the camera frustum.
    */
   static auto make_light_vp_from_camera (const glm::mat4 &cam_view,
-                                       const glm::mat4 &cam_proj,
-                                       const glm::vec3 &light_dir_world,
-                                       float shadow_near = 0.1F,
-                                       float shadow_far = 200.0F,
-                                       float z_padding = 10.0F) -> glm::mat4;
+                                         const glm::mat4 &cam_proj,
+                                         const glm::vec3 &light_dir_world,
+                                         float shadow_near = 0.1F,
+                                         float shadow_far = 200.0F,
+                                         float z_padding = 10.0F) -> glm::mat4;
 
   /*!
    * \brief Builds a spotlight view-projection matrix for a single light.
    */
   static auto make_spot_light_vp (const glm::vec3 &light_pos,
-                                const glm::vec3 &light_dir,
-                                float outer_angle_radians, float near_plane,
-                                float far_plane) -> glm::mat4;
+                                  const glm::vec3 &light_dir,
+                                  float outer_angle_radians, float near_plane,
+                                  float far_plane) -> glm::mat4;
 
   //! Begins the directional shadow pass.
   void begin_shadow_pass ();
@@ -231,8 +241,8 @@ public:
    * \brief Returns the view-projection matrix for a point-light cubemap face.
    */
   static auto make_point_light_view_proj (const glm::vec3 &light_pos, int face,
-                                        float near_plane,
-                                        float far_plane) -> glm::mat4;
+                                          float near_plane, float far_plane)
+      -> glm::mat4;
 
   //! Bakes irradiance, prefilter, and BRDF resources for a cubemap.
   void bake_ibl (gfx::cubemap &env);
@@ -244,7 +254,7 @@ public:
   void bind_preview_bg_pipeline (SDL_GPURenderPass *pass);
 
   //! Default clear color used by renderer-owned full-screen passes.
-  SDL_FColor clear_color{ .r=0.1F, .g=0.15F, .b=0.2F, .a=1.0F };
+  SDL_FColor clear_color{ .r = 0.1F, .g = 0.15F, .b = 0.2F, .a = 1.0F };
   //! Enables or disables SSAO generation.
   bool ssao_enabled = true;
   //! Sampling radius in view space for SSAO.
@@ -268,10 +278,12 @@ public:
 
 private:
   // High-level scene drawing helpers.
-  [[nodiscard]] auto create_1x1_texture (uint8_t red, uint8_t green, uint8_t blue,
-                                      uint8_t alpha) const -> SDL_GPUTexture *;
-  [[nodiscard]] auto create_1x1_cubemap (uint8_t red, uint8_t green, uint8_t blue,
-                                      uint8_t alpha) const -> SDL_GPUTexture *;
+  [[nodiscard]] auto create_1x1_texture (uint8_t red, uint8_t green,
+                                         uint8_t blue, uint8_t alpha) const
+      -> SDL_GPUTexture *;
+  [[nodiscard]] auto create_1x1_cubemap (uint8_t red, uint8_t green,
+                                         uint8_t blue, uint8_t alpha) const
+      -> SDL_GPUTexture *;
   static auto extract_position (const glm::mat4 &matrix) -> glm::vec3;
   auto select_lod (gfx::node &n) const -> gfx::mesh *;
   void bind_pipeline ();
@@ -322,7 +334,7 @@ private:
   void run_ssao_blur_pass ();
   void create_ssao_pipeline ();
   void destroy_ssao_pipeline ();
-  void create_ssao_noise_texture ();
+  void create_ssao_noise_texture (SDL_GPUCommandBuffer *cmd = nullptr);
   void create_ssao_kernel ();
 
   // Outline resource management and internal helpers.

@@ -281,11 +281,23 @@ render_window::create_depth_texture ()
   info.sample_count = SDL_GPU_SAMPLECOUNT_4; // MSAA matches MRT pass
 
   depth_texture = SDL_CreateGPUTexture (ctx->gpu_device, &info);
+  if (depth_texture == nullptr) {
+    wsl::log::gfx ()->error ("Failed to create depth texture: {}",
+                             SDL_GetError ());
+  }
 }
 
 void
 render_window::begin_3d_pass () const
 {
+  if ((msaa_hdr_scene == nullptr) || (msaa_hdr_bloom == nullptr)
+      || (hdr_scene == nullptr) || (hdr_bloom_src == nullptr)
+      || (depth_texture == nullptr)) {
+    wsl::log::gfx ()->warn (
+        "begin_3d_pass: null render target texture(s), skipping");
+    return;
+  }
+
   SDL_GPUColorTargetInfo ct[2]{};
 
   // Scene HDR
@@ -339,9 +351,16 @@ render_window::end_ui_pass () const
 void
 render_window::new_swapchain ()
 {
-  SDL_WaitAndAcquireGPUSwapchainTexture (ctx->main_cmd, handler,
-                                         &swapchain.texture_data,
-                                         &swapchain.width, &swapchain.height);
+  bool const ok = SDL_WaitAndAcquireGPUSwapchainTexture (
+      ctx->main_cmd, handler, &swapchain.texture_data, &swapchain.width,
+      &swapchain.height);
+  if (!ok) {
+    wsl::log::gfx ()->error ("Failed to acquire swapchain texture: {}",
+                             SDL_GetError ());
+    swapchain.texture_data = nullptr;
+    swapchain.width = 0;
+    swapchain.height = 0;
+  }
 }
 
 void
@@ -383,24 +402,33 @@ render_window::on_resize ()
   msaa.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
   msaa.sample_count = SDL_GPU_SAMPLECOUNT_4;
 
-  msaa_hdr_scene = SDL_CreateGPUTexture (ctx->gpu_device, &msaa);
-  msaa_hdr_bloom = SDL_CreateGPUTexture (ctx->gpu_device, &msaa);
+  auto create_hdr_target = [&] (const SDL_GPUTextureCreateInfo &ci) {
+    SDL_GPUTexture *tex = SDL_CreateGPUTexture (ctx->gpu_device, &ci);
+    if (tex == nullptr) {
+      wsl::log::gfx ()->error ("Failed to create HDR render target ({}x{}): {}",
+                               ci.width, ci.height, SDL_GetError ());
+    }
+    return tex;
+  };
+
+  msaa_hdr_scene = create_hdr_target (msaa);
+  msaa_hdr_bloom = create_hdr_target (msaa);
 
   // Resolved HDR targets must be sampler + color target
   SDL_GPUTextureCreateInfo res = msaa;
   res.sample_count = SDL_GPU_SAMPLECOUNT_1;
   res.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  hdr_scene = SDL_CreateGPUTexture (ctx->gpu_device, &res);
-  hdr_bloom_src = SDL_CreateGPUTexture (ctx->gpu_device, &res);
+  hdr_scene = create_hdr_target (res);
+  hdr_bloom_src = create_hdr_target (res);
 
   // Half-res bloom ping-pong
   SDL_GPUTextureCreateInfo half = res;
   half.width = (uint32_t)std::max (1, w / 2);
   half.height = (uint32_t)std::max (1, h / 2);
 
-  bloom_a = SDL_CreateGPUTexture (ctx->gpu_device, &half);
-  bloom_b = SDL_CreateGPUTexture (ctx->gpu_device, &half);
+  bloom_a = create_hdr_target (half);
+  bloom_b = create_hdr_target (half);
 
   // Create LDR output texture (same format as swapchain) so UI can sample it
   SDL_GPUTextureCreateInfo out{};
@@ -414,7 +442,7 @@ render_window::on_resize ()
   out.format = swapchain_format;
   out.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  present_tex.texture_data = SDL_CreateGPUTexture (ctx->gpu_device, &out);
+  present_tex.texture_data = create_hdr_target (out);
   present_tex.width = (uint32_t)w;
   present_tex.height = (uint32_t)h;
 }

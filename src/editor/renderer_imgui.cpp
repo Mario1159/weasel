@@ -58,8 +58,9 @@ aabb_expand (glm::vec3 &mn, glm::vec3 &mx, const glm::vec3 &p)
 }
 
 static void
-compute_scene_bounds_recursive (const wsl::gfx::node &n, const glm::mat4 &parent,
-                                glm::vec3 &mn, glm::vec3 &mx)
+compute_scene_bounds_recursive (const wsl::gfx::node &n,
+                                const glm::mat4 &parent, glm::vec3 &mn,
+                                glm::vec3 &mx)
 {
   glm::mat4 const world = parent * n.local_transform;
 
@@ -78,7 +79,7 @@ compute_scene_bounds_recursive (const wsl::gfx::node &n, const glm::mat4 &parent
 
   for (const auto &c : n.children) {
     compute_scene_bounds_recursive (c, world, mn, mx);
-}
+  }
 }
 
 static bool
@@ -87,7 +88,7 @@ compute_model_bounds_world (const wsl::gfx::model_3d &model, int scene_index,
 {
   if (scene_index < 0 || scene_index >= (int)model.scenes.size ()) {
     return false;
-}
+  }
 
   glm::vec3 mn;
   glm::vec3 mx;
@@ -98,12 +99,12 @@ compute_model_bounds_world (const wsl::gfx::model_3d &model, int scene_index,
 
   for (const auto &root : scn.roots) {
     compute_scene_bounds_recursive (root, i, mn, mx);
-}
+  }
 
   // if empty (no vertices), mn is +inf
   if (!std::isfinite (mn.x) || !std::isfinite (mx.x)) {
     return false;
-}
+  }
 
   out_min = mn;
   out_max = mx;
@@ -146,7 +147,7 @@ rgb_to_hsl (float r, float g, float b, float &h, float &s, float &l)
     h = ((b - r) / d) + 2.0F;
   } else {
     h = ((r - g) / d) + 4.0F;
-}
+  }
 
   h /= 6.0F;
 }
@@ -156,19 +157,19 @@ hue_to_rgb (float p, float q, float t)
 {
   if (t < 0.0F) {
     t += 1.0F;
-}
+  }
   if (t > 1.0F) {
     t -= 1.0F;
-}
+  }
   if (t < 1.0F / 6.0F) {
     return p + ((q - p) * 6.0F * t);
-}
+  }
   if (t < 1.0F / 2.0F) {
     return q;
-}
+  }
   if (t < 2.0F / 3.0F) {
     return p + ((q - p) * ((2.0F / 3.0F) - t) * 6.0F);
-}
+  }
   return p;
 }
 
@@ -343,7 +344,7 @@ renderer_imgui::apply_editor_style (const wsl::gfx::editor_theme &t)
 
   colors[ImGuiCol_ResizeGrip] = border_soft;
   colors[ImGuiCol_ResizeGripHovered] = accent_primary;
-  colors[ImGuiCol_ResizeGripActive] = lighten(accent_primary, 0.3);
+  colors[ImGuiCol_ResizeGripActive] = lighten (accent_primary, 0.3);
 
   // --- Tabs ---
   colors[ImGuiCol_Tab] = bg_panel;
@@ -391,13 +392,12 @@ static std::string
 resolve_font_path (const char *relative_path)
 {
   const char *base_path = SDL_GetBasePath ();
-  if (base_path != nullptr)
-    {
-      std::filesystem::path exe_dir (base_path);
-      std::filesystem::path share_dir = exe_dir / ".." / "share" / "weasel";
-      if (std::filesystem::exists (share_dir / "otf"))
-        return (share_dir / relative_path).string ();
-    }
+  if (base_path != nullptr) {
+    std::filesystem::path exe_dir (base_path);
+    std::filesystem::path share_dir = exe_dir / ".." / "share" / "weasel";
+    if (std::filesystem::exists (share_dir / "otf"))
+      return (share_dir / relative_path).string ();
+  }
 
 #ifdef WEASEL_BUILD_DIR
   return (std::filesystem::path (WEASEL_BUILD_DIR) / relative_path).string ();
@@ -408,7 +408,8 @@ resolve_font_path (const char *relative_path)
 #endif
 }
 
-renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::render_context *ctx)
+renderer_imgui::renderer_imgui (wsl::gfx::render_window &window,
+                                wsl::gfx::render_context *ctx)
     : m_window (&window), m_ctx (ctx)
 {
   IMGUI_CHECKVERSION ();
@@ -429,15 +430,18 @@ renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::rende
 
   // Main UI font
   ImFont *font_regular = io.Fonts->AddFontFromFileTTF (
-      resolve_font_path ("otf/splinesans-regular.otf").c_str (), font_size, &cfg);
+      resolve_font_path ("otf/splinesans-regular.otf").c_str (), font_size,
+      &cfg);
 
   fonts.regular = font_regular;
   fonts.light = io.Fonts->AddFontFromFileTTF (
       resolve_font_path ("otf/splinesans-light.otf").c_str (), font_size, &cfg);
   fonts.medium = io.Fonts->AddFontFromFileTTF (
-      resolve_font_path ("otf/splinesans-medium.otf").c_str (), font_size, &cfg);
+      resolve_font_path ("otf/splinesans-medium.otf").c_str (), font_size,
+      &cfg);
   fonts.semibold = io.Fonts->AddFontFromFileTTF (
-      resolve_font_path ("otf/splinesans-semibold.otf").c_str (), font_size, &cfg);
+      resolve_font_path ("otf/splinesans-semibold.otf").c_str (), font_size,
+      &cfg);
   fonts.bold = io.Fonts->AddFontFromFileTTF (
       resolve_font_path ("otf/splinesans-bold.otf").c_str (), font_size, &cfg);
   fonts.title = io.Fonts->AddFontFromFileTTF (
@@ -483,10 +487,9 @@ renderer_imgui::renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::rende
 
 renderer_imgui::~renderer_imgui ()
 {
-  if ((m_ctx != nullptr) && (m_ctx->gpu_device != nullptr))
-    {
-      SDL_WaitForGPUIdle (m_ctx->gpu_device);
-    }
+  if ((m_ctx != nullptr) && (m_ctx->gpu_device != nullptr)) {
+    SDL_WaitForGPUIdle (m_ctx->gpu_device);
+  }
   destroy_preview_targets ();
 
   ImGui_ImplSDLGPU3_Shutdown ();
@@ -530,7 +533,7 @@ renderer_imgui::request_model_preview (
   (void)resource_manager;
   if (runtime_ctx == nullptr) {
     return;
-}
+  }
 
   m_preview_runtime = runtime_ctx;
   m_preview_model = model_eid;
@@ -547,8 +550,10 @@ renderer_imgui::request_model_preview (
   m_desired_h = new_h;
 
   // Allocate (or reallocate) preview textures when size changes or not created
-  if (size_changed || (m_preview_resolve == nullptr) || (m_preview_color_msaa == nullptr)
-      || (m_preview_depth_msaa == nullptr) || (m_preview_bloom_msaa == nullptr) || (m_preview_bloom_resolve == nullptr)) {
+  if (size_changed || (m_preview_resolve == nullptr)
+      || (m_preview_color_msaa == nullptr) || (m_preview_depth_msaa == nullptr)
+      || (m_preview_bloom_msaa == nullptr)
+      || (m_preview_bloom_resolve == nullptr)) {
     ensure_preview_targets (m_desired_w, m_desired_h);
   }
 
@@ -563,24 +568,24 @@ renderer_imgui::destroy_preview_targets ()
   if (m_preview_color_msaa != nullptr) {
     SDL_ReleaseGPUTexture (dev, m_preview_color_msaa),
         m_preview_color_msaa = nullptr;
-}
+  }
   if (m_preview_depth_msaa != nullptr) {
     SDL_ReleaseGPUTexture (dev, m_preview_depth_msaa),
         m_preview_depth_msaa = nullptr;
-}
+  }
   if (m_preview_resolve != nullptr) {
     SDL_ReleaseGPUTexture (dev, m_preview_resolve), m_preview_resolve = nullptr;
-}
+  }
 
   // NEW:
   if (m_preview_bloom_msaa != nullptr) {
     SDL_ReleaseGPUTexture (dev, m_preview_bloom_msaa),
         m_preview_bloom_msaa = nullptr;
-}
+  }
   if (m_preview_bloom_resolve != nullptr) {
     SDL_ReleaseGPUTexture (dev, m_preview_bloom_resolve),
         m_preview_bloom_resolve = nullptr;
-}
+  }
 
   m_preview_w = m_preview_h = 0;
 }
@@ -589,7 +594,8 @@ void
 renderer_imgui::ensure_preview_targets (uint32_t w, uint32_t h)
 {
   if (m_preview_w == w && m_preview_h == h && (m_preview_color_msaa != nullptr)
-      && (m_preview_depth_msaa != nullptr) && (m_preview_resolve != nullptr) && (m_preview_bloom_msaa != nullptr)
+      && (m_preview_depth_msaa != nullptr) && (m_preview_resolve != nullptr)
+      && (m_preview_bloom_msaa != nullptr)
       && (m_preview_bloom_resolve != nullptr)) {
     return;
   }
@@ -620,7 +626,8 @@ renderer_imgui::ensure_preview_targets (uint32_t w, uint32_t h)
   res.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
   m_preview_resolve = SDL_CreateGPUTexture (m_ctx->gpu_device, &res);
-  m_preview_bloom_resolve = SDL_CreateGPUTexture (m_ctx->gpu_device, &res); // NEW
+  m_preview_bloom_resolve
+      = SDL_CreateGPUTexture (m_ctx->gpu_device, &res); // NEW
 
   // ---- MSAA depth ----
   SDL_GPUTextureCreateInfo ds{};
@@ -664,28 +671,30 @@ renderer_imgui::render_requested_previews ()
 
   if (!m_preview_dirty) {
     return;
-}
+  }
   if (m_preview_runtime == nullptr) {
     return;
-}
+  }
   if (m_ctx->main_cmd == nullptr) {
     return;
-}
+  }
 
-  if ((m_preview_color_msaa == nullptr) || (m_preview_depth_msaa == nullptr) || (m_preview_resolve == nullptr)
-      || (m_preview_bloom_msaa == nullptr) || (m_preview_bloom_resolve == nullptr)) {
+  if ((m_preview_color_msaa == nullptr) || (m_preview_depth_msaa == nullptr)
+      || (m_preview_resolve == nullptr) || (m_preview_bloom_msaa == nullptr)
+      || (m_preview_bloom_resolve == nullptr)) {
     ensure_preview_targets (m_requested_w, m_requested_h);
-    if ((m_preview_color_msaa == nullptr) || (m_preview_depth_msaa == nullptr) || (m_preview_resolve == nullptr)
-        || (m_preview_bloom_msaa == nullptr) || (m_preview_bloom_resolve == nullptr)) {
+    if ((m_preview_color_msaa == nullptr) || (m_preview_depth_msaa == nullptr)
+        || (m_preview_resolve == nullptr) || (m_preview_bloom_msaa == nullptr)
+        || (m_preview_bloom_resolve == nullptr)) {
       return; // allocation failed
-}
+    }
   }
   if (m_requested_w != m_preview_w || m_requested_h != m_preview_h) {
     return;
-}
+  }
 
-  if (render_model_preview_low_lod (*m_preview_runtime, m_preview_model, m_preview_w,
-                                    m_preview_h)) {
+  if (render_model_preview_low_lod (*m_preview_runtime, m_preview_model,
+                                    m_preview_w, m_preview_h)) {
     m_preview_dirty = false;
   }
 }
@@ -697,10 +706,10 @@ renderer_imgui::render_model_preview_low_lod (
 {
   auto &mgr = runtime_ctx.resource_manager;
 
-  SDL_GPUCommandBuffer  const*cmd = m_ctx->main_cmd;
+  SDL_GPUCommandBuffer const *cmd = m_ctx->main_cmd;
   if (cmd == nullptr) {
     return false;
-}
+  }
 
   SDL_GPUColorTargetInfo ct[2]{};
   SDL_zero (ct);
@@ -727,9 +736,14 @@ renderer_imgui::render_model_preview_low_lod (
   ds.clear_depth = 1.0F;
 
   // Begin preview 3D pass (MRT-compatible!)
-  SDL_GPURenderPass *pass = SDL_BeginGPURenderPass (m_ctx->main_cmd, ct, 2, &ds);
+  SDL_GPURenderPass *pass
+      = SDL_BeginGPURenderPass (m_ctx->main_cmd, ct, 2, &ds);
+  if (pass == nullptr) {
+    return false;
+  }
 
-  SDL_GPURenderPass *old = m_ctx->main_pass;
+  // redirect the 3D renderer to our temporary preview pass
+  SDL_GPURenderPass *old_pass = m_ctx->main_pass;
   m_ctx->main_pass = pass;
 
   SDL_GPUViewport const viewport{ 0, 0, (float)w, (float)h, 0.0F, 1.0F };
@@ -737,19 +751,18 @@ renderer_imgui::render_model_preview_low_lod (
   SDL_Rect const sc{ 0, 0, (int)w, (int)h };
   SDL_SetGPUScissor (pass, &sc);
 
-  // redirect the 3D renderer to our pass
-  auto *old_pass = runtime_ctx.render_ctx.main_pass;
-  runtime_ctx.render_ctx.main_pass = pass;
-
   auto *scene_renderer = runtime_ctx.try_get_active_scene_renderer ();
 
-  // Render model ONLY if model_id is not null and is loaded AND we have a renderer
-  if ((scene_renderer != nullptr) && model_id != entt::null && mgr.contains (wsl::rsc::model_id{ model_id })
-      && mgr.state (wsl::rsc::model_id{ model_id }) == wsl::rsc::model_state::loaded) {
+  // Render model ONLY if model_id is not null and is loaded AND we have a
+  // renderer
+  if ((scene_renderer != nullptr) && model_id != entt::null
+      && mgr.contains (wsl::rsc::model_id{ model_id })
+      && mgr.state (wsl::rsc::model_id{ model_id })
+             == wsl::rsc::model_state::loaded) {
     auto handle = mgr.get (wsl::rsc::model_id{ model_id });
     if (handle) {
       int scene_index = handle->default_scene;
-      scene_index = std::max(scene_index, 0);
+      scene_index = std::max (scene_index, 0);
 
       glm::vec3 bmin;
       glm::vec3 bmax;
@@ -780,8 +793,8 @@ renderer_imgui::render_model_preview_low_lod (
       model_mtx = glm::translate (model_mtx, -center);
 
       // rotate right constantly (yaw around +Y)
-      model_mtx
-          = glm::rotate (model_mtx, -m_preview_yaw, glm::vec3 (0.0F, 1.0F, 0.0F));
+      model_mtx = glm::rotate (model_mtx, -m_preview_yaw,
+                               glm::vec3 (0.0F, 1.0F, 0.0F));
 
       // Pivot in preview space is origin (model is centered to origin via
       // model_mtx)
@@ -794,7 +807,8 @@ renderer_imgui::render_model_preview_low_lod (
       // Camera should look at the pivot (camera -> pivot)
       const glm::vec3 default_dir
           = glm::normalize (m_preview_pivot - m_preview_default_pos);
-      m_preview_default_rot = glm::quatLookAt (default_dir, glm::vec3 (0, 1, 0));
+      m_preview_default_rot
+          = glm::quatLookAt (default_dir, glm::vec3 (0, 1, 0));
 
       // If user isn't controlling the camera, keep preview camera snapped
       // to default
@@ -813,7 +827,8 @@ renderer_imgui::render_model_preview_low_lod (
       float const nearp = glm::max (0.01F, dist - (radius * 3.0F));
       float const farp = dist + (radius * 6.0F);
 
-      glm::mat4 const view = glm::lookAt (cam_pos, m_preview_pivot, glm::vec3 (0, 1, 0));
+      glm::mat4 const view
+          = glm::lookAt (cam_pos, m_preview_pivot, glm::vec3 (0, 1, 0));
       glm::mat4 const proj = glm::perspective (fov, aspect, nearp, farp);
       glm::mat4 const vp = proj * view;
 
@@ -828,10 +843,8 @@ renderer_imgui::render_model_preview_low_lod (
     }
   }
 
-  runtime_ctx.render_ctx.main_pass = old_pass;
-
   SDL_EndGPURenderPass (pass);
-  m_ctx->main_pass = old;
+  m_ctx->main_pass = old_pass;
   return true;
 }
 
@@ -840,11 +853,11 @@ renderer_imgui::on_resize (uint32_t /*unused*/, uint32_t /*unused*/)
 {
   if ((m_ctx == nullptr) || (m_ctx->gpu_device == nullptr)) {
     return;
-}
+  }
 
   if (m_desired_w == 0 || m_desired_h == 0) {
     return;
-}
+  }
 
   SDL_WaitForGPUIdle (m_ctx->gpu_device);
   ensure_preview_targets (m_desired_w, m_desired_h);
@@ -853,7 +866,7 @@ renderer_imgui::on_resize (uint32_t /*unused*/, uint32_t /*unused*/)
 
 void
 renderer_imgui::preview_set_camera_from_gizmo (const glm::vec3 &pos,
-                                                    const glm::quat &rot)
+                                               const glm::quat &rot)
 {
   m_preview_cam_pos = pos;
   m_preview_cam_rot = rot;
@@ -870,7 +883,7 @@ renderer_imgui::preview_set_camera_from_gizmo (const glm::vec3 &pos,
 
 void
 renderer_imgui::preview_get_camera (glm::vec3 &out_pos,
-                                         glm::quat &out_rot) const
+                                    glm::quat &out_rot) const
 {
   out_pos = m_preview_cam_pos;
   out_rot = m_preview_cam_rot;

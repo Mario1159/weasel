@@ -2422,7 +2422,8 @@ void
 gfx::scene_renderer::begin_shadow_pass ()
 {
   if (!m_shadows_enabled || (m_shadow_depth == nullptr)
-      || (m_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)) {
+      || (m_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)
+      || (m_ctx->main_cmd == nullptr)) {
     return;
   }
 
@@ -2553,7 +2554,7 @@ gfx::scene_renderer::begin_spot_shadow_pass (int index)
     return;
   }
   if ((m_spot_shadows[index].depth == nullptr) || (m_shadow_pipe == nullptr)
-      || (m_shadow_pass != nullptr)) {
+      || (m_shadow_pass != nullptr) || (m_ctx->main_cmd == nullptr)) {
     return;
   }
 
@@ -2690,7 +2691,8 @@ gfx::scene_renderer::begin_point_shadow_pass (int index, int face)
     return;
   }
   if ((m_point_shadows[index].depth_cube == nullptr)
-      || (m_point_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)) {
+      || (m_point_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)
+      || (m_ctx->main_cmd == nullptr)) {
     return;
   }
 
@@ -2910,7 +2912,7 @@ gfx::scene_renderer::create_ssao_kernel ()
 }
 
 void
-gfx::scene_renderer::create_ssao_noise_texture ()
+gfx::scene_renderer::create_ssao_noise_texture (SDL_GPUCommandBuffer *cmd)
 {
   if (m_ssao_noise_tex != nullptr) {
     return;
@@ -2952,7 +2954,13 @@ gfx::scene_renderer::create_ssao_noise_texture ()
   std::memcpy (mapped, noise.data (), sizeof (noise));
   SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, upload);
 
-  SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer (m_ctx->gpu_device);
+  // Use provided command buffer when called during an active frame to avoid
+  // submitting a separate command buffer while main_cmd is still recording.
+  bool const own_cmd = (cmd == nullptr);
+  if (own_cmd) {
+    cmd = SDL_AcquireGPUCommandBuffer (m_ctx->gpu_device);
+  }
+
   SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass (cmd);
 
   SDL_GPUTextureTransferInfo src{};
@@ -2974,7 +2982,10 @@ gfx::scene_renderer::create_ssao_noise_texture ()
 
   SDL_UploadToGPUTexture (copy, &src, &dst, false);
   SDL_EndGPUCopyPass (copy);
-  SDL_SubmitGPUCommandBuffer (cmd);
+
+  if (own_cmd) {
+    SDL_SubmitGPUCommandBuffer (cmd);
+  }
 
   SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, upload);
 }
@@ -2998,7 +3009,7 @@ gfx::scene_renderer::create_ssao_resources (uint32_t w, uint32_t h)
   m_ssao_height = h;
 
   create_ssao_kernel ();
-  create_ssao_noise_texture ();
+  create_ssao_noise_texture (m_ctx->main_cmd);
 
   SDL_GPUTextureCreateInfo nd{};
   nd.type = SDL_GPU_TEXTURETYPE_2D;
@@ -3304,7 +3315,8 @@ gfx::scene_renderer::begin_ssao_prepass (const glm::mat4 &view,
   (void)proj;
 
   if (!ssao_enabled || (m_ssao_normal_depth == nullptr)
-      || (m_ssao_depth == nullptr) || (m_ssao_prepass != nullptr)) {
+      || (m_ssao_depth == nullptr) || (m_ssao_prepass != nullptr)
+      || (m_ctx->main_cmd == nullptr)) {
     return;
   }
 

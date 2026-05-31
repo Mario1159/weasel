@@ -1,13 +1,16 @@
 #include "mcp_server_app.hpp"
 
+#include "wsl/log/log.hpp"
+
 #include <CLI/CLI.hpp>
 #include <cstdlib>
 #include <iostream>
+#include <spdlog/spdlog.h>
 
 int
 main (int argc, char **argv)
 {
-  CLI::App app{"Weasel Engine MCP Server"};
+  CLI::App app{ "Weasel Engine MCP Server" };
 
   std::string host = "localhost";
   int port = 8080;
@@ -21,6 +24,13 @@ main (int argc, char **argv)
   } catch (const CLI::ParseError &e) {
     return app.exit (e);
   }
+
+  // Initialise the engine logging system so that engine code (e.g. component
+  // registry registration) does not crash on a null logger pointer.
+  // Suppress all output so that log messages do not corrupt the JSON-RPC
+  // protocol carried over stdout.
+  wsl::log::init ();
+  spdlog::set_level (spdlog::level::off);
 
   wsl::mcp_server::mcp_server_app server (host, port);
   server.set_stdio_mode (stdio_mode);

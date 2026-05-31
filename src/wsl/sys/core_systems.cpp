@@ -12,6 +12,7 @@
 #include "sys/transform_system.hpp"
 #include "wsl/log/log.hpp"
 #include <SDL3/SDL_events.h>
+#include <algorithm>
 #include <entt/entity/fwd.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <memory>
@@ -376,6 +377,17 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   window.new_swapchain ();
 
+  // Pre-compute set of core system type_ids so that scene-system loops can
+  // skip duplicate entries (they have uninitialised render state).
+  entt::id_type core_ids[]{};
+  size_t n_core = 0;
+  for (sys::ecs_system *sys : to_vec ()) {
+    if (sys != nullptr) {
+      core_ids[n_core++] = sys->get_type_id ();
+    }
+  }
+  std::sort (core_ids, core_ids + n_core);
+
   for (sys::ecs_system *sys : to_vec ()) {
     if (sys == nullptr) {
       continue;
@@ -390,6 +402,13 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   if (scene != nullptr) {
     for (auto &sys : scene->systems) {
+      if (sys == nullptr) {
+        continue;
+      }
+      if (std::binary_search (core_ids, core_ids + n_core,
+                              sys->get_type_id ())) {
+        continue;
+      }
       sys->render_prepare_gpu_rsc (&registry);
     }
   }
@@ -433,6 +452,13 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
     if (scene != nullptr) {
       for (auto &sys : scene->systems) {
+        if (sys == nullptr) {
+          continue;
+        }
+        if (std::binary_search (core_ids, core_ids + n_core,
+                                sys->get_type_id ())) {
+          continue;
+        }
         sys->render_record_draw_cmd (&registry);
       }
     }
