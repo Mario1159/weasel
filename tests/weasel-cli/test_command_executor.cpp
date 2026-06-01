@@ -298,9 +298,11 @@ TEST_CASE ("sys ls lists per-scene systems")
 {
   exec_fixture fx;
   fx.execute ("scene new TestScene");
-  // CLI runs in headless mode — no built-in engine systems are registered
+  // CLI runs in headless mode — core systems may be listed; "No active scene"
+  // should not appear
   auto out = fx.execute ("sys ls");
-  CHECK (out.find ("No per-scene systems") != std::string::npos);
+  CHECK (out.find ("Scene systems") != std::string::npos);
+  CHECK (out.find ("No active scene") == std::string::npos);
 }
 
 TEST_CASE ("sys avail lists registered systems")
@@ -308,7 +310,8 @@ TEST_CASE ("sys avail lists registered systems")
   exec_fixture fx;
   auto out = fx.execute ("sys avail");
   // CLI runs in headless mode — no built-in engine systems are registered
-  CHECK (out.find ("No registered scene systems") != std::string::npos);
+  CHECK (out.find ("No user-defined system types registered")
+         != std::string::npos);
 }
 
 TEST_CASE ("sys with unknown subcommand prints usage")

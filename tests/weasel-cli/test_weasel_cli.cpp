@@ -149,8 +149,9 @@ TEST_CASE ("proj load <path> builds command")
 
 TEST_CASE ("proj info builds command")
 {
-  const char *argv[] = { "weasel-cli", "proj", "info" };
-  auto res = cli_handler ().parse (3, const_cast<char **> (argv));
+  const char *argv[]
+      = { "weasel-cli", "-a", "--project", "/dummy", "proj", "info" };
+  auto res = cli_handler ().parse (6, const_cast<char **> (argv));
   CHECK (res.should_exit == false);
   REQUIRE (res.command.has_value ());
   CHECK (*res.command == "proj info");
@@ -158,8 +159,9 @@ TEST_CASE ("proj info builds command")
 
 TEST_CASE ("proj save builds command")
 {
-  const char *argv[] = { "weasel-cli", "proj", "save" };
-  auto res = cli_handler ().parse (3, const_cast<char **> (argv));
+  const char *argv[]
+      = { "weasel-cli", "-a", "--project", "/dummy", "proj", "save" };
+  auto res = cli_handler ().parse (6, const_cast<char **> (argv));
   CHECK (res.should_exit == false);
   REQUIRE (res.command.has_value ());
   CHECK (*res.command == "proj save");
