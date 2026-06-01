@@ -501,6 +501,16 @@ rigid_body::register_meta ()
       .data<comp::rigid_body::shape_type::sphere> ("sphere"_hs)
       .custom<const char *> ("Sphere");
 
+  entt::meta_factory<phys::motion_type> ()
+      .type (entt::type_hash<phys::motion_type>::value ())
+      .conv<int> ()
+      .data<phys::motion_type::Static> ("static"_hs)
+      .custom<const char *> ("Static")
+      .data<phys::motion_type::Kinematic> ("kinematic"_hs)
+      .custom<const char *> ("Kinematic")
+      .data<phys::motion_type::Dynamic> ("dynamic"_hs)
+      .custom<const char *> ("Dynamic");
+
   entt::meta_factory<comp::rigid_body> ()
       .type (entt::type_hash<comp::rigid_body>::value ())
       .custom<comp::meta_info> (

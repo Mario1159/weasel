@@ -104,22 +104,20 @@ handle_get_quick_start (const mcp::json &params)
   oss << "   weasel-cli --project ./mygame/wslpro.json --interactive\n\n";
   oss << "   Inside the REPL you can manage entities, components, scenes, and "
          "more:\n";
-  oss << "     scene new Level1              # Create a new scene (no systems "
-         "attached)\n";
-  oss << "     sys add Transform             # Add transform system (recompute "
-         "world transforms)\n";
-  oss << "     sys add Physics               # Add physics simulation\n";
-  oss << "     sys add \"3D Render\"           # Add 3D rendering\n";
+  oss << "     scene new Level1              # Create a new empty scene\n";
+  oss << "     (core systems—Transform, Physics, 3D Render, etc.—are\n";
+  oss << "     automatically present in every scene and do not need to\n";
+  oss << "     be added manually)\n";
   oss << "     ent new Player                # Create an entity named Player\n";
   oss << "     ent new --empty MyBare        # Create entity without default "
          "components\n";
-  oss << "     comp add 1 transform          # Add Transform component\n";
-  oss << "     comp set 1 transform position '[0,2,0]'  # Set position\n";
-  oss << "     comp add 1 rigid_body         # Add RigidBody component\n";
-  oss << "     comp set 1 rigid_body shape sphere  # Set shape to sphere\n";
-  oss << "     comp set 1 rigid_body radius 0.5      # Set radius\n";
-  oss << "     comp rm 1 rigid_body          # Remove component\n";
-  oss << "     ent inspect 1                 # Inspect entity\n";
+  oss << "     comp add 0 transform          # Add Transform component\n";
+  oss << "     comp set 0 transform position '[0,2,0]'  # Set position\n";
+  oss << "     comp add 0 rigid_body         # Add RigidBody component\n";
+  oss << "     comp set 0 rigid_body shape sphere  # Set shape to sphere\n";
+  oss << "     comp set 0 rigid_body radius 0.5      # Set radius\n";
+  oss << "     comp rm 0 rigid_body          # Remove component\n";
+  oss << "     ent inspect 0                 # Inspect entity\n";
   oss << "     scene save                    # Save scene\n";
   oss << "     help                          # Show full command reference\n\n";
   oss << "5. Attach to a running editor:\n";
@@ -166,9 +164,11 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "  singl add       - Add a value-owned singleton\n";
   oss << "  singl create    - Generate a singleton template\n";
   oss << "  singl set       - Set a singleton property\n";
-  oss << "  sys ls          - List systems in the active scene\n";
-  oss << "  sys avail       - List globally registered system types\n";
-  oss << "  sys add         - Add a system to the active scene\n";
+  oss << "  sys ls          - List all systems in the active scene (core + "
+         "user)\n";
+  oss << "  sys avail       - List user-defined system types available via "
+         "'sys add'\n";
+  oss << "  sys add         - Add a user-defined system to the active scene\n";
   oss << "  sys create      - Generate a system template\n";
   oss << "  check           - Run validation checks\n";
   oss << "  rsc ls          - List resources\n";
@@ -190,20 +190,22 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "    C++ names (wsl::comp::transform)\n";
   oss << "  - model_id property on model_instance_3d now accepts\n";
   oss << "    builtin:// paths (e.g. builtin://cube) without crashing\n";
-  oss << "  - sys add <name> can attach systems to scenes dynamically\n";
-  oss << "    (e.g. Transform, Physics, 3D Render)\n";
+  oss << "  - sys add <name> can attach user-defined systems to scenes "
+         "dynamically\n";
   oss << "  - Nested comp set properties (motion_type.value,\n";
   oss << "    collision_layer.value) now persist through scene save\n";
   oss << "  - scene save without a path writes to project's scenes_path\n";
   oss << "    (no double .wscn.json extension)\n";
   oss << "  - # comments and inline comments are now supported in REPL\n\n";
   oss << "== Scene System Notes ==\n";
-  oss << "  - `scene new` creates a scene with no per-scene systems\n";
-  oss << "    (use `sys add` to attach them)\n";
-  oss << "  - 8 system types are registered: Transform, Physics, 3D Render,\n";
-  oss << "    Audio, Lighting, Skybox, Shadow, UI\n";
-  oss << "  - Global core systems (transform, physics, render, etc.) always\n";
-  oss << "    run regardless of per-scene system list\n";
+  oss << "  - `scene new` creates a scene with no per-scene user systems\n";
+  oss << "  - 8 built-in core systems are always present in every scene:\n";
+  oss << "    Transform, Physics, 3D Render, Audio, Lighting, Skybox,\n";
+  oss << "    Shadow, UI\n";
+  oss << "  - Core systems are part of the engine and cannot be added or\n";
+  oss << "    removed via `sys add`/`sys rm`\n";
+  oss << "  - `sys add` is only for user-defined systems created with\n";
+  oss << "    `sys create`\n";
   oss << "  - Core singleton components present in every scene:\n";
   oss << "    Runtime Context, Scene Manager, Resource Manager, UI Manager,\n";
   oss << "    Rendering Manager, Physics Manager\n";

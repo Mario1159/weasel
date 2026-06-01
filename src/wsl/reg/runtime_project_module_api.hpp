@@ -41,7 +41,8 @@ struct runtime_module_registration_context
 };
 
 /*!
- * \brief Helper class that centralizes runtime registration helpers and buckets.
+ * \brief Helper class that centralizes runtime registration helpers and
+ * buckets.
  *
  * This class replaces the previous free-floating runtime_detail namespace and
  * groups registration callbacks and helpers used by interpreted/compiled
@@ -52,14 +53,15 @@ class runtime_registrar
 public:
   using registration_fn = void (*) (runtime_module_registration_context &);
 
-  /*! 
-   * \brief Makes the current runtime boundary use the engine-owned meta context.
+  /*!
+   * \brief Makes the current runtime boundary use the engine-owned meta
+   * context.
    * \param meta_ctx_ptr Pointer to the engine's default \c entt::meta_ctx.
    *
    * EnTT stores reflection data in a per-boundary default context. Runtime code
    * compiled or interpreted outside the engine must adopt the engine-owned
-   * context before registering reflected types, otherwise the inspector resolves
-   * a different registry than the one runtime components populated.
+   * context before registering reflected types, otherwise the inspector
+   * resolves a different registry than the one runtime components populated.
    */
   static void
   sync_runtime_state (void *meta_ctx_ptr)
@@ -70,36 +72,37 @@ public:
     }
   }
 
-  /*! 
+  /*!
    * \brief Sets the active runtime context for the current runtime boundary.
    * \param runtime_ctx Pointer to the runtime context to activate.
    */
-  static void set_active_runtime_context (comp::singl::runtime_context *runtime_ctx);
+  static void
+  set_active_runtime_context (comp::singl::runtime_context *runtime_ctx);
 
-  /*! 
+  /*!
    * \brief Returns the component registration bucket for runtime code.
    * \return The shared component registration callback list.
    */
   static std::vector<registration_fn> &component_registrations ();
 
-  /*! 
+  /*!
    * \brief Returns the singleton registration bucket for runtime code.
    * \return The shared singleton registration callback list.
    */
   static std::vector<registration_fn> &singleton_registrations ();
 
-  /*! 
+  /*!
    * \brief Returns the system registration bucket for runtime code.
    * \return The shared system registration callback list.
    */
   static std::vector<registration_fn> &system_registrations ();
 
-  /*! 
+  /*!
    * \brief Adds a registration callback to one of the runtime buckets.
    */
   struct registration_hook
   {
-    /*! 
+    /*!
      * \brief Registers a callback function into a specific bucket.
      * \param bucket Function that returns the target registration bucket.
      * \param fn The registration callback to add.
@@ -111,7 +114,7 @@ public:
     }
   };
 
-  /*! 
+  /*!
    * \brief Helper to register a component type in the registration context.
    * \tparam T The component type to register.
    * \param ctx The registration context.
@@ -130,7 +133,7 @@ public:
     ctx.components.register_world_component<T> (options);
   }
 
-  /*! 
+  /*!
    * \brief Helper to register a singleton type in the registration context.
    * \tparam T The singleton type to register.
    * \param ctx The registration context.
@@ -149,7 +152,7 @@ public:
     ctx.singletons.register_singleton_component<T> (options);
   }
 
-  /*! 
+  /*!
    * \brief Helper to register a system type in the registration context.
    * \tparam T The system type to register.
    * \param ctx The registration context.
@@ -181,58 +184,79 @@ using runtime_detail = runtime_registrar;
 #define WEASEL_DETAIL_CAT(a, b) WEASEL_DETAIL_CAT_IMPL (a, b)
 
 #define WEASEL_RUNTIME_COMPONENT(Type, ...)                                    \
-  WEASEL_RUNTIME_COMPONENT_NAMED (Type, "" __VA_ARGS__, __LINE__)
+  WEASEL_RUNTIME_COMPONENT_NAMED (Type, "" __VA_ARGS__, __COUNTER__)
 
 #define WEASEL_RUNTIME_COMPONENT_NAMED(Type, DisplayNameLiteral, N)            \
-  namespace wsl::comp {                                                        \
-    template <> struct type_traits<Type> {                                     \
-      static constexpr std::string_view name() { return #Type; }               \
-    };                                                                         \
-  }                                                                            \
-  static void WEASEL_DETAIL_CAT (weasel_runtime_component_register_,           \
-                                 N) (wsl::reg::runtime::runtime_module_registration_context & ctx)     \
+  namespace wsl::comp                                                          \
   {                                                                            \
-    wsl::reg::runtime::runtime_detail::register_component<Type> (ctx, DisplayNameLiteral); \
+  template <> struct type_traits<Type>                                         \
+  {                                                                            \
+    static constexpr std::string_view                                          \
+    name ()                                                                    \
+    {                                                                          \
+      return #Type;                                                            \
+    }                                                                          \
+  };                                                                           \
   }                                                                            \
-  static wsl::reg::runtime::runtime_detail::registration_hook WEASEL_DETAIL_CAT (       \
-      weasel_runtime_component_hook_,                                          \
-      N) (wsl::reg::runtime::runtime_detail::component_registrations,                   \
+  static void WEASEL_DETAIL_CAT (weasel_runtime_component_register_, N) (      \
+      wsl::reg::runtime::runtime_module_registration_context & ctx)            \
+  {                                                                            \
+    wsl::reg::runtime::runtime_detail::register_component<Type> (              \
+        ctx, DisplayNameLiteral);                                              \
+  }                                                                            \
+  static wsl::reg::runtime::runtime_detail::registration_hook                  \
+      WEASEL_DETAIL_CAT (weasel_runtime_component_hook_, N) (                  \
+          wsl::reg::runtime::runtime_detail::component_registrations,          \
           &WEASEL_DETAIL_CAT (weasel_runtime_component_register_, N));
 
 #define WEASEL_RUNTIME_SYSTEM(Type, ...)                                       \
-  WEASEL_RUNTIME_SYSTEM_NAMED (Type, "" __VA_ARGS__, __LINE__)
+  WEASEL_RUNTIME_SYSTEM_NAMED (Type, "" __VA_ARGS__, __COUNTER__)
 
 #define WEASEL_RUNTIME_SYSTEM_NAMED(Type, DisplayNameLiteral, N)               \
-  namespace wsl::comp {                                                        \
-    template <> struct type_traits<Type> {                                     \
-      static constexpr std::string_view name() { return #Type; }               \
-    };                                                                         \
-  }                                                                            \
-  static void WEASEL_DETAIL_CAT (weasel_runtime_system_register_,              \
-                                 N) (wsl::reg::runtime::runtime_module_registration_context & ctx)       \
+  namespace wsl::comp                                                          \
   {                                                                            \
-    wsl::reg::runtime::runtime_detail::register_system<Type> (ctx, DisplayNameLiteral);    \
+  template <> struct type_traits<Type>                                         \
+  {                                                                            \
+    static constexpr std::string_view                                          \
+    name ()                                                                    \
+    {                                                                          \
+      return #Type;                                                            \
+    }                                                                          \
+  };                                                                           \
   }                                                                            \
-  static wsl::reg::runtime::runtime_detail::registration_hook WEASEL_DETAIL_CAT (       \
-      weasel_runtime_system_hook_,                                             \
-      N) (wsl::reg::runtime::runtime_detail::system_registrations,                      \
+  static void WEASEL_DETAIL_CAT (weasel_runtime_system_register_, N) (         \
+      wsl::reg::runtime::runtime_module_registration_context & ctx)            \
+  {                                                                            \
+    wsl::reg::runtime::runtime_detail::register_system<Type> (                 \
+        ctx, DisplayNameLiteral);                                              \
+  }                                                                            \
+  static wsl::reg::runtime::runtime_detail::registration_hook                  \
+      WEASEL_DETAIL_CAT (weasel_runtime_system_hook_, N) (                     \
+          wsl::reg::runtime::runtime_detail::system_registrations,             \
           &WEASEL_DETAIL_CAT (weasel_runtime_system_register_, N));
 
 #define WEASEL_RUNTIME_SINGLETON(Type, ...)                                    \
-  WEASEL_RUNTIME_SINGLETON_NAMED (Type, "" __VA_ARGS__, __LINE__)
+  WEASEL_RUNTIME_SINGLETON_NAMED (Type, "" __VA_ARGS__, __COUNTER__)
 
 #define WEASEL_RUNTIME_SINGLETON_NAMED(Type, DisplayNameLiteral, N)            \
-  namespace wsl::comp {                                                        \
-    template <> struct type_traits<Type> {                                     \
-      static constexpr std::string_view name() { return #Type; }               \
-    };                                                                         \
-  }                                                                            \
-  static void WEASEL_DETAIL_CAT (weasel_runtime_singleton_register_,           \
-                                 N) (wsl::reg::runtime::runtime_module_registration_context & ctx)       \
+  namespace wsl::comp                                                          \
   {                                                                            \
-    wsl::reg::runtime::runtime_detail::register_singleton<Type> (ctx, DisplayNameLiteral);   \
+  template <> struct type_traits<Type>                                         \
+  {                                                                            \
+    static constexpr std::string_view                                          \
+    name ()                                                                    \
+    {                                                                          \
+      return #Type;                                                            \
+    }                                                                          \
+  };                                                                           \
   }                                                                            \
-  static wsl::reg::runtime::runtime_detail::registration_hook WEASEL_DETAIL_CAT (       \
-      weasel_runtime_singleton_hook_,                                          \
-      N) (wsl::reg::runtime::runtime_detail::singleton_registrations,                        \
+  static void WEASEL_DETAIL_CAT (weasel_runtime_singleton_register_, N) (      \
+      wsl::reg::runtime::runtime_module_registration_context & ctx)            \
+  {                                                                            \
+    wsl::reg::runtime::runtime_detail::register_singleton<Type> (              \
+        ctx, DisplayNameLiteral);                                              \
+  }                                                                            \
+  static wsl::reg::runtime::runtime_detail::registration_hook                  \
+      WEASEL_DETAIL_CAT (weasel_runtime_singleton_hook_, N) (                  \
+          wsl::reg::runtime::runtime_detail::singleton_registrations,          \
           &WEASEL_DETAIL_CAT (weasel_runtime_singleton_register_, N));

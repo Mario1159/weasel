@@ -211,9 +211,11 @@ cli_handler::parse (int argc, char **argv)
       ->required ();
 
   auto *proj_info = proj_cmd->add_subcommand (
-      "info", "Show information about the loaded project");
-  auto *proj_save
-      = proj_cmd->add_subcommand ("save", "Save the loaded project");
+      "info",
+      "Show information about the loaded project (interactive mode or --attach "
+      "only)");
+  auto *proj_save = proj_cmd->add_subcommand (
+      "save", "Save the loaded project (interactive mode or --attach only)");
 
   auto *scene_cmd
       = app.add_subcommand ("scene", "Manage scenes in the loaded project");
@@ -223,13 +225,14 @@ cli_handler::parse (int argc, char **argv)
   scene_new->add_option ("name", scene_new_name, "Scene name")->required ();
 
   auto *scene_load = scene_cmd->add_subcommand (
-      "load", "Load a scene into the active runtime");
+      "load", "Load a scene into the active runtime (interactive mode or "
+              "--attach only)");
   std::string scene_load_path;
   scene_load->add_option ("path", scene_load_path, "Path to the scene file")
       ->required ();
 
-  auto *scene_save
-      = scene_cmd->add_subcommand ("save", "Save the active scene");
+  auto *scene_save = scene_cmd->add_subcommand (
+      "save", "Save the active scene (interactive mode or --attach only)");
   std::string scene_save_path;
   scene_save->add_option ("path", scene_save_path,
                           "Optional override save path");
@@ -313,11 +316,18 @@ cli_handler::parse (int argc, char **argv)
 
   auto *sys_cmd = app.add_subcommand (
       "sys", "Manage systems attached to the active scene");
-  auto *sys_ls = sys_cmd->add_subcommand ("ls", "List registered systems");
+  auto *sys_ls
+
+      = sys_cmd->add_subcommand (
+          "ls", "List all systems in the active scene (core + user-defined)");
   auto *sys_avail
-      = sys_cmd->add_subcommand ("avail", "List registered systems");
+
+      = sys_cmd->add_subcommand ("avail",
+                                 "List registered system types (core + user)");
   auto *sys_add
-      = sys_cmd->add_subcommand ("add", "Add a system to the active scene");
+
+      = sys_cmd->add_subcommand (
+          "add", "Add a user-defined system to the active scene");
   std::string sys_add_name;
   sys_add->add_option ("name", sys_add_name, "System name")->required ();
 
@@ -557,10 +567,10 @@ cli_handler::parse (int argc, char **argv)
     return { true, 1, std::nullopt };
   }
 
-  if ((*scene_load || *scene_save) && !attach) {
+  if ((*proj_info || *proj_save || *scene_load || *scene_save) && !interactive
+      && !attach) {
     wsl::log::cli ()->error (
-        "scene load/save require --attach to connect to a persistent "
-        "editor server session");
+        "proj info/save and scene load/save require --interactive or --attach");
     return { true, 1, std::nullopt };
   }
 

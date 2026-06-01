@@ -46,6 +46,8 @@ public:
 
   core_systems ();
 
+  static void register_factory_types (comp::singl::runtime_context &rtc);
+
   void init (comp::singl::runtime_context *runtime_ctx,
              comp::singl::editor_context *editor_ctx);
   void sync_activation ();
@@ -58,7 +60,7 @@ public:
 
   std::unique_ptr<render_3d_system> render_3d_sys;
   std::unique_ptr<physics_system> physics_sys;
-  
+
   std::unique_ptr<render_ui_system> render_ui_sys;
   std::unique_ptr<lighting_system> lighting_sys;
   std::unique_ptr<skybox_system> skybox_sys;

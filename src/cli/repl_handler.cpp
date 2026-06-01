@@ -370,6 +370,35 @@ set_component_property (entt::meta_any &instance, entt::meta_data prop_data,
     }
   }
 
+  // Auto-descend into single-field wrapper structs (e.g. motion_type_ui →
+  // value)
+  if (field_type.is_class () && !field_type.is_enum () && j.is_string ()) {
+    // Try the parent type first — resource handles (model_id, audio_id, etc.)
+    // have their own handlers in set_meta_from_json that should take priority
+    // over descending into the wrapper.
+    if (set_meta_from_json (field_inst, j, res_mgr)) {
+      prop_data.set (instance, field_inst);
+      out_msg = "set";
+      return true;
+    }
+
+    auto data_range = field_type.data ();
+    auto it = data_range.begin ();
+    if (it != data_range.end ()) {
+      auto sub_data = it->second;
+      ++it;
+      if (it == data_range.end ()) {
+        entt::meta_any sub_inst = sub_data.get (field_inst);
+        if (sub_inst && set_meta_from_json (sub_inst, j, res_mgr)) {
+          sub_data.set (field_inst, sub_inst);
+          prop_data.set (instance, field_inst);
+          out_msg = "set";
+          return true;
+        }
+      }
+    }
+  }
+
   if (set_meta_from_json (field_inst, j, res_mgr)) {
     prop_data.set (instance, field_inst);
     out_msg = "set";
@@ -746,6 +775,35 @@ command_executor::set_current_project (std::shared_ptr<wsl::rsc::project> proj)
   m_current_project = std::move (proj);
 }
 
+void
+command_executor::ensure_runtime_module_loaded ()
+{
+  if (!m_current_project || m_rtc.runtime_project_module.has_loaded_module ())
+    return;
+
+  std::filesystem::path const root (m_current_project->root_path);
+  bool has_runtime = false;
+  for (auto const &sub :
+       { m_current_project->systems_path, m_current_project->components_path,
+         m_current_project->singletons_path }) {
+    if (std::filesystem::exists (root / sub)) {
+      has_runtime = true;
+      break;
+    }
+  }
+  if (!has_runtime)
+    return;
+
+  wsl::log::cli ()->info ("Compiling and loading runtime module...");
+  if (!m_rtc.runtime_project_module.compile_and_load (*m_current_project)) {
+    m_output << "Warning: runtime module compilation failed.\n"
+             << "  Some user-defined types may not be available.\n";
+    return;
+  }
+  m_rtc.runtime_project_module.finalize_load ();
+  wsl::log::cli ()->info ("Runtime module loaded successfully.");
+}
+
 std::string
 command_executor::execute (const std::string &line)
 {
@@ -921,7 +979,17 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
              << "\n  Author: " << m_current_project->author
              << "\n  Root: " << m_current_project->root_path
              << "\n  Default Scene: " << m_current_project->default_scene_path
-             << "\n";
+             << "\n  Systems: " << m_current_project->systems_path
+             << "\n  Components: " << m_current_project->components_path
+             << "\n  Singletons: " << m_current_project->singletons_path
+             << "\n  Scenes: " << m_current_project->scenes_path
+             << "\n  Models: " << m_current_project->models_path
+             << "\n  Images: " << m_current_project->images_path
+             << "\n  Cubemaps: " << m_current_project->cubemaps_path
+             << "\n  Audio: " << m_current_project->audio_path
+             << "\n  UI Layouts: " << m_current_project->ui_layouts_path
+             << "\n  Fonts: " << m_current_project->fonts_path
+             << "\n  Shaders: " << m_current_project->shaders_path << "\n";
   } else if (action == "set") {
     if (tokens.size () < 4) {
       m_output << "Usage: proj set <field> <value>\n";
@@ -933,18 +1001,46 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     }
     const std::string &field = tokens[2];
     const std::string &value = tokens[3];
+    bool found = true;
     if (field == "name") {
       m_current_project->name = value;
-      m_output << "Project name set.\n";
     } else if (field == "author") {
       m_current_project->author = value;
-      m_output << "Project author set.\n";
     } else if (field == "default_scene_path") {
       m_current_project->default_scene_path = value;
-      m_output << "Default scene path set.\n";
+    } else if (field == "systems_path") {
+      m_current_project->systems_path = value;
+    } else if (field == "components_path") {
+      m_current_project->components_path = value;
+    } else if (field == "singletons_path") {
+      m_current_project->singletons_path = value;
+    } else if (field == "scenes_path") {
+      m_current_project->scenes_path = value;
+    } else if (field == "models_path") {
+      m_current_project->models_path = value;
+    } else if (field == "images_path") {
+      m_current_project->images_path = value;
+    } else if (field == "cubemaps_path") {
+      m_current_project->cubemaps_path = value;
+    } else if (field == "audio_path") {
+      m_current_project->audio_path = value;
+    } else if (field == "ui_layouts_path") {
+      m_current_project->ui_layouts_path = value;
+    } else if (field == "fonts_path") {
+      m_current_project->fonts_path = value;
+    } else if (field == "shaders_path") {
+      m_current_project->shaders_path = value;
     } else {
-      m_output << "Unknown project field: " << field
-               << ". Supported: name, author, default_scene_path\n";
+      found = false;
+      m_output
+          << "Unknown project field: " << field
+          << ". Supported: name, author, default_scene_path, systems_path, "
+             "components_path, singletons_path, scenes_path, models_path, "
+             "images_path, cubemaps_path, audio_path, ui_layouts_path, "
+             "fonts_path, shaders_path\n";
+    }
+    if (found) {
+      m_output << "Project field '" << field << "' set.\n";
     }
   } else if (action == "save") {
     if (!m_current_project) {
@@ -1026,6 +1122,11 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     std::string path;
     if (tokens.size () > 2) {
       path = tokens[2];
+      // Resolve relative paths against the project root
+      if (m_current_project && !std::filesystem::path (path).is_absolute ()) {
+        path = (std::filesystem::path (m_current_project->root_path) / path)
+                   .string ();
+      }
     } else {
       // Default to project's scenes_path + scene_name.wscn.json
       if (m_current_project) {
@@ -1049,7 +1150,10 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       }
     }
     wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, *scene);
-    if (serializer.save_json (path)) {
+    std::filesystem::path save_path (path);
+    std::error_code ec;
+    std::filesystem::create_directories (save_path.parent_path (), ec);
+    if (serializer.save_json (save_path.string ())) {
       m_output << "Scene saved to " << path << "\n";
     } else
       m_output << "Failed to save scene.\n";
@@ -1185,6 +1289,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   const std::string &action = tokens[1];
 
   if ((action == "ls" || action == "avail") && tokens.size () == 2) {
+    ensure_runtime_module_loaded ();
     auto components = m_rtc.component_registry.get_world_components ();
     m_output << "Registered Components (" << components.size () << "):\n";
     for (const auto *component : components) {
@@ -1299,6 +1404,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   } else if (action == "add") {
     if (tokens.size () < 4)
       return;
+    ensure_runtime_module_loaded ();
     const auto *descriptor
         = m_rtc.component_registry.find_world_component (tokens[3]);
     if (descriptor && descriptor->emplace_default) {
@@ -1500,6 +1606,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
 
   // ── singl ls ──
   if (action == "ls") {
+    ensure_runtime_module_loaded ();
     auto singletons = m_rtc.singleton_registry.get_singleton_components ();
     auto *scene = get_active_scene ();
     m_output << "Singleton Components (" << singletons.size () << "):\n";
@@ -1535,6 +1642,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "Usage: singl add <name>\n";
       return;
     }
+    ensure_runtime_module_loaded ();
     auto *scene = get_active_scene ();
     if (!scene) {
       m_output << "No active scene.\n";
@@ -1784,26 +1892,64 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
-    auto instances = scene->get_systems ();
-    if (instances.empty ()) {
-      m_output << "No per-scene systems attached to active scene.\n";
-      return;
+
+    // Collect core systems (always present in every scene).
+    std::vector<std::string> core_names;
+    if (m_rtc.core_systems) {
+      for (sys::ecs_system *sys : m_rtc.core_systems->to_vec ()) {
+        if (sys)
+          core_names.push_back (sys->get_name ());
+      }
+    } else {
+      // Headless mode: list core system display names from the factory.
+      auto all = m_rtc.system_factory_registry.get_systems ();
+      for (const auto *desc : all) {
+        if (desc && !desc->runtime_registered)
+          core_names.push_back (desc->display_name);
+      }
     }
-    m_output << "Scene systems (" << instances.size () << "):\n";
-    for (const auto *sys : instances) {
-      if (sys == nullptr)
-        continue;
-      m_output << "  " << sys->get_name () << "\n";
+
+    // Collect per-scene (user-defined) systems.
+    auto user_instances = scene->get_systems ();
+    std::vector<std::string> user_names;
+    user_names.reserve (user_instances.size ());
+    for (const auto *sys : user_instances) {
+      if (sys)
+        user_names.push_back (sys->get_name ());
+    }
+
+    m_output << "Scene systems (" << (core_names.size () + user_names.size ())
+             << "):\n";
+    for (const auto &name : core_names) {
+      m_output << "  " << name << " (core)\n";
+    }
+    for (const auto &name : user_names) {
+      m_output << "  " << name << "\n";
+    }
+    if (core_names.empty () && user_names.empty ()) {
+      m_output << "  (none)\n";
     }
   } else if (tokens[1] == "avail") {
+    ensure_runtime_module_loaded ();
     auto systems = m_rtc.system_factory_registry.get_systems ();
-    if (systems.empty ()) {
-      m_output << "No registered scene systems.\n";
+
+    std::vector<const reg::system_factory_registry::system_descriptor *>
+        user_systems;
+    for (const auto *system : systems) {
+      if (system && system->runtime_registered) {
+        user_systems.push_back (system);
+      }
+    }
+
+    if (user_systems.empty ()) {
+      m_output << "No user-defined system types registered.\n"
+               << "  Use `sys create <name>` to create a custom system, then\n"
+               << "  `sys add <name>` to attach it to the active scene.\n";
       return;
     }
 
-    m_output << "Available system types (" << systems.size () << "):\n";
-    for (const auto *system : systems) {
+    m_output << "User-defined system types (" << user_systems.size () << "):\n";
+    for (const auto *system : user_systems) {
       if (system == nullptr) {
         continue;
       }
@@ -1884,6 +2030,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "Usage: sys add <name>\n";
       return;
     }
+    ensure_runtime_module_loaded ();
     std::string sys_name = tokens[2];
     for (size_t i = 3; i < tokens.size (); ++i) {
       sys_name += ' ' + tokens[i];
@@ -1893,12 +2040,20 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
-    auto sys = m_rtc.system_factory_registry.create (sys_name, *scene);
-    if (sys) {
-      scene->add_system_instance (std::move (sys));
-      m_output << "Added system '" << sys_name << "' to active scene.\n";
-    } else {
+    auto *desc = m_rtc.system_factory_registry.find_system (sys_name);
+    if (desc == nullptr) {
       m_output << "Unknown system: " << sys_name << "\n";
+    } else if (!desc->runtime_registered) {
+      m_output << "'" << sys_name
+               << "' is a core engine system and is always present.\n"
+               << "  Use `sys add` only for custom systems created via `sys "
+                  "create`.\n";
+    } else {
+      auto sys = m_rtc.system_factory_registry.create (sys_name, *scene);
+      if (sys) {
+        scene->add_system_instance (std::move (sys));
+        m_output << "Added system '" << sys_name << "' to active scene.\n";
+      }
     }
   } else {
     m_output << "Usage: sys <ls|avail|add>\n";
@@ -2529,10 +2684,14 @@ command_executor::cmd_help ()
       << "  singl create <name> [--source]  Generate a singleton template\n"
       << "  singl set <name> <prop> <val>   Set a singleton property\n\n"
       << "System:\n"
-      << "  sys ls                     List systems in the active scene\n"
-      << "  sys avail                  List globally registered system types\n"
-      << "  sys add <name>             Add a system (e.g. Transform, Physics, "
-         "3D Render)\n"
+      << "  sys ls                     List all systems in the active scene\n"
+      << "                             (core + user-defined)\n"
+      << "  sys avail                  List user-defined system types "
+         "available\n"
+      << "                             via 'sys add'\n"
+      << "  sys add <name>             Add a user-defined system to the scene\n"
+      << "                             (core engine systems are always "
+         "present)\n"
       << "  sys create <name> [--source]  Generate a system template\n\n"
       << "Resources:\n"
       << "  rsc ls [type]              List registered resources\n"

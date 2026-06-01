@@ -223,6 +223,11 @@ comp::singl::runtime_context::runtime_context (
   dispatcher.sink<wsl::event::scene_changed> ()
       .connect<&runtime_context::on_scene_changed> (this);
 
+  // Register core system factories so CLI can discover them via `sys avail`,
+  // even in headless mode.  The actual system instances are only created
+  // when a full rendering context is available.
+  sys::core_systems::register_factory_types (*this);
+
   if (!headless) {
     core_systems = std::make_unique<sys::core_systems> ();
     core_systems->init (this, nullptr);

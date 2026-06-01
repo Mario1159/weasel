@@ -101,9 +101,9 @@ const std::vector<cli_command_info> g_cli_reference = {
     "cli",
     "Run a system REPL command without entering the interactive shell.",
     "weasel-cli sys <ls|avail|add>",
-    { "<ls> – List per-scene system instances.",
-      "<avail> – List globally registered system types.",
-      "add <name> – Add a system to the active scene." },
+    { "<ls> – List all systems in the active scene (core + user-defined).",
+      "<avail> – List user-defined system types available via 'sys add'.",
+      "add <name> – Add a user-defined system to the active scene." },
     { "weasel-cli sys ls", "weasel-cli sys avail" } },
 
   // === REPL Commands ===
@@ -134,8 +134,10 @@ const std::vector<cli_command_info> g_cli_reference = {
     { "proj save" } },
   { "scene new",
     "repl",
-    "Create a new empty scene and set it as active. No per-scene systems are "
-    "added by default — use 'sys add' to attach systems. Core singleton "
+    "Create a new empty scene and set it as active. The 8 core engine systems "
+    "(Transform, Physics, 3D Render, etc.) are always present; only "
+    "user-defined systems created with 'sys create' need 'sys add'. Core "
+    "singleton "
     "components (Runtime Context, Scene Manager, Resource Manager, UI Manager, "
     "Rendering Manager, Physics Manager) are automatically present in every "
     "scene.",
@@ -303,17 +305,17 @@ const std::vector<cli_command_info> g_cli_reference = {
     {} },
   { "sys add",
     "repl",
-    "Add a system to the active scene by registered name. Scenes start with no "
-    "per-scene systems — you must add them explicitly. Available system types: "
-    "Transform (recomputes world transforms from hierarchy), Physics (steps "
-    "Jolt physics simulation), 3D Render (draws models), Audio (3D audio "
-    "playback), Lighting (uploads light UBO data), Skybox (renders cubemap "
-    "background), Shadow (shadow-map depth passes), UI (renders ImGui "
-    "overlay). System names are case-sensitive.",
+    "Add a user-defined system to the active scene. The 8 core engine systems "
+    "(Transform, Physics, 3D Render, Audio, Lighting, Skybox, Shadow, UI) are "
+    "always present in every scene and cannot be added via this command. Use "
+    "'sys create' to generate a new custom system, then 'sys add' to attach "
+    "it. "
+    "System names are case-sensitive.",
     "sys add <name>",
-    { "<name> – System name. Available: Transform, Physics, 3D Render, Audio, "
-      "Lighting, Skybox, Shadow, UI. Names are case-sensitive." },
-    { "sys add Transform", "sys add Physics", "sys add 3D Render" } },
+    { "<name> – User-defined system name (created with 'sys create'). "
+      "Core systems (Transform, Physics, etc.) are built-in and always "
+      "active." },
+    { "sys add gravity", "sys add custom_render" } },
   { "sys create",
     "repl",
     "Generate a C++ system template file (header and optionally source) in the "
@@ -325,15 +327,17 @@ const std::vector<cli_command_info> g_cli_reference = {
     { "sys create gravity", "sys create custom_render --source" } },
   { "sys ls",
     "repl",
-    "List systems currently attached to the active scene. Scenes start empty "
-    "— use 'sys add' to attach systems. Note: global core systems always run "
-    "regardless of per-scene system list.",
+    "List all systems in the active scene: core engine systems (always "
+    "present, marked with (core)) plus any user-defined systems attached "
+    "via 'sys add'.",
     "sys ls",
     {},
     { "sys ls" } },
   { "sys avail",
     "repl",
-    "List all registered system types available via 'sys add'.",
+    "List user-defined system types that can be added to a scene via "
+    "'sys add'. Core engine systems (Transform, Physics, etc.) are always "
+    "present and are not listed here.",
     "sys avail",
     {},
     { "sys avail" } },

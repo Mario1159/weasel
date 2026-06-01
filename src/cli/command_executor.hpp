@@ -35,6 +35,8 @@ private:
   void cmd_rsc (const std::vector<std::string> &tokens);
   void cmd_help ();
 
+  void ensure_runtime_module_loaded ();
+
   wsl::rsc::scene *get_active_scene ();
 
   wsl::comp::singl::runtime_context &m_rtc;
