@@ -482,11 +482,13 @@ cli_handler::parse (int argc, char **argv)
           = std::filesystem::exists (project_root / proj->systems_path)
             || std::filesystem::exists (project_root / proj->components_path)
             || std::filesystem::exists (project_root / proj->singletons_path);
-      if (has_runtime_code
-          && !rtc.runtime_project_module.compile_and_load (*proj)) {
-        wsl::log::cli ()->error ("Runtime module validation failed: {}",
-                                 rtc.runtime_project_module.last_status ());
-        return { true, 1, std::nullopt };
+      if (has_runtime_code) {
+        if (!rtc.runtime_project_module.compile_and_load (*proj)) {
+          wsl::log::cli ()->error ("Runtime module validation failed: {}",
+                                   rtc.runtime_project_module.last_status ());
+          return { true, 1, std::nullopt };
+        }
+        rtc.runtime_project_module.finalize_load ();
       }
 
       wsl::rsc::scene scene{ &rtc, nullptr, "ValidationScene" };

@@ -65,6 +65,10 @@ public:
   {
   }
   virtual void
+  on_editor_update (entt::registry &, double /*dt*/)
+  {
+  }
+  virtual void
   on_event (entt::registry &, const SDL_Event &)
   {
   }
@@ -109,29 +113,32 @@ public:
   void
   refresh_activation (entt::registry *registry, bool is_playing)
   {
-    const bool should_activate
-        = is_playing ? m_init_on_startup : m_editor_active;
-
     if (registry == nullptr) {
       m_active = false;
       return;
     }
 
-    if (should_activate) {
-      if (!m_active) {
-        wsl::log::sys ()->trace ("Activating {}", get_name ());
+    if (is_playing) {
+      if (m_init_on_startup) {
+        if (!m_active) {
+          wsl::log::sys ()->trace ("Activating {}", get_name ());
+          init (registry);
+          m_active = true;
+        }
+      } else {
+        if (m_active) {
+          wsl::log::sys ()->trace ("Deactivating {}", get_name ());
+          on_inactive (*registry);
+          m_active = false;
+        }
       }
-      init (registry);
-      m_active = true;
-      return;
+    } else {
+      if (m_active) {
+        wsl::log::sys ()->trace ("Deactivating {}", get_name ());
+        on_inactive (*registry);
+        m_active = false;
+      }
     }
-
-    if (m_active) {
-      wsl::log::sys ()->trace ("Deactivating {}", get_name ());
-      on_inactive (*registry);
-    }
-
-    m_active = false;
   }
 
   void
@@ -142,10 +149,9 @@ public:
   }
 
   void
-  set_editor_active (bool value, entt::registry *registry, bool is_playing)
+  set_editor_active (bool value)
   {
     m_editor_active = value;
-    refresh_activation (registry, is_playing);
   }
 
   void
@@ -177,6 +183,14 @@ public:
   }
 
   void
+  editor_update (entt::registry *registry, double dt)
+  {
+    if (m_editor_active && (registry != nullptr)) {
+      on_editor_update (*registry, dt);
+    }
+  }
+
+  void
   event_handler (entt::registry *registry, const SDL_Event &event)
   {
     if (m_active && (registry != nullptr)) {
@@ -187,7 +201,7 @@ public:
   void
   render_build_draw_data (entt::registry *registry)
   {
-    if (m_active && (registry != nullptr)) {
+    if ((m_active || m_editor_active) && (registry != nullptr)) {
       on_render_build_draw_data (*registry);
     }
   }
@@ -195,7 +209,7 @@ public:
   void
   render_prepare_gpu_rsc (entt::registry *registry)
   {
-    if (m_active && (registry != nullptr)) {
+    if ((m_active || m_editor_active) && (registry != nullptr)) {
       on_render_prepare_gpu_rsc (*registry);
     }
   }
@@ -203,7 +217,7 @@ public:
   void
   render_record_draw_cmd (entt::registry *registry)
   {
-    if (m_active && (registry != nullptr)) {
+    if ((m_active || m_editor_active) && (registry != nullptr)) {
       on_render_record_draw_cmd (*registry);
     }
   }
@@ -230,6 +244,18 @@ public:
   is_active () const
   {
     return m_active;
+  }
+
+  bool
+  is_init_on_startup () const
+  {
+    return m_init_on_startup;
+  }
+
+  bool
+  is_editor_active () const
+  {
+    return m_editor_active;
   }
 
 protected:

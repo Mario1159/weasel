@@ -243,6 +243,20 @@ core_systems::update (double dt)
     }
   }
 
+  for (sys::ecs_system *sys : to_vec ()) {
+    if (sys == nullptr) {
+      continue;
+    }
+
+    sys->editor_update (&registry, dt);
+  }
+
+  if (scene != nullptr) {
+    for (auto &sys : scene->systems) {
+      sys->editor_update (&registry, dt);
+    }
+  }
+
   wsl::log::sys ()->trace ("Update: {} active systems, dt={}s, scene='{}'",
                            active_count, dt,
                            scene ? scene->get_name ().c_str () : "(none)");

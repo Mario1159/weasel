@@ -74,10 +74,13 @@ rsc::project_loader::create (const project &proj) const
 
     const rsc::model_id builtin_cube_id
         = m_runtime_ctx->resource_manager.register_model ("builtin://cube");
+    const rsc::model_id builtin_sphere_id
+        = m_runtime_ctx->resource_manager.register_model ("builtin://sphere");
     const rsc::cubemap_id builtin_skybox_id
         = m_runtime_ctx->resource_manager.register_cubemap (
             "builtin/skybox_procedural");
     temp_scene.add_resource (io::resource_type::model, builtin_cube_id.value);
+    temp_scene.add_resource (io::resource_type::model, builtin_sphere_id.value);
     temp_scene.add_resource (io::resource_type::cubemap,
                              builtin_skybox_id.value);
 

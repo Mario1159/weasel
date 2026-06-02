@@ -63,6 +63,12 @@ transform_system::on_update (entt::registry &registry, double dt)
 }
 
 void
+transform_system::on_editor_update (entt::registry &registry, double dt)
+{
+  run_registered_iterations (registry, dt);
+}
+
+void
 transform_system::update_world_transforms (entt::registry &reg,
                                            double /*unused*/)
 {

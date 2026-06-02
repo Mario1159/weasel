@@ -12,7 +12,6 @@
 #include <utility>
 #include <vector>
 
-
 namespace wsl
 {
 
@@ -34,10 +33,29 @@ singleton_registry::find_singleton_component (::entt::id_type type_id) const
 const singleton_registry::descriptor *
 singleton_registry::find_singleton_component (std::string_view type_name) const
 {
+  // 1. Fully qualified C++ type name (e.g. "wsl::comp::singl::physics_manager")
   if (std::unordered_map<std::string, ::entt::id_type>::const_iterator const it
       = m_type_name_to_type_id.find (std::string (type_name));
       it != m_type_name_to_type_id.end ()) {
     return find_singleton_component (it->second);
+  }
+
+  // 2. Display name (e.g. "Physics Manager", "Score")
+  if (std::unordered_map<std::string, ::entt::id_type>::const_iterator const dit
+      = m_display_name_to_type_id.find (std::string (type_name));
+      dit != m_display_name_to_type_id.end ()) {
+    return find_singleton_component (dit->second);
+  }
+
+  // 3. Short name — last segment after "::" (e.g. "physics_manager", "score")
+  for (const auto &entry : m_descriptors) {
+    std::string_view const full = entry.second.type_name;
+    std::size_t const pos = full.rfind ("::");
+    std::string_view const short_name
+        = (pos != std::string_view::npos) ? full.substr (pos + 2) : full;
+    if (short_name == type_name) {
+      return &entry.second;
+    }
   }
 
   return nullptr;
@@ -67,8 +85,10 @@ void
 singleton_registry::apply_core_singleton_components (
     ::entt::registry &registry) const
 {
-  for (const descriptor *desc : get_singleton_components (singleton_component_order::type_id)) {
-    if ((desc == nullptr) || !desc->core || (desc->emplace_default == nullptr)) {
+  for (const descriptor *desc :
+       get_singleton_components (singleton_component_order::type_id)) {
+    if ((desc == nullptr) || !desc->core
+        || (desc->emplace_default == nullptr)) {
       continue;
     }
 
@@ -77,9 +97,11 @@ singleton_registry::apply_core_singleton_components (
 }
 
 void
-singleton_registry::reset_scene_singleton_components (::entt::registry &registry) const
+singleton_registry::reset_scene_singleton_components (
+    ::entt::registry &registry) const
 {
-  for (const descriptor *desc : get_singleton_components (singleton_component_order::type_id)) {
+  for (const descriptor *desc :
+       get_singleton_components (singleton_component_order::type_id)) {
     if (desc == nullptr) {
       continue;
     }
@@ -103,7 +125,8 @@ singleton_registry::clear_runtime_singleton_components (rsc::world &world)
   std::vector<::entt::id_type> runtime_ids;
   runtime_ids.reserve (m_descriptors.size ());
 
-  for (const std::pair<const ::entt::id_type, descriptor> &entry : m_descriptors) {
+  for (const std::pair<const ::entt::id_type, descriptor> &entry :
+       m_descriptors) {
     if (entry.second.runtime_registered) {
       runtime_ids.push_back (entry.first);
     }
@@ -136,8 +159,8 @@ singleton_registry::clear_runtime_singleton_components (rsc::world &world)
 
 bool
 singleton_registry::save_singleton_binary (cereal::BinaryOutputArchive &archive,
-                                         ::entt::registry &registry,
-                                         ::entt::id_type type_id) const
+                                           ::entt::registry &registry,
+                                           ::entt::id_type type_id) const
 {
   const descriptor *desc = find_singleton_component (type_id);
   if ((desc == nullptr) || (desc->save_binary == nullptr)) {
@@ -150,8 +173,8 @@ singleton_registry::save_singleton_binary (cereal::BinaryOutputArchive &archive,
 
 bool
 singleton_registry::load_singleton_binary (cereal::BinaryInputArchive &archive,
-                                         ::entt::registry &registry,
-                                         ::entt::id_type type_id) const
+                                           ::entt::registry &registry,
+                                           ::entt::id_type type_id) const
 {
   const descriptor *desc = find_singleton_component (type_id);
   if ((desc == nullptr) || (desc->load_binary == nullptr)) {
@@ -164,8 +187,8 @@ singleton_registry::load_singleton_binary (cereal::BinaryInputArchive &archive,
 
 bool
 singleton_registry::save_singleton_json (cereal::JSONOutputArchive &archive,
-                                       ::entt::registry &registry,
-                                       ::entt::id_type type_id) const
+                                         ::entt::registry &registry,
+                                         ::entt::id_type type_id) const
 {
   const descriptor *desc = find_singleton_component (type_id);
   if ((desc == nullptr) || (desc->save_json == nullptr)) {
@@ -178,8 +201,8 @@ singleton_registry::save_singleton_json (cereal::JSONOutputArchive &archive,
 
 bool
 singleton_registry::load_singleton_json (cereal::JSONInputArchive &archive,
-                                       ::entt::registry &registry,
-                                       ::entt::id_type type_id) const
+                                         ::entt::registry &registry,
+                                         ::entt::id_type type_id) const
 {
   const descriptor *desc = find_singleton_component (type_id);
   if ((desc == nullptr) || (desc->load_json == nullptr)) {

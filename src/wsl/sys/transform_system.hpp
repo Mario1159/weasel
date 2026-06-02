@@ -5,7 +5,6 @@
 #include <entt/entt.hpp>
 #include <glm/mat4x4.hpp>
 
-
 namespace wsl
 {
 
@@ -25,6 +24,7 @@ public:
   void register_iterations (reg::sig::signal_hub &hub) override;
 
   void on_update (entt::registry &registry, double dt) override;
+  void on_editor_update (entt::registry &registry, double dt) override;
 
 private:
   void update_world_recursive (entt::registry &reg, entt::entity entity,

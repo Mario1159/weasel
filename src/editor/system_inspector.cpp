@@ -108,7 +108,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
       ImGui::SameLine (avail - (checkbox_w * 2.0F) - gap - pad_right);
 
       // Editor activation (show/hide)
-      bool const ed_active = system->is_active (); // approximation
+      bool const ed_active = system->is_editor_active ();
       wsl::rsc::image_id const ed_icon
           = ed_active ? editor_ctx->icon_show : editor_ctx->icon_hide;
       auto ed_handle = editor_ctx->editor_resources.get (ed_icon);
@@ -118,13 +118,13 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
         if (ImGui::ImageButton ("##ed_active_btn",
                                 (ImTextureID)(*ed_handle).texture,
                                 ImVec2 (checkbox_w - 4, checkbox_w - 4))) {
-          system->set_editor_active (!ed_active, registry, is_playing);
+          system->set_editor_active (!ed_active);
         }
       } else {
         editor_ctx->editor_resources.load (ed_icon);
         if (ImGui::Button (ed_active ? "S##ed" : "H##ed",
                            ImVec2 (checkbox_w, checkbox_w))) {
-          system->set_editor_active (!ed_active, registry, is_playing);
+          system->set_editor_active (!ed_active);
         }
       }
       ImGui::PopStyleColor ();
@@ -145,7 +145,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
           ImGui::SetTooltip ("Active at Runtime (Live)");
         }
       } else {
-        bool const rt_active = system->is_active (); // approximation
+        bool const rt_active = system->is_init_on_startup ();
 
         ImGui::PushStyleColor (ImGuiCol_Button, ImVec4 (0, 0, 0, 0));
         if (rt_active) {

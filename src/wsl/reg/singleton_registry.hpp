@@ -17,7 +17,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 namespace wsl
 {
 
@@ -58,9 +57,8 @@ struct singleton_component_registration_options
  * \brief Concept for types that have a serialize method compatible with Cereal.
  */
 template <typename T>
-concept has_serialize = requires (T &v, cereal::BinaryOutputArchive &ar) {
-  v.serialize (ar);
-};
+concept has_serialize
+    = requires (T &v, cereal::BinaryOutputArchive &ar) { v.serialize (ar); };
 
 /*!
  * \brief Central registry for singleton components (singletons) in the engine.
@@ -86,7 +84,8 @@ public:
     bool runtime_registered = false;
     //! Whether this is a core engine singleton that cannot be removed.
     bool core = false;
-    //! Whether this singleton should be serialized as part of the scene snapshot.
+    //! Whether this singleton should be serialized as part of the scene
+    //! snapshot.
     bool serialize_with_scene = false;
     //! Whether the singleton can be default-constructed.
     bool can_add_default = false;
@@ -105,9 +104,11 @@ public:
     void (*load_binary) (cereal::BinaryInputArchive &, ::entt::registry &)
         = nullptr;
     //! Function pointer to save the singleton to a JSON archive.
-    void (*save_json) (cereal::JSONOutputArchive &, ::entt::registry &) = nullptr;
+    void (*save_json) (cereal::JSONOutputArchive &, ::entt::registry &)
+        = nullptr;
     //! Function pointer to load the singleton from a JSON archive.
-    void (*load_json) (cereal::JSONInputArchive &, ::entt::registry &) = nullptr;
+    void (*load_json) (cereal::JSONInputArchive &, ::entt::registry &)
+        = nullptr;
   };
 
   using singleton_component_descriptor = descriptor;
@@ -141,13 +142,14 @@ public:
   const descriptor *find_singleton_component (std::string_view type_name) const;
 
   /*!
-   * \brief Returns registered singleton component descriptors in the requested order.
+   * \brief Returns registered singleton component descriptors in the requested
+   * order.
    * \param order Requested descriptor ordering.
    * \return Ordered descriptor list.
    */
   std::vector<const descriptor *>
-  get_singleton_components (
-      singleton_component_order order = singleton_component_order::display_name) const;
+  get_singleton_components (singleton_component_order order
+                            = singleton_component_order::display_name) const;
 
   /*! \brief Ensures all core singleton components exist in the registry. */
   void apply_core_singleton_components (::entt::registry &registry) const;
@@ -187,22 +189,47 @@ public:
                             ::entt::id_type type_id) const;
 
   /*! \brief Finds a singleton descriptor by type ID. */
-  const descriptor *find (::entt::id_type type_id) const { return find_singleton_component (type_id); }
+  const descriptor *
+  find (::entt::id_type type_id) const
+  {
+    return find_singleton_component (type_id);
+  }
   /*! \brief Returns all registered descriptors sorted by display name. */
-  std::vector<const descriptor *> ordered () const { return get_singleton_components (singleton_component_order::display_name); }
+  std::vector<const descriptor *>
+  ordered () const
+  {
+    return get_singleton_components (singleton_component_order::display_name);
+  }
   /*! \brief Returns all registered descriptors sorted by type ID. */
-  std::vector<const descriptor *> by_type_id () const { return get_singleton_components (singleton_component_order::type_id); }
+  std::vector<const descriptor *>
+  by_type_id () const
+  {
+    return get_singleton_components (singleton_component_order::type_id);
+  }
 
   /*! \brief Ensures all core singletons are present in the given registry. */
-  void apply_core_singletons (::entt::registry &registry) const { apply_core_singleton_components (registry); }
+  void
+  apply_core_singletons (::entt::registry &registry) const
+  {
+    apply_core_singleton_components (registry);
+  }
   /*! \brief Resets or removes non-core singletons in the registry. */
-  void reset_scene_registry (::entt::registry &registry) const { reset_scene_singleton_components (registry); }
+  void
+  reset_scene_registry (::entt::registry &registry) const
+  {
+    reset_scene_singleton_components (registry);
+  }
   /*! \brief Clears runtime-registered singletons from the specified world. */
-  void clear_runtime_singletons (rsc::world &world) { clear_runtime_singleton_components (world); }
+  void
+  clear_runtime_singletons (rsc::world &world)
+  {
+    clear_runtime_singleton_components (world);
+  }
 
 private:
   std::unordered_map<::entt::id_type, descriptor> m_descriptors;
   std::unordered_map<std::string, ::entt::id_type> m_type_name_to_type_id;
+  std::unordered_map<std::string, ::entt::id_type> m_display_name_to_type_id;
 };
 
 template <comp::singleton_component_type T>
@@ -224,6 +251,7 @@ singleton_registry::register_singleton_component (
   desc.core = options.core;
   desc.serialize_with_scene = options.serialize_with_scene;
   m_type_name_to_type_id[desc.type_name] = type_id;
+  m_display_name_to_type_id[desc.display_name] = type_id;
   desc.contains = +[] (::entt::registry &registry) -> bool {
     return registry.ctx ().contains<T> ();
   };
@@ -261,28 +289,28 @@ singleton_registry::register_singleton_component (
   desc.can_add_default = true;
 
   if (options.serialize_with_scene) {
-    desc.save_binary
-        = +[] (cereal::BinaryOutputArchive &archive, ::entt::registry &registry) {
-            archive (cereal::make_nvp (
-                detail::make_archive_name ("singleton_data_",
-                                           ::entt::type_name<T> ().value ()),
-                registry.ctx ().get<T> ()));
-          };
-    desc.load_binary
-        = +[] (cereal::BinaryInputArchive &archive, ::entt::registry &registry) {
-            T value{};
-            archive (cereal::make_nvp (
-                detail::make_archive_name ("singleton_data_",
-                                           ::entt::type_name<T> ().value ()),
-                value));
+    desc.save_binary = +[] (cereal::BinaryOutputArchive &archive,
+                            ::entt::registry &registry) {
+      archive (cereal::make_nvp (
+          detail::make_archive_name ("singleton_data_",
+                                     ::entt::type_name<T> ().value ()),
+          registry.ctx ().get<T> ()));
+    };
+    desc.load_binary = +[] (cereal::BinaryInputArchive &archive,
+                            ::entt::registry &registry) {
+      T value{};
+      archive (cereal::make_nvp (
+          detail::make_archive_name ("singleton_data_",
+                                     ::entt::type_name<T> ().value ()),
+          value));
 
-            auto &ctx = registry.ctx ();
-            if (ctx.contains<T> ()) {
-              ctx.get<T> () = std::move (value);
-            } else {
-              ctx.emplace<T> (std::move (value));
-            }
-          };
+      auto &ctx = registry.ctx ();
+      if (ctx.contains<T> ()) {
+        ctx.get<T> () = std::move (value);
+      } else {
+        ctx.emplace<T> (std::move (value));
+      }
+    };
     desc.save_json
         = +[] (cereal::JSONOutputArchive &archive, ::entt::registry &registry) {
             archive (cereal::make_nvp (
@@ -327,6 +355,7 @@ singleton_registry::register_bound_singleton_component (
   desc.can_add_default = false;
   desc.serialize_with_scene = options.serialize_with_scene;
   m_type_name_to_type_id[desc.type_name] = type_id;
+  m_display_name_to_type_id[desc.display_name] = type_id;
   desc.contains = +[] (::entt::registry &registry) -> bool {
     return registry.ctx ().contains<T *> ();
   };
@@ -354,40 +383,39 @@ singleton_registry::register_bound_singleton_component (
 
   if (options.serialize_with_scene) {
     if constexpr (has_serialize<T>) {
-      desc.save_binary
-          = +[] (cereal::BinaryOutputArchive &archive, ::entt::registry &registry) {
-              archive (cereal::make_nvp (
-                  detail::make_archive_name ("singleton_data_",
-                                             ::entt::type_name<T> ().value ()),
-                  *registry.ctx ().get<T *> ()));
-            };
-      desc.load_binary
-          = +[] (cereal::BinaryInputArchive &archive, ::entt::registry &registry) {
-              archive (cereal::make_nvp (
-                  detail::make_archive_name ("singleton_data_",
-                                             ::entt::type_name<T> ().value ()),
-                  *registry.ctx ().get<T *> ()));
-            };
-      desc.save_json
-          = +[] (cereal::JSONOutputArchive &archive, ::entt::registry &registry) {
-              archive (cereal::make_nvp (
-                  detail::make_archive_name ("singleton_data_",
-                                             ::entt::type_name<T> ().value ()),
-                  *registry.ctx ().get<T *> ()));
-            };
-      desc.load_json
-          = +[] (cereal::JSONInputArchive &archive, ::entt::registry &registry) {
-              archive (cereal::make_nvp (
-                  detail::make_archive_name ("singleton_data_",
-                                             ::entt::type_name<T> ().value ()),
-                  *registry.ctx ().get<T *> ()));
-            };
+      desc.save_binary = +[] (cereal::BinaryOutputArchive &archive,
+                              ::entt::registry &registry) {
+        archive (cereal::make_nvp (
+            detail::make_archive_name ("singleton_data_",
+                                       ::entt::type_name<T> ().value ()),
+            *registry.ctx ().get<T *> ()));
+      };
+      desc.load_binary = +[] (cereal::BinaryInputArchive &archive,
+                              ::entt::registry &registry) {
+        archive (cereal::make_nvp (
+            detail::make_archive_name ("singleton_data_",
+                                       ::entt::type_name<T> ().value ()),
+            *registry.ctx ().get<T *> ()));
+      };
+      desc.save_json = +[] (cereal::JSONOutputArchive &archive,
+                            ::entt::registry &registry) {
+        archive (cereal::make_nvp (
+            detail::make_archive_name ("singleton_data_",
+                                       ::entt::type_name<T> ().value ()),
+            *registry.ctx ().get<T *> ()));
+      };
+      desc.load_json = +[] (cereal::JSONInputArchive &archive,
+                            ::entt::registry &registry) {
+        archive (cereal::make_nvp (
+            detail::make_archive_name ("singleton_data_",
+                                       ::entt::type_name<T> ().value ()),
+            *registry.ctx ().get<T *> ()));
+      };
     }
   }
 
   m_descriptors[type_id] = std::move (desc);
 }
-
 
 } // namespace reg
 

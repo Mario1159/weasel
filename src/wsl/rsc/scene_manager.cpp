@@ -132,10 +132,13 @@ rsc::scene_manager::create_default_scene (const std::string &name,
   // Register built-in resources and add to scene load list
   const model_id builtin_cube_id
       = runtime_ctx->resource_manager.register_model ("builtin://cube");
+  const model_id builtin_sphere_id
+      = runtime_ctx->resource_manager.register_model ("builtin://sphere");
   const cubemap_id builtin_skybox_id
       = runtime_ctx->resource_manager.register_cubemap (
           "builtin/skybox_procedural");
   new_scene.add_resource (io::resource_type::model, builtin_cube_id.value);
+  new_scene.add_resource (io::resource_type::model, builtin_sphere_id.value);
   new_scene.add_resource (io::resource_type::cubemap, builtin_skybox_id.value);
 
   // Sample cube

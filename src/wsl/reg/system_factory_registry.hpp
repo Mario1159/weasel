@@ -10,7 +10,6 @@
 #include <string_view>
 #include <unordered_map>
 
-
 namespace wsl
 {
 
@@ -74,7 +73,8 @@ using system_factory_fn
     = std::function<std::unique_ptr<sys::ecs_system> (rsc::scene &)>;
 
 /*!
- * \brief Registry for system factories, allowing dynamic creation of systems by name.
+ * \brief Registry for system factories, allowing dynamic creation of systems by
+ * name.
  *
  * This class maps system names to factory functions that can instantiate
  * those systems for a given scene.
@@ -115,7 +115,11 @@ public:
    * \brief Sets the signal hub used for iteration queries.
    * \param hub Pointer to the engine signal hub.
    */
-  void set_signal_hub (sig::signal_hub *hub) { m_signal_hub = hub; }
+  void
+  set_signal_hub (sig::signal_hub *hub)
+  {
+    m_signal_hub = hub;
+  }
 
   /*!
    * \brief Registers a system type with a default factory.
@@ -151,7 +155,7 @@ public:
    */
   void
   register_system (const char *name, system_factory_fn factory,
-                    bool runtime_registered = false)
+                   bool runtime_registered = false)
   {
     register_system_factory (name, std::move (factory), runtime_registered);
   }
@@ -179,7 +183,8 @@ public:
    * \param options Registration options.
    */
   void register_system_factory (system_factory_fn factory,
-                                const system_registration_options &options = {});
+                                const system_registration_options &options
+                                = {});
 
   /*!
    * \brief Finds a system descriptor by scene/editor-facing name.
@@ -204,7 +209,8 @@ public:
   get_systems (system_order order = system_order::display_name) const;
 
   /*!
-   * \brief Returns the user-facing system names for editor search and scene persistence.
+   * \brief Returns the user-facing system names for editor search and scene
+   * persistence.
    */
   std::vector<std::string> get_system_factory_names () const;
 
@@ -223,8 +229,8 @@ public:
    * \param scene Scene that will own the system instance.
    * \return Instantiated system, or `nullptr` when not found.
    */
-  std::unique_ptr<sys::ecs_system> create_system (std::string_view display_name,
-                                                  rsc::scene &scene)
+  std::unique_ptr<sys::ecs_system>
+  create_system (std::string_view display_name, rsc::scene &scene)
   {
     return create (std::string (display_name), scene);
   }
@@ -250,34 +256,43 @@ public:
    * \param system_type_id Stable system type identifier.
    * \return List of dependencies as system type references.
    */
-  std::vector<system_type_ref> get_system_dependencies (entt::id_type system_type_id) const;
+  std::vector<system_type_ref>
+  get_system_dependencies (entt::id_type system_type_id) const;
 
   /*!
    * \brief Returns the declared conflict list for the system.
    * \param system_type_id Stable system type identifier.
    * \return List of conflicts as system type references.
    */
-  std::vector<system_type_ref> get_system_conflicts (entt::id_type system_type_id) const;
+  std::vector<system_type_ref>
+  get_system_conflicts (entt::id_type system_type_id) const;
 
   /*!
    * \brief Returns the declared iterations for the system.
    * \param system_type_id Stable system type identifier.
    * \return List of system iteration descriptors.
    */
-  std::vector<const system_iteration_descriptor *> get_system_iterations (entt::id_type system_type_id) const;
+  std::vector<const system_iteration_descriptor *>
+  get_system_iterations (entt::id_type system_type_id) const;
 
   /*!
-   * \brief Returns every declared system iteration whose required component set includes the queried world component.
+   * \brief Returns every declared system iteration whose required component set
+   * includes the queried world component.
    * \param component_type_id Stable world component identifier.
    * \return List of matching system iteration descriptors.
    */
-  std::vector<const system_iteration_descriptor *> find_iterations_using_world_component (entt::id_type component_type_id) const;
+  std::vector<const system_iteration_descriptor *>
+  find_iterations_using_world_component (entt::id_type component_type_id) const;
 
   /*! \brief Clears all runtime-registered system factories. */
   void clear_runtime_systems ();
 
   /*! \brief Returns a list of all registered system factory names. */
-  std::vector<std::string> get_factory_names () const { return get_system_factory_names(); }
+  std::vector<std::string>
+  get_factory_names () const
+  {
+    return get_system_factory_names ();
+  }
 
 private:
   template <typename T>
@@ -305,6 +320,7 @@ private:
 
   std::unordered_map<std::string, system_descriptor> m_factories;
   std::unordered_map<entt::id_type, std::string> m_type_to_name;
+  std::unordered_map<std::string, std::string> m_type_name_to_display_name;
   sig::signal_hub *m_signal_hub = nullptr;
 };
 
@@ -329,6 +345,7 @@ system_factory_registry::register_system_type (
   };
 
   m_type_to_name[desc.type_id] = desc.display_name;
+  m_type_name_to_display_name[desc.type_name] = desc.display_name;
   m_factories[desc.display_name] = std::move (desc);
 }
 
@@ -339,8 +356,11 @@ system_factory_registry::declare_system_dependency ()
   const entt::id_type owner_id = wsl::comp::stable_type_id<OwnerSystem> ();
   const entt::id_type dep_id = wsl::comp::stable_type_id<DependencySystem> ();
 
-  if (system_descriptor *desc = const_cast<system_descriptor *> (find_system (owner_id))) {
-    if (std::find (desc->dependencies.begin (), desc->dependencies.end (), dep_id) == desc->dependencies.end ()) {
+  if (system_descriptor *desc
+      = const_cast<system_descriptor *> (find_system (owner_id))) {
+    if (std::find (desc->dependencies.begin (), desc->dependencies.end (),
+                   dep_id)
+        == desc->dependencies.end ()) {
       desc->dependencies.push_back (dep_id);
     }
   }
@@ -351,10 +371,14 @@ inline void
 system_factory_registry::declare_system_conflict ()
 {
   const entt::id_type owner_id = wsl::comp::stable_type_id<OwnerSystem> ();
-  const entt::id_type conflict_id = wsl::comp::stable_type_id<ConflictSystem> ();
+  const entt::id_type conflict_id
+      = wsl::comp::stable_type_id<ConflictSystem> ();
 
-  if (system_descriptor *desc = const_cast<system_descriptor *> (find_system (owner_id))) {
-    if (std::find (desc->conflicts.begin (), desc->conflicts.end (), conflict_id) == desc->conflicts.end ()) {
+  if (system_descriptor *desc
+      = const_cast<system_descriptor *> (find_system (owner_id))) {
+    if (std::find (desc->conflicts.begin (), desc->conflicts.end (),
+                   conflict_id)
+        == desc->conflicts.end ()) {
       desc->conflicts.push_back (conflict_id);
     }
   }

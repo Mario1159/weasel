@@ -6,33 +6,38 @@
 #include <string>
 #include <unordered_map>
 
-namespace wsl::mcp_server {
+namespace wsl::mcp_server
+{
 
-namespace {
+namespace
+{
 
 // ---------------------------------------------------------------------------
 // Documentation for each namespace
 // ---------------------------------------------------------------------------
 
-struct ns_doc {
-    std::string name;
-    std::string brief;
-    std::string detail;
+struct ns_doc
+{
+  std::string name;
+  std::string brief;
+  std::string detail;
 };
 
-const std::unordered_map<std::string, ns_doc>& get_namespace_docs() {
-    static const std::unordered_map<std::string, ns_doc> docs = {
+const std::unordered_map<std::string, ns_doc> &
+get_namespace_docs ()
+{
+  static const std::unordered_map<std::string, ns_doc> docs = {
 
-        // ===================================================================
-        // comp
-        // ===================================================================
-        {"comp",
-         {
-             "comp – ECS Components (entity data)",
-             "Data components attached to entities. Define what an entity *is*: its transform, "
-             "camera, physics body, lights, audio source, etc.",
+    // ===================================================================
+    // comp
+    // ===================================================================
+    { "comp",
+      { "comp – ECS Components (entity data)",
+        "Data components attached to entities. Define what an entity *is*: its "
+        "transform, "
+        "camera, physics body, lights, audio source, etc.",
 
-             R"doc(== wsl::comp — ECS Components ==
+        R"doc(== wsl::comp — ECS Components ==
 
 The ECS data layer. Components are plain structs attached to entities via
 the EnTT registry. They carry no logic — only state.
@@ -124,19 +129,17 @@ skybox_instance_3d
   Register at runtime via:
     reg::component_registry::register_world_component<T>()
     reg::singleton_registry::register_singleton_component<T>()
-)doc"
-         }},
+)doc" } },
 
-        // ===================================================================
-        // sys
-        // ===================================================================
-        {"sys",
-         {
-             "sys – ECS Systems (game logic)",
-             "Systems contain the behavior that operates on entities. Each system "
-             "derives from ecs_system and overrides lifecycle hooks like on_update.",
+    // ===================================================================
+    // sys
+    // ===================================================================
+    { "sys",
+      { "sys – ECS Systems (game logic)",
+        "Systems contain the behavior that operates on entities. Each system "
+        "derives from ecs_system and overrides lifecycle hooks like on_update.",
 
-             R"doc(== wsl::sys — ECS Systems ==
+        R"doc(== wsl::sys — ECS Systems ==
 
 The logic layer. Systems iterate over entity components and implement
 behavior. Each system is a class inheriting from ecs_system (or the CRTP
@@ -147,7 +150,8 @@ helper ecs_system_t<Derived>).
 Lifecycle hooks (override as needed):
   on_init(registry)         — called once on first activation
   on_inactive(registry)     — called on deactivation
-  on_update(registry, dt)   — called every frame while active
+  on_update(registry, dt)   — called every frame while runtime-active
+  on_editor_update(registry, dt) — called every frame while editor-active
   on_event(registry, event) — SDL event handler
   on_render_build_draw_data(registry)
   on_render_prepare_gpu_rsc(registry)
@@ -156,7 +160,7 @@ Lifecycle hooks (override as needed):
 Activation control:
   set_active(bool, registry)
   set_init_on_startup(bool, registry, is_playing)
-  set_editor_active(bool, registry, is_playing)
+  set_editor_active(bool) — independent; no runtime side-effects
 
 System dependencies and conflicts (prevent incompatible systems):
   set_dependencies({"SystemA", "SystemB"})
@@ -290,19 +294,17 @@ the factory registry to register and create them:
 
   Register with system_factory_registry to make it available:
     sys_reg.register_system<my_system>("My System");
-)doc"
-         }},
+)doc" } },
 
-        // ===================================================================
-        // rsc
-        // ===================================================================
-        {"rsc",
-         {
-             "rsc – Resource Management",
-             "Loading, caching, serializing and managing assets: models, textures, "
-             "scenes, shaders, audio, fonts, and UI layouts.",
+    // ===================================================================
+    // rsc
+    // ===================================================================
+    { "rsc",
+      { "rsc – Resource Management",
+        "Loading, caching, serializing and managing assets: models, textures, "
+        "scenes, shaders, audio, fonts, and UI layouts.",
 
-             R"doc(== wsl::rsc — Resource Management ==
+        R"doc(== wsl::rsc — Resource Management ==
 
 Central resource system with async loading, GPU upload staging, scene
 lifecycle, and project management.
@@ -391,19 +393,17 @@ to decouple scenes from concrete asset paths.
 
   Singleton component wrapping a pointer to the resource_manager.
   Provides an ImGui inspector for debugging.
-)doc"
-         }},
+)doc" } },
 
-        // ===================================================================
-        // phys
-        // ===================================================================
-        {"phys",
-         {
-             "phys – Physics Engine (Jolt Physics wrapper)",
-             "Rigid body simulation, collision detection, sensors, and ray "
-             "casting backed by Jolt Physics.",
+    // ===================================================================
+    // phys
+    // ===================================================================
+    { "phys",
+      { "phys – Physics Engine (Jolt Physics wrapper)",
+        "Rigid body simulation, collision detection, sensors, and ray "
+        "casting backed by Jolt Physics.",
 
-             R"doc(== wsl::phys — Physics (Jolt Integration) ==
+        R"doc(== wsl::phys — Physics (Jolt Integration) ==
 
 A C++ wrapper around Jolt Physics providing body creation, simulation
 stepping, collision queries, and sensor overlap events.
@@ -467,19 +467,17 @@ stepping, collision queries, and sensor overlap events.
     • After step:  body → world_transform
   Rebuild body when shape/dims/motion change via:
     rigid_body.rebuild_body(engine, scale);
-)doc"
-         }},
+)doc" } },
 
-        // ===================================================================
-        // gfx
-        // ===================================================================
-        {"gfx",
-         {
-             "gfx – Graphics / Rendering (SDL_GPU)",
-             "GPU-powered 3D rendering: meshes, materials, shaders, HDR bloom, "
-             "shadow maps, and the full frame pipeline.",
+    // ===================================================================
+    // gfx
+    // ===================================================================
+    { "gfx",
+      { "gfx – Graphics / Rendering (SDL_GPU)",
+        "GPU-powered 3D rendering: meshes, materials, shaders, HDR bloom, "
+        "shadow maps, and the full frame pipeline.",
 
-             R"doc(== wsl::gfx — Graphics & Rendering ==
+        R"doc(== wsl::gfx — Graphics & Rendering ==
 
 Built on SDL_GPU. Supports HDR rendering, MSAA, bloom post-processing,
 shadow mapping, and immediate-mode UI overlay via ImGui.
@@ -560,19 +558,17 @@ shadow mapping, and immediate-mode UI overlay via ImGui.
   5. Bloom post-fx     (downsample → blur × N → composite)
   6. UI pass           (ImGui)
   7. Present
-)doc"
-         }},
+)doc" } },
 
-        // ===================================================================
-        // math
-        // ===================================================================
-        {"math",
-         {
-             "math – Math Types & Utilities",
-             "Core math types (vec3f, quatf) with automatic conversion between "
-             "GLM, Jolt, and ImGui. Also includes MikkTSpace tangent computation.",
+    // ===================================================================
+    // math
+    // ===================================================================
+    { "math",
+      { "math – Math Types & Utilities",
+        "Core math types (vec3f, quatf) with automatic conversion between "
+        "GLM, Jolt, and ImGui. Also includes MikkTSpace tangent computation.",
 
-             R"doc(== wsl::math — Math Types ==
+        R"doc(== wsl::math — Math Types ==
 
 Lightweight math types used as component fields across the engine.
 Designed for seamless interop between GLM, Jolt Physics, and ImGui.
@@ -630,19 +626,18 @@ Designed for seamless interop between GLM, Jolt Physics, and ImGui.
     • Cereal serialize() for scene snapshot serialization
     • EnTT register_meta() for editor property-grid reflection
     • ImGui custom_inspect() for in-editor manipulation
-)doc"
-         }},
+)doc" } },
 
-        // ===================================================================
-        // reg
-        // ===================================================================
-        {"reg",
-         {
-             "reg – Registry & Registration Infrastructure",
-             "Central registration for components, singletons, systems, and "
-             "signals. Enables serialization, editor reflection, and dynamic queries.",
+    // ===================================================================
+    // reg
+    // ===================================================================
+    { "reg",
+      { "reg – Registry & Registration Infrastructure",
+        "Central registration for components, singletons, systems, and "
+        "signals. Enables serialization, editor reflection, and dynamic "
+        "queries.",
 
-             R"doc(== wsl::reg — Registry & Registration ==
+        R"doc(== wsl::reg — Registry & Registration ==
 
 The registration layer bridges the ECS core with editor, serialization,
 and runtime code. It makes the engine introspectable and extensible.
@@ -722,22 +717,25 @@ and runtime code. It makes the engine introspectable and extensible.
     • ensure_meta_registered<T>() — calls T::register_meta() if defined
     • resolve_display_name<T>() — fallback chain for human-readable names
     • make_archive_name() — naming convention for Cereal archive nodes
-)doc"
-         }}
-    };
+)doc" } }
+  };
 
-    return docs;
+  return docs;
 }
 
 // Case-insensitive key lookup
-const ns_doc* find_namespace(const std::string& name) {
-    std::string key = name;
-    for (auto& c : key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+const ns_doc *
+find_namespace (const std::string &name)
+{
+  std::string key = name;
+  for (auto &c : key)
+    c = static_cast<char> (std::tolower (static_cast<unsigned char> (c)));
 
-    for (const auto& [k, v] : get_namespace_docs()) {
-        if (k == key) return &v;
-    }
-    return nullptr;
+  for (const auto &[k, v] : get_namespace_docs ()) {
+    if (k == key)
+      return &v;
+  }
+  return nullptr;
 }
 
 } // namespace
@@ -746,51 +744,58 @@ const ns_doc* find_namespace(const std::string& name) {
 // Handlers
 // ---------------------------------------------------------------------------
 
-mcp::json handle_list_namespaces(const mcp::json& params) {
-    (void)params;
-    std::ostringstream oss;
-    oss << "Weasel Engine Namespaces\n\n";
-    oss << "The engine core library (wsl) is organized into the following "
-           "namespaces. Use describe_namespace with any of these names to get "
-           "detailed documentation.\n\n";
+mcp::json
+handle_list_namespaces (const mcp::json &params)
+{
+  (void)params;
+  std::ostringstream oss;
+  oss << "Weasel Engine Namespaces\n\n";
+  oss << "The engine core library (wsl) is organized into the following "
+         "namespaces. Use describe_namespace with any of these names to get "
+         "detailed documentation.\n\n";
 
-    for (const auto& [key, doc] : get_namespace_docs()) {
-        oss << "  " << doc.name << "\n";
-        oss << "    " << doc.brief << "\n\n";
-    }
+  for (const auto &[key, doc] : get_namespace_docs ()) {
+    oss << "  " << doc.name << "\n";
+    oss << "    " << doc.brief << "\n\n";
+  }
 
-    oss << "To get started writing a game:\n";
-    oss << "  1. describe_namespace('comp') — entity components (what things ARE)\n";
-    oss << "  2. describe_namespace('sys')  — systems (what things DO)\n";
-    oss << "  3. describe_namespace('rsc')  — resources & scenes\n";
-    oss << "  4. describe_namespace('phys') — physics simulation\n";
-    oss << "  5. describe_namespace('gfx')  — rendering pipeline\n";
-    oss << "  6. describe_namespace('math') — vector/quaternion types\n";
-    oss << "  7. describe_namespace('reg')  — registration infrastructure\n";
+  oss << "To get started writing a game:\n";
+  oss << "  1. describe_namespace('comp') — entity components (what things "
+         "ARE)\n";
+  oss << "  2. describe_namespace('sys')  — systems (what things DO)\n";
+  oss << "  3. describe_namespace('rsc')  — resources & scenes\n";
+  oss << "  4. describe_namespace('phys') — physics simulation\n";
+  oss << "  5. describe_namespace('gfx')  — rendering pipeline\n";
+  oss << "  6. describe_namespace('math') — vector/quaternion types\n";
+  oss << "  7. describe_namespace('reg')  — registration infrastructure\n";
 
-    return mcp::json{{{"type", "text"}, {"text", oss.str()}}};
+  return mcp::json{ { { "type", "text" }, { "text", oss.str () } } };
 }
 
-mcp::json handle_describe_namespace(const mcp::json& params) {
-    if (!params.contains("name")) {
-        throw mcp::mcp_exception(mcp::error_code::invalid_params,
-                                 "Missing required parameter: name");
+mcp::json
+handle_describe_namespace (const mcp::json &params)
+{
+  if (!params.contains ("name")) {
+    throw mcp::mcp_exception (mcp::error_code::invalid_params,
+                              "Missing required parameter: name");
+  }
+
+  const std::string name = params["name"].get<std::string> ();
+  const auto *doc = find_namespace (name);
+
+  if (!doc) {
+    std::string valid;
+    for (const auto &[k, v] : get_namespace_docs ()) {
+      if (!valid.empty ())
+        valid += ", ";
+      valid += k;
     }
+    throw mcp::mcp_exception (mcp::error_code::invalid_params,
+                              "Unknown namespace: " + name
+                                  + ". Valid: " + valid);
+  }
 
-    const std::string name = params["name"].get<std::string>();
-    const auto* doc = find_namespace(name);
-
-    if (!doc) {
-        std::string valid;
-        for (const auto& [k, v] : get_namespace_docs()) {
-            if (!valid.empty()) valid += ", ";
-            valid += k;
-        }
-        throw mcp::mcp_exception(mcp::error_code::invalid_params,
-                                 "Unknown namespace: " + name + ". Valid: " + valid);
-    }
-
-    return mcp::json{{{"type", "text"}, {"text", doc->detail}}};
+  return mcp::json{ { { "type", "text" }, { "text", doc->detail } } };
 }
 
 } // namespace wsl::mcp_server

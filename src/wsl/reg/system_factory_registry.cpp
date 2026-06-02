@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-
 namespace wsl
 {
 
@@ -33,12 +32,33 @@ system_factory_registry::register_system_factory (
 }
 
 const system_factory_registry::system_descriptor *
-system_factory_registry::find_system (std::string_view display_name) const
+system_factory_registry::find_system (std::string_view name) const
 {
-  if (std::unordered_map<std::string, system_descriptor>::const_iterator const it
-      = m_factories.find (std::string (display_name));
+  // 1. Display name (e.g. "Player Control System")
+  if (std::unordered_map<std::string, system_descriptor>::const_iterator const
+          it = m_factories.find (std::string (name));
       it != m_factories.end ()) {
     return &it->second;
+  }
+
+  // 2. Fully qualified C++ type name (e.g. "wsl::sys::PlayerControlSystem")
+  if (std::unordered_map<std::string, std::string>::const_iterator const tn_it
+      = m_type_name_to_display_name.find (std::string (name));
+      tn_it != m_type_name_to_display_name.end ()) {
+    return find_system (tn_it->second);
+  }
+
+  // 3. Short name — last segment after "::" (e.g. "PlayerControlSystem")
+  for (const auto &entry : m_factories) {
+    if (entry.second.type_name.empty ())
+      continue;
+    std::string_view const full = entry.second.type_name;
+    std::size_t const pos = full.rfind ("::");
+    std::string_view const short_name
+        = (pos != std::string_view::npos) ? full.substr (pos + 2) : full;
+    if (short_name == name) {
+      return &entry.second;
+    }
   }
 
   return nullptr;
@@ -132,8 +152,8 @@ system_factory_registry::get_system_conflicts (
   result.reserve (desc->conflicts.size ());
   for (entt::id_type conflict_id : desc->conflicts) {
     if (const system_descriptor *conflict_desc = find_system (conflict_id)) {
-      result.push_back (
-          { conflict_id, conflict_desc->type_name, conflict_desc->display_name });
+      result.push_back ({ conflict_id, conflict_desc->type_name,
+                          conflict_desc->display_name });
     } else {
       result.push_back ({ conflict_id, "Unknown", "Unknown" });
     }
@@ -195,8 +215,8 @@ system_factory_registry::clear_runtime_systems ()
   }
 
   for (const std::string &name : runtime_names) {
-    if (std::unordered_map<std::string, system_descriptor>::const_iterator const it
-        = m_factories.find (name);
+    if (std::unordered_map<std::string, system_descriptor>::const_iterator const
+            it = m_factories.find (name);
         it != m_factories.end ()) {
       m_type_to_name.erase (it->second.type_id);
     }

@@ -1170,6 +1170,7 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     }
     auto &scene = m_rtc.scene_manager.create_scene (tokens[2], true);
     m_output << "Scene '" << tokens[2] << "' created and set as active.\n";
+    auto_save_scene ();
   } else if (action == "load") {
     if (tokens.size () < 3) {
       m_output << "Usage: scene load <path>\n";

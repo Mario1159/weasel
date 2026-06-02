@@ -336,7 +336,11 @@ component_registry::register_world_component (
     desc.copy = +[] (entt::registry &src_reg, entt::entity src_ent,
                      entt::registry &dst_reg, entt::entity dst_ent) {
       if (src_reg.all_of<T> (src_ent)) {
-        dst_reg.emplace_or_replace<T> (dst_ent, src_reg.get<T> (src_ent));
+        if constexpr (std::is_empty_v<T>) {
+          dst_reg.emplace_or_replace<T> (dst_ent);
+        } else {
+          dst_reg.emplace_or_replace<T> (dst_ent, src_reg.get<T> (src_ent));
+        }
       }
     };
   }

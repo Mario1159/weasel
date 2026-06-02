@@ -186,16 +186,15 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
     registry = &scene->get_registry ();
   }
 
-  bool init_on_startup = system->is_active () && true; // Use getter
+  bool init_on_startup = system->is_init_on_startup ();
   if (ImGui::Checkbox ("Init On Startup", &init_on_startup)) {
     system->set_init_on_startup (init_on_startup, registry,
                                  runtime_ctx->is_running);
   }
 
-  bool editor_active = system->is_active ();
+  bool editor_active = system->is_editor_active ();
   if (ImGui::Checkbox ("Editor Active", &editor_active)) {
-    system->set_editor_active (editor_active, registry,
-                               runtime_ctx->is_running);
+    system->set_editor_active (editor_active);
   }
 
   ImGui::TextDisabled ("Current State: %s",
