@@ -106,8 +106,11 @@ private:
 
   static void gather_files (const std::filesystem::path &base, source_set &out);
 
-  static bool write_generated_translation_unit (const std::filesystem::path &generated_path,
-                                             const source_set &sources) ;
+  static std::size_t compute_source_hash (const source_set &sources);
+
+  static bool
+  write_generated_translation_unit (const std::filesystem::path &generated_path,
+                                    const source_set &sources);
 
   bool initialize_interpreter ();
   bool interpret (const std::filesystem::path &generated_path);
@@ -116,6 +119,7 @@ private:
   std::filesystem::path m_loaded_project_root;
   std::string m_last_status;
   bool m_module_loaded = false;
+  std::size_t m_source_hash = 0;
 
   std::vector<std::string> m_interpreter_args_storage;
   std::vector<const char *> m_interpreter_args;

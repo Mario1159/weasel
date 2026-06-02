@@ -211,11 +211,9 @@ cli_handler::parse (int argc, char **argv)
       ->required ();
 
   auto *proj_info = proj_cmd->add_subcommand (
-      "info",
-      "Show information about the loaded project (interactive mode or --attach "
-      "only)");
-  auto *proj_save = proj_cmd->add_subcommand (
-      "save", "Save the loaded project (interactive mode or --attach only)");
+      "info", "Show information about the loaded project");
+  auto *proj_save
+      = proj_cmd->add_subcommand ("save", "Save the loaded project");
 
   auto *scene_cmd
       = app.add_subcommand ("scene", "Manage scenes in the loaded project");
@@ -225,14 +223,13 @@ cli_handler::parse (int argc, char **argv)
   scene_new->add_option ("name", scene_new_name, "Scene name")->required ();
 
   auto *scene_load = scene_cmd->add_subcommand (
-      "load", "Load a scene into the active runtime (interactive mode or "
-              "--attach only)");
+      "load", "Load a scene into the active runtime");
   std::string scene_load_path;
   scene_load->add_option ("path", scene_load_path, "Path to the scene file")
       ->required ();
 
-  auto *scene_save = scene_cmd->add_subcommand (
-      "save", "Save the active scene (interactive mode or --attach only)");
+  auto *scene_save
+      = scene_cmd->add_subcommand ("save", "Save the active scene");
   std::string scene_save_path;
   scene_save->add_option ("path", scene_save_path,
                           "Optional override save path");
@@ -288,6 +285,25 @@ cli_handler::parse (int argc, char **argv)
   comp_add->add_option ("entity_id", comp_add_entity_id, "Entity id")
       ->required ();
   comp_add->add_option ("type", comp_add_type, "Component type name")
+      ->required ();
+
+  auto *comp_rm
+      = comp_cmd->add_subcommand ("rm", "Remove a component from an entity");
+  std::string comp_rm_entity_id, comp_rm_type;
+  comp_rm->add_option ("entity_id", comp_rm_entity_id, "Entity id")
+      ->required ();
+  comp_rm->add_option ("type", comp_rm_type, "Component type name")
+      ->required ();
+
+  auto *comp_set = comp_cmd->add_subcommand ("set", "Set a component property");
+  std::string comp_set_entity_id, comp_set_type, comp_set_prop, comp_set_val;
+  comp_set->add_option ("entity_id", comp_set_entity_id, "Entity id")
+      ->required ();
+  comp_set->add_option ("type", comp_set_type, "Component type name")
+      ->required ();
+  comp_set->add_option ("property", comp_set_prop, "Property path")
+      ->required ();
+  comp_set->add_option ("value", comp_set_val, "Value (JSON or plain)")
       ->required ();
 
   auto *singl_cmd = app.add_subcommand ("singl", "Manage singleton components");
@@ -540,6 +556,13 @@ cli_handler::parse (int argc, char **argv)
   } else if (*comp_add) {
     repl_command = build_repl_command (
         { "comp", "add", comp_add_entity_id, comp_add_type });
+  } else if (*comp_rm) {
+    repl_command = build_repl_command (
+        { "comp", "rm", comp_rm_entity_id, comp_rm_type });
+  } else if (*comp_set) {
+    repl_command
+        = build_repl_command ({ "comp", "set", comp_set_entity_id,
+                                comp_set_type, comp_set_prop, comp_set_val });
   } else if (*singl_ls) {
     repl_command = build_repl_command ({ "singl", "ls" });
   } else if (*singl_add) {
@@ -567,12 +590,9 @@ cli_handler::parse (int argc, char **argv)
     return { true, 1, std::nullopt };
   }
 
-  if ((*proj_info || *proj_save || *scene_load || *scene_save) && !interactive
-      && !attach) {
-    wsl::log::cli ()->error (
-        "proj info/save and scene load/save require --interactive or --attach");
-    return { true, 1, std::nullopt };
-  }
+  // note: proj info/save and scene load/save previously required
+  // --interactive or --attach but now work standalone (with auto-save
+  // in one-shot mode).
 
   result res;
   if (!project_to_load.empty ()) {

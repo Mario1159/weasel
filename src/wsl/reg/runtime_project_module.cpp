@@ -297,6 +297,43 @@ runtime_project_module::gather_files (const fs::path &base, source_set &out)
   std::sort (out.sources.begin (), out.sources.end (), by_path);
 }
 
+std::size_t
+runtime_project_module::compute_source_hash (const source_set &sources)
+{
+  std::size_t seed = 0;
+
+  auto hash_combine = [] (std::size_t s, std::size_t v) {
+    return s ^ (v + 0x9e3779b9 + (s << 6) + (s >> 2));
+  };
+
+  seed = hash_combine (seed, sources.headers.size ());
+  seed = hash_combine (seed, sources.sources.size ());
+
+  for (const fs::path &path : sources.headers) {
+    seed
+        = hash_combine (seed, std::hash<std::string>{}(path.generic_string ()));
+    std::error_code ec;
+    auto ftime = fs::last_write_time (path, ec);
+    if (!ec) {
+      seed = hash_combine (
+          seed, static_cast<std::size_t> (ftime.time_since_epoch ().count ()));
+    }
+  }
+
+  for (const fs::path &path : sources.sources) {
+    seed
+        = hash_combine (seed, std::hash<std::string>{}(path.generic_string ()));
+    std::error_code ec;
+    auto ftime = fs::last_write_time (path, ec);
+    if (!ec) {
+      seed = hash_combine (
+          seed, static_cast<std::size_t> (ftime.time_since_epoch ().count ()));
+    }
+  }
+
+  return seed;
+}
+
 bool
 runtime_project_module::write_generated_translation_unit (
     const fs::path &generated_path, const source_set &sources)
@@ -536,6 +573,7 @@ runtime_project_module::unload ()
   m_interpreter.reset ();
   m_module_loaded = false;
   m_loaded_project_root.clear ();
+  m_source_hash = 0;
   m_last_status = "Module unloaded.";
 }
 
@@ -564,6 +602,16 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   wsl::log::cmake ()->trace ("Gathered {} headers and {} sources",
                              sources.headers.size (), sources.sources.size ());
 
+  const std::size_t current_hash = compute_source_hash (sources);
+
+  if (m_module_loaded && current_hash == m_source_hash && m_interpreter) {
+    m_loaded_project_root = project_root;
+    m_last_status
+        = "Runtime module is already up to date (no changes detected).";
+    wsl::log::cmake ()->trace ("{}", m_last_status);
+    return true;
+  }
+
   const fs::path build_dir = project_root / "build" / "weasel_runtime";
   fs::create_directories (build_dir);
 
@@ -588,6 +636,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   }
 
   m_module_loaded = true;
+  m_source_hash = current_hash;
   m_last_status = "Runtime systems/components interpreted and registered.";
   wsl::log::cmake ()->trace ("{}", m_last_status);
   return true;

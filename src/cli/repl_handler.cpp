@@ -642,17 +642,33 @@ write_text_file (const std::filesystem::path &path, std::string_view text)
 // ── template generators (mirrors editor/file_list.cpp) ──
 
 std::string
-make_component_header_template (const std::string &class_name, bool header_only)
+make_component_header_template (const std::string &class_name,
+                                const std::string &display_name,
+                                bool header_only)
 {
   std::ostringstream output;
   output << "#pragma once\n\n";
   output << "#include \"wsl/comp/component_meta.hpp\"\n";
   output << "#include \"wsl/reg/runtime_project_module_api.hpp\"\n";
   output << "#include <cereal/cereal.hpp>\n\n";
+  output << "#include <entt/meta/factory.hpp>\n\n";
   output << "namespace wsl::comp\n{\n\n";
   output << "struct " << class_name << " : world_component {\n";
   output << "  float value = 1.0f;\n\n";
-  output << "  static void register_meta();\n\n";
+  if (header_only) {
+    output << "  static void register_meta() {\n";
+    output << "    entt::meta_factory<" << class_name << "> factory\n";
+    output << "        = reflect_type<" << class_name << ">(\n";
+    output << "              entt::type_hash<" << class_name << ">::value(),\n";
+    output << "              \"" << display_name << "\",\n";
+    output << "              \"Describe what this component stores.\");\n";
+    output << "    reflect_field<" << class_name << ",\n";
+    output << "                 &" << class_name << "::value>(\n";
+    output << "        factory, \"value\", {}, \"Example editable field.\");\n";
+    output << "  }\n\n";
+  } else {
+    output << "  static void register_meta();\n\n";
+  }
   output << "  template <class Archive> void serialize(Archive &archive) {\n";
   output << "    archive(cereal::make_nvp(\"value\", value));\n";
   output << "  }\n";
@@ -706,10 +722,24 @@ make_singleton_header_template (const std::string &class_name,
   output << "#include \"wsl/comp/component_meta.hpp\"\n";
   output << "#include \"wsl/reg/runtime_project_module_api.hpp\"\n";
   output << "#include <cereal/cereal.hpp>\n\n";
+  output << "#include <entt/meta/factory.hpp>\n\n";
   output << "namespace wsl::comp\n{\n\n";
   output << "struct " << class_name << " : singleton_component {\n";
   output << "  float value = 1.0f;\n\n";
-  output << "  static void register_meta();\n\n";
+  if (header_only) {
+    output << "  static void register_meta() {\n";
+    output << "    entt::meta_factory<" << class_name << "> factory\n";
+    output << "        = reflect_type<" << class_name << ">(\n";
+    output << "              entt::type_hash<" << class_name << ">::value(),\n";
+    output << "              \"" << display_name << "\",\n";
+    output << "              \"Describe what this singleton stores.\");\n";
+    output << "    reflect_field<" << class_name << ",\n";
+    output << "                 &" << class_name << "::value>(\n";
+    output << "        factory, \"value\", {}, \"Example editable field.\");\n";
+    output << "  }\n\n";
+  } else {
+    output << "  static void register_meta();\n\n";
+  }
   output << "  template <class Archive> void serialize(Archive &archive) {\n";
   output << "    archive(cereal::make_nvp(\"value\", value));\n";
   output << "  }\n";
@@ -802,6 +832,69 @@ command_executor::ensure_runtime_module_loaded ()
   }
   m_rtc.runtime_project_module.finalize_load ();
   wsl::log::cli ()->info ("Runtime module loaded successfully.");
+}
+
+void
+command_executor::auto_save_scene (bool verbose)
+{
+  if (!m_auto_save)
+    return;
+
+  auto *scene = get_active_scene ();
+  if (!scene) {
+    if (verbose)
+      m_output << "Auto-save skipped: no active scene.\n";
+    return;
+  }
+  if (!m_current_project) {
+    if (verbose)
+      m_output << "Auto-save skipped: no project loaded.\n";
+    return;
+  }
+
+  std::filesystem::path scenes_dir (m_current_project->root_path);
+  scenes_dir /= m_current_project->scenes_path;
+  std::string sname
+      = std::filesystem::path (scene->get_name ()).filename ().string ();
+  if (sname.ends_with (".wscn.json"))
+    sname.resize (sname.size () - 10);
+  else if (sname.ends_with (".json"))
+    sname.resize (sname.size () - 5);
+  std::string save_path = (scenes_dir / (sname + ".wscn.json")).string ();
+
+  std::error_code ec;
+  std::filesystem::create_directories (scenes_dir, ec);
+
+  wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, *scene);
+  if (serializer.save_json (save_path)) {
+    if (verbose)
+      m_output << "Auto-saved scene to " << save_path << "\n";
+  } else {
+    m_output << "Auto-save failed for scene to " << save_path << "\n";
+  }
+}
+
+void
+command_executor::auto_save_project ()
+{
+  if (!m_auto_save)
+    return;
+
+  if (!m_current_project) {
+    m_output << "Auto-save skipped: no project loaded.\n";
+    return;
+  }
+
+  std::filesystem::path manifest
+      = std::filesystem::path (m_current_project->root_path)
+        / wsl::rsc::project_loader::manifest_file;
+  std::ofstream file (manifest);
+  if (!file) {
+    m_output << "Auto-save failed for project.\n";
+    return;
+  }
+  cereal::JSONOutputArchive archive (file);
+  archive (cereal::make_nvp ("project", *m_current_project));
 }
 
 std::string
@@ -1041,6 +1134,7 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     }
     if (found) {
       m_output << "Project field '" << field << "' set.\n";
+      auto_save_project ();
     }
   } else if (action == "save") {
     if (!m_current_project) {
@@ -1087,7 +1181,17 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     }
     std::string load_path = tokens[2];
 
-    // Try to resolve by scene name if the given path doesn't exist
+    // Resolve relative paths against the project root
+    if (!std::filesystem::path (load_path).is_absolute ()) {
+      std::string rooted
+          = (std::filesystem::path (m_current_project->root_path) / load_path)
+                .string ();
+      if (std::filesystem::exists (rooted)) {
+        load_path = rooted;
+      }
+    }
+
+    // Try to resolve by scene name if the resolved path doesn't exist
     if (!std::filesystem::exists (load_path)) {
       std::filesystem::path scenes_dir (m_current_project->root_path);
       scenes_dir /= m_current_project->scenes_path;
@@ -1103,16 +1207,35 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       }
     }
 
+    if (!std::filesystem::exists (load_path)) {
+      m_output << "Failed to load scene: file not found '" << tokens[2]
+               << "'.\n";
+      return;
+    }
+
+    // Ensure runtime component types are registered before loading
+    ensure_runtime_module_loaded ();
+
     // Derive scene name from the path basename (strip .wscn.json / .json)
     std::string scene_name
         = std::filesystem::path (load_path).stem ().stem ().string ();
 
-    auto &scene = m_rtc.scene_manager.create_scene (scene_name, true);
-    wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, scene);
-    if (serializer.load_json (load_path)) {
-      m_output << "Scene loaded from " << load_path << "\n";
-    } else
-      m_output << "Failed to load scene.\n";
+    try {
+      auto &scene = m_rtc.scene_manager.create_scene (scene_name, true);
+      wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, scene);
+      if (serializer.load_json (load_path)) {
+        m_output << "Scene loaded from " << load_path << "\n";
+      } else {
+        m_output << "Failed to load scene from '" << load_path
+                 << "' (could not open file).\n";
+      }
+    } catch (const std::exception &e) {
+      m_output << "Failed to load scene from '" << load_path
+               << "': " << e.what () << "\n";
+    } catch (...) {
+      m_output << "Failed to load scene from '" << load_path
+               << "': unknown error.\n";
+    }
   } else if (action == "save") {
     auto *scene = get_active_scene ();
     if (!scene) {
@@ -1250,6 +1373,7 @@ command_executor::cmd_ent (const std::vector<std::string> &tokens)
         m_output << " (" << tokens[name_idx] << ")";
       m_output << " created with Transform, WorldTransform, Hierarchy.\n";
     }
+    auto_save_scene ();
   } else if (action == "ls") {
     for (auto [e] : scene->get_registry ().storage<entt::entity> ().each ()) {
       m_output << "ID: " << (uint32_t)e
@@ -1261,6 +1385,7 @@ command_executor::cmd_ent (const std::vector<std::string> &tokens)
     entt::entity e = (entt::entity)std::stoul (tokens[2]);
     scene->get_registry ().destroy (e);
     m_output << "Entity " << tokens[2] << " destroyed.\n";
+    auto_save_scene ();
   } else if (action == "ren") {
     if (tokens.size () < 4)
       return;
@@ -1268,6 +1393,7 @@ command_executor::cmd_ent (const std::vector<std::string> &tokens)
     scene->set_entity_name (e, tokens[3]);
     m_output << "Entity " << tokens[2] << " renamed to '" << tokens[3]
              << "'.\n";
+    auto_save_scene ();
   } else if (action == "inspect") {
     if (tokens.size () < 3)
       return;
@@ -1351,8 +1477,8 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
       return;
     }
 
-    std::string header_text
-        = make_component_header_template (class_name, header_only);
+    std::string header_text = make_component_header_template (
+        class_name, display_name, header_only);
     if (!write_text_file (header_path, header_text)) {
       m_output << "Failed to write header.\n";
       return;
@@ -1410,6 +1536,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     if (descriptor && descriptor->emplace_default) {
       if (descriptor->emplace_default (scene->get_registry (), e)) {
         m_output << "Added " << tokens[3] << " to " << tokens[2] << "\n";
+        auto_save_scene ();
       } else {
         m_output << "Failed to add " << tokens[3] << " to " << tokens[2]
                  << " (already has it or entity invalid)\n";
@@ -1425,6 +1552,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     if (descriptor && descriptor->remove) {
       if (descriptor->remove (scene->get_registry (), e)) {
         m_output << "Removed " << tokens[3] << " from " << tokens[2] << "\n";
+        auto_save_scene ();
       } else {
         m_output << "Failed to remove " << tokens[3] << " from " << tokens[2]
                  << " (entity doesn't have this component or entity invalid)\n";
@@ -1588,6 +1716,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
 
       m_output << "Set " << tokens[3] << "." << tokens[4] << " = " << tokens[5]
                << " (" << set_msg << ")\n";
+      auto_save_scene ();
     } else {
       m_output << "Failed to set " << tokens[3] << "." << tokens[4] << ": "
                << set_msg << "\n";
@@ -1665,6 +1794,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     }
     desc->emplace_default (scene->get_registry ());
     m_output << "Added singleton: " << desc->display_name << "\n";
+    auto_save_scene ();
     return;
   }
 
@@ -1861,6 +1991,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
 
       m_output << "Set " << desc->display_name << "." << tokens[3] << " = "
                << tokens[4] << " (" << set_msg << ")\n";
+      auto_save_scene ();
     } else {
       m_output << "Failed to set " << desc->display_name << "." << tokens[3]
                << ": " << set_msg << "\n";
@@ -2053,6 +2184,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       if (sys) {
         scene->add_system_instance (std::move (sys));
         m_output << "Added system '" << sys_name << "' to active scene.\n";
+        auto_save_scene ();
       }
     }
   } else {
@@ -2632,6 +2764,10 @@ command_executor::cmd_help ()
   m_output
       << "Weasel Engine REPL - Available Commands\n"
       << "======================================\n\n"
+      << "Save policy:\n"
+      << "  One-shot mode (no -i/-a): changes auto-save to disk after each\n"
+      << "  mutation command. Interactive/attach mode: save manually via\n"
+      << "  scene save / proj save.\n\n"
       << "Project:\n"
       << "  proj new <path> <name>     Create a new project at path with name\n"
       << "  proj load <path>           Load an existing project\n"
@@ -2659,7 +2795,7 @@ command_executor::cmd_help ()
       << "Component:\n"
       << "  comp avail                 List all registered component types\n"
       << "  comp ls [id]               List components on an entity, or all "
-      << "types\n"
+         "types\n"
       << "  comp add <id> <type>       Add a component to entity by type name\n"
       << "  comp rm <id> <type>        Remove a component from entity\n"
       << "  comp set <id> <type> <prop> <val>   Set a component property\n"
@@ -2716,6 +2852,15 @@ command_executor::cmd_help ()
 repl_handler::repl_handler (const std::string &engine_res_path, bool attach)
     : m_engine_res_path (engine_res_path), m_attach (attach)
 {
+}
+
+void
+repl_handler::set_auto_save (bool enabled)
+{
+  ensure_local_executor ();
+  if (m_local_executor) {
+    m_local_executor->set_auto_save (enabled);
+  }
 }
 
 void

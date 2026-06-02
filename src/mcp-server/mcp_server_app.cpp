@@ -100,7 +100,14 @@ handle_get_quick_start (const mcp::json &params)
          "Level1\n\n";
   oss << "3. Validate a project:\n";
   oss << "   weasel-cli validate-project ./mygame/wslpro.json\n\n";
-  oss << "4. Start the interactive REPL:\n";
+  oss << "4. One-shot scripting (auto-save):\n";
+  oss << "   weasel-cli --project ./mygame/wslpro.json --scene Level1 \\\n";
+  oss << "       ent new Player\n";
+  oss << "   weasel-cli --project ./mygame/wslpro.json --scene Level1 \\\n";
+  oss << "       comp add 0 rigid_body\n";
+  oss << "   Each mutation command auto-saves the scene to disk. No \\\n";
+  oss << "   explicit save needed.\n\n";
+  oss << "5. Start the interactive REPL (manual save):\n";
   oss << "   weasel-cli --project ./mygame/wslpro.json --interactive\n\n";
   oss << "   Inside the REPL you can manage entities, components, scenes, and "
          "more:\n";
@@ -118,9 +125,9 @@ handle_get_quick_start (const mcp::json &params)
   oss << "     comp set 0 rigid_body radius 0.5      # Set radius\n";
   oss << "     comp rm 0 rigid_body          # Remove component\n";
   oss << "     ent inspect 0                 # Inspect entity\n";
-  oss << "     scene save                    # Save scene\n";
+  oss << "     scene save                    # Save scene (manual in REPL)\n";
   oss << "     help                          # Show full command reference\n\n";
-  oss << "5. Attach to a running editor:\n";
+  oss << "6. Attach to a running editor:\n";
   oss << "   weasel-cli --project ./mygame/wslpro.json --attach\n\n";
   oss << "For full command reference, use the list_commands and "
          "describe_command tools.\n";
@@ -138,6 +145,12 @@ handle_cli_capabilities (const mcp::json &params)
   std::ostringstream oss;
   oss << "Weasel CLI/REPL Capabilities Manifest\n";
   oss << "======================================\n\n";
+
+  oss << "== Save Policy ==\n";
+  oss << "  One-shot mode (no --interactive/--attach): mutation commands\n";
+  oss << "  auto-save the active scene and project after each change.\n";
+  oss << "  Interactive/attach mode: save manually via scene save / proj "
+         "save.\n\n";
 
   oss << "== Fully Implemented ==\n";
   oss << "  proj new        - Create and load a new project\n";

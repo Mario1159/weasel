@@ -21,6 +21,13 @@ public:
   // Execute a command and return the output
   std::string execute (const std::string &line);
 
+  // Enable auto-save after mutation commands (used for one-shot CLI mode)
+  void
+  set_auto_save (bool enabled)
+  {
+    m_auto_save = enabled;
+  }
+
   static std::vector<std::string> tokenize (const std::string &line);
 
 private:
@@ -39,9 +46,13 @@ private:
 
   wsl::rsc::scene *get_active_scene ();
 
+  void auto_save_scene (bool verbose = true);
+  void auto_save_project ();
+
   wsl::comp::singl::runtime_context &m_rtc;
   std::shared_ptr<wsl::rsc::project> m_current_project;
   std::ostringstream m_output;
+  bool m_auto_save = false;
 };
 
 } // namespace wsl::cli

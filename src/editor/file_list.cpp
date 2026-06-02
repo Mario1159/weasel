@@ -119,17 +119,35 @@ write_text_file (const std::filesystem::path &path, std::string_view text)
 }
 
 std::string
-make_component_header_template (const std::string &class_name, bool header_only)
+make_component_header_template (const std::string &class_name,
+                                const std::string &display_name,
+                                bool header_only)
 {
   std::ostringstream output;
   output << "#pragma once\n\n";
   output << "#include \"wsl/comp/component_meta.hpp\"\n";
   output << "#include \"wsl/reg/runtime_project_module_api.hpp\"\n";
   output << "#include <cereal/cereal.hpp>\n\n";
+  output << "#include <entt/meta/factory.hpp>\n\n";
   output << "namespace wsl::comp\n{\n\n";
   output << "struct " << class_name << " : world_component {\n";
   output << "  float value = 1.0f;\n\n";
-  output << "  static void register_meta();\n\n";
+
+  if (header_only) {
+    output << "  static void register_meta() {\n";
+    output << "    entt::meta_factory<" << class_name << "> factory\n";
+    output << "        = reflect_type<" << class_name << ">(\n";
+    output << "              entt::type_hash<" << class_name << ">::value(),\n";
+    output << "              \"" << display_name << "\",\n";
+    output << "              \"Describe what this component stores.\");\n";
+    output << "    reflect_field<" << class_name << ",\n";
+    output << "                 &" << class_name << "::value>(\n";
+    output << "        factory, \"value\", {}, \"Example editable field.\");\n";
+    output << "  }\n\n";
+  } else {
+    output << "  static void register_meta();\n\n";
+  }
+
   output << "  template <class Archive> void serialize(Archive &archive) {\n";
   output << "    archive(cereal::make_nvp(\"value\", value));\n";
   output << "  }\n";
@@ -154,17 +172,22 @@ make_component_source_template (const std::string &header_name,
   output << "#include <entt/meta/factory.hpp>\n\n";
   output << "void wsl::comp::" << class_name << "::register_meta() {\n";
   output << "  entt::meta_factory<wsl::comp::" << class_name << "> factory\n";
-  output << "      = wsl::comp::reflect_type<wsl::comp::" << class_name << ">(\n";
-  output << "            entt::type_hash<wsl::comp::" << class_name << ">::value(),\n";
+  output << "      = wsl::comp::reflect_type<wsl::comp::" << class_name
+         << ">(\n";
+  output << "            entt::type_hash<wsl::comp::" << class_name
+         << ">::value(),\n";
   output << "            \"" << display_name << "\",\n";
-  output << "            \"Describe what this " << (is_singleton ? "singleton" : "component") << " stores.\");\n\n";
+  output << "            \"Describe what this "
+         << (is_singleton ? "singleton" : "component") << " stores.\");\n\n";
   output << "  wsl::comp::reflect_field<wsl::comp::" << class_name << ",\n";
-  output << "                           &wsl::comp::" << class_name << "::value>(\n";
+  output << "                           &wsl::comp::" << class_name
+         << "::value>(\n";
   output << "      factory, \"value\", {}, \"Example editable field.\");\n";
   output << "}\n\n";
 
   if (is_singleton) {
-    output << "WEASEL_RUNTIME_SINGLETON(wsl::comp::" << class_name << ", \"" << display_name << "\")\n";
+    output << "WEASEL_RUNTIME_SINGLETON(wsl::comp::" << class_name << ", \""
+           << display_name << "\")\n";
   } else {
     output << "WEASEL_RUNTIME_COMPONENT(wsl::comp::" << class_name << ")\n";
   }
@@ -182,10 +205,26 @@ make_singleton_header_template (const std::string &class_name,
   output << "#include \"wsl/comp/component_meta.hpp\"\n";
   output << "#include \"wsl/reg/runtime_project_module_api.hpp\"\n";
   output << "#include <cereal/cereal.hpp>\n\n";
+  output << "#include <entt/meta/factory.hpp>\n\n";
   output << "namespace wsl::comp\n{\n\n";
   output << "struct " << class_name << " : singleton_component {\n";
   output << "  float value = 1.0f;\n\n";
-  output << "  static void register_meta();\n\n";
+
+  if (header_only) {
+    output << "  static void register_meta() {\n";
+    output << "    entt::meta_factory<" << class_name << "> factory\n";
+    output << "        = reflect_type<" << class_name << ">(\n";
+    output << "              entt::type_hash<" << class_name << ">::value(),\n";
+    output << "              \"" << display_name << "\",\n";
+    output << "              \"Describe what this singleton stores.\");\n";
+    output << "    reflect_field<" << class_name << ",\n";
+    output << "                 &" << class_name << "::value>(\n";
+    output << "        factory, \"value\", {}, \"Example editable field.\");\n";
+    output << "  }\n\n";
+  } else {
+    output << "  static void register_meta();\n\n";
+  }
+
   output << "  template <class Archive> void serialize(Archive &archive) {\n";
   output << "    archive(cereal::make_nvp(\"value\", value));\n";
   output << "  }\n";
@@ -213,15 +252,18 @@ make_system_header_template (const std::string &class_name,
          << "> {\n";
   output << "public:\n";
   output << "  using ecs_system_t::ecs_system_t;\n\n";
-  output << "  void register_signals(wsl::reg::sig::signal_hub &hub) override {}\n";
-  output << "  void register_event_handlers(wsl::reg::sig::signal_hub &hub) override {}\n";
-  output << "  void register_iterations(wsl::reg::sig::signal_hub &hub) override {}\n";
+  output << "  void register_signals(wsl::reg::sig::signal_hub &hub) override "
+            "{}\n";
+  output << "  void register_event_handlers(wsl::reg::sig::signal_hub &hub) "
+            "override {}\n";
+  output << "  void register_iterations(wsl::reg::sig::signal_hub &hub) "
+            "override {}\n";
   output << "};\n\n";
   output << "} // namespace wsl::sys\n";
 
   if (header_only) {
-    output << "\nWEASEL_RUNTIME_SYSTEM(wsl::sys::" << class_name << ", \"" << display_name
-           << "\")\n";
+    output << "\nWEASEL_RUNTIME_SYSTEM(wsl::sys::" << class_name << ", \""
+           << display_name << "\")\n";
   }
 
   return output.str ();
@@ -234,7 +276,8 @@ make_system_source_template (const std::string &header_name,
 {
   std::ostringstream output;
   output << "#include \"" << header_name << "\"\n\n";
-  output << "WEASEL_RUNTIME_SYSTEM(wsl::sys::" << class_name << ", \"" << display_name << "\")\n";
+  output << "WEASEL_RUNTIME_SYSTEM(wsl::sys::" << class_name << ", \""
+         << display_name << "\")\n";
   return output.str ();
 }
 
@@ -294,9 +337,8 @@ file_list::gather_files_with_extensions (const std::filesystem::path &base,
     }
   }
 
-  std::sort (out.begin (), out.end (), [] (const entry &a, const entry &b) {
-    return a.label < b.label;
-  });
+  std::sort (out.begin (), out.end (),
+             [] (const entry &a, const entry &b) { return a.label < b.label; });
 }
 
 void
@@ -360,7 +402,9 @@ file_list::refresh_if_needed (wsl::rsc::resource_manager *resources)
   gather_cpp_hpp (singl, singleton_files);
   gather_cpp_hpp (sys, system_files);
   gather_files_with_extensions (ui, { ".rml", ".rcss" }, ui_layout_files);
-  gather_files_with_extensions (shaders, { ".hlsl", ".spv", ".dxil", ".metal", ".vert", ".frag" }, shader_files);
+  gather_files_with_extensions (
+      shaders, { ".hlsl", ".spv", ".dxil", ".metal", ".vert", ".frag" },
+      shader_files);
 
   if (!pending_open_path.empty ()) {
     if (select_entry_by_path (component_files, pending_open_path,
@@ -426,7 +470,8 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
   auto proj = (resources != nullptr) ? resources->current_project () : nullptr;
   const bool is_system = pending_create_kind == create_kind::system;
   const bool is_singleton = pending_create_kind == create_kind::singleton;
-  const char *kind_label = is_system ? "system" : (is_singleton ? "singleton" : "component");
+  const char *kind_label
+      = is_system ? "system" : (is_singleton ? "singleton" : "component");
 
   if (!ImGui::BeginPopupModal ("Create Runtime Script", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -438,7 +483,9 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
   if (proj) {
     const std::filesystem::path base_dir
         = std::filesystem::path (proj->root_path)
-          / (is_system ? proj->systems_path : (is_singleton ? proj->singletons_path : proj->components_path));
+          / (is_system ? proj->systems_path
+                       : (is_singleton ? proj->singletons_path
+                                       : proj->components_path));
     const std::string base_dir_str = base_dir.lexically_normal ().string ();
     ImGui::TextDisabled ("%s", base_dir_str.c_str ());
   }
@@ -487,13 +534,15 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
         const std::string display_name = to_title_case (tokens);
 
         if (class_name.empty ()
-            || (std::isdigit (
-                static_cast<unsigned char> (class_name.front ())) != 0)) {
+            || (std::isdigit (static_cast<unsigned char> (class_name.front ()))
+                != 0)) {
           create_error = "The generated class name must start with a letter.";
         } else {
           const std::filesystem::path base_dir
               = std::filesystem::path (proj->root_path)
-                / (is_system ? proj->systems_path : (is_singleton ? proj->singletons_path : proj->components_path));
+                / (is_system ? proj->systems_path
+                             : (is_singleton ? proj->singletons_path
+                                             : proj->components_path));
           const std::filesystem::path header_path
               = base_dir / (file_stem + ".hpp");
           const std::filesystem::path source_path
@@ -504,29 +553,34 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
           if (ec) {
             create_error = "Could not create the target folder.";
           } else if (std::filesystem::exists (header_path)
-                     || (!create_header_only && std::filesystem::exists (source_path))) {
+                     || (!create_header_only
+                         && std::filesystem::exists (source_path))) {
             create_error = "A file with that name already exists in "
                            "the project.";
           } else {
             const std::string header_name = header_path.filename ().string ();
             std::string header_text;
             if (is_system) {
-              header_text = make_system_header_template (class_name, display_name, create_header_only);
+              header_text = make_system_header_template (
+                  class_name, display_name, create_header_only);
             } else if (is_singleton) {
-              header_text = make_singleton_header_template (class_name, display_name, create_header_only);
+              header_text = make_singleton_header_template (
+                  class_name, display_name, create_header_only);
             } else {
-              header_text = make_component_header_template (class_name, create_header_only);
+              header_text = make_component_header_template (
+                  class_name, display_name, create_header_only);
             }
 
             const std::string source_text
                 = is_system
                       ? make_system_source_template (header_name, class_name,
                                                      display_name)
-                      : (is_singleton ? make_component_source_template (
-                             header_name, class_name, display_name, true)
-                                      : make_component_source_template (
-                                          header_name, class_name,
-                                          display_name, false));
+                      : (is_singleton
+                             ? make_component_source_template (
+                                   header_name, class_name, display_name, true)
+                             : make_component_source_template (
+                                   header_name, class_name, display_name,
+                                   false));
 
             bool success = write_text_file (header_path, header_text);
             if (success && !create_header_only) {
@@ -562,8 +616,9 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
 
 void
 file_list::draw (const char *title, bool *p_open,
-                 wsl::rsc::resource_manager *resources, editor::text_editor *editor,
-                 bool *show_editor, wsl::comp::singl::runtime_context *runtime_ctx)
+                 wsl::rsc::resource_manager *resources,
+                 editor::text_editor *editor, bool *show_editor,
+                 wsl::comp::singl::runtime_context *runtime_ctx)
 {
   refresh_if_needed (resources);
 
@@ -576,7 +631,9 @@ file_list::draw (const char *title, bool *p_open,
   draw_create_popup (resources, editor, show_editor);
 
   if (ImSearch::BeginSearch ()) {
-    if (ImGui::Button ("+##unified_create", ImVec2 (ImGui::GetFrameHeight (), ImGui::GetFrameHeight ()))) {
+    if (ImGui::Button (
+            "+##unified_create",
+            ImVec2 (ImGui::GetFrameHeight (), ImGui::GetFrameHeight ()))) {
       ImGui::OpenPopup ("UnifiedCreatePopup");
     }
     ImGui::SameLine ();
@@ -589,14 +646,17 @@ file_list::draw (const char *title, bool *p_open,
 
       auto *editor_ctx = runtime_ctx->editor_ctx;
       if (editor_ctx != nullptr) {
-        auto handle = editor_ctx->editor_resources.get (editor_ctx->icon_refresh);
+        auto handle
+            = editor_ctx->editor_resources.get (editor_ctx->icon_refresh);
         const float btn_size = ImGui::GetFrameHeight ();
         const float icon_padding = 4.0F;
         const float icon_size = btn_size - (icon_padding * 2.0F);
 
         if (handle && (handle->texture != nullptr)) {
-          ImGui::PushStyleVar (ImGuiStyleVar_FramePadding, ImVec2 (icon_padding, icon_padding));
-          if (ImGui::ImageButton ("##reload_scripts", (ImTextureID)handle->texture,
+          ImGui::PushStyleVar (ImGuiStyleVar_FramePadding,
+                               ImVec2 (icon_padding, icon_padding));
+          if (ImGui::ImageButton ("##reload_scripts",
+                                  (ImTextureID)handle->texture,
                                   ImVec2 (icon_size, icon_size))) {
             if (proj) {
               runtime_ctx->runtime_project_module.compile_and_load (*proj);
@@ -605,7 +665,8 @@ file_list::draw (const char *title, bool *p_open,
           }
           ImGui::PopStyleVar ();
         } else {
-          if (ImGui::Button ("R##reload_scripts", ImVec2 (btn_size, btn_size))) {
+          if (ImGui::Button ("R##reload_scripts",
+                             ImVec2 (btn_size, btn_size))) {
             if (proj) {
               runtime_ctx->runtime_project_module.compile_and_load (*proj);
               runtime_ctx->runtime_project_module.finalize_load ();
@@ -631,28 +692,28 @@ file_list::draw (const char *title, bool *p_open,
       if (ImGui::BeginMenu ("World Component")) {
         if (ImGui::MenuItem ("Header Only")) {
           queue_create_popup (create_kind::component, true);
-}
+        }
         if (ImGui::MenuItem ("Header and Source")) {
           queue_create_popup (create_kind::component, false);
-}
+        }
         ImGui::EndMenu ();
       }
       if (ImGui::BeginMenu ("Singleton Component")) {
         if (ImGui::MenuItem ("Header Only")) {
           queue_create_popup (create_kind::singleton, true);
-}
+        }
         if (ImGui::MenuItem ("Header and Source")) {
           queue_create_popup (create_kind::singleton, false);
-}
+        }
         ImGui::EndMenu ();
       }
       if (ImGui::BeginMenu ("System")) {
         if (ImGui::MenuItem ("Header Only")) {
           queue_create_popup (create_kind::system, true);
-}
+        }
         if (ImGui::MenuItem ("Header and Source")) {
           queue_create_popup (create_kind::system, false);
-}
+        }
         ImGui::EndMenu ();
       }
       ImGui::EndPopup ();
@@ -660,9 +721,11 @@ file_list::draw (const char *title, bool *p_open,
 
     ImGui::BeginChild ("##files_merged_list", ImVec2 (0, 0), 1);
 
-    auto draw_file_entry = [&] (const std::vector<entry> &files, int &selected_idx) {
+    auto draw_file_entry = [&] (const std::vector<entry> &files,
+                                int &selected_idx) {
       for (int i = 0; i < (int)files.size (); ++i) {
-        ImSearch::SearchableItem (files[i].label.c_str (), [&, i] (const char *) {
+        ImSearch::SearchableItem (files[i].label.c_str (), [&,
+                                                            i] (const char *) {
           const bool is_this_selected = (selected_idx == i);
           if (ImGui::Selectable (files[i].label.c_str (), is_this_selected)) {
             selected_comp = -1;
@@ -673,10 +736,10 @@ file_list::draw (const char *title, bool *p_open,
             selected_idx = i;
             if (show_editor) {
               *show_editor = true;
-}
+            }
             if (editor) {
               editor->open_file (files[i].path.c_str ());
-}
+            }
           }
         });
       }
@@ -684,23 +747,33 @@ file_list::draw (const char *title, bool *p_open,
 
     // Category 1: World Components
     if (ImSearch::PushSearchable ("World Components", [] (const char *name) {
-          return ImGui::TreeNodeEx (name, ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DrawLinesFull);
+          return ImGui::TreeNodeEx (name,
+                                    ImGuiTreeNodeFlags_DefaultOpen
+                                        | ImGuiTreeNodeFlags_SpanAvailWidth
+                                        | ImGuiTreeNodeFlags_DrawLinesFull);
         })) {
       draw_file_entry (component_files, selected_comp);
       ImSearch::PopSearchable ([] () { ImGui::TreePop (); });
     }
 
     // Category 2: Singleton Components
-    if (ImSearch::PushSearchable ("Singleton Components", [] (const char *name) {
-          return ImGui::TreeNodeEx (name, ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DrawLinesFull);
-        })) {
+    if (ImSearch::PushSearchable (
+            "Singleton Components", [] (const char *name) {
+              return ImGui::TreeNodeEx (name,
+                                        ImGuiTreeNodeFlags_DefaultOpen
+                                            | ImGuiTreeNodeFlags_SpanAvailWidth
+                                            | ImGuiTreeNodeFlags_DrawLinesFull);
+            })) {
       draw_file_entry (singleton_files, selected_singleton);
       ImSearch::PopSearchable ([] () { ImGui::TreePop (); });
     }
 
     // Category 3: Systems
     if (ImSearch::PushSearchable ("Systems", [] (const char *name) {
-          return ImGui::TreeNodeEx (name, ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DrawLinesFull);
+          return ImGui::TreeNodeEx (name,
+                                    ImGuiTreeNodeFlags_DefaultOpen
+                                        | ImGuiTreeNodeFlags_SpanAvailWidth
+                                        | ImGuiTreeNodeFlags_DrawLinesFull);
         })) {
       draw_file_entry (system_files, selected_sys);
       ImSearch::PopSearchable ([] () { ImGui::TreePop (); });
@@ -708,7 +781,10 @@ file_list::draw (const char *title, bool *p_open,
 
     // Category 4: UI Layouts
     if (ImSearch::PushSearchable ("UI Layouts", [] (const char *name) {
-          return ImGui::TreeNodeEx (name, ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DrawLinesFull);
+          return ImGui::TreeNodeEx (name,
+                                    ImGuiTreeNodeFlags_DefaultOpen
+                                        | ImGuiTreeNodeFlags_SpanAvailWidth
+                                        | ImGuiTreeNodeFlags_DrawLinesFull);
         })) {
       draw_file_entry (ui_layout_files, selected_ui);
       ImSearch::PopSearchable ([] () { ImGui::TreePop (); });
@@ -716,7 +792,10 @@ file_list::draw (const char *title, bool *p_open,
 
     // Category 5: Shaders
     if (ImSearch::PushSearchable ("Shaders", [] (const char *name) {
-          return ImGui::TreeNodeEx (name, ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DrawLinesFull);
+          return ImGui::TreeNodeEx (name,
+                                    ImGuiTreeNodeFlags_DefaultOpen
+                                        | ImGuiTreeNodeFlags_SpanAvailWidth
+                                        | ImGuiTreeNodeFlags_DrawLinesFull);
         })) {
       draw_file_entry (shader_files, selected_shader);
       ImSearch::PopSearchable ([] () { ImGui::TreePop (); });
