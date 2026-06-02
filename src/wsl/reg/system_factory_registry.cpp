@@ -16,6 +16,17 @@ namespace wsl
 namespace reg
 {
 
+namespace
+{
+
+class cached_runtime_system : public sys::ecs_system_t<cached_runtime_system>
+{
+public:
+  using ecs_system_t::ecs_system_t;
+};
+
+} // namespace
+
 void
 system_factory_registry::register_system_factory (
     system_factory_fn factory, const system_registration_options &options)
@@ -28,6 +39,27 @@ system_factory_registry::register_system_factory (
   // We don't have a type_id for custom factories unless they are registered
   // through register_system_type. For custom factories, we use the display
   // name as the primary identity.
+  m_factories[desc.display_name] = std::move (desc);
+}
+
+void
+system_factory_registry::register_cached_runtime_system (
+    entt::id_type type_id, std::string_view type_name,
+    std::string_view display_name)
+{
+  system_descriptor desc{};
+  desc.type_id = type_id;
+  desc.type_name = std::string (type_name);
+  desc.display_name = display_name.empty ()
+                          ? comp::humanize_identifier (type_name)
+                          : std::string (display_name);
+  desc.runtime_registered = true;
+  desc.factory = [display_name = desc.display_name] (rsc::scene &) {
+    return std::make_unique<cached_runtime_system> (display_name);
+  };
+
+  m_type_to_name[desc.type_id] = desc.display_name;
+  m_type_name_to_display_name[desc.type_name] = desc.display_name;
   m_factories[desc.display_name] = std::move (desc);
 }
 
@@ -219,6 +251,7 @@ system_factory_registry::clear_runtime_systems ()
             it = m_factories.find (name);
         it != m_factories.end ()) {
       m_type_to_name.erase (it->second.type_id);
+      m_type_name_to_display_name.erase (it->second.type_name);
     }
     m_factories.erase (name);
   }

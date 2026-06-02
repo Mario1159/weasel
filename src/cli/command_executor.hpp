@@ -42,7 +42,7 @@ private:
   void cmd_rsc (const std::vector<std::string> &tokens);
   void cmd_help ();
 
-  void ensure_runtime_module_loaded ();
+  void ensure_runtime_module_loaded (bool allow_cached_metadata = false);
 
   wsl::rsc::scene *get_active_scene ();
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -66,6 +67,14 @@ public:
   bool compile_and_load (const rsc::project &project);
 
   /*!
+   * \brief Loads cached runtime registration metadata for a project.
+   *
+   * This is a fast path for commands that only need runtime names and system
+   * placeholders. It does not load user C++ types.
+   */
+  bool load_cached_metadata (const rsc::project &project);
+
+  /*!
    * \brief Finalizes the loading process on the main thread.
    *
    * This clears the registries and applies the interpreted registrations.
@@ -97,6 +106,30 @@ public:
     return m_module_loaded;
   }
 
+  /*!
+   * \brief Reports whether cached runtime metadata is active.
+   */
+  bool
+  has_loaded_cached_metadata () const
+  {
+    return m_metadata_cache_loaded;
+  }
+
+  struct cached_registration
+  {
+    std::uint64_t type_id = 0;
+    std::string type_name;
+    std::string display_name;
+  };
+
+  struct registration_cache
+  {
+    std::size_t source_hash = 0;
+    std::vector<cached_registration> components;
+    std::vector<cached_registration> singletons;
+    std::vector<cached_registration> systems;
+  };
+
 private:
   struct source_set
   {
@@ -107,6 +140,17 @@ private:
   static void gather_files (const std::filesystem::path &base, source_set &out);
 
   static std::size_t compute_source_hash (const source_set &sources);
+
+  static std::filesystem::path
+  registration_cache_path (const std::filesystem::path &project_root);
+
+  static bool read_registration_cache (const std::filesystem::path &path,
+                                       std::size_t source_hash,
+                                       registration_cache &out);
+
+  bool write_registration_cache () const;
+
+  void apply_registration_cache (const registration_cache &cache);
 
   static bool
   write_generated_translation_unit (const std::filesystem::path &generated_path,
@@ -119,6 +163,7 @@ private:
   std::filesystem::path m_loaded_project_root;
   std::string m_last_status;
   bool m_module_loaded = false;
+  bool m_metadata_cache_loaded = false;
   std::size_t m_source_hash = 0;
 
   std::vector<std::string> m_interpreter_args_storage;

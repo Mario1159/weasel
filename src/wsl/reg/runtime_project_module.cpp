@@ -6,6 +6,8 @@
 
 #include <cctype>
 #include <cereal/external/rapidjson/document.h>
+#include <cereal/external/rapidjson/stringbuffer.h>
+#include <cereal/external/rapidjson/writer.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Interpreter/Interpreter.h>
 #include <cstddef>
@@ -45,6 +47,8 @@ namespace
 
 constexpr std::string_view k_generated_module_file
     = "runtime_module.generated.cpp";
+constexpr std::string_view k_registration_cache_file
+    = "runtime_registration_cache.json";
 
 bool
 is_cpp_file (const fs::path &path)
@@ -223,6 +227,73 @@ clear_runtime_registries (comp::singl::runtime_context &runtime_ctx)
   runtime_ctx.system_factory_registry.clear_runtime_systems ();
 }
 
+void
+write_cached_registration (
+    rapidjson::Writer<rapidjson::StringBuffer> &writer,
+    const runtime_project_module::cached_registration &registration)
+{
+  writer.StartObject ();
+  writer.Key ("type_id");
+  writer.Uint64 (registration.type_id);
+  writer.Key ("type_name");
+  writer.String (registration.type_name.c_str (),
+                 static_cast<rapidjson::SizeType> (
+                     registration.type_name.size ()));
+  writer.Key ("display_name");
+  writer.String (registration.display_name.c_str (),
+                 static_cast<rapidjson::SizeType> (
+                     registration.display_name.size ()));
+  writer.EndObject ();
+}
+
+template <typename Descriptor>
+runtime_project_module::cached_registration
+make_cached_registration (const Descriptor &descriptor)
+{
+  runtime_project_module::cached_registration registration{};
+  registration.type_id = descriptor.type_id;
+  registration.type_name = descriptor.type_name;
+  registration.display_name = descriptor.display_name;
+  return registration;
+}
+
+bool
+read_cached_registration (const rapidjson::Value &value,
+                          runtime_project_module::cached_registration &out)
+{
+  if (!value.IsObject () || !value.HasMember ("type_id")
+      || !value.HasMember ("type_name") || !value.HasMember ("display_name")
+      || !value["type_id"].IsUint64 () || !value["type_name"].IsString ()
+      || !value["display_name"].IsString ()) {
+    return false;
+  }
+
+  out.type_id = value["type_id"].GetUint64 ();
+  out.type_name = value["type_name"].GetString ();
+  out.display_name = value["display_name"].GetString ();
+  return true;
+}
+
+bool
+read_cached_registration_array (
+    const rapidjson::Document &doc, const char *name,
+    std::vector<runtime_project_module::cached_registration> &out)
+{
+  if (!doc.HasMember (name) || !doc[name].IsArray ()) {
+    return false;
+  }
+
+  for (const rapidjson::Value &value : doc[name].GetArray ()) {
+    runtime_project_module::cached_registration registration{};
+    if (!read_cached_registration (value, registration)) {
+      return false;
+    }
+    out.push_back (std::move (registration));
+  }
+
+  return true;
+}
+
 std::size_t
 apply_interpreted_registrations (runtime_module_registration_context &ctx)
 {
@@ -332,6 +403,158 @@ runtime_project_module::compute_source_hash (const source_set &sources)
   }
 
   return seed;
+}
+
+fs::path
+runtime_project_module::registration_cache_path (const fs::path &project_root)
+{
+  return project_root / "build" / "weasel_runtime"
+         / k_registration_cache_file;
+}
+
+bool
+runtime_project_module::read_registration_cache (const fs::path &path,
+                                                 std::size_t source_hash,
+                                                 registration_cache &out)
+{
+  std::ifstream input (path);
+  if (!input) {
+    return false;
+  }
+
+  std::string const content ((std::istreambuf_iterator<char> (input)),
+                             std::istreambuf_iterator<char> ());
+  rapidjson::Document doc;
+  if (doc.Parse (content.c_str ()).HasParseError () || !doc.IsObject ()) {
+    return false;
+  }
+
+  if (!doc.HasMember ("version") || !doc["version"].IsUint ()
+      || doc["version"].GetUint () != 1 || !doc.HasMember ("source_hash")
+      || !doc["source_hash"].IsUint64 ()) {
+    return false;
+  }
+
+  if (static_cast<std::size_t> (doc["source_hash"].GetUint64 ())
+      != source_hash) {
+    return false;
+  }
+
+  registration_cache cache{};
+  cache.source_hash = source_hash;
+  if (!read_cached_registration_array (doc, "components", cache.components)
+      || !read_cached_registration_array (doc, "singletons",
+                                          cache.singletons)
+      || !read_cached_registration_array (doc, "systems", cache.systems)) {
+    return false;
+  }
+
+  out = std::move (cache);
+  return true;
+}
+
+bool
+runtime_project_module::write_registration_cache () const
+{
+  if (m_runtime_ctx == nullptr || m_loaded_project_root.empty ()
+      || m_source_hash == 0) {
+    return false;
+  }
+
+  registration_cache cache{};
+  cache.source_hash = m_source_hash;
+
+  for (const component_registry::descriptor *desc :
+       m_runtime_ctx->component_registry.get_world_components (
+           world_component_order::type_id)) {
+    if (desc != nullptr && desc->runtime_registered) {
+      cache.components.push_back (make_cached_registration (*desc));
+    }
+  }
+
+  for (const singleton_registry::descriptor *desc :
+       m_runtime_ctx->singleton_registry.get_singleton_components (
+           singleton_component_order::type_id)) {
+    if (desc != nullptr && desc->runtime_registered) {
+      cache.singletons.push_back (make_cached_registration (*desc));
+    }
+  }
+
+  for (const system_factory_registry::system_descriptor *desc :
+       m_runtime_ctx->system_factory_registry.get_systems (
+           system_order::type_id)) {
+    if (desc != nullptr && desc->runtime_registered) {
+      cache.systems.push_back (make_cached_registration (*desc));
+    }
+  }
+
+  const fs::path path = registration_cache_path (m_loaded_project_root);
+  std::error_code ec;
+  fs::create_directories (path.parent_path (), ec);
+  if (ec) {
+    wsl::log::cmake ()->warn ("Could not create runtime cache directory: {}",
+                              ec.message ());
+    return false;
+  }
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer (buffer);
+  writer.StartObject ();
+  writer.Key ("version");
+  writer.Uint (1);
+  writer.Key ("source_hash");
+  writer.Uint64 (static_cast<std::uint64_t> (cache.source_hash));
+
+  auto write_array = [&writer] (
+                         const char *name,
+                         const std::vector<cached_registration> &entries) {
+    writer.Key (name);
+    writer.StartArray ();
+    for (const cached_registration &entry : entries) {
+      write_cached_registration (writer, entry);
+    }
+    writer.EndArray ();
+  };
+
+  write_array ("components", cache.components);
+  write_array ("singletons", cache.singletons);
+  write_array ("systems", cache.systems);
+  writer.EndObject ();
+
+  std::ofstream output (path);
+  if (!output) {
+    wsl::log::cmake ()->warn ("Could not write runtime cache: {}",
+                              path.string ());
+    return false;
+  }
+
+  output << buffer.GetString ();
+  return output.good ();
+}
+
+void
+runtime_project_module::apply_registration_cache (
+    const registration_cache &cache)
+{
+  clear_runtime_registries (*m_runtime_ctx);
+
+  for (const cached_registration &entry : cache.components) {
+    m_runtime_ctx->component_registry.register_cached_runtime_world_component (
+        static_cast<entt::id_type> (entry.type_id), entry.type_name,
+        entry.display_name);
+  }
+
+  for (const cached_registration &entry : cache.singletons) {
+    m_runtime_ctx->singleton_registry.register_cached_runtime_singleton_component (
+        static_cast<entt::id_type> (entry.type_id), entry.type_name,
+        entry.display_name);
+  }
+
+  for (const cached_registration &entry : cache.systems) {
+    m_runtime_ctx->system_factory_registry.register_cached_runtime_system (
+        static_cast<entt::id_type> (entry.type_id), entry.type_name,
+        entry.display_name);
+  }
 }
 
 bool
@@ -532,6 +755,43 @@ runtime_project_module::interpret (const fs::path &generated_path)
   return true;
 }
 
+bool
+runtime_project_module::load_cached_metadata (const rsc::project &project)
+{
+  if (m_module_loaded || m_metadata_cache_loaded) {
+    m_last_status = "Runtime metadata is already loaded.";
+    return true;
+  }
+
+  if (m_runtime_ctx == nullptr) {
+    m_last_status = "Runtime metadata cache has no runtime context.";
+    return false;
+  }
+
+  const fs::path project_root = fs::weakly_canonical (project.root_path);
+
+  source_set sources;
+  gather_files (project_root / project.components_path, sources);
+  gather_files (project_root / project.systems_path, sources);
+  gather_files (project_root / project.singletons_path, sources);
+
+  const std::size_t current_hash = compute_source_hash (sources);
+  registration_cache cache{};
+  if (!read_registration_cache (registration_cache_path (project_root),
+                                current_hash, cache)) {
+    m_last_status = "Runtime metadata cache is missing or stale.";
+    return false;
+  }
+
+  apply_registration_cache (cache);
+  m_loaded_project_root = project_root;
+  m_source_hash = current_hash;
+  m_metadata_cache_loaded = true;
+  m_last_status = "Runtime metadata loaded from cache.";
+  wsl::log::cmake ()->debug ("{}", m_last_status);
+  return true;
+}
+
 void
 runtime_project_module::finalize_load ()
 {
@@ -550,12 +810,16 @@ runtime_project_module::finalize_load ()
 
   wsl::log::cmake ()->debug ("Clang Interpreter runtime registered {} entries",
                              registered_count);
+  m_metadata_cache_loaded = false;
+  if (write_registration_cache ()) {
+    wsl::log::cmake ()->debug ("Runtime registration cache updated.");
+  }
 }
 
 void
 runtime_project_module::unload ()
 {
-  if (!m_module_loaded) {
+  if (!m_module_loaded && !m_metadata_cache_loaded) {
     return;
   }
 
@@ -572,6 +836,7 @@ runtime_project_module::unload ()
 
   m_interpreter.reset ();
   m_module_loaded = false;
+  m_metadata_cache_loaded = false;
   m_loaded_project_root.clear ();
   m_source_hash = 0;
   m_last_status = "Module unloaded.";
@@ -612,6 +877,11 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     return true;
   }
 
+  if (m_metadata_cache_loaded) {
+    clear_runtime_registries (*m_runtime_ctx);
+    m_metadata_cache_loaded = false;
+  }
+
   const fs::path build_dir = project_root / "build" / "weasel_runtime";
   fs::create_directories (build_dir);
 
@@ -636,6 +906,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   }
 
   m_module_loaded = true;
+  m_metadata_cache_loaded = false;
   m_source_hash = current_hash;
   m_last_status = "Runtime systems/components interpreted and registered.";
   wsl::log::cmake ()->trace ("{}", m_last_status);

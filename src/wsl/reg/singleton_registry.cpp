@@ -18,6 +18,25 @@ namespace wsl
 namespace reg
 {
 
+void
+singleton_registry::register_cached_runtime_singleton_component (
+    ::entt::id_type type_id, std::string_view type_name,
+    std::string_view display_name)
+{
+  descriptor desc{};
+  desc.type_id = type_id;
+  desc.type_name = std::string (type_name);
+  desc.display_name = display_name.empty ()
+                          ? comp::humanize_identifier (type_name)
+                          : std::string (display_name);
+  desc.runtime_registered = true;
+  desc.serialize_with_scene = true;
+
+  m_type_name_to_type_id[desc.type_name] = type_id;
+  m_display_name_to_type_id[desc.display_name] = type_id;
+  m_descriptors[type_id] = std::move (desc);
+}
+
 const singleton_registry::descriptor *
 singleton_registry::find_singleton_component (::entt::id_type type_id) const
 {
@@ -152,6 +171,7 @@ singleton_registry::clear_runtime_singleton_components (rsc::world &world)
         = m_descriptors.find (type_id);
         it != m_descriptors.end ()) {
       m_type_name_to_type_id.erase (it->second.type_name);
+      m_display_name_to_type_id.erase (it->second.display_name);
     }
     m_descriptors.erase (type_id);
   }

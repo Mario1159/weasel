@@ -148,6 +148,16 @@ public:
   void register_system_type (const system_registration_options &options = {});
 
   /*!
+   * \brief Registers cached metadata for a runtime system.
+   *
+   * Cached systems use a lightweight placeholder instance so CLI operations can
+   * attach the system name to a scene without loading user C++ code.
+   */
+  void register_cached_runtime_system (entt::id_type type_id,
+                                       std::string_view type_name,
+                                       std::string_view display_name);
+
+  /*!
    * \brief Registers a system with a custom factory function.
    * \param name The name to register the system under.
    * \param factory The custom factory function.

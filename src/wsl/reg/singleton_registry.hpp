@@ -123,6 +123,17 @@ public:
       const singleton_component_registration_options &options = {});
 
   /*!
+   * \brief Registers metadata for a runtime singleton without loading its C++
+   * type.
+   *
+   * Cached descriptors are only suitable for discovery and name lookup. They do
+   * not provide construction, reflection, access, or serialization callbacks.
+   */
+  void register_cached_runtime_singleton_component (
+      ::entt::id_type type_id, std::string_view type_name,
+      std::string_view display_name);
+
+  /*!
    * \brief Registers a bound singleton component type stored as a raw pointer.
    * \tparam T Singleton component type.
    * \param options Registration options.

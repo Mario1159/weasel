@@ -108,6 +108,17 @@ public:
                             = {});
 
   /*!
+   * \brief Registers metadata for a runtime component without loading its C++
+   * type.
+   *
+   * Cached descriptors are only suitable for discovery and name lookup. They do
+   * not provide construction, reflection, copy, or serialization callbacks.
+   */
+  void register_cached_runtime_world_component (entt::id_type type_id,
+                                                std::string_view type_name,
+                                                std::string_view display_name);
+
+  /*!
    * \brief Finds a registered world component by stable or internal type ID.
    * \param type_id Stable world component ID or internal EnTT type ID.
    * \return Matching descriptor, or `nullptr` when not found.

@@ -13,6 +13,24 @@ namespace wsl
 namespace reg
 {
 
+void
+component_registry::register_cached_runtime_world_component (
+    entt::id_type type_id, std::string_view type_name,
+    std::string_view display_name)
+{
+  descriptor desc{};
+  desc.type_id = type_id;
+  desc.type_name = std::string (type_name);
+  desc.display_name = display_name.empty ()
+                          ? comp::humanize_identifier (type_name)
+                          : std::string (display_name);
+  desc.runtime_registered = true;
+
+  m_type_name_to_stable[desc.type_name] = type_id;
+  m_display_name_to_stable[desc.display_name] = type_id;
+  m_descriptors[type_id] = std::move (desc);
+}
+
 const component_registry::descriptor *
 component_registry::find_world_component (entt::id_type type_id) const
 {

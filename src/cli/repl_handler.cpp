@@ -806,10 +806,14 @@ command_executor::set_current_project (std::shared_ptr<wsl::rsc::project> proj)
 }
 
 void
-command_executor::ensure_runtime_module_loaded ()
+command_executor::ensure_runtime_module_loaded (bool allow_cached_metadata)
 {
   if (!m_current_project || m_rtc.runtime_project_module.has_loaded_module ())
     return;
+  if (allow_cached_metadata
+      && m_rtc.runtime_project_module.has_loaded_cached_metadata ()) {
+    return;
+  }
 
   std::filesystem::path const root (m_current_project->root_path);
   bool has_runtime = false;
@@ -823,6 +827,13 @@ command_executor::ensure_runtime_module_loaded ()
   }
   if (!has_runtime)
     return;
+
+  if (allow_cached_metadata
+      && m_rtc.runtime_project_module.load_cached_metadata (
+          *m_current_project)) {
+    wsl::log::cli ()->info ("Runtime metadata loaded from cache.");
+    return;
+  }
 
   wsl::log::cli ()->info ("Compiling and loading runtime module...");
   if (!m_rtc.runtime_project_module.compile_and_load (*m_current_project)) {
@@ -1416,7 +1427,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   const std::string &action = tokens[1];
 
   if ((action == "ls" || action == "avail") && tokens.size () == 2) {
-    ensure_runtime_module_loaded ();
+    ensure_runtime_module_loaded (true);
     auto components = m_rtc.component_registry.get_world_components ();
     m_output << "Registered Components (" << components.size () << "):\n";
     for (const auto *component : components) {
@@ -1512,6 +1523,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   entt::entity e = (entt::entity)std::stoul (tokens[2]);
 
   if (action == "ls") {
+    ensure_runtime_module_loaded ();
     for (auto [id, storage] : scene->get_registry ().storage ()) {
       if (storage.contains (e)) {
         if (const auto *descriptor
@@ -1548,6 +1560,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   } else if (action == "rm") {
     if (tokens.size () < 4)
       return;
+    ensure_runtime_module_loaded ();
     const auto *descriptor
         = m_rtc.component_registry.find_world_component (tokens[3]);
     if (descriptor && descriptor->remove) {
@@ -1567,6 +1580,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
       return;
     }
 
+    ensure_runtime_module_loaded ();
     const auto *descriptor
         = m_rtc.component_registry.find_world_component (tokens[3]);
     if (!descriptor) {
@@ -1736,7 +1750,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
 
   // ── singl ls ──
   if (action == "ls") {
-    ensure_runtime_module_loaded ();
+    ensure_runtime_module_loaded (true);
     auto singletons = m_rtc.singleton_registry.get_singleton_components ();
     auto *scene = get_active_scene ();
     m_output << "Singleton Components (" << singletons.size () << "):\n";
@@ -1748,13 +1762,14 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
         m_output << " [" << s->type_name << "]";
       if (s->core)
         m_output << " [core]";
-      if (scene && s->contains (scene->get_registry ()))
+      if (scene && s->contains && s->contains (scene->get_registry ()))
         m_output << " [present]";
       else if (scene)
         m_output << " [absent]";
       m_output << "\n";
 
-      if (scene && s->contains (scene->get_registry ())) {
+      if (scene && s->contains && s->get_ptr
+          && s->contains (scene->get_registry ())) {
         void *ptr = s->get_ptr (scene->get_registry ());
         if (ptr) {
           entt::meta_type meta = entt::resolve (s->type_id);
@@ -1772,12 +1787,12 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "Usage: singl add <name>\n";
       return;
     }
-    ensure_runtime_module_loaded ();
     auto *scene = get_active_scene ();
     if (!scene) {
       m_output << "No active scene.\n";
       return;
     }
+    ensure_runtime_module_loaded ();
     const auto *desc
         = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
     if (!desc) {
@@ -1881,6 +1896,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
+    ensure_runtime_module_loaded ();
     const auto *desc
         = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
     if (!desc) {
@@ -2062,7 +2078,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "  (none)\n";
     }
   } else if (tokens[1] == "avail") {
-    ensure_runtime_module_loaded ();
+    ensure_runtime_module_loaded (true);
     auto systems = m_rtc.system_factory_registry.get_systems ();
 
     std::vector<const reg::system_factory_registry::system_descriptor *>
@@ -2162,7 +2178,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "Usage: sys add <name>\n";
       return;
     }
-    ensure_runtime_module_loaded ();
+    ensure_runtime_module_loaded (true);
     std::string sys_name = tokens[2];
     for (size_t i = 3; i < tokens.size (); ++i) {
       sys_name += ' ' + tokens[i];
