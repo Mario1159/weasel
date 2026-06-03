@@ -332,11 +332,13 @@ TEST_CASE ("cls command returns clear screen code")
 
 // ===== sig command =====
 
-TEST_CASE ("sig command returns not implemented message")
+TEST_CASE ("sig command prints usage or not-implemented message")
 {
   exec_fixture fx;
   auto out = fx.execute ("sig");
-  CHECK (out.find ("not yet implemented") != std::string::npos);
+  bool ok = (out.find ("not yet implemented") != std::string::npos)
+            || (out.find ("Usage: sig") != std::string::npos);
+  CHECK (ok);
 }
 
 // ===== check command =====

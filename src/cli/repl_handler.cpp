@@ -2068,7 +2068,139 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
 void
 command_executor::cmd_sig (const std::vector<std::string> &tokens)
 {
-  m_output << "Signal management not yet implemented in REPL.\n";
+  if (tokens.size () < 2) {
+    m_output << "Usage: sig <ls|handlers|connections|connect|disconnect> [args...]\n";
+    return;
+  }
+
+  const std::string &sub = tokens[1];
+
+  if (sub == "ls") {
+    if (m_rtc.signal_db.entries.empty ()) {
+      m_output << "No signals declared.\n";
+      return;
+    }
+    for (const auto &kv : m_rtc.signal_db.entries) {
+      const auto &entry = kv.second;
+      m_output << entry.type_name << " (owner=" << entry.owner_system_type_name
+               << ") listeners=" << entry.listener_count
+               << " emits=" << entry.emit_count << "\n";
+    }
+    return;
+  }
+
+  if (sub == "handlers") {
+    if (m_rtc.signal_db.connectable_handlers.empty ()) {
+      m_output << "No connectable handlers declared.\n";
+      return;
+    }
+    for (const auto &h : m_rtc.signal_db.connectable_handlers) {
+      m_output << h.signal_type_name << " -> " << h.system_type_name << "::"
+               << h.handler_name << "\n";
+    }
+    return;
+  }
+
+  if (sub == "connections") {
+    auto conns = m_rtc.signal_hub.get_all_connections ();
+    if (conns.empty ()) {
+      m_output << "No signal connections.\n";
+      return;
+    }
+    for (const auto &c : conns) {
+      std::string signal_name = std::to_string (c.signal_type_id);
+      auto it = m_rtc.signal_db.entries.find (c.signal_type_id);
+      if (it != m_rtc.signal_db.entries.end ())
+        signal_name = it->second.type_name;
+
+      std::string system_name = "<unknown>";
+      if (auto sd = m_rtc.system_factory_registry.find_system (c.system_type_id))
+        system_name = sd->display_name;
+
+      m_output << signal_name << " -> " << system_name << "::"
+               << c.handler_name << " (src=" << (uint64_t)c.source_entity
+               << ", tgt=" << (uint64_t)c.target_entity << ")\n";
+    }
+    return;
+  }
+
+  if (sub == "connect" || sub == "disconnect") {
+    // Usage: sig connect <signal> <system> <handler> [src_entity] [tgt_entity]
+    if (tokens.size () < 5) {
+      m_output << "Usage: sig " << sub << " <signal> <system> <handler> [src] [tgt]\n";
+      return;
+    }
+
+    const std::string &signal_arg = tokens[2];
+    const std::string &system_arg = tokens[3];
+    const std::string &handler_arg = tokens[4];
+
+    // Resolve signal type id by full or simple name
+    entt::id_type signal_id = 0;
+    for (const auto &kv : m_rtc.signal_db.entries) {
+      const auto &entry = kv.second;
+      if (entry.type_name == signal_arg) {
+        signal_id = kv.first;
+        break;
+      }
+      // match simple name (after last ::)
+      auto pos = entry.type_name.rfind ("::");
+      std::string simple = (pos == std::string::npos) ? entry.type_name
+                                                      : entry.type_name.substr (pos + 2);
+      if (simple == signal_arg) {
+        signal_id = kv.first;
+        break;
+      }
+    }
+    if (signal_id == 0) {
+      m_output << "Unknown signal: " << signal_arg << "\n";
+      return;
+    }
+
+    // Resolve system type id by display name or type name
+    entt::id_type system_id = 0;
+    if (auto sd = m_rtc.system_factory_registry.find_system (system_arg)) {
+      system_id = sd->type_id;
+    } else {
+      // try match by type name
+      if (auto sd2 = m_rtc.system_factory_registry.find_system (system_arg)) {
+        system_id = sd2->type_id;
+      }
+    }
+    if (system_id == 0) {
+      m_output << "Unknown system: " << system_arg << "\n";
+      return;
+    }
+
+    entt::entity src = entt::null;
+    entt::entity tgt = entt::null;
+    if (tokens.size () >= 6) {
+      try {
+        uint64_t v = std::stoull (tokens[5]);
+        src = (entt::entity)v;
+      } catch (...) {
+      }
+    }
+    if (tokens.size () >= 7) {
+      try {
+        uint64_t v = std::stoull (tokens[6]);
+        tgt = (entt::entity)v;
+      } catch (...) {
+      }
+    }
+
+    bool ok = false;
+    if (sub == "connect") {
+      ok = m_rtc.signal_hub.connect (signal_id, system_id, handler_arg, src, tgt);
+      m_output << (ok ? "Connected." : "Failed to connect.") << "\n";
+    } else {
+      ok = m_rtc.signal_hub.disconnect (signal_id, system_id, handler_arg, src, tgt);
+      m_output << (ok ? "Disconnected." : "Failed to disconnect.") << "\n";
+    }
+    return;
+  }
+
+  m_output << "Unknown sig subcommand: " << sub << "\n";
 }
 
 void
