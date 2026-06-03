@@ -1,6 +1,8 @@
 #pragma once
 
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/rsc/scene.hpp"
+#include <entt/entt.hpp>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -41,6 +43,9 @@ private:
   void cmd_check (const std::vector<std::string> &tokens);
   void cmd_rsc (const std::vector<std::string> &tokens);
   void cmd_help ();
+
+  entt::entity resolve_entity_token (const std::string &token,
+                                    wsl::rsc::scene *scene);
 
   void ensure_runtime_module_loaded (bool allow_cached_metadata = false);
 

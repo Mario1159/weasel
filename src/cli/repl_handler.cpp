@@ -146,6 +146,7 @@ build_repl_command (const std::vector<std::string> &args)
   return output.str ();
 }
 
+
 bool
 command_failed (std::string_view output)
 {
@@ -1030,6 +1031,26 @@ command_executor::get_active_scene ()
   return m_rtc.scene_manager.get_active ();
 }
 
+entt::entity
+command_executor::resolve_entity_token (const std::string &token,
+                                       wsl::rsc::scene *scene)
+{
+  entt::entity e = entt::null;
+  try {
+    e = (entt::entity)std::stoul (token);
+  } catch (const std::exception &) {
+    if (scene) {
+      for (const auto &kv : scene->get_entity_names ()) {
+        if (kv.second == token) {
+          e = kv.first;
+          break;
+        }
+      }
+    }
+  }
+  return e;
+}
+
 void
 command_executor::cmd_proj (const std::vector<std::string> &tokens)
 {
@@ -1069,7 +1090,15 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
       m_output << "Usage: proj load <path>\n";
       return;
     }
-    m_current_project = wsl::rsc::project_loader::load (tokens[2]);
+    std::filesystem::path load_path (tokens[2]);
+    if (std::filesystem::is_directory (load_path)) {
+      load_path /= wsl::rsc::project_loader::manifest_file;
+    }
+    if (!std::filesystem::exists (load_path)) {
+      m_output << "Failed to find project manifest: " << load_path.string () << "\n";
+      return;
+    }
+    m_current_project = wsl::rsc::project_loader::load (load_path.string ());
     if (m_current_project) {
       m_output << "Project '" << m_current_project->name << "' loaded.\n";
     } else
@@ -1394,14 +1423,22 @@ command_executor::cmd_ent (const std::vector<std::string> &tokens)
   } else if (action == "rm") {
     if (tokens.size () < 3)
       return;
-    entt::entity e = (entt::entity)std::stoul (tokens[2]);
+    entt::entity e = resolve_entity_token (tokens[2], scene);
+    if (e == entt::null) {
+      m_output << "Unknown entity: " << tokens[2] << "\n";
+      return;
+    }
     scene->get_registry ().destroy (e);
     m_output << "Entity " << tokens[2] << " destroyed.\n";
     auto_save_scene ();
   } else if (action == "ren") {
     if (tokens.size () < 4)
       return;
-    entt::entity e = (entt::entity)std::stoul (tokens[2]);
+    entt::entity e = resolve_entity_token (tokens[2], scene);
+    if (e == entt::null) {
+      m_output << "Unknown entity: " << tokens[2] << "\n";
+      return;
+    }
     scene->set_entity_name (e, tokens[3]);
     m_output << "Entity " << tokens[2] << " renamed to '" << tokens[3]
              << "'.\n";
@@ -1409,11 +1446,15 @@ command_executor::cmd_ent (const std::vector<std::string> &tokens)
   } else if (action == "inspect") {
     if (tokens.size () < 3)
       return;
-    entt::entity e = (entt::entity)std::stoul (tokens[2]);
+    entt::entity e = resolve_entity_token (tokens[2], scene);
+    if (e == entt::null) {
+      m_output << "Unknown entity: " << tokens[2] << "\n";
+      return;
+    }
     m_output << "Inspecting Entity " << tokens[2] << ":\n";
     m_output << " Name: " << scene->get_entity_name (e) << "\n";
     m_output << " Components:\n";
-    cmd_comp ({ "comp", "ls", tokens[2] });
+    cmd_comp ({ "comp", "ls", std::to_string ((uint32_t)e) });
   }
 }
 
@@ -1520,7 +1561,11 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     return;
   }
 
-  entt::entity e = (entt::entity)std::stoul (tokens[2]);
+  entt::entity e = resolve_entity_token (tokens[2], scene);
+  if (e == entt::null) {
+    m_output << "Unknown entity: " << tokens[2] << "\n";
+    return;
+  }
 
   if (action == "ls") {
     ensure_runtime_module_loaded ();
@@ -2947,8 +2992,20 @@ repl_handler::prepare (std::optional<std::string> initial_project,
 
   ensure_local_executor ();
   if (initial_project) {
+    std::filesystem::path proj_path (*initial_project);
+    std::filesystem::path manifest_path = proj_path;
+    // If user passed a project root directory, look for the manifest file inside it
+    if (std::filesystem::is_directory (proj_path)) {
+      manifest_path = proj_path / wsl::rsc::project_loader::manifest_file;
+    }
+    if (!std::filesystem::exists (manifest_path)) {
+      std::cerr << "Failed to find project manifest: " << manifest_path.string ()
+                << "\n";
+      return false;
+    }
+
     std::string const output = m_local_executor->execute (
-        build_repl_command ({ "proj", "load", *initial_project }));
+        build_repl_command ({ "proj", "load", manifest_path.string () }));
     if (command_failed (output)) {
       std::cerr << output;
       return false;

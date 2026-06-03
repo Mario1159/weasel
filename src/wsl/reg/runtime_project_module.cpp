@@ -521,15 +521,39 @@ runtime_project_module::write_registration_cache () const
   write_array ("systems", cache.systems);
   writer.EndObject ();
 
-  std::ofstream output (path);
-  if (!output) {
-    wsl::log::cmake ()->warn ("Could not write runtime cache: {}",
-                              path.string ());
+  // Write atomically: write to a temp file then rename
+  const fs::path tmp_path = path.parent_path () / (path.filename ().string () + ".tmp");
+  {
+    std::ofstream out (tmp_path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+      wsl::log::cmake ()->warn ("Could not write runtime cache temp file: {}",
+                                tmp_path.string ());
+      return false;
+    }
+    out << buffer.GetString ();
+    out.flush ();
+    if (!out.good ()) {
+      wsl::log::cmake ()->warn ("Failed writing to runtime cache temp file: {}",
+                                tmp_path.string ());
+      // attempt to remove temp file
+      std::error_code rem_ec;
+      fs::remove (tmp_path, rem_ec);
+      return false;
+    }
+  }
+
+  std::error_code rename_ec;
+  fs::rename (tmp_path, path, rename_ec);
+  if (rename_ec) {
+    wsl::log::cmake ()->warn ("Could not move runtime cache into place: {} -> {} ({})",
+                              tmp_path.string (), path.string (), rename_ec.message ());
+    // best-effort cleanup
+    std::error_code rem_ec;
+    fs::remove (tmp_path, rem_ec);
     return false;
   }
 
-  output << buffer.GetString ();
-  return output.good ();
+  return true;
 }
 
 void
@@ -825,16 +849,22 @@ runtime_project_module::unload ()
 
   wsl::log::cmake ()->trace ("Unloading module");
 
-  if (m_runtime_ctx != nullptr) {
-    clear_runtime_registries (*m_runtime_ctx);
-  }
-  runtime_registrar::set_active_runtime_context (nullptr);
+  // Destroy the interpreter first to ensure any Clang/LLVM-owned
+  // resources that may reference registration hooks are cleaned up
+  // before we clear runtime registries.
+  m_interpreter.reset ();
 
+  // Clear any pending interpreted registrations
   runtime_registrar::component_registrations ().clear ();
   runtime_registrar::singleton_registrations ().clear ();
   runtime_registrar::system_registrations ().clear ();
 
-  m_interpreter.reset ();
+  // Unbind active runtime context and clear registries
+  runtime_registrar::set_active_runtime_context (nullptr);
+  if (m_runtime_ctx != nullptr) {
+    clear_runtime_registries (*m_runtime_ctx);
+  }
+
   m_module_loaded = false;
   m_metadata_cache_loaded = false;
   m_loaded_project_root.clear ();
