@@ -21,6 +21,7 @@ else()
         "/usr/local/lib/llvm20"
         "/usr/local/opt/llvm@20"
         "/opt/llvm20"
+        "/opt/homebrew/opt/llvm@20"
     )
 endif()
 
