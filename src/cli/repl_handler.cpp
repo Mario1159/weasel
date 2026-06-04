@@ -1328,8 +1328,26 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     }
     auto assets = wsl::rsc::project_loader::scan_assets (*m_current_project);
     m_output << "Scenes in project:\n";
-    for (const auto &s : assets.scenes)
-      m_output << " - " << s << "\n";
+    for (const auto &s : assets.scenes) {
+      std::string header_name;
+      try {
+        std::ifstream sf (s);
+        if (sf) {
+          nlohmann::json j;
+          sf >> j;
+          if (j.contains ("header") && j["header"].contains ("scene_name"))
+            header_name = j["header"]["scene_name"].get<std::string> ();
+        }
+      } catch (...) {
+      }
+
+      std::filesystem::path p (s);
+      std::string filename = p.filename ().string ();
+      if (!header_name.empty ())
+        m_output << " - " << header_name << " (" << filename << ")\n";
+      else
+        m_output << " - " << filename << "\n";
+    }
   } else if (action == "status") {
     auto *scene = get_active_scene ();
     if (!scene) {
@@ -3141,6 +3159,21 @@ repl_handler::prepare (std::optional<std::string> initial_project,
     if (command_failed (output)) {
       std::cerr << output;
       return false;
+    }
+
+    // If no scene was explicitly requested, attempt to load the project's
+    // default_scene_path (if present). This makes one-shot CLI commands that
+    // provide --project behave on the project's default scene.
+    if (!initial_scene) {
+      auto proj_ptr = wsl::rsc::project_loader::load (manifest_path.string ());
+      if (proj_ptr && !proj_ptr->default_scene_path.empty ()) {
+        std::string const ds_output = m_local_executor->execute (
+            build_repl_command ({ "scene", "load", proj_ptr->default_scene_path }));
+        if (command_failed (ds_output)) {
+          std::cerr << ds_output;
+          return false;
+        }
+      }
     }
   }
   if (initial_scene) {
