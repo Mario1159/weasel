@@ -192,10 +192,11 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "  rsc info        - Show resource metadata\n";
   oss << "  help            - Show help\n";
   oss << "  exit/quit       - Exit REPL\n";
-  oss << "  cls             - Clear screen\n\n";
+  oss << "  cls             - Clear screen\n";
+  oss << "  sig             - Signal management (ls, handlers, connections, connect, disconnect)\n\n";
 
   oss << "== Documented but NOT Implemented ==\n";
-  oss << "  sig             - Signal management (stub only)\n\n";
+  oss << "  (none)\n\n";
 
   oss << "== Previously Fixed Limitations ==\n";
   oss << "  - Component type names now accept short names (transform,\n";

@@ -307,6 +307,7 @@ cli_handler::parse (int argc, char **argv)
       ->required ();
 
   auto *singl_cmd = app.add_subcommand ("singl", "Manage singleton components");
+  auto *sig_cmd = app.add_subcommand ("sig", "Signal management (ls, handlers, connections, connect, disconnect)");
   auto *singl_ls = singl_cmd->add_subcommand (
       "ls", "List singleton components in the scene");
   auto *singl_add = singl_cmd->add_subcommand (
@@ -584,6 +585,13 @@ cli_handler::parse (int argc, char **argv)
     repl_command = build_repl_command ({ "sys", "avail" });
   } else if (*sys_add) {
     repl_command = build_repl_command ({ "sys", "add", sys_add_name });
+  } else if (*sig_cmd) {
+    // Build a repl command that forwards all remaining args to the REPL 'sig' handler
+    std::vector<std::string> args;
+    args.push_back ("sig");
+    for (const auto &s : app.remaining ())
+      args.push_back (s);
+    repl_command = build_repl_command (args);
   }
 
   auto extras = app.remaining ();

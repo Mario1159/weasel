@@ -337,7 +337,13 @@ runtime_project_module::runtime_project_module (
 {
 }
 
-runtime_project_module::~runtime_project_module () {}
+runtime_project_module::~runtime_project_module ()
+{
+  // Ensure we unload interpreted/runtime registrations before destruction to
+  // avoid registry destructors invoking std::function targets that reference
+  // interpreter-owned memory which may already be freed.
+  unload ();
+}
 
 void
 runtime_project_module::gather_files (const fs::path &base, source_set &out)
@@ -849,21 +855,25 @@ runtime_project_module::unload ()
 
   wsl::log::cmake ()->trace ("Unloading module");
 
-  // Destroy the interpreter first to ensure any Clang/LLVM-owned
-  // resources that may reference registration hooks are cleaned up
-  // before we clear runtime registries.
-  m_interpreter.reset ();
+  // Clear runtime registries and pending interpreted registrations before
+  // destroying the interpreter. Some registration targets (std::function,
+  // entt meta descriptors, etc.) may require interpreter-owned code to run
+  // their destructors; clearing them while the interpreter is still alive
+  // avoids calling into freed code during shutdown.
+  if (m_runtime_ctx != nullptr) {
+    clear_runtime_registries (*m_runtime_ctx);
+  }
 
   // Clear any pending interpreted registrations
   runtime_registrar::component_registrations ().clear ();
   runtime_registrar::singleton_registrations ().clear ();
   runtime_registrar::system_registrations ().clear ();
 
-  // Unbind active runtime context and clear registries
+  // Unbind active runtime context
   runtime_registrar::set_active_runtime_context (nullptr);
-  if (m_runtime_ctx != nullptr) {
-    clear_runtime_registries (*m_runtime_ctx);
-  }
+
+  // Now destroy the interpreter and any Clang/LLVM-owned resources.
+  m_interpreter.reset ();
 
   m_module_loaded = false;
   m_metadata_cache_loaded = false;
