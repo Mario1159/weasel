@@ -561,18 +561,25 @@ rigid_body::register_meta ()
 
       .data<&comp::rigid_body::position> ("position"_hs)
       .custom<comp::meta_info> (meta_info{
-          "Position", "Local offset from the entity's Transform", "" })
+          "Position",
+          "Local position offset relative to the entity's Transform position",
+          "" })
 
       .data<&comp::rigid_body::rotation> ("rotation"_hs)
       .custom<comp::meta_info> (meta_info{
-          "Rotation", "Local rotation offset from the entity's Transform", "" })
+          "Rotation",
+          "Local rotation offset relative to the entity's Transform rotation",
+          "" })
 
       .data<&comp::rigid_body::half_extents> ("half_extents"_hs)
-      .custom<comp::meta_info> (
-          meta_info{ "Half Extents", "Box half size", "" })
+      .custom<comp::meta_info> (meta_info{
+          "Half Extents",
+          "Box half size (scaled by the entity's Transform scale)", "" })
 
       .data<&comp::rigid_body::radius> ("radius"_hs)
-      .custom<comp::meta_info> (meta_info{ "Radius", "Sphere radius", "" })
+      .custom<comp::meta_info> (meta_info{
+          "Radius", "Sphere radius (scaled by the entity's Transform scale)",
+          "" })
 
       .data<&comp::rigid_body::motion_type> ("motion_type"_hs)
       .custom<comp::meta_info> (
