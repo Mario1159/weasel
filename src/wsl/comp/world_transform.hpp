@@ -9,7 +9,7 @@
 
 namespace wsl::comp::singl
 {
-struct runtime_context;
+class runtime_context;
 }
 
 namespace wsl

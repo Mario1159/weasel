@@ -30,7 +30,8 @@ class editor_context;
 }
 
 /*!
- * \brief Contains types and classes for managing engine resources, scenes, and project metadata.
+ * \brief Contains types and classes for managing engine resources, scenes, and
+ * project metadata.
  */
 namespace rsc
 {
@@ -43,28 +44,32 @@ namespace detail
 }
 
 /*!
- * \brief Core structures for raw, CPU-side asset representation before GPU upload.
+ * \brief Core structures for raw, CPU-side asset representation before GPU
+ * upload.
  */
 namespace raw
 {
 }
 
 /*!
- * \brief Input/Output and serialization logic for scenes and resource references.
+ * \brief Input/Output and serialization logic for scenes and resource
+ * references.
  */
 namespace io
 {
 }
 
 /*!
- * \brief Tools for interacting with the CMake File API and project configuration.
+ * \brief Tools for interacting with the CMake File API and project
+ * configuration.
  */
 namespace cmake
 {
 }
 
 using namespace entt::literals;
-constexpr entt::id_type builtin_skybox_procedural = "builtin/skybox_procedural"_hs;
+constexpr entt::id_type builtin_skybox_procedural
+    = "builtin/skybox_procedural"_hs;
 
 /*! \brief Represents the current loading state of a 3D model. */
 enum class model_state
@@ -125,11 +130,12 @@ enum class shader_state
  */
 struct model_resource_info
 {
-  entt::id_type id{};      //!< Unique identifier.
-  std::string path;        //!< Path to the model file.
-  std::string name;        //!< Human-readable name.
-  model_state state{};     //!< Current loading state.
-  bool preview_owned = false; //!< Whether the model is currently used as a preview.
+  entt::id_type id{};  //!< Unique identifier.
+  std::string path;    //!< Path to the model file.
+  std::string name;    //!< Human-readable name.
+  model_state state{}; //!< Current loading state.
+  bool preview_owned
+      = false; //!< Whether the model is currently used as a preview.
   bool lowest_lod_only = false; //!< Whether only the lowest LOD is loaded.
 };
 
@@ -160,10 +166,10 @@ struct cubemap_resource_info
  */
 struct scene_resource_info
 {
-  entt::id_type id{};  //!< Unique identifier.
-  std::string path;    //!< Path to the scene file.
-  std::string name;    //!< Human-readable name.
-  scene_state state{}; //!< Current loading state.
+  entt::id_type id{};     //!< Unique identifier.
+  std::string path;       //!< Path to the scene file.
+  std::string name;       //!< Human-readable name.
+  scene_state state{};    //!< Current loading state.
   bool is_prefab = false; //!< Whether the scene is a prefab.
 };
 
@@ -218,12 +224,14 @@ namespace detail
  */
 struct model_record
 {
-  std::string path; //!< Path to the model file.
-  std::string name; //!< Human-readable name.
+  std::string path;                            //!< Path to the model file.
+  std::string name;                            //!< Human-readable name.
   model_state state = model_state::not_loaded; //!< Current loading state.
-  std::future<std::shared_ptr<raw::cpu_model>> job; //!< Async CPU loading job.
-  std::shared_ptr<raw::cpu_model> cpu_data;        //!< Loaded CPU data.
-  std::unique_ptr<model_loader::upload_session> upload; //!< Active GPU upload session.
+  std::future<std::shared_ptr<raw::cpu_model>>
+      job{};                                  //!< Async CPU loading job.
+  std::shared_ptr<raw::cpu_model> cpu_data{}; //!< Loaded CPU data.
+  std::unique_ptr<model_loader::upload_session>
+      upload{}; //!< Active GPU upload session.
 };
 
 /*!
@@ -231,10 +239,10 @@ struct model_record
  */
 struct image_record
 {
-  std::string path; //!< Path to the image file.
-  std::string name; //!< Human-readable name.
+  std::string path;                            //!< Path to the image file.
+  std::string name;                            //!< Human-readable name.
   image_state state = image_state::not_loaded; //!< Current loading state.
-  std::future<std::shared_ptr<raw::image_cpu>> job; //!< Async loading job.
+  std::future<std::shared_ptr<raw::image_cpu>> job{}; //!< Async loading job.
 };
 
 /*!
@@ -244,8 +252,8 @@ struct cubemap_record
 {
   std::string path; //!< Path to the cubemap file.
   std::string name; //!< Human-readable name.
-  cubemap_state state = cubemap_state::not_loaded; //!< Current loading state.
-  std::future<std::shared_ptr<gfx::cubemap>> job; //!< Async loading job.
+  cubemap_state state = cubemap_state::not_loaded;  //!< Current loading state.
+  std::future<std::shared_ptr<gfx::cubemap>> job{}; //!< Async loading job.
 };
 
 /*!
@@ -253,11 +261,11 @@ struct cubemap_record
  */
 struct scene_record
 {
-  std::string path; //!< Path to the scene file.
-  std::string name; //!< Human-readable name.
+  std::string path;                            //!< Path to the scene file.
+  std::string name;                            //!< Human-readable name.
   scene_state state = scene_state::not_loaded; //!< Current loading state.
-  bool is_prefab = false;                      //!< Whether the scene is a prefab.
-  std::future<std::shared_ptr<rsc::scene>> job; //!< Async loading job.
+  bool is_prefab = false; //!< Whether the scene is a prefab.
+  std::future<std::shared_ptr<rsc::scene>> job{}; //!< Async loading job.
 };
 
 /*!
@@ -265,10 +273,10 @@ struct scene_record
  */
 struct audio_record
 {
-  std::string path; //!< Path to the audio file.
-  std::string name; //!< Human-readable name.
+  std::string path;                            //!< Path to the audio file.
+  std::string name;                            //!< Human-readable name.
   audio_state state = audio_state::not_loaded; //!< Current loading state.
-  MIX_Audio *audio = nullptr;                  //!< Pointer to loaded audio data.
+  MIX_Audio *audio = nullptr; //!< Pointer to loaded audio data.
 };
 
 /*!
@@ -295,8 +303,8 @@ struct font_record
  */
 struct shader_record
 {
-  std::string path; //!< Path to the shader file.
-  std::string name; //!< Human-readable name.
+  std::string path;                              //!< Path to the shader file.
+  std::string name;                              //!< Human-readable name.
   shader_state state = shader_state::not_loaded; //!< Current loading state.
 };
 
@@ -311,10 +319,11 @@ public:
   using scene_handle = entt::resource<rsc::scene>;
   using shader_handle = entt::resource<gfx::shader_module>;
 
-  /*! 
+  /*!
    * \brief Construct a resource manager for the runtime.
    * \param runtime_ctx Pointer to the runtime context (non-owning).
-   * \param engine_res_path Path to engine-provided resources used as a base for resolution.
+   * \param engine_res_path Path to engine-provided resources used as a base for
+   * resolution.
    */
   explicit resource_manager (comp::singl::runtime_context *runtime_ctx,
                              const std::string &engine_res_path = ".",
@@ -330,9 +339,9 @@ public:
    */
   void set_editor_context (comp::singl::editor_context *editor_ctx);
 
-  /*! \brief Poll and finalize any asynchronous upload jobs started for GPU resources.
-   * This should be called from the main thread to move resources from CPU-side
-   * jobs into GPU upload sessions when ready.
+  /*! \brief Poll and finalize any asynchronous upload jobs started for GPU
+   * resources. This should be called from the main thread to move resources
+   * from CPU-side jobs into GPU upload sessions when ready.
    */
   void update_async_uploads ();
 
@@ -400,7 +409,8 @@ public:
    */
   void release_preview_ownership_if_matches (model_id id);
 
-  /*! \brief Query whether the given model id is currently owned as a preview. */
+  /*! \brief Query whether the given model id is currently owned as a preview.
+   */
   bool is_preview_owned (model_id id) const;
 
   /*! \brief Register an image asset path without loading. */
@@ -478,8 +488,9 @@ public:
   /*! \brief Get a scene resource handle for the given id. */
   scene_handle get (scene_id id);
 
-  /*! \brief Return a raw pointer to a loaded scene instance or nullptr if not loaded.
-   * The returned pointer is non-owning and valid until the scene is unloaded.
+  /*! \brief Return a raw pointer to a loaded scene instance or nullptr if not
+   * loaded. The returned pointer is non-owning and valid until the scene is
+   * unloaded.
    */
   scene *find_loaded_scene (scene_id id) const;
 
@@ -503,7 +514,9 @@ public:
   /*! \brief List metadata for all registered scenes. */
   std::vector<scene_resource_info> list_scenes () const;
 
-  /*! \brief Save a scene to disk. \param scene Scene to save. \param path Destination path. \param is_prefab Mark whether the saved scene is a prefab.
+  /*! \brief Save a scene to disk. \param scene Scene to save. \param path
+   * Destination path. \param is_prefab Mark whether the saved scene is a
+   * prefab.
    * \return True on success.
    */
   bool save_scene (const rsc::scene &scene, const std::string &path,
@@ -580,11 +593,16 @@ public:
   /*! \brief List all registered shaders and metadata. */
   std::vector<shader_resource_info> list_shaders () const;
 
-  /*! \brief Set the base engine resource path used to resolve engine-provided assets. */
+  /*! \brief Set the base engine resource path used to resolve engine-provided
+   * assets. */
   void set_engine_resource_path (const std::string &path);
 
   /*! \brief Get the configured engine resource base path. */
-  std::string get_engine_resource_path () const { return m_wsl_resource_path; }
+  std::string
+  get_engine_resource_path () const
+  {
+    return m_wsl_resource_path;
+  }
 
   /*! \brief Create a new project from the provided project descriptor. */
   bool new_project (const rsc::project &proj);
@@ -595,14 +613,20 @@ public:
   /*! \brief Return the currently active project if any. */
   std::shared_ptr<rsc::project> current_project () const;
 
-  /*! \brief Unload and clear all managed resources, releasing GPU and CPU memory. */
+  /*! \brief Unload and clear all managed resources, releasing GPU and CPU
+   * memory. */
   void clear_all_resources (bool restore_builtin_defaults = true);
 
   /*! \brief Access to the internal audio mixer instance (non-owning). */
-  MIX_Mixer *mixer () const { return m_mixer; }
+  MIX_Mixer *
+  mixer () const
+  {
+    return m_mixer;
+  }
 
   // Path resolution helpers
-  /*! \brief Resolve a possibly-relative asset path to an absolute engine/project path. */
+  /*! \brief Resolve a possibly-relative asset path to an absolute
+   * engine/project path. */
   std::string resolve_path (const std::string &path) const;
 
   /*! \brief Get the filesystem path for a registered model id. */
@@ -687,7 +711,8 @@ private:
   };
   std::optional<project_load_job> m_active_project_load;
 
-  /*! \brief Register built-in engine models used as placeholders or defaults. */
+  /*! \brief Register built-in engine models used as placeholders or defaults.
+   */
   void register_builtin_models ();
 
   /*! \brief Register built-in cubemaps used by engine defaults. */

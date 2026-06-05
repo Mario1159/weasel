@@ -60,9 +60,11 @@ rsc::scene_manager::register_meta ()
 
   entt::meta_factory<rsc::scene_manager> ()
       .type (entt::type_hash<rsc::scene_manager>::value ())
-      .custom<comp::meta_info> (comp::meta_info{
-          "Scene Manager", "Controls scene creation and active scene "
-                           "selection for the current runtime." })
+      .custom<comp::meta_info> (
+          comp::meta_info{ "Scene Manager",
+                           "Controls scene creation and active scene "
+                           "selection for the current runtime.",
+                           "" })
       .func<&rsc::scene_manager::custom_inspect> ("custom_inspect"_hs);
 }
 

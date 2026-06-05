@@ -6,7 +6,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-
 namespace wsl
 {
 
@@ -35,18 +34,22 @@ public:
   void on_init (entt::registry &registry) override;
   void on_inactive (entt::registry &registry) override;
   void on_update (entt::registry &registry, double dt) override;
+  void on_editor_update (entt::registry &registry, double dt) override;
 
   void on_render_build_draw_data (entt::registry &registry) override;
   void on_render_record_draw_cmd (entt::registry &registry) override;
 
 private:
-  static void set_local_from_world (entt::registry &registry, entt::entity entity,
-                             const glm::vec3 &world_pos,
-                             const glm::quat &world_rot) ;
+  static void set_local_from_world (entt::registry &registry,
+                                    entt::entity entity,
+                                    const glm::vec3 &world_pos,
+                                    const glm::quat &world_rot);
   static comp::singl::physics_manager *
-  get_registry_physics_manager (entt::registry &registry) ;
+  get_registry_physics_manager (entt::registry &registry);
   void update_character_controllers (entt::registry &registry, double dt);
-  void sync_transforms_to_rigid_bodies (entt::registry &registry, double dt);
+  void sync_transforms_to_rigid_bodies (entt::registry &registry, double dt,
+                                        bool force_all = false);
+  void sync_transforms_to_areas (entt::registry &registry, double dt);
   void step_world (entt::registry &registry, double dt);
   void dispatch_sensor_overlap_events (entt::registry &registry, double dt);
   void sync_rigid_bodies_to_transforms (entt::registry &registry, double dt);
@@ -54,9 +57,13 @@ private:
 
   void recreate_all_bodies (entt::registry &registry);
 
+  void on_rigid_body_constructed (entt::registry &registry,
+                                  entt::entity entity);
   void on_rigid_body_removed (entt::registry &registry, entt::entity entity);
+  void on_area_constructed (entt::registry &registry, entt::entity entity);
   void on_area_removed (entt::registry &registry, entt::entity entity);
-  void on_character_body_removed (entt::registry &registry, entt::entity entity);
+  void on_character_body_removed (entt::registry &registry,
+                                  entt::entity entity);
 
   entt::registry *m_registry = nullptr;
 };

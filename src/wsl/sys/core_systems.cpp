@@ -398,14 +398,14 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   // Pre-compute set of core system type_ids so that scene-system loops can
   // skip duplicate entries (they have uninitialised render state).
-  entt::id_type core_ids[]{};
-  size_t n_core = 0;
+  std::vector<entt::id_type> core_ids;
+  core_ids.reserve (to_vec ().size ());
   for (sys::ecs_system *sys : to_vec ()) {
     if (sys != nullptr) {
-      core_ids[n_core++] = sys->get_type_id ();
+      core_ids.push_back (sys->get_type_id ());
     }
   }
-  std::sort (core_ids, core_ids + n_core);
+  std::sort (core_ids.begin (), core_ids.end ());
 
   for (sys::ecs_system *sys : to_vec ()) {
     if (sys == nullptr) {
@@ -424,7 +424,7 @@ core_systems::render_impl (wsl::gfx::render_window &window,
       if (sys == nullptr) {
         continue;
       }
-      if (std::binary_search (core_ids, core_ids + n_core,
+      if (std::binary_search (core_ids.begin (), core_ids.end (),
                               sys->get_type_id ())) {
         continue;
       }
@@ -474,7 +474,7 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         if (sys == nullptr) {
           continue;
         }
-        if (std::binary_search (core_ids, core_ids + n_core,
+        if (std::binary_search (core_ids.begin (), core_ids.end (),
                                 sys->get_type_id ())) {
           continue;
         }

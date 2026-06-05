@@ -173,8 +173,12 @@ physics_system::on_init (entt::registry &registry)
 
   recreate_all_bodies (registry);
 
+  registry.on_construct<comp::rigid_body> ()
+      .connect<&physics_system::on_rigid_body_constructed> (this);
   registry.on_destroy<comp::rigid_body> ()
       .connect<&physics_system::on_rigid_body_removed> (this);
+  registry.on_construct<comp::area> ()
+      .connect<&physics_system::on_area_constructed> (this);
   registry.on_destroy<comp::area> ().connect<&physics_system::on_area_removed> (
       this);
   registry.on_destroy<comp::character_body> ()
@@ -207,8 +211,12 @@ physics_system::on_inactive (entt::registry &registry)
     }
   }
 
+  registry.on_construct<comp::rigid_body> ()
+      .disconnect<&physics_system::on_rigid_body_constructed> (this);
   registry.on_destroy<comp::rigid_body> ()
       .disconnect<&physics_system::on_rigid_body_removed> (this);
+  registry.on_construct<comp::area> ()
+      .disconnect<&physics_system::on_area_constructed> (this);
   registry.on_destroy<comp::area> ()
       .disconnect<&physics_system::on_area_removed> (this);
   registry.on_destroy<comp::character_body> ()
@@ -233,6 +241,34 @@ physics_system::on_update (entt::registry &registry, double dt)
   }
 
   run_registered_iterations (registry, dt);
+}
+
+void
+physics_system::on_editor_update (entt::registry &registry, double dt)
+{
+  this->m_registry = &registry;
+
+  auto &ctx = registry.ctx ();
+  if (!ctx.contains<comp::singl::runtime_context *> ()) {
+    return;
+  }
+
+  // Only sync if the physics engine already exists.  The dummy registry's
+  // physics_manager is reset every frame by ensure_dummy_context_bindings →
+  // apply_core_singletons, which would destroy and recreate the engine
+  // unnecessarily (and spam the log) if we called ensure_engine() here.
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
+  if ((physics == nullptr) || (physics->try_engine () == nullptr)) {
+    return;
+  }
+
+  // Keep rigid-body world positions in sync with entity transforms so
+  // collision-debug wireframes render at the correct location.
+  // force_all=true skips the dynamic-body check so editor movement is
+  // reflected in the debug draw in real time.
+  sync_transforms_to_rigid_bodies (registry, dt, true);
+  sync_transforms_to_areas (registry, dt);
 }
 
 void
@@ -446,7 +482,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
 
 void
 physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
-                                                 double /*dt*/)
+                                                 double /*dt*/, bool force_all)
 {
   comp::singl::physics_manager *physics
       = get_registry_physics_manager (registry);
@@ -459,7 +495,7 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
   auto view = registry.view<comp::transform, comp::rigid_body> ();
 
   for (entt::entity const e : view) {
-    comp::rigid_body const &rb = view.get<comp::rigid_body> (e);
+    comp::rigid_body &rb = view.get<comp::rigid_body> (e);
     if (rb.body_id.IsInvalid ()) {
       continue;
     }
@@ -468,24 +504,48 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
 
     // Dynamic bodies should not be reset by their transform during gameplay,
     // as physics is the source of truth. Transform -> Physics sync should only
-    // happen for Kinematic/Static bodies or when explicitly moved in editor.
-    if (rb.motion_type.value == phys::motion_type::Dynamic) {
+    // happen for Kinematic/Static bodies. When force_all is set (editor mode),
+    // sync every body so the debug wireframe follows entity movement.
+    if (!force_all && rb.motion_type.value == phys::motion_type::Dynamic) {
       continue;
     }
 
     glm::vec3 world_pos = t.position;
     glm::quat world_rot = t.rotation;
+    glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
 
     // If it has a parent, we MUST use the WorldTransform because
     // ECS transform is local but Jolt wants world.
-    if (auto *h = registry.try_get<comp::hierarchy> (e);
-        (h != nullptr) && h->parent != entt::null) {
+    auto *h = registry.try_get<comp::hierarchy> (e);
+    bool const has_parent = (h != nullptr) && h->parent != entt::null;
+    if (has_parent) {
       if (auto *wt = registry.try_get<comp::world_transform> (e)) {
         glm::mat4 const wm = wt->value;
         world_pos = glm::vec3 (wm[3]);
         world_rot = glm::quat_cast (wm);
+        scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                           glm::length (glm::vec3 (wm[1])),
+                           glm::length (glm::vec3 (wm[2])));
       }
+    } else {
+      scale = glm::vec3 (t.scale.x, t.scale.y, t.scale.z);
     }
+
+    // Check for scale change — rebuild body to update the debug wireframe.
+    math::vec3f const current_scale{ scale.x, scale.y, scale.z };
+    if (rb.has_scale_change (current_scale)) {
+      // Compute final world pos/rot with offset for the rebuild
+      glm::vec3 const final_pos
+          = world_pos + world_rot * (glm::vec3)rb.position;
+      glm::quat const final_rot = world_rot * (glm::quat)rb.rotation;
+      rb.rebuild_body (engine, final_pos, final_rot, scale);
+      rb.applied_scale = current_scale;
+      continue; // already re-positioned inside rebuild_body
+    }
+
+    // Apply rigid_body's local offset
+    world_pos = world_pos + world_rot * (glm::vec3)rb.position;
+    world_rot = world_rot * (glm::quat)rb.rotation;
 
     bi.SetPositionAndRotation (rb.body_id, to_jolt (world_pos),
                                to_jolt (world_rot), JPH::EActivation::Activate);
@@ -508,11 +568,27 @@ physics_system::recreate_all_bodies (entt::registry &registry)
     for (entt::entity const e : view) {
       comp::rigid_body &rb = view.get<comp::rigid_body> (e);
       if (rb.body_id.IsInvalid ()) {
+        glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
+        glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
         glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
-        if (auto *t = registry.try_get<comp::transform> (e); t) {
+        if (auto *wt = registry.try_get<comp::world_transform> (e); wt) {
+          glm::mat4 const &wm = wt->value;
+          world_pos = glm::vec3 (wm[3]);
+          world_rot = glm::quat_cast (wm);
+          // Extract scale from world transform
+          scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                             glm::length (glm::vec3 (wm[1])),
+                             glm::length (glm::vec3 (wm[2])));
+        } else if (auto *t = registry.try_get<comp::transform> (e); t) {
+          world_pos = (glm::vec3)t->position;
+          world_rot = (glm::quat)t->rotation;
           scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
         }
-        rb.create_body (engine, scale);
+        // Apply rigid_body offset to get the final body world position
+        world_pos = world_pos + world_rot * (glm::vec3)rb.position;
+        world_rot = world_rot * (glm::quat)rb.rotation;
+        rb.create_body (engine, world_pos, world_rot, scale);
+        rb.applied_scale = math::vec3f{ scale.x, scale.y, scale.z };
       }
     }
   }
@@ -523,11 +599,25 @@ physics_system::recreate_all_bodies (entt::registry &registry)
     for (entt::entity const e : view) {
       comp::area &a = view.get<comp::area> (e);
       if (a.body_id.IsInvalid ()) {
+        glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
+        glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
         glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
-        if (auto *t = registry.try_get<comp::transform> (e); t) {
+        if (auto *wt = registry.try_get<comp::world_transform> (e); wt) {
+          glm::mat4 const &wm = wt->value;
+          world_pos = glm::vec3 (wm[3]);
+          world_rot = glm::quat_cast (wm);
+          scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                             glm::length (glm::vec3 (wm[1])),
+                             glm::length (glm::vec3 (wm[2])));
+        } else if (auto *t = registry.try_get<comp::transform> (e); t) {
+          world_pos = (glm::vec3)t->position;
+          world_rot = (glm::quat)t->rotation;
           scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
         }
-        a.create_body (engine, scale);
+        // Apply area offset
+        world_pos = world_pos + world_rot * (glm::vec3)a.position;
+        world_rot = world_rot * (glm::quat)a.rotation;
+        a.create_body (engine, world_pos, world_rot, scale);
       }
     }
   }
@@ -579,8 +669,15 @@ physics_system::sync_rigid_bodies_to_transforms (entt::registry &registry,
 
     const JPH::Body &body = lock.GetBody ();
 
-    set_local_from_world (registry, e, to_glm (body.GetCenterOfMassPosition ()),
-                          to_glm (body.GetRotation ()));
+    // The Jolt body sits at transform_world + offset.  Remove the offset
+    // so that set_local_from_world sees the transform's own world position.
+    glm::vec3 const body_world = to_glm (body.GetCenterOfMassPosition ());
+    glm::quat const body_rot = to_glm (body.GetRotation ());
+    glm::quat const inv_offset = glm::inverse ((glm::quat)rb.rotation);
+    glm::quat const xform_rot = body_rot * inv_offset;
+    glm::vec3 const xform_pos = body_world - xform_rot * (glm::vec3)rb.position;
+
+    set_local_from_world (registry, e, xform_pos, xform_rot);
   }
 }
 
@@ -599,6 +696,194 @@ physics_system::sync_characters_to_transforms (entt::registry &registry,
     set_local_from_world (registry, e, to_glm (c.get ()->GetPosition ()),
                           to_glm (c.get ()->GetRotation ()));
   }
+}
+
+void
+physics_system::on_rigid_body_constructed (entt::registry &registry,
+                                           entt::entity entity)
+{
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
+  if (physics == nullptr) {
+    return;
+  }
+  phys::engine &engine = physics->ensure_engine ();
+
+  auto &rb = registry.get<comp::rigid_body> (entity);
+  if (!rb.body_id.IsInvalid ()) {
+    return; // already has a body
+  }
+
+  // Compute world position from the entity's transform + rigid_body offset.
+  //
+  // IMPORTANT: prefer comp::transform over comp::world_transform for root
+  // entities because world_transform may be stale — it is recomputed only
+  // during transform_system::on_editor_update, so if the user moves the
+  // entity and then adds rigid_body between frames, world_transform still
+  // holds the previous frame's value (or identity for a brand-new entity).
+  // For root entities, transform.position IS the world position and is
+  // always up-to-date.
+  glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
+  glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
+  glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
+
+  auto *t = registry.try_get<comp::transform> (entity);
+  auto *h = registry.try_get<comp::hierarchy> (entity);
+  bool const has_parent = (h != nullptr) && h->parent != entt::null;
+
+  if (t != nullptr) {
+    if (has_parent) {
+      // Child entity — world_transform is the most reliable source.
+      if (auto *wt = registry.try_get<comp::world_transform> (entity); wt) {
+        glm::mat4 const &wm = wt->value;
+        world_pos = glm::vec3 (wm[3]);
+        world_rot = glm::quat_cast (wm);
+        scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                           glm::length (glm::vec3 (wm[1])),
+                           glm::length (glm::vec3 (wm[2])));
+      } else {
+        world_pos = (glm::vec3)t->position;
+        world_rot = (glm::quat)t->rotation;
+        scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
+      }
+    } else {
+      // Root entity — transform is always current.
+      world_pos = (glm::vec3)t->position;
+      world_rot = (glm::quat)t->rotation;
+      scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
+    }
+  } else if (auto *wt = registry.try_get<comp::world_transform> (entity); wt) {
+    glm::mat4 const &wm = wt->value;
+    world_pos = glm::vec3 (wm[3]);
+    world_rot = glm::quat_cast (wm);
+    scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                       glm::length (glm::vec3 (wm[1])),
+                       glm::length (glm::vec3 (wm[2])));
+  }
+
+  // Apply rigid_body offset to get the final body world position
+  world_pos = world_pos + world_rot * (glm::vec3)rb.position;
+  world_rot = world_rot * (glm::quat)rb.rotation;
+
+  rb.create_body (engine, world_pos, world_rot, scale);
+  rb.applied_scale = math::vec3f{ scale.x, scale.y, scale.z };
+}
+
+void
+physics_system::sync_transforms_to_areas (entt::registry &registry,
+                                          double /*dt*/)
+{
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
+  if (physics == nullptr) {
+    return;
+  }
+  phys::engine &engine = physics->ensure_engine ();
+  auto &bi = engine.get_body_interface ();
+
+  auto view = registry.view<comp::area> ();
+
+  for (entt::entity const e : view) {
+    comp::area const &a = view.get<comp::area> (e);
+    if (a.body_id.IsInvalid ()) {
+      continue;
+    }
+
+    glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
+    glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
+
+    auto *t = registry.try_get<comp::transform> (e);
+    auto *h = registry.try_get<comp::hierarchy> (e);
+    bool const has_parent = (h != nullptr) && h->parent != entt::null;
+
+    if (t != nullptr) {
+      if (has_parent) {
+        if (auto *wt = registry.try_get<comp::world_transform> (e); wt) {
+          glm::mat4 const wm = wt->value;
+          world_pos = glm::vec3 (wm[3]);
+          world_rot = glm::quat_cast (wm);
+        } else {
+          world_pos = (glm::vec3)t->position;
+          world_rot = (glm::quat)t->rotation;
+        }
+      } else {
+        world_pos = (glm::vec3)t->position;
+        world_rot = (glm::quat)t->rotation;
+      }
+    } else if (auto *wt = registry.try_get<comp::world_transform> (e); wt) {
+      glm::mat4 const wm = wt->value;
+      world_pos = glm::vec3 (wm[3]);
+      world_rot = glm::quat_cast (wm);
+    }
+
+    // Apply area offset
+    world_pos = world_pos + world_rot * (glm::vec3)a.position;
+    world_rot = world_rot * (glm::quat)a.rotation;
+
+    bi.SetPositionAndRotation (a.body_id, to_jolt (world_pos),
+                               to_jolt (world_rot), JPH::EActivation::Activate);
+  }
+}
+
+void
+physics_system::on_area_constructed (entt::registry &registry,
+                                     entt::entity entity)
+{
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
+  if (physics == nullptr) {
+    return;
+  }
+  phys::engine &engine = physics->ensure_engine ();
+
+  auto &a = registry.get<comp::area> (entity);
+  if (!a.body_id.IsInvalid ()) {
+    return;
+  }
+
+  // Compute world position from transform + offset (same logic as
+  // on_rigid_body_constructed).
+  glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
+  glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
+  glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
+
+  auto *t = registry.try_get<comp::transform> (entity);
+  auto *h = registry.try_get<comp::hierarchy> (entity);
+  bool const has_parent = (h != nullptr) && h->parent != entt::null;
+
+  if (t != nullptr) {
+    if (has_parent) {
+      if (auto *wt = registry.try_get<comp::world_transform> (entity); wt) {
+        glm::mat4 const &wm = wt->value;
+        world_pos = glm::vec3 (wm[3]);
+        world_rot = glm::quat_cast (wm);
+        scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                           glm::length (glm::vec3 (wm[1])),
+                           glm::length (glm::vec3 (wm[2])));
+      } else {
+        world_pos = (glm::vec3)t->position;
+        world_rot = (glm::quat)t->rotation;
+        scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
+      }
+    } else {
+      world_pos = (glm::vec3)t->position;
+      world_rot = (glm::quat)t->rotation;
+      scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
+    }
+  } else if (auto *wt = registry.try_get<comp::world_transform> (entity); wt) {
+    glm::mat4 const &wm = wt->value;
+    world_pos = glm::vec3 (wm[3]);
+    world_rot = glm::quat_cast (wm);
+    scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                       glm::length (glm::vec3 (wm[1])),
+                       glm::length (glm::vec3 (wm[2])));
+  }
+
+  // Apply area offset
+  world_pos = world_pos + world_rot * (glm::vec3)a.position;
+  world_rot = world_rot * (glm::quat)a.rotation;
+
+  a.create_body (engine, world_pos, world_rot, scale);
 }
 
 void

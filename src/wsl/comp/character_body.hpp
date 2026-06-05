@@ -17,7 +17,6 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 // clang-format on
 
-
 namespace wsl
 {
 
@@ -74,21 +73,21 @@ public:
         .custom<comp::meta_info> (
             meta_info{ "Character Body",
                        "Capsule-based kinematic character controller (Jolt)",
-                        "engine://icons/comp_character_body.svg" })
+                       "engine://icons/comp_character_body.svg" })
         .func<&comp::character_body::on_inspector_changed> (
             "on_inspector_changed"_hs)
 
         .data<&comp::character_body::height> ("height"_hs)
         .custom<comp::meta_info> (
-            meta_info{ "Height", "Capsule height in meters" })
+            meta_info{ "Height", "Capsule height in meters", "" })
 
         .data<&comp::character_body::radius> ("radius"_hs)
         .custom<comp::meta_info> (
-            meta_info{ "Radius", "Capsule radius in meters" })
+            meta_info{ "Radius", "Capsule radius in meters", "" })
 
         .data<&comp::character_body::desired_velocity> ("desired_velocity"_hs)
         .custom<comp::meta_info> (
-            meta_info{ "Desired Velocity", "Target movement velocity" });
+            meta_info{ "Desired Velocity", "Target movement velocity", "" });
   }
 
   template <class Archive>
@@ -114,11 +113,10 @@ private:
   static constexpr float min_half_height = 1e-3F; // must be > 0 for Jolt assert
   static constexpr float min_radius = 1e-3F;
 
-  static void sanitize_dimensions (float &height, float &radius) ;
-  static float capsule_half_height (float height, float radius) ;
+  static void sanitize_dimensions (float &height, float &radius);
+  static float capsule_half_height (float height, float radius);
 
   void build_settings (JPH::CharacterVirtualSettings &settings) const;
-
 
   JPH::Ref<JPH::CharacterVirtual> m_body;
 

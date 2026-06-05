@@ -1,5 +1,6 @@
 #include "repl_handler.hpp"
 #include "wsl/log/log.hpp"
+#include <cstdint>
 
 #include "comp/area3d.hpp"
 #include "comp/camera.hpp"
@@ -145,7 +146,6 @@ build_repl_command (const std::vector<std::string> &args)
   }
   return output.str ();
 }
-
 
 bool
 command_failed (std::string_view output)
@@ -432,7 +432,8 @@ set_component_property (entt::meta_any &instance, entt::meta_data prop_data,
 
 void
 format_meta_value (std::ostringstream &output, const entt::meta_any &field_inst,
-                   const std::string &indent)
+                   const std::string &indent,
+                   const rsc::resource_manager *res_mgr = nullptr)
 {
   auto type = field_inst.type ();
   if (!type) {
@@ -451,14 +452,30 @@ format_meta_value (std::ostringstream &output, const entt::meta_any &field_inst,
   if (type.is_arithmetic ()) {
     if (type_id == entt::type_hash<float>::value ())
       output << *static_cast<const float *> (ptr);
-    else if (type_id == entt::type_hash<int>::value ())
-      output << *static_cast<const int *> (ptr);
-    else if (type_id == entt::type_hash<bool>::value ())
-      output << (*static_cast<const bool *> (ptr) ? "true" : "false");
-    else if (type_id == entt::type_hash<uint32_t>::value ())
-      output << *static_cast<const uint32_t *> (ptr);
     else if (type_id == entt::type_hash<double>::value ())
       output << *static_cast<const double *> (ptr);
+    else if (type_id == entt::type_hash<bool>::value ())
+      output << (*static_cast<const bool *> (ptr) ? "true" : "false");
+    else if (type_id == entt::type_hash<int>::value ())
+      output << *static_cast<const int *> (ptr);
+    else if (type_id == entt::type_hash<unsigned int>::value ())
+      output << *static_cast<const unsigned int *> (ptr);
+    else if (type_id == entt::type_hash<int16_t>::value ())
+      output << *static_cast<const int16_t *> (ptr);
+    else if (type_id == entt::type_hash<uint16_t>::value ())
+      output << *static_cast<const uint16_t *> (ptr);
+    else if (type_id == entt::type_hash<int32_t>::value ())
+      output << *static_cast<const int32_t *> (ptr);
+    else if (type_id == entt::type_hash<uint32_t>::value ())
+      output << *static_cast<const uint32_t *> (ptr);
+    else if (type_id == entt::type_hash<int64_t>::value ())
+      output << *static_cast<const int64_t *> (ptr);
+    else if (type_id == entt::type_hash<uint64_t>::value ())
+      output << *static_cast<const uint64_t *> (ptr);
+    else if (type_id == entt::type_hash<uint8_t>::value ())
+      output << static_cast<unsigned int> (*static_cast<const uint8_t *> (ptr));
+    else if (type_id == entt::type_hash<int8_t>::value ())
+      output << static_cast<int> (*static_cast<const int8_t *> (ptr));
     else
       output << "<?>";
     return;
@@ -472,7 +489,16 @@ format_meta_value (std::ostringstream &output, const entt::meta_any &field_inst,
 
   // model_id
   if (type_id == entt::type_hash<wsl::rsc::model_id>::value ()) {
-    output << "model#" << static_cast<const wsl::rsc::model_id *> (ptr)->value;
+    auto id = *static_cast<const wsl::rsc::model_id *> (ptr);
+    if (res_mgr) {
+      auto info = res_mgr->info (id);
+      if (info)
+        output << info->path;
+      else
+        output << "model#" << id.value;
+    } else {
+      output << "model#" << id.value;
+    }
     return;
   }
 
@@ -498,14 +524,25 @@ format_meta_value (std::ostringstream &output, const entt::meta_any &field_inst,
 
   // compound with sub-fields
   if (type.is_class ()) {
-    bool has_sub = false;
-    for (auto [fid, fdata] : type.data ()) {
-      (void)fid;
-      (void)fdata;
-      has_sub = true;
-      break;
-    }
-    if (has_sub) {
+    auto data_range = type.data ();
+    auto data_begin = data_range.begin ();
+    auto data_end = data_range.end ();
+    if (data_begin != data_end) {
+      // Flatten wrapper types: if a single unnamed sub-field, show value
+      // directly
+      auto next = data_begin;
+      ++next;
+      if (next == data_end) {
+        auto &fdata = data_begin->second;
+        auto mi = wsl::comp::get_meta_info (fdata);
+        if (!mi) {
+          entt::meta_any sub = fdata.get (field_inst);
+          if (sub) {
+            format_meta_value (output, sub, indent, res_mgr);
+            return;
+          }
+        }
+      }
       output << "{";
       for (auto [fid, fdata] : type.data ()) {
         (void)fid;
@@ -514,7 +551,7 @@ format_meta_value (std::ostringstream &output, const entt::meta_any &field_inst,
         entt::meta_any sub = fdata.get (field_inst);
         output << "\n" << indent << "  " << dn << " = ";
         if (sub)
-          format_meta_value (output, sub, indent + "  ");
+          format_meta_value (output, sub, indent + "  ", res_mgr);
         else
           output << "<?>";
       }
@@ -529,22 +566,75 @@ format_meta_value (std::ostringstream &output, const entt::meta_any &field_inst,
 void
 format_component_properties (std::ostringstream &output,
                              const entt::meta_type &meta, void *instance,
-                             const std::string &indent)
+                             const std::string &indent,
+                             const rsc::resource_manager *res_mgr = nullptr)
 {
   entt::meta_any comp_any = meta.from_void (instance);
   if (!comp_any)
     return;
+  bool first = true;
   for (auto [fid, fdata] : meta.data ()) {
     (void)fid;
+    if (!first)
+      output << "\n";
+    first = false;
     auto mi = wsl::comp::get_meta_info (fdata);
     std::string dn = mi ? mi->display_name : "?";
     entt::meta_any sub = fdata.get (comp_any);
-    output << "\n" << indent << "  " << dn << " = ";
+    output << indent << "  " << dn << " = ";
     if (sub)
-      format_meta_value (output, sub, indent + "  ");
+      format_meta_value (output, sub, indent + "  ", res_mgr);
     else
       output << "<?>";
   }
+  if (!first)
+    output << "\n";
+}
+
+void
+format_component_info (std::ostringstream &output, const entt::meta_type &meta,
+                       const std::string &indent)
+{
+  output << indent;
+  // Component title with display name and C++ type
+  auto comp_mi = wsl::comp::get_meta_info (meta);
+  if (comp_mi && !comp_mi->display_name.empty ())
+    output << comp_mi->display_name;
+  else
+    output << meta.info ().name ();
+  output << " [" << meta.info ().name () << "]";
+
+  if (comp_mi && !comp_mi->description.empty ())
+    output << "\n" << indent << "  Description: " << comp_mi->description;
+
+  output << "\n" << indent << "  Fields:";
+
+  bool any_field = false;
+  for (auto [fid, fdata] : meta.data ()) {
+    (void)fid;
+    any_field = true;
+    auto mi = wsl::comp::get_meta_info (fdata);
+    std::string dn = mi ? mi->display_name : "?";
+    output << "\n" << indent << "    - " << dn;
+
+    if (fdata.type ()) {
+      std::string_view type_name = fdata.type ().info ().name ();
+      // Strip "struct " / "class " prefix if present
+      if (type_name.starts_with ("struct "))
+        type_name.remove_prefix (7);
+      else if (type_name.starts_with ("class "))
+        type_name.remove_prefix (6);
+      output << " [" << type_name << "]";
+    }
+
+    if (mi && !mi->description.empty ())
+      output << "\n" << indent << "        " << mi->description;
+  }
+
+  if (!any_field)
+    output << "\n" << indent << "    (none)";
+
+  output << "\n";
 }
 
 } // namespace
@@ -1033,7 +1123,7 @@ command_executor::get_active_scene ()
 
 entt::entity
 command_executor::resolve_entity_token (const std::string &token,
-                                       wsl::rsc::scene *scene)
+                                        wsl::rsc::scene *scene)
 {
   entt::entity e = entt::null;
   try {
@@ -1095,7 +1185,8 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
       load_path /= wsl::rsc::project_loader::manifest_file;
     }
     if (!std::filesystem::exists (load_path)) {
-      m_output << "Failed to find project manifest: " << load_path.string () << "\n";
+      m_output << "Failed to find project manifest: " << load_path.string ()
+               << "\n";
       return;
     }
     m_current_project = wsl::rsc::project_loader::load (load_path.string ());
@@ -1181,18 +1272,10 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
       m_output << "No project loaded.\n";
       return;
     }
-    std::filesystem::path manifest
-        = std::filesystem::path (m_current_project->root_path)
-          / wsl::rsc::project_loader::manifest_file;
-    std::ofstream file (manifest);
-    if (!file) {
-      m_output << "Failed to open project file for writing.\n";
-      return;
-    }
-    cereal::JSONOutputArchive archive (file);
-    archive (cereal::make_nvp ("project", *m_current_project));
-    m_output << "Project saved to " << manifest.string () << "\n";
+    return;
   }
+
+  // ── scene subcommand ──
 }
 
 void
@@ -1480,7 +1563,7 @@ void
 command_executor::cmd_comp (const std::vector<std::string> &tokens)
 {
   if (tokens.size () < 2) {
-    m_output << "Usage: comp <ls|avail|add|rm|set> [ent_id] [args...]\n";
+    m_output << "Usage: comp <ls|avail|info|add|rm|set> [ent_id] [args...]\n";
     return;
   }
   const std::string &action = tokens[1];
@@ -1568,6 +1651,29 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     return;
   }
 
+  // ── comp info <name> ──
+  if (action == "info") {
+    if (tokens.size () < 3) {
+      m_output << "Usage: comp info <name>\n";
+      return;
+    }
+    ensure_runtime_module_loaded (true);
+    const auto *descriptor
+        = m_rtc.component_registry.find_world_component (tokens[2]);
+    if (!descriptor) {
+      m_output << "Unknown component: " << tokens[2] << "\n";
+      return;
+    }
+    entt::meta_type meta = entt::resolve (descriptor->type_id);
+    if (!meta) {
+      m_output << "No reflection metadata for " << descriptor->display_name
+               << "\n";
+      return;
+    }
+    format_component_info (m_output, meta, "");
+    return;
+  }
+
   auto *scene = get_active_scene ();
   if (!scene) {
     m_output << "No active scene.\n";
@@ -1596,7 +1702,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
           entt::meta_type meta = entt::resolve (descriptor->type_id);
           if (meta && storage.value (e)) {
             format_component_properties (m_output, meta, storage.value (e),
-                                         "    ");
+                                         "    ", &m_rtc.resource_manager);
           }
         } else {
           m_output << " - Unknown Component (Hash: " << id << ")\n";
@@ -1806,7 +1912,7 @@ void
 command_executor::cmd_singl (const std::vector<std::string> &tokens)
 {
   if (tokens.size () < 2) {
-    m_output << "Usage: singl <ls|add|create|set> [args...]\n";
+    m_output << "Usage: singl <ls|info|add|create|set> [args...]\n";
     return;
   }
   const std::string &action = tokens[1];
@@ -1837,10 +1943,34 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
         if (ptr) {
           entt::meta_type meta = entt::resolve (s->type_id);
           if (meta)
-            format_component_properties (m_output, meta, ptr, "    ");
+            format_component_properties (m_output, meta, ptr, "    ",
+                                         &m_rtc.resource_manager);
         }
       }
     }
+    return;
+  }
+
+  // ── singl info <name> ──
+  if (action == "info") {
+    if (tokens.size () < 3) {
+      m_output << "Usage: singl info <name>\n";
+      return;
+    }
+    ensure_runtime_module_loaded (true);
+    const auto *descriptor
+        = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
+    if (!descriptor) {
+      m_output << "Unknown singleton: " << tokens[2] << "\n";
+      return;
+    }
+    entt::meta_type meta = entt::resolve (descriptor->type_id);
+    if (!meta) {
+      m_output << "No reflection metadata for " << descriptor->display_name
+               << "\n";
+      return;
+    }
+    format_component_info (m_output, meta, "");
     return;
   }
 
@@ -2087,7 +2217,8 @@ void
 command_executor::cmd_sig (const std::vector<std::string> &tokens)
 {
   if (tokens.size () < 2) {
-    m_output << "Usage: sig <ls|handlers|connections|connect|disconnect> [args...]\n";
+    m_output << "Usage: sig <ls|handlers|connections|connect|disconnect> "
+                "[args...]\n";
     return;
   }
 
@@ -2113,8 +2244,8 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
       return;
     }
     for (const auto &h : m_rtc.signal_db.connectable_handlers) {
-      m_output << h.signal_type_name << " -> " << h.system_type_name << "::"
-               << h.handler_name << "\n";
+      m_output << h.signal_type_name << " -> " << h.system_type_name
+               << "::" << h.handler_name << "\n";
     }
     return;
   }
@@ -2132,11 +2263,12 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
         signal_name = it->second.type_name;
 
       std::string system_name = "<unknown>";
-      if (auto sd = m_rtc.system_factory_registry.find_system (c.system_type_id))
+      if (auto sd
+          = m_rtc.system_factory_registry.find_system (c.system_type_id))
         system_name = sd->display_name;
 
-      m_output << signal_name << " -> " << system_name << "::"
-               << c.handler_name << " (src=" << (uint64_t)c.source_entity
+      m_output << signal_name << " -> " << system_name << "::" << c.handler_name
+               << " (src=" << (uint64_t)c.source_entity
                << ", tgt=" << (uint64_t)c.target_entity << ")\n";
     }
     return;
@@ -2145,7 +2277,8 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
   if (sub == "connect" || sub == "disconnect") {
     // Usage: sig connect <signal> <system> <handler> [src_entity] [tgt_entity]
     if (tokens.size () < 5) {
-      m_output << "Usage: sig " << sub << " <signal> <system> <handler> [src] [tgt]\n";
+      m_output << "Usage: sig " << sub
+               << " <signal> <system> <handler> [src] [tgt]\n";
       return;
     }
 
@@ -2163,8 +2296,9 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
       }
       // match simple name (after last ::)
       auto pos = entry.type_name.rfind ("::");
-      std::string simple = (pos == std::string::npos) ? entry.type_name
-                                                      : entry.type_name.substr (pos + 2);
+      std::string simple = (pos == std::string::npos)
+                               ? entry.type_name
+                               : entry.type_name.substr (pos + 2);
       if (simple == signal_arg) {
         signal_id = kv.first;
         break;
@@ -2209,10 +2343,12 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
 
     bool ok = false;
     if (sub == "connect") {
-      ok = m_rtc.signal_hub.connect (signal_id, system_id, handler_arg, src, tgt);
+      ok = m_rtc.signal_hub.connect (signal_id, system_id, handler_arg, src,
+                                     tgt);
       m_output << (ok ? "Connected." : "Failed to connect.") << "\n";
     } else {
-      ok = m_rtc.signal_hub.disconnect (signal_id, system_id, handler_arg, src, tgt);
+      ok = m_rtc.signal_hub.disconnect (signal_id, system_id, handler_arg, src,
+                                        tgt);
       m_output << (ok ? "Disconnected." : "Failed to disconnect.") << "\n";
     }
     return;
@@ -3144,13 +3280,14 @@ repl_handler::prepare (std::optional<std::string> initial_project,
   if (initial_project) {
     std::filesystem::path proj_path (*initial_project);
     std::filesystem::path manifest_path = proj_path;
-    // If user passed a project root directory, look for the manifest file inside it
+    // If user passed a project root directory, look for the manifest file
+    // inside it
     if (std::filesystem::is_directory (proj_path)) {
       manifest_path = proj_path / wsl::rsc::project_loader::manifest_file;
     }
     if (!std::filesystem::exists (manifest_path)) {
-      std::cerr << "Failed to find project manifest: " << manifest_path.string ()
-                << "\n";
+      std::cerr << "Failed to find project manifest: "
+                << manifest_path.string () << "\n";
       return false;
     }
 
@@ -3167,8 +3304,9 @@ repl_handler::prepare (std::optional<std::string> initial_project,
     if (!initial_scene) {
       auto proj_ptr = wsl::rsc::project_loader::load (manifest_path.string ());
       if (proj_ptr && !proj_ptr->default_scene_path.empty ()) {
-        std::string const ds_output = m_local_executor->execute (
-            build_repl_command ({ "scene", "load", proj_ptr->default_scene_path }));
+        std::string const ds_output
+            = m_local_executor->execute (build_repl_command (
+                { "scene", "load", proj_ptr->default_scene_path }));
         if (command_failed (ds_output)) {
           std::cerr << ds_output;
           return false;
@@ -3243,7 +3381,7 @@ repl_handler::execute_command (const std::string &line)
   ensure_local_executor ();
   if (m_local_executor) {
     std::string output = m_local_executor->execute (line);
-    wsl::log::cli ()->info ("{}", output);
+    std::cout << output;
   }
 }
 

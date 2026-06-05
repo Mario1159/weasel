@@ -79,7 +79,8 @@ comp::singl::runtime_context::register_meta ()
   entt::meta_factory<comp::singl::runtime_context> ()
       .type (entt::type_hash<comp::singl::runtime_context>::value ())
       .custom<comp::meta_info> (comp::meta_info{
-          "Runtime Context", "Global state for the running game application." })
+          "Runtime Context", "Global state for the running game application.",
+          "" })
       .func<&comp::singl::runtime_context::custom_inspect> (
           "custom_inspect"_hs);
 }

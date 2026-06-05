@@ -309,6 +309,15 @@ rigid_body::has_structural_change () const
 }
 
 bool
+rigid_body::has_transform_change () const
+{
+  return position.x != applied_position.x || position.y != applied_position.y
+         || position.z != applied_position.z || rotation.x != applied_rotation.x
+         || rotation.y != applied_rotation.y || rotation.z != applied_rotation.z
+         || rotation.w != applied_rotation.w;
+}
+
+bool
 rigid_body::has_surface_change () const
 {
   return collision_layer.value != applied_collision_layer
@@ -317,12 +326,10 @@ rigid_body::has_surface_change () const
 }
 
 bool
-rigid_body::has_transform_change () const
+rigid_body::has_scale_change (const math::vec3f &scale) const
 {
-  return position.x != applied_position.x || position.y != applied_position.y
-         || position.z != applied_position.z || rotation.x != applied_rotation.x
-         || rotation.y != applied_rotation.y || rotation.z != applied_rotation.z
-         || rotation.w != applied_rotation.w;
+  return scale.x != applied_scale.x || scale.y != applied_scale.y
+         || scale.z != applied_scale.z;
 }
 
 rigid_body
@@ -342,7 +349,8 @@ rigid_body::create_box_body (phys::engine &engine, const glm::vec3 &pos,
   rb.allowed_dofs.value = JPH::EAllowedDOFs::All;
 
   rb.sync_applied_cache ();
-  rb.create_body (engine);
+  rb.applied_scale = math::vec3f{ 1, 1, 1 };
+  rb.create_body (engine, pos, rot);
   return rb;
 }
 
@@ -362,7 +370,8 @@ rigid_body::create_sphere_body (phys::engine &engine, const glm::vec3 &pos,
   rb.dynamic = (motion == phys::motion_type::Dynamic);
 
   rb.sync_applied_cache ();
-  rb.create_body (engine);
+  rb.applied_scale = math::vec3f{ 1, 1, 1 };
+  rb.create_body (engine, pos, glm::quat (1, 0, 0, 0));
   return rb;
 }
 
@@ -378,14 +387,16 @@ rigid_body::destroy_body (phys::engine &engine)
 }
 
 void
-rigid_body::rebuild_body (phys::engine &engine, const glm::vec3 &scale)
+rigid_body::rebuild_body (phys::engine &engine, const glm::vec3 &world_pos,
+                          const glm::quat &world_rot, const glm::vec3 &scale)
 {
   destroy_body (engine);
-  create_body (engine, scale);
+  create_body (engine, world_pos, world_rot, scale);
 }
 
 void
-rigid_body::create_body (phys::engine &engine, const glm::vec3 &scale)
+rigid_body::create_body (phys::engine &engine, const glm::vec3 &world_pos,
+                         const glm::quat &world_rot, const glm::vec3 &scale)
 {
   if (!body_id.IsInvalid ()) {
     destroy_body (engine);
@@ -407,8 +418,8 @@ rigid_body::create_body (phys::engine &engine, const glm::vec3 &scale)
 
   dynamic = (motion_type.value == phys::motion_type::Dynamic);
 
-  const JPH::RVec3 pos = to_jolt (position);
-  const JPH::Quat rot = to_jolt (rotation);
+  const JPH::RVec3 pos = to_jolt (world_pos);
+  const JPH::Quat rot = to_jolt (world_rot);
 
   JPH::BodyCreationSettings settings (shape_ref, pos, rot, motion_type.value,
                                       object_layer ());
@@ -431,7 +442,24 @@ rigid_body::apply_transform_to_body (phys::engine &engine) const
   }
 
   auto &bi = engine.get_body_interface ();
-  bi.SetPositionAndRotation (body_id, to_jolt (position), to_jolt (rotation),
+
+  // Read current body world position/rotation
+  glm::vec3 const body_pos = to_glm (bi.GetPosition (body_id));
+  glm::quat const body_rot = to_glm (bi.GetRotation (body_id));
+
+  // Undo old offset to recover the transform's world rotation
+  glm::quat const old_off_rot = (glm::quat)applied_rotation;
+  glm::quat const xform_rot = body_rot * glm::inverse (old_off_rot);
+
+  // Apply new offset: body = transform * offset
+  glm::quat const new_off_rot = (glm::quat)rotation;
+  glm::vec3 const offset_delta
+      = (glm::vec3)position - (glm::vec3)applied_position;
+  glm::vec3 const new_body_pos = body_pos + xform_rot * offset_delta;
+  glm::quat const new_body_rot = xform_rot * new_off_rot;
+
+  bi.SetPositionAndRotation (body_id, to_jolt (new_body_pos),
+                             to_jolt (new_body_rot),
                              JPH::EActivation::Activate);
 }
 
@@ -468,9 +496,18 @@ rigid_body::on_inspector_changed (comp::singl::runtime_context *runtime,
   const bool xform_change = has_transform_change ();
 
   if (body_id.IsInvalid ()) {
-    create_body (*engine, scale);
-  } else if (structural_change) {
-    rebuild_body (*engine, scale);
+    sync_applied_cache ();
+    applied_scale = math::vec3f{ scale.x, scale.y, scale.z };
+    return;
+  }
+
+  if (structural_change) {
+    // Read current body position from Jolt to preserve world placement
+    auto const &bi = engine->get_body_interface ();
+    glm::vec3 const current_pos = to_glm (bi.GetPosition (body_id));
+    glm::quat const current_rot = to_glm (bi.GetRotation (body_id));
+    rebuild_body (*engine, current_pos, current_rot, scale);
+    applied_scale = math::vec3f{ scale.x, scale.y, scale.z };
   } else {
     if (xform_change) {
       apply_transform_to_body (*engine);
@@ -523,10 +560,12 @@ rigid_body::register_meta ()
           meta_info{ "Shape", "Collision shape type", "" })
 
       .data<&comp::rigid_body::position> ("position"_hs)
-      .custom<comp::meta_info> (meta_info{ "Position", "World position", "" })
+      .custom<comp::meta_info> (meta_info{
+          "Position", "Local offset from the entity's Transform", "" })
 
       .data<&comp::rigid_body::rotation> ("rotation"_hs)
-      .custom<comp::meta_info> (meta_info{ "Rotation", "World rotation", "" })
+      .custom<comp::meta_info> (meta_info{
+          "Rotation", "Local rotation offset from the entity's Transform", "" })
 
       .data<&comp::rigid_body::half_extents> ("half_extents"_hs)
       .custom<comp::meta_info> (

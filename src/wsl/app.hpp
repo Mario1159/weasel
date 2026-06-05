@@ -41,7 +41,6 @@ protected:
   }
 
 private:
-  uint64_t m_last_ticks_ns = 0;
 };
 
 } // namespace wsl

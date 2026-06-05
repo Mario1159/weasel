@@ -63,9 +63,15 @@ struct area : world_component
   math::quatf applied_rotation{ 0, 0, 0, 1 };
 
   // runtime ops
-  void create_body (phys::engine &engine, const glm::vec3 &scale = { 1, 1, 1 });
+  // world_pos and world_rot must be the entity's world-space position/rotation
+  // (derived from its transform component). This body is offset by
+  // position/rotation.
+  void create_body (phys::engine &engine, const glm::vec3 &world_pos,
+                    const glm::quat &world_rot,
+                    const glm::vec3 &scale = { 1, 1, 1 });
   void destroy_body (phys::engine &engine);
-  void rebuild_body (phys::engine &engine,
+  void rebuild_body (phys::engine &engine, const glm::vec3 &world_pos,
+                     const glm::quat &world_rot,
                      const glm::vec3 &scale = { 1, 1, 1 });
   void apply_transform_to_body (phys::engine &engine) const;
 
@@ -112,10 +118,13 @@ struct area : world_component
             meta_info{ "Shape", "Sensor collision shape", "" })
 
         .data<&comp::area::position> ("position"_hs)
-        .custom<comp::meta_info> (meta_info{ "Position", "World position", "" })
+        .custom<comp::meta_info> (meta_info{
+            "Position", "Local offset from the entity's Transform", "" })
 
         .data<&comp::area::rotation> ("rotation"_hs)
-        .custom<comp::meta_info> (meta_info{ "Rotation", "World rotation", "" })
+        .custom<comp::meta_info> (meta_info{
+            "Rotation", "Local rotation offset from the entity's Transform",
+            "" })
 
         .data<&comp::area::half_extents> ("half_extents"_hs)
         .custom<comp::meta_info> (

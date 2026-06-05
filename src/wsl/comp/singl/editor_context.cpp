@@ -206,7 +206,7 @@ editor_context::register_meta ()
   entt::meta_factory<editor_context> ()
       .type (entt::type_hash<editor_context>::value ())
       .custom<wsl::comp::meta_info> (wsl::comp::meta_info{
-          "Editor Context", "Global state for the editor application." })
+          "Editor Context", "Global state for the editor application.", "" })
       .func<&editor_context::custom_inspect> ("custom_inspect"_hs);
 }
 

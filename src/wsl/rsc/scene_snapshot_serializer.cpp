@@ -318,12 +318,27 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       wsl::log::rsc ()->trace ("Creating rigid body for entity {}",
                                (uint32_t)e);
 
+      glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
+      glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
-      if (auto *t = reg.try_get<comp::transform> (e); t) {
+      if (auto *wt = reg.try_get<comp::world_transform> (e); wt) {
+        glm::mat4 const &wm = wt->value;
+        world_pos = glm::vec3 (wm[3]);
+        world_rot = glm::quat_cast (wm);
+        scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                           glm::length (glm::vec3 (wm[1])),
+                           glm::length (glm::vec3 (wm[2])));
+      } else if (auto *t = reg.try_get<comp::transform> (e); t) {
+        world_pos = (glm::vec3)t->position;
+        world_rot = (glm::quat)t->rotation;
         scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
       }
 
-      rb.create_body (engine, scale);
+      // Apply rigid_body offset to get the final body world position
+      world_pos = world_pos + world_rot * (glm::vec3)rb.position;
+      world_rot = world_rot * (glm::quat)rb.rotation;
+
+      rb.create_body (engine, world_pos, world_rot, scale);
     }
   }
 
@@ -351,12 +366,27 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       comp::area &area = view.get<comp::area> (e);
       wsl::log::rsc ()->trace ("Creating area for entity {}", (uint32_t)e);
 
+      glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
+      glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
-      if (auto *t = reg.try_get<comp::transform> (e); t) {
+      if (auto *wt = reg.try_get<comp::world_transform> (e); wt) {
+        glm::mat4 const &wm = wt->value;
+        world_pos = glm::vec3 (wm[3]);
+        world_rot = glm::quat_cast (wm);
+        scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
+                           glm::length (glm::vec3 (wm[1])),
+                           glm::length (glm::vec3 (wm[2])));
+      } else if (auto *t = reg.try_get<comp::transform> (e); t) {
+        world_pos = (glm::vec3)t->position;
+        world_rot = (glm::quat)t->rotation;
         scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
       }
 
-      area.create_body (engine, scale);
+      // Apply area offset
+      world_pos = world_pos + world_rot * (glm::vec3)area.position;
+      world_rot = world_rot * (glm::quat)area.rotation;
+
+      area.create_body (engine, world_pos, world_rot, scale);
     }
   }
   wsl::log::rsc ()->trace ("Scene load finished");

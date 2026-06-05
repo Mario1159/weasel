@@ -42,8 +42,8 @@ jph_to_glm (JPH::RMat44Arg m)
   for (int c = 0; c < 4; c++) {
     for (int r = 0; r < 4; r++) {
       out[c][r] = m (r, c);
-}
-}
+    }
+  }
   return out;
 }
 
@@ -62,24 +62,25 @@ glm_to_jph (const glm::vec3 &v)
 namespace editor
 {
 
-physics_debug_renderer::physics_debug_renderer (wsl::gfx::render_window &w, wsl::gfx::render_context *ctx)
+physics_debug_renderer::physics_debug_renderer (wsl::gfx::render_window &w,
+                                                wsl::gfx::render_context *ctx)
     : m_window (&w), m_ctx (ctx)
 {
   Initialize ();
 
   auto *res_mgr = m_window->resource_manager ();
-  auto vs_id = res_mgr->register_shader ("engine://compiled_shaders/flat.vert.slang.spv");
-  auto fs_id = res_mgr->register_shader ("engine://compiled_shaders/flat.frag.slang.spv");
+  auto vs_id = res_mgr->register_shader (
+      "engine://compiled_shaders/flat.vert.slang.spv");
+  auto fs_id = res_mgr->register_shader (
+      "engine://compiled_shaders/flat.frag.slang.spv");
 
   SDL_GPUShader *vert = wsl::gfx::shader::load_from_manager (
-      m_ctx->gpu_device, res_mgr, vs_id,
-      SDL_GPU_SHADERSTAGE_VERTEX,
+      m_ctx->gpu_device, res_mgr, vs_id, SDL_GPU_SHADERSTAGE_VERTEX,
       /*num_uniform_buffers=*/1,
       /*num_samplers=*/0);
 
   SDL_GPUShader *frag = wsl::gfx::shader::load_from_manager (
-      m_ctx->gpu_device, res_mgr, fs_id,
-      SDL_GPU_SHADERSTAGE_FRAGMENT,
+      m_ctx->gpu_device, res_mgr, fs_id, SDL_GPU_SHADERSTAGE_FRAGMENT,
       /*num_uniform_buffers=*/0,
       /*num_samplers=*/0);
 
@@ -157,21 +158,22 @@ physics_debug_renderer::~physics_debug_renderer ()
   destroy_default_resources ();
   if (m_pipeline_lines != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_lines);
-}
+  }
   if (m_pipeline_tris != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_tris);
-}
+  }
   if (m_vertex_buffer != nullptr) {
     SDL_ReleaseGPUBuffer (m_ctx->gpu_device, m_vertex_buffer);
-}
+  }
   if (m_upload_buffer != nullptr) {
     SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_upload_buffer);
-}
+  }
   wsl::phys::release_jolt_runtime ();
 }
 
 std::unique_ptr<physics_debug_renderer>
-make_physics_debug_renderer (wsl::gfx::render_window &window, wsl::gfx::render_context *ctx)
+make_physics_debug_renderer (wsl::gfx::render_window &window,
+                             wsl::gfx::render_context *ctx)
 {
   wsl::phys::retain_jolt_runtime ();
 
@@ -211,7 +213,8 @@ physics_debug_renderer::set_camera_pos (const glm::vec3 &pos)
 // ------------------------------------------------------------
 
 void
-physics_debug_renderer::DrawLine (JPH::RVec3Arg a, JPH::RVec3Arg b, JPH::ColorArg c)
+physics_debug_renderer::DrawLine (JPH::RVec3Arg a, JPH::RVec3Arg b,
+                                  JPH::ColorArg c)
 {
   glm::vec4 const col = jph_color_to_glm (c);
   m_line_vertices.push_back ({ jph_to_glm (a), col });
@@ -219,8 +222,9 @@ physics_debug_renderer::DrawLine (JPH::RVec3Arg a, JPH::RVec3Arg b, JPH::ColorAr
 }
 
 void
-physics_debug_renderer::DrawTriangle (JPH::RVec3Arg a, JPH::RVec3Arg b, JPH::RVec3Arg c,
-                             JPH::ColorArg col, ECastShadow /*inCastShadow*/)
+physics_debug_renderer::DrawTriangle (JPH::RVec3Arg a, JPH::RVec3Arg b,
+                                      JPH::RVec3Arg c, JPH::ColorArg col,
+                                      ECastShadow /*inCastShadow*/)
 {
   glm::vec4 const color = jph_color_to_glm (col);
   m_tri_vertices.push_back ({ jph_to_glm (a), color });
@@ -254,7 +258,7 @@ physics_debug_renderer::upload_buffers ()
 
   if (line_count == 0 && tri_count == 0) {
     return;
-}
+  }
 
   const Uint32 line_bytes = line_count * sizeof (debug_vertex);
   const Uint32 tri_bytes = tri_count * sizeof (debug_vertex);
@@ -266,10 +270,10 @@ physics_debug_renderer::upload_buffers ()
   if ((m_vertex_buffer == nullptr) || total_bytes > m_vertex_buffer_size) {
     if (m_vertex_buffer != nullptr) {
       SDL_ReleaseGPUBuffer (m_ctx->gpu_device, m_vertex_buffer);
-}
+    }
     if (m_upload_buffer != nullptr) {
       SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_upload_buffer);
-}
+    }
 
     m_vertex_buffer_size = total_bytes;
 
@@ -292,11 +296,11 @@ physics_debug_renderer::upload_buffers ()
 
   if (line_count != 0u) {
     memcpy (dst, m_line_vertices.data (), line_bytes);
-}
+  }
 
   if (tri_count != 0u) {
     memcpy (dst + line_bytes, m_tri_vertices.data (), tri_bytes);
-}
+  }
 
   SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, m_upload_buffer);
 
@@ -325,7 +329,7 @@ physics_debug_renderer::flush (const glm::mat4 &vp)
 
   if (line_count == 0 && tri_count == 0) {
     return;
-}
+  }
 
   // ------------------------------------------------------------
   // Ensure required fragment samplers are bound (from main pass)
@@ -448,11 +452,11 @@ physics_debug_renderer::destroy_default_resources ()
 {
   if (m_default_sampler != nullptr) {
     SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_default_sampler);
-}
+  }
 
   if (m_default_texture != nullptr) {
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_texture);
-}
+  }
 }
 
 void
@@ -460,11 +464,12 @@ physics_debug_renderer::DrawGeometry (
     JPH::RMat44Arg in_model_matrix, const JPH::AABox &in_world_space_bounds,
     float in_lod_scale_sq, JPH::ColorArg in_color,
     const JPH::DebugRenderer::GeometryRef &in_geometry,
-    JPH::DebugRenderer::ECullMode /*inCullMode*/, JPH::DebugRenderer::ECastShadow /*inCastShadow*/,
+    JPH::DebugRenderer::ECullMode /*inCullMode*/,
+    JPH::DebugRenderer::ECastShadow /*inCastShadow*/,
     JPH::DebugRenderer::EDrawMode in_draw_mode)
 {
   const LOD &lod = in_geometry->GetLOD (glm_to_jph (camera_pos),
-                                       in_world_space_bounds, in_lod_scale_sq);
+                                        in_world_space_bounds, in_lod_scale_sq);
 
   auto *batch
       = static_cast<debug_triangle_batch *> (lod.mTriangleBatch.GetPtr ());
@@ -496,17 +501,19 @@ physics_debug_renderer::DrawGeometry (
 }
 
 void
-physics_debug_renderer::DrawText3D (JPH::Vec3Arg /*inPosition*/, const JPH::string_view & /*inString*/,
-                           JPH::ColorArg /*inColor*/, float /*inHeight*/)
+physics_debug_renderer::DrawText3D (JPH::Vec3Arg /*inPosition*/,
+                                    const JPH::string_view & /*inString*/,
+                                    JPH::ColorArg /*inColor*/,
+                                    float /*inHeight*/)
 {
   // No-op por ahora
 }
 
 physics_debug_renderer::Batch
 physics_debug_renderer::CreateTriangleBatch (const Vertex *in_vertices,
-                                    int in_vertex_count,
-                                    const uint32_t *in_indices,
-                                    int in_index_count)
+                                             int /*in_vertex_count*/,
+                                             const uint32_t *in_indices,
+                                             int in_index_count)
 {
   auto *batch = new debug_triangle_batch ();
 

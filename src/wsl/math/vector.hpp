@@ -124,11 +124,11 @@ struct vec3f
         .func<&vec3f::custom_inspect> ("custom_inspect"_hs)
 
         .data<&vec3f::x> ("x"_hs)
-        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate" })
+        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
         .data<&vec3f::y> ("y"_hs)
-        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate" })
+        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
         .data<&vec3f::z> ("z"_hs)
-        .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate" });
+        .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" });
   }
 
   template <class Archive>

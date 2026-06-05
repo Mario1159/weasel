@@ -7,7 +7,6 @@
 
 #include <cereal/cereal.hpp>
 
-
 namespace wsl
 {
 
@@ -31,9 +30,9 @@ public:
     entt::meta_factory<comp::singl::skybox_instance_3d> ()
         .type (entt::type_hash<comp::singl::skybox_instance_3d>::value ())
         .custom<comp::meta_info> (
-            meta_info{ "Skybox", "Global skybox cubemap" })
+            meta_info{ "Skybox", "Global skybox cubemap", "" })
         .data<&comp::singl::skybox_instance_3d::id> ("cubemap_id"_hs)
-        .custom<comp::meta_info> (meta_info{ "Cubemap", "Skybox texture" });
+        .custom<comp::meta_info> (meta_info{ "Cubemap", "Skybox texture", "" });
 
     entt::meta_factory<rsc::model_id> ().type (
         entt::type_hash<rsc::model_id>::value ());

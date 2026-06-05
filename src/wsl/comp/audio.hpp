@@ -68,9 +68,11 @@ struct audio : world_component
             "Loop", "Whether the audio should restart when finished.", "" })
 
         .data<&comp::audio::play_on_start> ("play_on_start"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Play on Start", "Whether the audio should start automatically "
-                             "when the scene begins." })
+        .custom<comp::meta_info> (
+            meta_info{ "Play on Start",
+                       "Whether the audio should start automatically "
+                       "when the scene begins.",
+                       "" })
 
         .data<&comp::audio::volume> ("volume"_hs)
         .custom<comp::meta_info> (

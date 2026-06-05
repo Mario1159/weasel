@@ -8,7 +8,6 @@
 
 #include <cereal/cereal.hpp>
 
-
 namespace wsl
 {
 
@@ -31,14 +30,15 @@ struct directional_light : world_component
         .custom<comp::meta_info> (meta_info{
             "Directional Light",
             "Emits parallel light rays in a single direction, like sunlight. "
-            "Light affects all objects equally regardless of distance." })
+            "Light affects all objects equally regardless of distance.",
+            "" })
         .data<&comp::directional_light::color> ("color"_hs)
         .custom<comp::meta_info> (
-            meta_info{ "Color", "RGB color of the light." })
+            meta_info{ "Color", "RGB color of the light.", "" })
 
         .data<&comp::directional_light::intensity> ("intensity"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "Intensity", "Brightness multiplier of the light." });
+        .custom<comp::meta_info> (meta_info{
+            "Intensity", "Brightness multiplier of the light.", "" });
   }
 
   template <class Archive>

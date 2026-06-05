@@ -133,6 +133,11 @@ public:
         }
       }
     } else {
+      // Editor mode: init if the system is editor-active and not yet
+      // initialized (e.g. so observers are connected for live editing).
+      if (!m_initialized && m_editor_active) {
+        init (registry);
+      }
       if (m_active) {
         wsl::log::sys ()->trace ("Deactivating {}", get_name ());
         on_inactive (*registry);

@@ -75,9 +75,11 @@ ui_manager::register_meta ()
   using namespace entt::literals;
   entt::meta_factory<comp::singl::ui_manager> ()
       .type (entt::type_hash<comp::singl::ui_manager>::value ())
-      .custom<comp::meta_info> (comp::meta_info{
-          "UI Manager", "Runtime-owned RmlUi context and renderer used "
-                        "by the active scene." })
+      .custom<comp::meta_info> (
+          comp::meta_info{ "UI Manager",
+                           "Runtime-owned RmlUi context and renderer used "
+                           "by the active scene.",
+                           "" })
       .func<&comp::singl::ui_manager::custom_inspect> ("custom_inspect"_hs);
 }
 

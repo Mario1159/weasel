@@ -51,7 +51,7 @@ world_transform::register_meta ()
   entt::meta_factory<comp::world_transform> ()
       .data<&comp::world_transform::value> ("matrix"_hs)
       .custom<comp::meta_info> (meta_info{
-          "Matrix", "Final world matrix after hierarchy evaluation" });
+          "Matrix", "Final world matrix after hierarchy evaluation", "" });
 }
 
 } // namespace comp

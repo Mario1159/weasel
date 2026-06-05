@@ -17,7 +17,6 @@
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/Body/MotionType.h>
 
-
 namespace wsl
 {
 
@@ -71,6 +70,9 @@ struct rigid_body : world_component
   // --- authored state ---
   shape_type shape = shape_type::box;
 
+  // Local offset relative to the entity's Transform component.
+  // The body's world position/rotation is computed as:
+  //   body_world = transform_world * offset (rotation) + offset (translation)
   math::vec3f position{ 0, 0, 0 };
   math::quatf rotation{ 0, 0, 0, 1 };
 
@@ -108,6 +110,7 @@ struct rigid_body : world_component
   float applied_restitution = 0.0F;
   math::vec3f applied_position{ 0, 0, 0 };
   math::quatf applied_rotation{ 0, 0, 0, 1 };
+  math::vec3f applied_scale{ 1, 1, 1 };
 
   // --- creation helpers ---
   static rigid_body create_box_body (phys::engine &engine, const glm::vec3 &pos,
@@ -120,10 +123,14 @@ struct rigid_body : world_component
                                         phys::allowed_do_fs dofs);
 
   // runtime ops
-  void create_body (phys::engine &engine,
+  // world_pos and world_rot must be the entity's world-space position/rotation
+  // (derived from its transform component).
+  void create_body (phys::engine &engine, const glm::vec3 &world_pos,
+                    const glm::quat &world_rot,
                     const glm::vec3 &scale = { 1, 1, 1 });
   void destroy_body (phys::engine &engine);
-  void rebuild_body (phys::engine &engine,
+  void rebuild_body (phys::engine &engine, const glm::vec3 &world_pos,
+                     const glm::quat &world_rot,
                      const glm::vec3 &scale = { 1, 1, 1 });
 
   // only non-structural live update (safe + exists)
@@ -140,6 +147,7 @@ struct rigid_body : world_component
   bool has_structural_change () const;
   bool has_surface_change () const;
   bool has_transform_change () const;
+  bool has_scale_change (const math::vec3f &scale) const;
 
   void
   sanitize_dimensions ()
@@ -155,10 +163,10 @@ struct rigid_body : world_component
   {
     friction = std::clamp (friction, 0.0F, 1.0F);
     restitution = std::clamp (restitution, 0.0F, 1.0F);
-    collision_layer.value = phys::layers::clamp_layer_index (
-        collision_layer.value);
-    collision_mask.value = phys::layers::clamp_layer_mask (
-        collision_mask.value);
+    collision_layer.value
+        = phys::layers::clamp_layer_index (collision_layer.value);
+    collision_mask.value
+        = phys::layers::clamp_layer_mask (collision_mask.value);
   }
 
   static void register_meta ();
@@ -224,12 +232,10 @@ struct rigid_body : world_component
       shape = (shape_type)shape_i;
       motion_type.value = (JPH::EMotionType)motion_i;
       allowed_dofs.value = (JPH::EAllowedDOFs)dofs_i;
-      collision_layer.value
-          = phys::layers::clamp_layer_index (
-              static_cast<phys::layers::layer_index_t> (collision_layer_i));
-      collision_mask.value
-          = phys::layers::clamp_layer_mask (
-              static_cast<phys::layers::layer_mask_t> (collision_mask_i));
+      collision_layer.value = phys::layers::clamp_layer_index (
+          static_cast<phys::layers::layer_index_t> (collision_layer_i));
+      collision_mask.value = phys::layers::clamp_layer_mask (
+          static_cast<phys::layers::layer_mask_t> (collision_mask_i));
 
       sanitize_dimensions ();
       sanitize_surface_properties ();

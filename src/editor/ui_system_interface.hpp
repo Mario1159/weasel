@@ -12,7 +12,7 @@ class ui_system_interface : public SystemInterface_SDL
 {
 public:
   bool
-  LogMessage (Rml::Log::Type type, const Rml::String &message) override
+  LogMessage (Rml::Log::Type /*type*/, const Rml::String &message) override
   {
     wsl::log::editor ()->debug ("{}", message);
     return true;

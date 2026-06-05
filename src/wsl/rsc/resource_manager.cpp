@@ -158,7 +158,8 @@ rsc::resource_manager_view::register_meta ()
       .custom<comp::meta_info> (
           comp::meta_info{ "Resource Manager",
                            "Owns project resources and background loading for "
-                           "the current runtime." })
+                           "the current runtime.",
+                           "" })
       .func<&rsc::resource_manager_view::custom_inspect> ("custom_inspect"_hs);
 
   rsc::model_id::register_meta ();
