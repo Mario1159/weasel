@@ -342,6 +342,25 @@ TEST_CASE ("comp add <id> <type> builds command")
   CHECK (*res.command == "comp add 7 Transform");
 }
 
+TEST_CASE ("comp create <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "comp", "create", "health" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "comp create health");
+}
+
+TEST_CASE ("comp create <name> --source builds command")
+{
+  const char *argv[]
+      = { "weasel-cli", "comp", "create", "movement", "--source" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "comp create movement --source");
+}
+
 // ===== REPL Subcommands - sys family =====
 
 TEST_CASE ("sys ls builds command")
@@ -378,6 +397,123 @@ TEST_CASE ("sys add with multi-word name is quoted")
   CHECK (res.should_exit == false);
   REQUIRE (res.command.has_value ());
   CHECK (*res.command == "sys add \"3D Render\"");
+}
+
+TEST_CASE ("sys create <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "sys", "create", "gravity" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "sys create gravity");
+}
+
+TEST_CASE ("sys create <name> --source builds command")
+{
+  const char *argv[]
+      = { "weasel-cli", "sys", "create", "custom_render", "--source" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "sys create custom_render --source");
+}
+
+// ===== REPL Subcommands - rsc family =====
+
+TEST_CASE ("rsc ls builds command")
+{
+  const char *argv[] = { "weasel-cli", "rsc", "ls" };
+  auto res = cli_handler ().parse (3, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc ls");
+}
+
+TEST_CASE ("rsc ls <type> builds command")
+{
+  const char *argv[] = { "weasel-cli", "rsc", "ls", "models" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc ls models");
+}
+
+TEST_CASE ("rsc add <type> <path> builds command")
+{
+  const char *argv[]
+      = { "weasel-cli", "rsc", "add", "model", "builtin://cube" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc add model builtin://cube");
+}
+
+TEST_CASE ("rsc add <type> <path> --load builds command")
+{
+  const char *argv[]
+      = { "weasel-cli", "rsc", "add", "model", "builtin://cube", "--load" };
+  auto res = cli_handler ().parse (6, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc add model builtin://cube --load");
+}
+
+TEST_CASE ("rsc add image with path builds command")
+{
+  const char *argv[]
+      = { "weasel-cli", "rsc", "add", "image", "./rsc/textures/grass.png" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc add image ./rsc/textures/grass.png");
+}
+
+TEST_CASE ("rsc rm <type> <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "rsc", "rm", "model", "cube" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc rm model cube");
+}
+
+TEST_CASE ("rsc load <type> <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "rsc", "load", "image", "grass" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc load image grass");
+}
+
+TEST_CASE ("rsc unload <type> <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "rsc", "unload", "cubemap", "sky" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc unload cubemap sky");
+}
+
+TEST_CASE ("rsc info <type> <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "rsc", "info", "audio", "music" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc info audio music");
+}
+
+TEST_CASE ("rsc with --project flag builds command")
+{
+  const char *argv[]
+      = { "weasel-cli", "--project", "/proj", "rsc", "ls", "shaders" };
+  auto res = cli_handler ().parse (6, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "rsc ls shaders");
+  REQUIRE (res.project_to_load.has_value ());
+  CHECK (*res.project_to_load == "/proj");
 }
 
 // ===== Error Cases =====

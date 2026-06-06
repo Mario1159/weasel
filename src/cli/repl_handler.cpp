@@ -954,18 +954,29 @@ command_executor::auto_save_scene (bool verbose)
     return;
   }
 
-  std::filesystem::path scenes_dir (m_current_project->root_path);
-  scenes_dir /= m_current_project->scenes_path;
-  std::string sname
-      = std::filesystem::path (scene->get_name ()).filename ().string ();
-  if (sname.ends_with (".wscn.json"))
-    sname.resize (sname.size () - 10);
-  else if (sname.ends_with (".json"))
-    sname.resize (sname.size () - 5);
-  std::string save_path = (scenes_dir / (sname + ".wscn.json")).string ();
+  std::string save_path;
+
+  // Prefer the original source path when the scene was loaded from a file,
+  // so auto-save overwrites the original file rather than creating a new one
+  // derived from the scene display name.
+  if (!m_active_scene_source_path.empty ()) {
+    save_path = m_active_scene_source_path;
+  } else {
+    std::filesystem::path scenes_dir (m_current_project->root_path);
+    scenes_dir /= m_current_project->scenes_path;
+    std::string sname
+        = std::filesystem::path (scene->get_name ()).filename ().string ();
+    if (sname.ends_with (".wscn.json"))
+      sname.resize (sname.size () - 10);
+    else if (sname.ends_with (".json"))
+      sname.resize (sname.size () - 5);
+    save_path = (scenes_dir / (sname + ".wscn.json")).string ();
+  }
 
   std::error_code ec;
-  std::filesystem::create_directories (scenes_dir, ec);
+  std::filesystem::path parent_dir
+      = std::filesystem::path (save_path).parent_path ();
+  std::filesystem::create_directories (parent_dir, ec);
 
   wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, *scene);
   if (serializer.save_json (save_path)) {
@@ -979,9 +990,6 @@ command_executor::auto_save_scene (bool verbose)
 void
 command_executor::auto_save_project ()
 {
-  if (!m_auto_save)
-    return;
-
   if (!m_current_project) {
     m_output << "Auto-save skipped: no project loaded.\n";
     return;
@@ -1272,6 +1280,8 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
       m_output << "No project loaded.\n";
       return;
     }
+    auto_save_project ();
+    m_output << "Project saved.\n";
     return;
   }
 
@@ -1291,6 +1301,7 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       m_output << "Usage: scene new <name>\n";
       return;
     }
+    m_active_scene_source_path.clear ();
     auto &scene = m_rtc.scene_manager.create_scene (tokens[2], true);
     m_output << "Scene '" << tokens[2] << "' created and set as active.\n";
     auto_save_scene ();
@@ -1349,6 +1360,7 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, scene);
       if (serializer.load_json (load_path)) {
         m_output << "Scene loaded from " << load_path << "\n";
+        m_active_scene_source_path = load_path;
       } else {
         m_output << "Failed to load scene from '" << load_path
                  << "' (could not open file).\n";

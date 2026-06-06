@@ -159,6 +159,24 @@ private:
   bool initialize_interpreter ();
   bool interpret (const std::filesystem::path &generated_path);
 
+  // ── Shared library cache ──
+  static std::filesystem::path
+  shared_library_path (const std::filesystem::path &project_root);
+
+  static std::filesystem::path
+  source_hash_path (const std::filesystem::path &project_root);
+
+  bool compile_to_shared_library (const std::filesystem::path &generated_path,
+                                  const std::filesystem::path &output_path);
+
+  bool try_load_cached_shared_library (std::size_t current_hash);
+
+  bool read_source_hash (const std::filesystem::path &path,
+                         std::size_t &out_hash) const;
+
+  void write_source_hash (const std::filesystem::path &path,
+                          std::size_t hash) const;
+
   comp::singl::runtime_context *m_runtime_ctx = nullptr;
   std::filesystem::path m_loaded_project_root;
   std::string m_last_status;

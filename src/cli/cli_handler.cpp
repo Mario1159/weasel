@@ -214,6 +214,14 @@ cli_handler::parse (int argc, char **argv)
       "info", "Show information about the loaded project");
   auto *proj_save
       = proj_cmd->add_subcommand ("save", "Save the loaded project");
+  auto *proj_set
+      = proj_cmd->add_subcommand ("set", "Set a project field value");
+  std::string proj_set_field, proj_set_value;
+  proj_set
+      ->add_option ("field", proj_set_field,
+                    "Field name (e.g. name, author, default_scene_path)")
+      ->required ();
+  proj_set->add_option ("value", proj_set_value, "Field value")->required ();
 
   auto *scene_cmd
       = app.add_subcommand ("scene", "Manage scenes in the loaded project");
@@ -306,8 +314,19 @@ cli_handler::parse (int argc, char **argv)
   comp_set->add_option ("value", comp_set_val, "Value (JSON or plain)")
       ->required ();
 
+  auto *comp_create = comp_cmd->add_subcommand (
+      "create", "Generate a world component template");
+  std::string comp_create_name;
+  bool comp_create_source = false;
+  comp_create->add_option ("name", comp_create_name, "Component name")
+      ->required ();
+  comp_create->add_flag ("--source", comp_create_source,
+                         "Also generate a .cpp source file");
+
   auto *singl_cmd = app.add_subcommand ("singl", "Manage singleton components");
-  auto *sig_cmd = app.add_subcommand ("sig", "Signal management (ls, handlers, connections, connect, disconnect)");
+  auto *sig_cmd = app.add_subcommand (
+      "sig",
+      "Signal management (ls, handlers, connections, connect, disconnect)");
   auto *singl_ls = singl_cmd->add_subcommand (
       "ls", "List singleton components in the scene");
   auto *singl_add = singl_cmd->add_subcommand (
@@ -347,6 +366,60 @@ cli_handler::parse (int argc, char **argv)
           "add", "Add a user-defined system to the active scene");
   std::string sys_add_name;
   sys_add->add_option ("name", sys_add_name, "System name")->required ();
+
+  auto *sys_create
+      = sys_cmd->add_subcommand ("create", "Generate a system template");
+  std::string sys_create_name;
+  bool sys_create_source = false;
+  sys_create->add_option ("name", sys_create_name, "System name")->required ();
+  sys_create->add_flag ("--source", sys_create_source,
+                        "Also generate a .cpp source file");
+
+  auto *rsc_cmd = app.add_subcommand ("rsc", "Manage engine resources");
+  auto *rsc_ls = rsc_cmd->add_subcommand ("ls", "List registered resources");
+  std::string rsc_ls_type;
+  rsc_ls->add_option ("type", rsc_ls_type,
+                      "Resource type filter (model, image, cubemap, scene, "
+                      "audio, font, shader, layout)");
+
+  auto *rsc_add = rsc_cmd->add_subcommand (
+      "add", "Register a resource (and optionally load it with --load)");
+  std::string rsc_add_type, rsc_add_path;
+  bool rsc_add_load = false;
+  rsc_add->add_option ("type", rsc_add_type, "Resource type")->required ();
+  rsc_add->add_option ("path", rsc_add_path, "Path to the resource file")
+      ->required ();
+  rsc_add->add_flag ("--load", rsc_add_load,
+                     "Load the resource after registration");
+
+  auto *rsc_rm = rsc_cmd->add_subcommand (
+      "rm", "Remove a registered resource by name or path");
+  std::string rsc_rm_type, rsc_rm_name;
+  rsc_rm->add_option ("type", rsc_rm_type, "Resource type")->required ();
+  rsc_rm->add_option ("name", rsc_rm_name, "Resource name or path")
+      ->required ();
+
+  auto *rsc_load = rsc_cmd->add_subcommand (
+      "load", "Load an already-registered resource by name or path");
+  std::string rsc_load_type, rsc_load_name;
+  rsc_load->add_option ("type", rsc_load_type, "Resource type")->required ();
+  rsc_load->add_option ("name", rsc_load_name, "Resource name or path")
+      ->required ();
+
+  auto *rsc_unload = rsc_cmd->add_subcommand (
+      "unload", "Unload a registered resource by name or path");
+  std::string rsc_unload_type, rsc_unload_name;
+  rsc_unload->add_option ("type", rsc_unload_type, "Resource type")
+      ->required ();
+  rsc_unload->add_option ("name", rsc_unload_name, "Resource name or path")
+      ->required ();
+
+  auto *rsc_info = rsc_cmd->add_subcommand (
+      "info", "Display metadata for a registered resource");
+  std::string rsc_info_type, rsc_info_name;
+  rsc_info->add_option ("type", rsc_info_type, "Resource type")->required ();
+  rsc_info->add_option ("name", rsc_info_name, "Resource name or path")
+      ->required ();
 
   try {
     app.parse (argc, argv);
@@ -516,6 +589,9 @@ cli_handler::parse (int argc, char **argv)
     repl_command = build_repl_command ({ "proj", "info" });
   } else if (*proj_save) {
     repl_command = build_repl_command ({ "proj", "save" });
+  } else if (*proj_set) {
+    repl_command = build_repl_command (
+        { "proj", "set", proj_set_field, proj_set_value });
   } else if (*scene_new) {
     repl_command = build_repl_command ({ "scene", "new", scene_new_name });
   } else if (*scene_load) {
@@ -566,6 +642,12 @@ cli_handler::parse (int argc, char **argv)
     repl_command
         = build_repl_command ({ "comp", "set", comp_set_entity_id,
                                 comp_set_type, comp_set_prop, comp_set_val });
+  } else if (*comp_create) {
+    std::vector<std::string> args{ "comp", "create", comp_create_name };
+    if (comp_create_source) {
+      args.push_back ("--source");
+    }
+    repl_command = build_repl_command (args);
   } else if (*singl_ls) {
     repl_command = build_repl_command ({ "singl", "ls" });
   } else if (*singl_add) {
@@ -585,13 +667,44 @@ cli_handler::parse (int argc, char **argv)
     repl_command = build_repl_command ({ "sys", "avail" });
   } else if (*sys_add) {
     repl_command = build_repl_command ({ "sys", "add", sys_add_name });
+  } else if (*sys_create) {
+    std::vector<std::string> args{ "sys", "create", sys_create_name };
+    if (sys_create_source) {
+      args.push_back ("--source");
+    }
+    repl_command = build_repl_command (args);
   } else if (*sig_cmd) {
-    // Build a repl command that forwards all remaining args to the REPL 'sig' handler
+    // Build a repl command that forwards all remaining args to the REPL 'sig'
+    // handler
     std::vector<std::string> args;
     args.push_back ("sig");
     for (const auto &s : app.remaining ())
       args.push_back (s);
     repl_command = build_repl_command (args);
+  } else if (*rsc_ls) {
+    std::vector<std::string> args{ "rsc", "ls" };
+    if (!rsc_ls_type.empty ()) {
+      args.push_back (rsc_ls_type);
+    }
+    repl_command = build_repl_command (args);
+  } else if (*rsc_add) {
+    std::vector<std::string> args{ "rsc", "add", rsc_add_type, rsc_add_path };
+    if (rsc_add_load) {
+      args.push_back ("--load");
+    }
+    repl_command = build_repl_command (args);
+  } else if (*rsc_rm) {
+    repl_command
+        = build_repl_command ({ "rsc", "rm", rsc_rm_type, rsc_rm_name });
+  } else if (*rsc_load) {
+    repl_command
+        = build_repl_command ({ "rsc", "load", rsc_load_type, rsc_load_name });
+  } else if (*rsc_unload) {
+    repl_command = build_repl_command (
+        { "rsc", "unload", rsc_unload_type, rsc_unload_name });
+  } else if (*rsc_info) {
+    repl_command
+        = build_repl_command ({ "rsc", "info", rsc_info_type, rsc_info_name });
   }
 
   auto extras = app.remaining ();

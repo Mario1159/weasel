@@ -6,6 +6,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Export all symbols from shared libraries on Windows so that runtime-loaded
+# .dll files can resolve symbols from the engine (wsl.dll).
+if(WIN32)
+  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
+# Pass the C++ compiler path to C++ code so the runtime shared library cache
+# can invoke the same compiler that built the engine.
+add_compile_definitions(
+  WEASEL_CXX_COMPILER="${CMAKE_CXX_COMPILER}"
+)
+
 option(WEASEL_DISCONNECTED_DEPENDENCY_UPDATES
     "Skip CPM/FetchContent git update steps for already-populated dependencies"
     ON)

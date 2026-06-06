@@ -45,7 +45,7 @@ private:
   void cmd_help ();
 
   entt::entity resolve_entity_token (const std::string &token,
-                                    wsl::rsc::scene *scene);
+                                     wsl::rsc::scene *scene);
 
   void ensure_runtime_module_loaded (bool allow_cached_metadata = false);
 
@@ -58,6 +58,7 @@ private:
   std::shared_ptr<wsl::rsc::project> m_current_project;
   std::ostringstream m_output;
   bool m_auto_save = false;
+  std::string m_active_scene_source_path;
 };
 
 } // namespace wsl::cli

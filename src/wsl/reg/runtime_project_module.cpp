@@ -24,6 +24,7 @@
 #include <optional>
 #include <ostream>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -201,25 +202,6 @@ shared_meta_context_address ()
 }
 
 void
-write_runtime_meta_context_sync (std::ostream &output)
-{
-  const std::uintptr_t shared_meta_ctx = shared_meta_context_address ();
-  wsl::log::cmake ()->trace (
-      "write_runtime_meta_context_sync: shared_meta_ctx address: {}",
-      shared_meta_ctx);
-
-  output << "namespace {\n";
-  output << "[[maybe_unused]] const bool weasel_runtime_meta_context_synced = "
-            "[]() {\n";
-  output << "  wsl::reg::runtime::runtime_detail::sync_runtime_state (\n";
-  output << "      reinterpret_cast<void *> (static_cast<std::uintptr_t> ("
-         << shared_meta_ctx << "ULL)));\n";
-  output << "  return true;\n";
-  output << "}();\n";
-  output << "} // namespace\n\n";
-}
-
-void
 clear_runtime_registries (comp::singl::runtime_context &runtime_ctx)
 {
   runtime_ctx.component_registry.clear_runtime_components ();
@@ -236,13 +218,13 @@ write_cached_registration (
   writer.Key ("type_id");
   writer.Uint64 (registration.type_id);
   writer.Key ("type_name");
-  writer.String (registration.type_name.c_str (),
-                 static_cast<rapidjson::SizeType> (
-                     registration.type_name.size ()));
+  writer.String (
+      registration.type_name.c_str (),
+      static_cast<rapidjson::SizeType> (registration.type_name.size ()));
   writer.Key ("display_name");
-  writer.String (registration.display_name.c_str (),
-                 static_cast<rapidjson::SizeType> (
-                     registration.display_name.size ()));
+  writer.String (
+      registration.display_name.c_str (),
+      static_cast<rapidjson::SizeType> (registration.display_name.size ()));
   writer.EndObject ();
 }
 
@@ -414,8 +396,7 @@ runtime_project_module::compute_source_hash (const source_set &sources)
 fs::path
 runtime_project_module::registration_cache_path (const fs::path &project_root)
 {
-  return project_root / "build" / "weasel_runtime"
-         / k_registration_cache_file;
+  return project_root / "build" / "weasel_runtime" / k_registration_cache_file;
 }
 
 bool
@@ -449,8 +430,7 @@ runtime_project_module::read_registration_cache (const fs::path &path,
   registration_cache cache{};
   cache.source_hash = source_hash;
   if (!read_cached_registration_array (doc, "components", cache.components)
-      || !read_cached_registration_array (doc, "singletons",
-                                          cache.singletons)
+      || !read_cached_registration_array (doc, "singletons", cache.singletons)
       || !read_cached_registration_array (doc, "systems", cache.systems)) {
     return false;
   }
@@ -511,16 +491,16 @@ runtime_project_module::write_registration_cache () const
   writer.Key ("source_hash");
   writer.Uint64 (static_cast<std::uint64_t> (cache.source_hash));
 
-  auto write_array = [&writer] (
-                         const char *name,
-                         const std::vector<cached_registration> &entries) {
-    writer.Key (name);
-    writer.StartArray ();
-    for (const cached_registration &entry : entries) {
-      write_cached_registration (writer, entry);
-    }
-    writer.EndArray ();
-  };
+  auto write_array
+      = [&writer] (const char *name,
+                   const std::vector<cached_registration> &entries) {
+          writer.Key (name);
+          writer.StartArray ();
+          for (const cached_registration &entry : entries) {
+            write_cached_registration (writer, entry);
+          }
+          writer.EndArray ();
+        };
 
   write_array ("components", cache.components);
   write_array ("singletons", cache.singletons);
@@ -528,7 +508,8 @@ runtime_project_module::write_registration_cache () const
   writer.EndObject ();
 
   // Write atomically: write to a temp file then rename
-  const fs::path tmp_path = path.parent_path () / (path.filename ().string () + ".tmp");
+  const fs::path tmp_path
+      = path.parent_path () / (path.filename ().string () + ".tmp");
   {
     std::ofstream out (tmp_path, std::ios::binary | std::ios::trunc);
     if (!out) {
@@ -551,8 +532,9 @@ runtime_project_module::write_registration_cache () const
   std::error_code rename_ec;
   fs::rename (tmp_path, path, rename_ec);
   if (rename_ec) {
-    wsl::log::cmake ()->warn ("Could not move runtime cache into place: {} -> {} ({})",
-                              tmp_path.string (), path.string (), rename_ec.message ());
+    wsl::log::cmake ()->warn (
+        "Could not move runtime cache into place: {} -> {} ({})",
+        tmp_path.string (), path.string (), rename_ec.message ());
     // best-effort cleanup
     std::error_code rem_ec;
     fs::remove (tmp_path, rem_ec);
@@ -575,9 +557,10 @@ runtime_project_module::apply_registration_cache (
   }
 
   for (const cached_registration &entry : cache.singletons) {
-    m_runtime_ctx->singleton_registry.register_cached_runtime_singleton_component (
-        static_cast<entt::id_type> (entry.type_id), entry.type_name,
-        entry.display_name);
+    m_runtime_ctx->singleton_registry
+        .register_cached_runtime_singleton_component (
+            static_cast<entt::id_type> (entry.type_id), entry.type_name,
+            entry.display_name);
   }
 
   for (const cached_registration &entry : cache.systems) {
@@ -604,7 +587,6 @@ runtime_project_module::write_generated_translation_unit (
                 .generic_string ()
          << "\"\n";
   output << "#include <cstdint>\n\n";
-  write_runtime_meta_context_sync (output);
 
   for (const fs::path &header : sources.headers) {
     output << "#include \"" << header.generic_string () << "\"\n";
@@ -766,6 +748,12 @@ runtime_project_module::interpret (const fs::path &generated_path)
     return false;
   }
 
+  // Sync the meta context before interpreting so that the interpreted code
+  // registers against the engine-owned entt::meta_ctx.
+  wsl::log::cmake ()->trace ("Syncing runtime meta context");
+  runtime_registrar::sync_runtime_state (
+      reinterpret_cast<void *> (shared_meta_context_address ()));
+
   wsl::log::cmake ()->trace ("Loading file {}", generated_path.string ());
 
   std::ifstream file (generated_path);
@@ -922,12 +910,23 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     m_metadata_cache_loaded = false;
   }
 
+  m_loaded_project_root = project_root;
+
+  // Try loading from shared library cache (fast path)
+  if (try_load_cached_shared_library (current_hash)) {
+    m_module_loaded = true;
+    m_metadata_cache_loaded = false;
+    m_source_hash = current_hash;
+    m_last_status = "Runtime module loaded from shared library cache.";
+    wsl::log::cmake ()->debug ("{}", m_last_status);
+    return true;
+  }
+
+  // Cache miss — full Clang-REPL interpretation
   const fs::path build_dir = project_root / "build" / "weasel_runtime";
   fs::create_directories (build_dir);
 
   const fs::path generated_path = build_dir / k_generated_module_file;
-
-  m_loaded_project_root = project_root;
 
   wsl::log::cmake ()->debug ("Writing generated translation unit to: {}",
                              generated_path.string ());
@@ -948,8 +947,175 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   m_module_loaded = true;
   m_metadata_cache_loaded = false;
   m_source_hash = current_hash;
+
+  // Compile to shared library for next time
+  const fs::path so_path = shared_library_path (project_root);
+  if (compile_to_shared_library (generated_path, so_path)) {
+    write_source_hash (source_hash_path (project_root), current_hash);
+    wsl::log::cmake ()->debug ("Shared library cache updated.");
+  }
+
   m_last_status = "Runtime systems/components interpreted and registered.";
   wsl::log::cmake ()->trace ("{}", m_last_status);
+  return true;
+}
+
+// ── Shared library cache ──
+
+fs::path
+runtime_project_module::shared_library_path (const fs::path &project_root)
+{
+#if defined(_WIN32)
+  constexpr std::string_view lib_name = "runtime_module_cached.dll";
+#elif defined(__APPLE__)
+  constexpr std::string_view lib_name = "runtime_module_cached.dylib";
+#else
+  constexpr std::string_view lib_name = "runtime_module_cached.so";
+#endif
+  return project_root / "build" / "weasel_runtime" / lib_name;
+}
+
+fs::path
+runtime_project_module::source_hash_path (const fs::path &project_root)
+{
+  return project_root / "build" / "weasel_runtime"
+         / "runtime_module_cached.hash";
+}
+
+bool
+runtime_project_module::read_source_hash (const fs::path &path,
+                                          std::size_t &out_hash) const
+{
+  std::ifstream input (path);
+  if (!input) {
+    return false;
+  }
+  input >> out_hash;
+  return !input.fail ();
+}
+
+void
+runtime_project_module::write_source_hash (const fs::path &path,
+                                           std::size_t hash) const
+{
+  std::ofstream output (path, std::ios::trunc);
+  if (output) {
+    output << hash;
+  }
+}
+
+bool
+runtime_project_module::compile_to_shared_library (
+    const fs::path &generated_path, const fs::path &output_path)
+{
+  // Derive compiler from the build system
+  std::string compiler;
+#if defined(WEASEL_CXX_COMPILER)
+  compiler = WEASEL_CXX_COMPILER;
+#elif defined(_MSC_VER)
+  compiler = "cl";
+#elif defined(__clang__)
+  compiler = "clang++";
+#elif defined(__GNUC__)
+  compiler = "g++";
+#else
+  compiler = "c++";
+#endif
+
+  // Build the compilation command
+  std::ostringstream cmd;
+  cmd << "\"" << compiler << "\" ";
+
+  // Add the same include paths and flags the interpreter uses
+  for (const auto &arg : m_interpreter_args_storage) {
+    cmd << "\"" << arg << "\" ";
+  }
+
+  // Platform-specific shared library flags
+#if defined(_MSC_VER)
+  cmd << "/LD /EHsc /MD ";
+#elif defined(__APPLE__)
+  cmd << "-shared -fPIC ";
+#else
+  cmd << "-shared -fPIC ";
+#endif
+
+  // Input and output
+  cmd << "\"" << generated_path.generic_string () << "\" ";
+#if defined(_MSC_VER)
+  cmd << "/Fe:" << output_path.generic_string ();
+#else
+  cmd << "-o \"" << output_path.generic_string () << "\"";
+#endif
+
+  wsl::log::cmake ()->debug ("Compiling shared library: {}", cmd.str ());
+
+  int result = std::system (cmd.str ().c_str ());
+  if (result != 0) {
+    wsl::log::cmake ()->warn (
+        "Shared library compilation failed (exit code {}). "
+        "Falling back to interpretation.",
+        result);
+    return false;
+  }
+
+  wsl::log::cmake ()->debug ("Shared library compiled: {}",
+                             output_path.string ());
+  return true;
+}
+
+bool
+runtime_project_module::try_load_cached_shared_library (
+    std::size_t current_hash)
+{
+  if (m_runtime_ctx == nullptr || m_loaded_project_root.empty ()) {
+    return false;
+  }
+
+  const fs::path so_path = shared_library_path (m_loaded_project_root);
+  const fs::path hash_path = source_hash_path (m_loaded_project_root);
+
+  std::size_t cached_hash = 0;
+  if (!read_source_hash (hash_path, cached_hash)
+      || cached_hash != current_hash) {
+    wsl::log::cmake ()->trace (
+        "Shared library cache miss (hash mismatch or missing)");
+    return false;
+  }
+
+  if (!fs::exists (so_path)) {
+    wsl::log::cmake ()->trace ("Shared library cache miss (file missing)");
+    return false;
+  }
+
+  // Ensure interpreter is initialized so LoadDynamicLibrary works
+  if (!m_interpreter) {
+    if (!initialize_interpreter ()) {
+      wsl::log::cmake ()->warn (
+          "Failed to initialize interpreter for shared library load");
+      return false;
+    }
+  }
+
+  // Sync the meta context before loading
+  runtime_registrar::sync_runtime_state (
+      reinterpret_cast<void *> (shared_meta_context_address ()));
+
+  // Clear any previous registrations
+  runtime_registrar::component_registrations ().clear ();
+  runtime_registrar::singleton_registrations ().clear ();
+  runtime_registrar::system_registrations ().clear ();
+
+  wsl::log::cmake ()->debug ("Loading cached shared library: {}",
+                             so_path.string ());
+  auto error = m_interpreter->LoadDynamicLibrary (so_path.string ().c_str ());
+  if (error) {
+    wsl::log::cmake ()->warn ("Failed to load cached shared library: {}",
+                              toString (std::move (error)));
+    return false;
+  }
+
+  wsl::log::cmake ()->debug ("Cached shared library loaded successfully");
   return true;
 }
 
