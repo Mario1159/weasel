@@ -1302,7 +1302,7 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       return;
     }
     m_active_scene_source_path.clear ();
-    auto &scene = m_rtc.scene_manager.create_scene (tokens[2], true);
+    auto &scene = m_rtc.scene_manager.create_default_scene (tokens[2], true);
     m_output << "Scene '" << tokens[2] << "' created and set as active.\n";
     auto_save_scene ();
   } else if (action == "load") {

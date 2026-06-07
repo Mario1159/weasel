@@ -500,6 +500,49 @@ cli_handler::parse (int argc, char **argv)
     register_all (rtc);
 
     wsl::rsc::scene scene{ &rtc, nullptr, cs_name };
+    auto &reg = scene.get_registry ();
+
+    // Skybox
+    auto &rendering
+        = reg.ctx ().emplace<wsl::comp::singl::rendering_manager> ();
+    rendering.skybox = { wsl::rsc::builtin_skybox_procedural };
+
+    // Sample cube
+    const wsl::rsc::model_id builtin_cube_id{ entt::hashed_string{
+        "builtin://cube" } };
+    const wsl::rsc::model_id builtin_sphere_id{ entt::hashed_string{
+        "builtin://sphere" } };
+    const wsl::rsc::cubemap_id builtin_skybox_id{
+      wsl::rsc::builtin_skybox_procedural
+    };
+    scene.add_resource (wsl::rsc::io::resource_type::model,
+                        builtin_cube_id.value);
+    scene.add_resource (wsl::rsc::io::resource_type::model,
+                        builtin_sphere_id.value);
+    scene.add_resource (wsl::rsc::io::resource_type::cubemap,
+                        builtin_skybox_id.value);
+
+    auto sample_cube = reg.create ();
+    scene.set_entity_name (sample_cube, "Sample Cube");
+    reg.emplace<wsl::comp::hierarchy> (sample_cube);
+    reg.emplace<wsl::comp::transform> (sample_cube,
+                                       glm::vec3 (0.0F, 0.0F, 0.0F));
+    reg.emplace<wsl::comp::world_transform> (sample_cube);
+    auto &cube_model = reg.emplace<wsl::comp::model_instance_3d> (sample_cube);
+    cube_model.id = builtin_cube_id;
+    cube_model.scene_index = 0;
+
+    // Default camera
+    auto cam_entity = reg.create ();
+    scene.set_entity_name (cam_entity, "Scene Default Camera");
+    reg.emplace<wsl::comp::hierarchy> (cam_entity);
+    auto &cam_transform = reg.emplace<wsl::comp::transform> (
+        cam_entity, glm::vec3 (0.0F, 0.0F, 5.0F));
+    auto &cam_world_transform
+        = reg.emplace<wsl::comp::world_transform> (cam_entity);
+    cam_world_transform.value = cam_transform.model ();
+    reg.emplace<wsl::comp::camera> (cam_entity);
+    scene.camera = cam_entity;
 
     for (const auto &sys_name : cs_systems) {
       rtc.system_factory_registry.register_system (
