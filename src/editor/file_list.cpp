@@ -659,8 +659,8 @@ file_list::draw (const char *title, bool *p_open,
                                   (ImTextureID)handle->texture,
                                   ImVec2 (icon_size, icon_size))) {
             if (proj) {
-              runtime_ctx->runtime_project_module.compile_and_load (*proj);
-              runtime_ctx->runtime_project_module.finalize_load ();
+              runtime_ctx->runtime_project_module.compile_and_load_async (
+                  *proj);
             }
           }
           ImGui::PopStyleVar ();
@@ -668,8 +668,8 @@ file_list::draw (const char *title, bool *p_open,
           if (ImGui::Button ("R##reload_scripts",
                              ImVec2 (btn_size, btn_size))) {
             if (proj) {
-              runtime_ctx->runtime_project_module.compile_and_load (*proj);
-              runtime_ctx->runtime_project_module.finalize_load ();
+              runtime_ctx->runtime_project_module.compile_and_load_async (
+                  *proj);
             }
           }
         }

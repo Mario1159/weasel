@@ -1115,6 +1115,13 @@ rsc::resource_manager::new_project (const rsc::project &proj)
 bool
 rsc::resource_manager::load_project (const std::string &path)
 {
+  if (m_active_project_load && m_active_project_load->assets_job.valid ()) {
+    wsl::log::rsc ()->warn (
+        "Project load already in progress, ignoring duplicate request for {}",
+        path);
+    return true;
+  }
+
   std::string actual_path = path;
   if (!fs::exists (actual_path) && fs::path (path).filename () == path) {
     fs::path p = fs::current_path ();

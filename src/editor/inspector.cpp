@@ -280,6 +280,11 @@ inspector::draw_singleton_inspector (entt::id_type type)
     return;
   }
 
+  if (!meta) {
+    ImGui::TextDisabled ("No reflection data available for this singleton.");
+    return;
+  }
+
   bool has_visible_members = false;
   for (auto &&[id, data] : meta.data ()) {
     (void)id;
@@ -290,15 +295,17 @@ inspector::draw_singleton_inspector (entt::id_type type)
   }
 
   const bool has_custom_inspector
-      = meta
-        && static_cast<bool> (
-            meta.func (entt::hashed_string{ "custom_inspect" }));
+      = static_cast<bool> (meta.func (entt::hashed_string{ "custom_inspect" }));
   if (!has_visible_members && !has_custom_inspector) {
     ImGui::TextDisabled ("No reflected fields.");
     return;
   }
 
   entt::meta_any obj = meta.from_void (instance_ptr);
+  if (!obj) {
+    ImGui::TextDisabled ("Failed to create meta instance.");
+    return;
+  }
   draw_meta_class (obj);
 }
 
@@ -438,6 +445,10 @@ inspector::draw_entity_inspector (entt::entity entity)
             draw_hierarchy_component (entity);
           } else {
             entt::meta_any instance = meta.from_void (ptr);
+            if (!instance) {
+              ImGui::PopID ();
+              continue;
+            }
 
             // If it's a prefab instance, try to find the same component in the
             // prefab
@@ -884,6 +895,9 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
 {
   auto type = object.type ();
 
+  if (!runtime_ctx->scene_manager.get_active ()) {
+    return false;
+  }
   entt::registry &registry
       = runtime_ctx->scene_manager.get_active ()->get_registry ();
 

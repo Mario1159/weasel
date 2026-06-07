@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <cstdint>
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -65,6 +66,26 @@ public:
    * \return \c true on success, otherwise \c false.
    */
   bool compile_and_load (const rsc::project &project);
+
+  /*! \brief Starts an asynchronous reload of the runtime code.
+   *
+   * Use \c poll_async_reload() in the main loop to check completion and
+   * call \c finalize_load() on the main thread when ready.
+   */
+  void compile_and_load_async (const rsc::project &project);
+
+  /*! \brief Polls an in-progress async reload.
+   *
+   * If the background compilation finished, this calls \c finalize_load()
+   * on the calling (main) thread and returns \c true.
+   * \return \c true if a reload just completed this call, otherwise \c false.
+   */
+  bool poll_async_reload ();
+
+  /*! \brief Reports whether an async reload is currently in progress.
+   * \return \c true if compilation is still running in the background.
+   */
+  bool is_reloading () const;
 
   /*!
    * \brief Loads cached runtime registration metadata for a project.
@@ -187,6 +208,8 @@ private:
   std::vector<std::string> m_interpreter_args_storage;
   std::vector<const char *> m_interpreter_args;
   std::unique_ptr<clang::Interpreter> m_interpreter;
+
+  std::future<bool> m_async_reload_future;
 };
 
 } // namespace runtime

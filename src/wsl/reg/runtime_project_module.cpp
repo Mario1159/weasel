@@ -20,6 +20,7 @@
 #include <llvm/Support/TargetSelect.h>
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <optional>
 #include <ostream>
@@ -194,11 +195,37 @@ split_command_line (const std::string &command)
   return out;
 }
 
-std::uintptr_t
-shared_meta_context_address ()
+/*!
+ * \brief Returns a pointer to the engine's meta context locator handle.
+ *
+ * This is exported as a C symbol so that interpreted/JIT code and shared
+ * libraries can look it up dynamically rather than hardcoding an absolute
+ * address, which breaks when the library is loaded in a different process.
+ */
+extern "C" void *
+wsl_get_meta_ctx_handle ()
 {
-  return reinterpret_cast<std::uintptr_t> (
-      &entt::locator<entt::meta_ctx>::value_or ());
+  static entt::locator<entt::meta_ctx>::node_type handle
+      = entt::locator<entt::meta_ctx>::handle ();
+  return &handle;
+}
+
+void
+write_runtime_meta_context_sync (std::ostream &output)
+{
+  wsl::log::cmake ()->trace ("write_runtime_meta_context_sync");
+
+  output << "extern \"C\" void *wsl_get_meta_ctx_handle ();\n";
+  output << "namespace {\n";
+  output << "[[maybe_unused]] const bool weasel_runtime_meta_context_synced = "
+            "[]() {\n";
+  output << "  using node_type = entt::locator<entt::meta_ctx>::node_type;\n";
+  output << "  node_type *handle = static_cast<node_type *> (\n";
+  output << "      wsl_get_meta_ctx_handle ());\n";
+  output << "  entt::locator<entt::meta_ctx>::reset (*handle);\n";
+  output << "  return true;\n";
+  output << "}();\n";
+  output << "} // namespace\n\n";
 }
 
 void
@@ -587,6 +614,7 @@ runtime_project_module::write_generated_translation_unit (
                 .generic_string ()
          << "\"\n";
   output << "#include <cstdint>\n\n";
+  write_runtime_meta_context_sync (output);
 
   for (const fs::path &header : sources.headers) {
     output << "#include \"" << header.generic_string () << "\"\n";
@@ -748,12 +776,6 @@ runtime_project_module::interpret (const fs::path &generated_path)
     return false;
   }
 
-  // Sync the meta context before interpreting so that the interpreted code
-  // registers against the engine-owned entt::meta_ctx.
-  wsl::log::cmake ()->trace ("Syncing runtime meta context");
-  runtime_registrar::sync_runtime_state (
-      reinterpret_cast<void *> (shared_meta_context_address ()));
-
   wsl::log::cmake ()->trace ("Loading file {}", generated_path.string ());
 
   std::ifstream file (generated_path);
@@ -813,7 +835,7 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
 void
 runtime_project_module::finalize_load ()
 {
-  wsl::log::cmake ()->trace ("Clearing runtime registries");
+  wsl::log::cmake ()->debug ("finalize_load: Clearing runtime registries");
   clear_runtime_registries (*m_runtime_ctx);
   runtime_registrar::set_active_runtime_context (m_runtime_ctx);
 
@@ -823,15 +845,17 @@ runtime_project_module::finalize_load ()
     m_runtime_ctx->system_factory_registry,
   };
 
-  wsl::log::cmake ()->trace ("Registering new entries");
+  wsl::log::cmake ()->debug (
+      "finalize_load: Applying interpreted registrations");
   const std::size_t registered_count = apply_interpreted_registrations (ctx);
 
-  wsl::log::cmake ()->debug ("Clang Interpreter runtime registered {} entries",
+  wsl::log::cmake ()->debug ("finalize_load: Registered {} interpreted entries",
                              registered_count);
   m_metadata_cache_loaded = false;
   if (write_registration_cache ()) {
-    wsl::log::cmake ()->debug ("Runtime registration cache updated.");
+    wsl::log::cmake ()->debug ("finalize_load: Registration cache updated.");
   }
+  wsl::log::cmake ()->debug ("finalize_load: Done");
 }
 
 void
@@ -960,6 +984,64 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   return true;
 }
 
+// ── Async reload ──
+
+void
+runtime_project_module::compile_and_load_async (const rsc::project &project)
+{
+  // If a previous async reload already finished but hasn't been polled yet,
+  // finalize it now so we don't lose the result before starting a new one.
+  if (m_async_reload_future.valid ()
+      && m_async_reload_future.wait_for (std::chrono::seconds (0))
+             == std::future_status::ready) {
+    poll_async_reload ();
+  }
+
+  if (is_reloading ()) {
+    wsl::log::cmake ()->warn (
+        "Async reload already in progress, ignoring duplicate request");
+    return;
+  }
+
+  wsl::log::cmake ()->debug ("Starting async runtime reload for project: {}",
+                             project.name);
+  m_async_reload_future = std::async (std::launch::async, [this, project] () {
+    return this->compile_and_load (project);
+  });
+}
+
+bool
+runtime_project_module::poll_async_reload ()
+{
+  if (!m_async_reload_future.valid ()) {
+    return false;
+  }
+
+  if (m_async_reload_future.wait_for (std::chrono::seconds (0))
+      == std::future_status::ready) {
+    const bool success = m_async_reload_future.get ();
+    if (success) {
+      wsl::log::cmake ()->debug (
+          "Async reload complete, calling finalize_load on main thread");
+      finalize_load ();
+    } else {
+      wsl::log::cmake ()->warn ("Async reload failed: {}", m_last_status);
+    }
+    return true;
+  }
+  return false;
+}
+
+bool
+runtime_project_module::is_reloading () const
+{
+  if (!m_async_reload_future.valid ()) {
+    return false;
+  }
+  return m_async_reload_future.wait_for (std::chrono::seconds (0))
+         == std::future_status::timeout;
+}
+
 // ── Shared library cache ──
 
 fs::path
@@ -1026,8 +1108,20 @@ runtime_project_module::compile_to_shared_library (
   std::ostringstream cmd;
   cmd << "\"" << compiler << "\" ";
 
-  // Add the same include paths and flags the interpreter uses
+  // Add the same include paths and flags the interpreter uses.
+  // Skip -resource-dir because the standalone compiler should use its own
+  // builtin headers; forcing the interpreter's resource dir can cause
+  // mismatches (e.g. LLVM 20 headers with an LLVM 21 compiler).
+  bool skip_next = false;
   for (const auto &arg : m_interpreter_args_storage) {
+    if (skip_next) {
+      skip_next = false;
+      continue;
+    }
+    if (arg == "-resource-dir") {
+      skip_next = true;
+      continue;
+    }
     cmd << "\"" << arg << "\" ";
   }
 
@@ -1097,10 +1191,6 @@ runtime_project_module::try_load_cached_shared_library (
     }
   }
 
-  // Sync the meta context before loading
-  runtime_registrar::sync_runtime_state (
-      reinterpret_cast<void *> (shared_meta_context_address ()));
-
   // Clear any previous registrations
   runtime_registrar::component_registrations ().clear ();
   runtime_registrar::singleton_registrations ().clear ();
@@ -1115,7 +1205,11 @@ runtime_project_module::try_load_cached_shared_library (
     return false;
   }
 
-  wsl::log::cmake ()->debug ("Cached shared library loaded successfully");
+  wsl::log::cmake ()->debug (
+      "Cached shared library loaded. Buckets: comp={}, singl={}, sys={}",
+      runtime_registrar::component_registrations ().size (),
+      runtime_registrar::singleton_registrations ().size (),
+      runtime_registrar::system_registrations ().size ());
   return true;
 }
 

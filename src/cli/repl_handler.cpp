@@ -2218,7 +2218,8 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "Failed to set " << desc->display_name << "." << tokens[3]
                << ": " << set_msg << "\n";
     }
-    std::free (parent_buf);
+    // parent_val (entt::meta_any with transfer_ownership=true) owns
+    // parent_buf; do NOT free it explicitly to avoid double-free.
     return;
   }
 
