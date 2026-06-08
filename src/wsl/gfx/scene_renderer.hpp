@@ -113,7 +113,7 @@ public:
   //! Builds SSAO from the current visible draw list.
   void build_ssao_for_visible_models ();
   //! Draws the active environment cubemap as the current skybox.
-  void draw_active_environment ();
+  void draw_active_environment (const glm::quat &skybox_rotation = glm::quat{});
 
   /*!
    * \brief Draws a procedural infinite grid at the origin.
@@ -306,7 +306,8 @@ private:
   void create_skybox_pipeline ();
   void bind_skybox_pipeline ();
   void draw_skybox (const gfx::cubemap &cubemap, const glm::mat4 &view,
-                    const glm::mat4 &proj);
+                    const glm::mat4 &proj,
+                    const glm::quat &skybox_rotation = glm::quat{});
   void create_preview_bg_pipeline ();
   void destroy_preview_bg_pipeline ();
   void create_ibl_pipelines ();

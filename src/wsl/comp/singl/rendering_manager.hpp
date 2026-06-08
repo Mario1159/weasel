@@ -19,6 +19,7 @@ struct rendering_manager : singleton_component
 {
   std::unique_ptr<gfx::scene_renderer> renderer;
   rsc::cubemap_id skybox{};
+  math::quatf skybox_rotation{};
 
   math::vec3f clear_color{ 0.1F, 0.1F, 0.1F };
   float clear_alpha = 1.0F;
@@ -102,6 +103,12 @@ struct rendering_manager : singleton_component
         .data<&comp::singl::rendering_manager::skybox> ("skybox"_hs)
         .custom<comp::meta_info> (
             meta_info{ "Skybox", "Environment cubemap used by the scene.", "" })
+
+        .data<&comp::singl::rendering_manager::skybox_rotation> (
+            "skybox_rotation"_hs)
+        .custom<comp::meta_info> (meta_info{
+            "Skybox Rotation",
+            "Rotation applied to the skybox sampling direction.", "" })
 
         .data<&comp::singl::rendering_manager::clear_color> ("clear_color"_hs)
         .custom<comp::meta_info> (meta_info{
@@ -215,6 +222,8 @@ struct rendering_manager : singleton_component
   {
     rendering_manager def{};
     serialize_field_if_diff (archive, "skybox", skybox.value, def.skybox.value);
+    serialize_field_if_diff (archive, "skybox_rotation", skybox_rotation,
+                             def.skybox_rotation);
     serialize_field_if_diff (archive, "clear_color", clear_color,
                              def.clear_color);
     serialize_field_if_diff (archive, "clear_alpha", clear_alpha,

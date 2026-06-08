@@ -425,14 +425,15 @@ gfx::scene_renderer::build_ssao_for_visible_models ()
 }
 
 void
-gfx::scene_renderer::draw_active_environment ()
+gfx::scene_renderer::draw_active_environment (const glm::quat &skybox_rotation)
 {
   if ((m_active_env == nullptr) || !m_active_view.valid) {
     return;
   }
 
   bind_skybox_pipeline ();
-  draw_skybox (*m_active_env, m_active_view.view, m_active_view.proj);
+  draw_skybox (*m_active_env, m_active_view.view, m_active_view.proj,
+               skybox_rotation);
 }
 
 void
@@ -1230,7 +1231,8 @@ gfx::scene_renderer::bind_skybox_pipeline ()
 
 void
 gfx::scene_renderer::draw_skybox (const gfx::cubemap &cubemap,
-                                  const glm::mat4 &view, const glm::mat4 &proj)
+                                  const glm::mat4 &view, const glm::mat4 &proj,
+                                  const glm::quat &skybox_rotation)
 {
   if ((cubemap.texture == nullptr) || (cubemap.sampler == nullptr)) {
     return;
@@ -1247,7 +1249,10 @@ gfx::scene_renderer::draw_skybox (const gfx::cubemap &cubemap,
   glm::mat4 flipped_proj = proj;
   flipped_proj[1][1] *= -1.0F;
 
-  glm::mat4 inv_vp = camera_rot * glm::inverse (flipped_proj);
+  // Apply optional skybox rotation to the sampling direction.
+  glm::mat4 const skybox_rot
+      = glm::mat4_cast (glm::conjugate (skybox_rotation));
+  glm::mat4 inv_vp = skybox_rot * camera_rot * glm::inverse (flipped_proj);
 
   SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &inv_vp,
                                 sizeof (glm::mat4));
