@@ -106,6 +106,9 @@ private:
   bool m_show_build_settings = false;
   bool m_request_build_settings_popup = false;
 
+  bool m_show_project_settings = false;
+  bool m_request_project_settings_popup = false;
+
   // Style prefs
   int m_pref_font_index = 0;      // 0..4 (regular/light/medium/semibold/bold)
   float m_pref_font_scale = 1.0F; // global scale
@@ -123,6 +126,7 @@ private:
   void apply_preferences_style ();
 
   void draw_build_settings_popup ();
+  void draw_project_settings_popup ();
 
   void draw_welcome_tab ();
   void draw_status_bar ();

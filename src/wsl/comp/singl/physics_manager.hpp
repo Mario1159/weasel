@@ -73,8 +73,7 @@ struct physics_manager : singleton_component
   }
 
   void
-  on_inspector_changed (
-      comp::singl::runtime_context * /*unused*/)
+  on_inspector_changed (comp::singl::runtime_context * /*unused*/)
   {
     apply_runtime_settings ();
   }
@@ -130,11 +129,15 @@ struct physics_manager : singleton_component
   serialize (Archive &archive)
   {
     sanitize_settings ();
-    archive (cereal::make_nvp ("gravity", gravity),
-             cereal::make_nvp ("fixed_timestep", fixed_timestep),
-             cereal::make_nvp ("max_frame_time", max_frame_time),
-             cereal::make_nvp ("max_substeps", max_substeps),
-             cereal::make_nvp ("show_debug", show_debug));
+    physics_manager def{};
+    serialize_field_if_diff (archive, "gravity", gravity, def.gravity);
+    serialize_field_if_diff (archive, "fixed_timestep", fixed_timestep,
+                             def.fixed_timestep);
+    serialize_field_if_diff (archive, "max_frame_time", max_frame_time,
+                             def.max_frame_time);
+    serialize_field_if_diff (archive, "max_substeps", max_substeps,
+                             def.max_substeps);
+    serialize_field_if_diff (archive, "show_debug", show_debug, def.show_debug);
   }
 };
 

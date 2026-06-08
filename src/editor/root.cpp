@@ -215,6 +215,16 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
     draw_build_settings_popup ();
   }
 
+  if (m_request_project_settings_popup) {
+    ImGui::OpenPopup ("Project Settings");
+    m_request_project_settings_popup = false;
+  }
+
+  if (m_show_project_settings
+      || ImGui::IsPopupOpen ("Project Settings", ImGuiPopupFlags_AnyPopupId)) {
+    draw_project_settings_popup ();
+  }
+
   draw_status_bar ();
 }
 
@@ -388,7 +398,10 @@ editor::root::draw_main_menu ()
   }
 
   if (ImGui::BeginMenu ("Project")) {
-    ImGui::MenuItem ("Project Settings");
+    if (ImGui::MenuItem ("Project Settings")) {
+      m_show_project_settings = true;
+      m_request_project_settings_popup = true;
+    }
     if (ImGui::MenuItem ("Build Settings")) {
       m_show_build_settings = true;
       m_request_build_settings_popup = true;
@@ -747,6 +760,152 @@ editor::root::draw_build_settings_popup ()
   if (!open) {
     ImGui::CloseCurrentPopup ();
     m_show_build_settings = false;
+  }
+}
+
+void
+editor::root::draw_project_settings_popup ()
+{
+  bool open = true;
+  ImGuiViewport const *vp = ImGui::GetMainViewport ();
+  ImGui::SetNextWindowPos (vp->GetCenter (), ImGuiCond_Appearing,
+                           ImVec2 (0.5F, 0.5F));
+
+  if (ImGui::BeginPopupModal ("Project Settings", &open,
+                              ImGuiWindowFlags_AlwaysAutoResize)) {
+
+    auto proj = m_runtime_ctx->resource_manager.current_project ();
+    if (!proj) {
+      ImGui::TextDisabled ("No project loaded.");
+      ImGui::Spacing ();
+      if (ImGui::Button ("Close")) {
+        ImGui::CloseCurrentPopup ();
+        m_show_project_settings = false;
+      }
+      ImGui::EndPopup ();
+      return;
+    }
+
+    // Project Name
+    ImGui::TextUnformatted ("Project Name");
+    ImGui::SetNextItemWidth (400.0F);
+    char name_buf[128];
+    std::strncpy (name_buf, proj->name.c_str (), sizeof (name_buf));
+    if (ImGui::InputText ("##proj_name", name_buf, sizeof (name_buf))) {
+      proj->name = name_buf;
+    }
+
+    // Author
+    ImGui::TextUnformatted ("Author");
+    ImGui::SetNextItemWidth (400.0F);
+    char author_buf[128];
+    std::strncpy (author_buf, proj->author.c_str (), sizeof (author_buf));
+    if (ImGui::InputText ("##proj_author", author_buf, sizeof (author_buf))) {
+      proj->author = author_buf;
+    }
+
+    // Default Scene
+    ImGui::TextUnformatted ("Default Scene");
+    ImGui::SetNextItemWidth (400.0F);
+
+    auto scenes = m_runtime_ctx->resource_manager.list_scenes ();
+    std::vector<std::string> scene_paths;
+    scene_paths.reserve (scenes.size ());
+    int current_scene_idx = -1;
+    for (const auto &rec : scenes) {
+      if (rec.is_prefab)
+        continue;
+      scene_paths.push_back (rec.path);
+      if (rec.path == proj->default_scene_path) {
+        current_scene_idx = static_cast<int> (scene_paths.size ()) - 1;
+      }
+    }
+
+    // Build preview name list
+    std::vector<std::string> scene_names;
+    scene_names.reserve (scene_paths.size ());
+    for (const auto &path : scene_paths) {
+      std::filesystem::path p (path);
+      scene_names.push_back (p.filename ().string ());
+    }
+
+    // Build null-terminated string array for Combo
+    std::string combo_items;
+    for (const auto &name : scene_names) {
+      combo_items += name;
+      combo_items += '\0';
+    }
+    if (!combo_items.empty ()) {
+      combo_items.pop_back (); // remove trailing null
+    }
+
+    int selected_idx = current_scene_idx >= 0 ? current_scene_idx : 0;
+    if (ImGui::Combo ("##default_scene", &selected_idx, combo_items.c_str ())) {
+      if (selected_idx >= 0
+          && selected_idx < static_cast<int> (scene_paths.size ())) {
+        proj->default_scene_path = scene_paths[selected_idx];
+      }
+    }
+
+    // Resource Paths
+    ImGui::Spacing ();
+    ImGui::Separator ();
+    ImGui::Spacing ();
+    ImGui::TextUnformatted ("Resource Paths");
+
+    auto draw_path_input = [&] (const char *label, std::string &value) {
+      char buf[512];
+      std::strncpy (buf, value.c_str (), sizeof (buf));
+      if (ImGui::InputText (label, buf, sizeof (buf))) {
+        value = buf;
+      }
+    };
+
+    draw_path_input ("Systems##systems_path", proj->systems_path);
+    draw_path_input ("Components##components_path", proj->components_path);
+    draw_path_input ("Singletons##singletons_path", proj->singletons_path);
+    draw_path_input ("Scenes##scenes_path", proj->scenes_path);
+    draw_path_input ("Models##models_path", proj->models_path);
+    draw_path_input ("Images##images_path", proj->images_path);
+    draw_path_input ("Cubemaps##cubemaps_path", proj->cubemaps_path);
+    draw_path_input ("Audio##audio_path", proj->audio_path);
+    draw_path_input ("UI Layouts##ui_layouts_path", proj->ui_layouts_path);
+    draw_path_input ("Fonts##fonts_path", proj->fonts_path);
+    draw_path_input ("Shaders##shaders_path", proj->shaders_path);
+
+    ImGui::Spacing ();
+    ImGui::Separator ();
+    ImGui::Spacing ();
+
+    if (ImGui::Button ("Save")) {
+      std::filesystem::path manifest
+          = std::filesystem::path (proj->root_path)
+            / wsl::rsc::project_loader::manifest_file;
+      std::ofstream file (manifest);
+      if (file) {
+        cereal::JSONOutputArchive archive (file);
+        archive (cereal::make_nvp ("project", *proj));
+        wsl::log::editor ()->info ("Saved project settings to {}",
+                                   manifest.string ());
+      } else {
+        wsl::log::editor ()->error ("Failed to save project settings to {}",
+                                    manifest.string ());
+      }
+      ImGui::CloseCurrentPopup ();
+      m_show_project_settings = false;
+    }
+    ImGui::SameLine ();
+    if (ImGui::Button ("Cancel")) {
+      ImGui::CloseCurrentPopup ();
+      m_show_project_settings = false;
+    }
+
+    ImGui::EndPopup ();
+  }
+
+  if (!open) {
+    ImGui::CloseCurrentPopup ();
+    m_show_project_settings = false;
   }
 }
 

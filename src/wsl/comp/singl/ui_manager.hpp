@@ -59,7 +59,9 @@ public:
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("active_document_id", active_document_id.value));
+    rsc::ui_layout_id def_id{};
+    serialize_field_if_diff (archive, "active_document_id",
+                             active_document_id.value, def_id.value);
   }
 
   editor::ui_system_interface system_interface;

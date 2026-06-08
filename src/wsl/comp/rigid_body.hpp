@@ -175,58 +175,95 @@ struct rigid_body : world_component
   void
   serialize (Archive &ar)
   {
+    rigid_body def{};
     int shape_i = (int)shape;
     int motion_i = (int)motion_type.value;
     int dofs_i = (int)allowed_dofs.value;
     int collision_layer_i = (int)collision_layer.value;
     int collision_mask_i = (int)collision_mask.value;
 
-    if constexpr (std::is_same_v<Archive, cereal::BinaryOutputArchive>
-                  || std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      ar (cereal::make_nvp ("shape", shape_i),
-          cereal::make_nvp ("position", position),
-          cereal::make_nvp ("rotation", rotation),
-          cereal::make_nvp ("half_extents", half_extents),
-          cereal::make_nvp ("radius", radius),
-          cereal::make_nvp ("dynamic", dynamic),
-          cereal::make_nvp ("motion_type", motion_i),
-          cereal::make_nvp ("allowed_dofs", dofs_i),
-          cereal::make_nvp ("collision_layer", collision_layer_i),
-          cereal::make_nvp ("collision_mask", collision_mask_i),
-          cereal::make_nvp ("friction", friction),
-          cereal::make_nvp ("restitution", restitution));
-    } else {
-      ar (cereal::make_nvp ("shape", shape_i),
-          cereal::make_nvp ("position", position),
-          cereal::make_nvp ("rotation", rotation),
-          cereal::make_nvp ("half_extents", half_extents),
-          cereal::make_nvp ("radius", radius),
-          cereal::make_nvp ("dynamic", dynamic),
-          cereal::make_nvp ("motion_type", motion_i),
-          cereal::make_nvp ("allowed_dofs", dofs_i));
+    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
+      if (shape_i != (int)def.shape)
+        ar (cereal::make_nvp ("shape", shape_i));
+      serialize_field_if_diff (ar, "position", position, def.position);
+      serialize_field_if_diff (ar, "rotation", rotation, def.rotation);
+      serialize_field_if_diff (ar, "half_extents", half_extents,
+                               def.half_extents);
+      serialize_field_if_diff (ar, "radius", radius, def.radius);
+      serialize_field_if_diff (ar, "dynamic", dynamic, def.dynamic);
+      if (motion_i != (int)def.motion_type.value)
+        ar (cereal::make_nvp ("motion_type", motion_i));
+      if (dofs_i != (int)def.allowed_dofs.value)
+        ar (cereal::make_nvp ("allowed_dofs", dofs_i));
+      if (collision_layer_i != (int)def.collision_layer.value)
+        ar (cereal::make_nvp ("collision_layer", collision_layer_i));
+      if (collision_mask_i != (int)def.collision_mask.value)
+        ar (cereal::make_nvp ("collision_mask", collision_mask_i));
+      serialize_field_if_diff (ar, "friction", friction, def.friction);
+      serialize_field_if_diff (ar, "restitution", restitution, def.restitution);
+    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+      shape_i = (int)def.shape;
+      position = def.position;
+      rotation = def.rotation;
+      half_extents = def.half_extents;
+      radius = def.radius;
+      dynamic = def.dynamic;
+      motion_i = (int)def.motion_type.value;
+      dofs_i = (int)def.allowed_dofs.value;
+      collision_layer_i = (int)def.collision_layer.value;
+      collision_mask_i = (int)def.collision_mask.value;
+      friction = def.friction;
+      restitution = def.restitution;
 
-      if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        try {
-          ar (cereal::make_nvp ("collision_layer", collision_layer_i));
-        } catch (const std::exception &) {
-        }
-        try {
-          ar (cereal::make_nvp ("collision_mask", collision_mask_i));
-        } catch (const std::exception &) {
-        }
-        try {
-          ar (cereal::make_nvp ("friction", friction));
-        } catch (const std::exception &) {
-        }
-        try {
-          ar (cereal::make_nvp ("restitution", restitution));
-        } catch (const std::exception &) {
-        }
-      } else {
-        ar (cereal::make_nvp ("collision_layer", collision_layer_i),
-            cereal::make_nvp ("collision_mask", collision_mask_i),
-            cereal::make_nvp ("friction", friction),
-            cereal::make_nvp ("restitution", restitution));
+      try {
+        ar (cereal::make_nvp ("shape", shape_i));
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "position", position, def.position);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "rotation", rotation, def.rotation);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "half_extents", half_extents,
+                                 def.half_extents);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "radius", radius, def.radius);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "dynamic", dynamic, def.dynamic);
+      } catch (...) {
+      }
+      try {
+        ar (cereal::make_nvp ("motion_type", motion_i));
+      } catch (...) {
+      }
+      try {
+        ar (cereal::make_nvp ("allowed_dofs", dofs_i));
+      } catch (...) {
+      }
+      try {
+        ar (cereal::make_nvp ("collision_layer", collision_layer_i));
+      } catch (...) {
+      }
+      try {
+        ar (cereal::make_nvp ("collision_mask", collision_mask_i));
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "friction", friction, def.friction);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "restitution", restitution,
+                                 def.restitution);
+      } catch (...) {
       }
 
       shape = (shape_type)shape_i;
@@ -243,6 +280,36 @@ struct rigid_body : world_component
       body_id = JPH::BodyID{};
 
       sync_applied_cache ();
+    } else {
+      ar (cereal::make_nvp ("shape", shape_i),
+          cereal::make_nvp ("position", position),
+          cereal::make_nvp ("rotation", rotation),
+          cereal::make_nvp ("half_extents", half_extents),
+          cereal::make_nvp ("radius", radius),
+          cereal::make_nvp ("dynamic", dynamic),
+          cereal::make_nvp ("motion_type", motion_i),
+          cereal::make_nvp ("allowed_dofs", dofs_i),
+          cereal::make_nvp ("collision_layer", collision_layer_i),
+          cereal::make_nvp ("collision_mask", collision_mask_i),
+          cereal::make_nvp ("friction", friction),
+          cereal::make_nvp ("restitution", restitution));
+      if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
+                                      Archive>) {
+        shape = (shape_type)shape_i;
+        motion_type.value = (JPH::EMotionType)motion_i;
+        allowed_dofs.value = (JPH::EAllowedDOFs)dofs_i;
+        collision_layer.value = phys::layers::clamp_layer_index (
+            static_cast<phys::layers::layer_index_t> (collision_layer_i));
+        collision_mask.value = phys::layers::clamp_layer_mask (
+            static_cast<phys::layers::layer_mask_t> (collision_mask_i));
+
+        sanitize_dimensions ();
+        sanitize_surface_properties ();
+
+        body_id = JPH::BodyID{};
+
+        sync_applied_cache ();
+      }
     }
   }
 };

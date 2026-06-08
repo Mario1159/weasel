@@ -18,7 +18,6 @@
 
 #include "scene.hpp"
 
-
 namespace wsl
 {
 
@@ -78,10 +77,51 @@ struct scene_header
 };
 
 /*!
+ * \brief Wrapper that adapts entt::snapshot for entt::entity into Cereal
+ *        archives with human-readable field names.
+ *
+ * The default EnTT snapshot writes the entity storage as a flat sequence of
+ * unnamed values, which Cereal's JSON output renders as auto-incremented
+ * "value0", "value1", ... names. This wrapper re-implements the snapshot
+ * protocol for JSON archives so the produced JSON is:
+ *
+ *   {
+ *     "alive_count": <number>,
+ *     "free_list_count": <number>,
+ *     "entities": [ <id>, <id>, ... ]
+ *   }
+ *
+ * Binary archives continue to use EnTT's snapshot directly.
+ */
+struct entity_snapshot_wrapper
+{
+  entt::registry &registry;
+
+  template <class Archive>
+  void
+  serialize (Archive &ar)
+  {
+    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
+      save_json (ar);
+    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+      load_json (ar);
+    } else {
+      entt::snapshot const snapshot{ registry };
+      snapshot.get<entt::entity> (ar);
+    }
+  }
+
+private:
+  void save_json (cereal::JSONOutputArchive &ar) const;
+  void load_json (cereal::JSONInputArchive &ar);
+};
+
+/*!
  * \brief Handles serialization and deserialization of scene snapshots.
  *
  * This class uses EnTT snapshots and Cereal archives to save and load
- * the complete state of a scene, including entities, components, and singletons.
+ * the complete state of a scene, including entities, components, and
+ * singletons.
  */
 class scene_snapshot_serializer
 {
@@ -91,8 +131,8 @@ public:
    * \param runtime_ctx Pointer to the runtime context.
    * \param scene Reference to the scene to be serialized.
    */
-  /*explicit*/ scene_snapshot_serializer (comp::singl::runtime_context *runtime_ctx,
-                                          scene &scene);
+  /*explicit*/ scene_snapshot_serializer (
+      comp::singl::runtime_context *runtime_ctx, scene &scene);
 
   /*! \brief Saves the scene to a binary file at the specified path. */
   bool save_binary (const std::string &path) const;

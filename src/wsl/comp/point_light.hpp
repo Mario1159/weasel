@@ -70,12 +70,15 @@ struct point_light : world_component
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("color", color),
-             cereal::make_nvp ("intensity", intensity),
-             cereal::make_nvp ("radius", radius),
-             cereal::make_nvp ("cast_shadows", cast_shadows),
-             cereal::make_nvp ("shadow_far", shadow_far),
-             cereal::make_nvp ("shadow_bias", shadow_bias));
+    point_light def{};
+    serialize_field_if_diff (archive, "color", color, def.color);
+    serialize_field_if_diff (archive, "intensity", intensity, def.intensity);
+    serialize_field_if_diff (archive, "radius", radius, def.radius);
+    serialize_field_if_diff (archive, "cast_shadows", cast_shadows,
+                             def.cast_shadows);
+    serialize_field_if_diff (archive, "shadow_far", shadow_far, def.shadow_far);
+    serialize_field_if_diff (archive, "shadow_bias", shadow_bias,
+                             def.shadow_bias);
   }
 };
 

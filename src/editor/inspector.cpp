@@ -573,9 +573,76 @@ inspector::set_parent (entt::entity child, entt::entity new_parent)
   }
 }
 
+static bool
+meta_any_equal (const entt::meta_any &a, const entt::meta_any &b)
+{
+  if (!a || !b) {
+    return false;
+  }
+  if (a.type () != b.type ()) {
+    return false;
+  }
+
+  auto type = a.type ();
+
+  // Try using meta equality operator if registered
+  if (auto eq = type.func (entt::hashed_string{ "operator==" }); eq) {
+    if (auto res = eq.invoke (a, b); res) {
+      return res.cast<bool> ();
+    }
+  }
+
+  // Fallback for common primitive types
+  if (type == entt::resolve<float> ()) {
+    return a.cast<float> () == b.cast<float> ();
+  }
+  if (type == entt::resolve<int> ()) {
+    return a.cast<int> () == b.cast<int> ();
+  }
+  if (type == entt::resolve<bool> ()) {
+    return a.cast<bool> () == b.cast<bool> ();
+  }
+  if (type == entt::resolve<std::string> ()) {
+    return a.cast<std::string> () == b.cast<std::string> ();
+  }
+  if (type == entt::resolve<entt::entity> ()) {
+    return a.cast<entt::entity> () == b.cast<entt::entity> ();
+  }
+  if (type == entt::resolve<uint32_t> ()) {
+    return a.cast<uint32_t> () == b.cast<uint32_t> ();
+  }
+  if (type == entt::resolve<wsl::math::vec3f> ()) {
+    return a.cast<wsl::math::vec3f> () == b.cast<wsl::math::vec3f> ();
+  }
+  if (type == entt::resolve<wsl::math::quatf> ()) {
+    return a.cast<wsl::math::quatf> () == b.cast<wsl::math::quatf> ();
+  }
+  if (type == entt::resolve<wsl::math::mat33f> ()) {
+    return a.cast<wsl::math::mat33f> () == b.cast<wsl::math::mat33f> ();
+  }
+  if (type == entt::resolve<wsl::math::mat44f> ()) {
+    return a.cast<wsl::math::mat44f> () == b.cast<wsl::math::mat44f> ();
+  }
+  if (type == entt::resolve<wsl::rsc::model_id> ()) {
+    return a.cast<wsl::rsc::model_id> () == b.cast<wsl::rsc::model_id> ();
+  }
+  if (type == entt::resolve<wsl::rsc::cubemap_id> ()) {
+    return a.cast<wsl::rsc::cubemap_id> () == b.cast<wsl::rsc::cubemap_id> ();
+  }
+  if (type == entt::resolve<wsl::rsc::audio_id> ()) {
+    return a.cast<wsl::rsc::audio_id> () == b.cast<wsl::rsc::audio_id> ();
+  }
+  if (type == entt::resolve<glm::mat4> ()) {
+    return a.cast<glm::mat4> () == b.cast<glm::mat4> ();
+  }
+
+  return false;
+}
+
 bool
 inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
-                            entt::meta_any *prefab_object)
+                            entt::meta_any *prefab_object,
+                            entt::meta_any *default_object)
 {
   auto type = object.type ();
 
@@ -617,19 +684,14 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
   // Default per-field inspector
   bool changed = false;
 
-  // First pass: compute max field name width for alignment
-  float max_label_width = 0.0F;
-  for (auto &&[id, data] : type.data ()) {
-    if (is_hidden (data))
-      continue;
-    const float w
-        = ImGui::CalcTextSize (
-              wsl::comp::meta_display_name (data, "<unnamed>").c_str ())
-              .x;
-    if (w > max_label_width)
-      max_label_width = w;
+  // Create a default instance if none was provided
+  entt::meta_any default_instance;
+  if (default_object == nullptr) {
+    default_instance = type.construct ();
+    if (default_instance) {
+      default_object = &default_instance;
+    }
   }
-  const float label_spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
 
   for (auto &&[id, data] : type.data ()) {
     if (is_hidden (data)) {
@@ -650,11 +712,28 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
       }
     }
 
+    entt::meta_any *default_value = nullptr;
+    entt::meta_any default_value_storage;
+    if (default_object != nullptr) {
+      default_value_storage = data.get (*default_object);
+      if (default_value_storage) {
+        default_value = &default_value_storage;
+      }
+    }
+
     ImGui::PushID (static_cast<int> (id));
 
     const std::string field_name
         = wsl::comp::meta_display_name (data, "<unnamed>");
-    const float label_start_x = ImGui::GetCursorPosX ();
+
+    // --- Field name line with refresh button anchored right ---
+    float line_start_x = ImGui::GetCursorPosX ();
+    float avail_width = ImGui::GetContentRegionAvail ().x;
+    bool show_refresh = false;
+    if (default_value != nullptr && !meta_any_equal (value, *default_value)) {
+      show_refresh = true;
+    }
+
     ImGui::TextUnformatted (field_name.c_str ());
 
     if (ImGui::IsItemHovered ()) {
@@ -668,20 +747,58 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
       ImGui::EndTooltip ();
     }
 
-    ImGui::SameLine ();
-    if (const float target_x = label_start_x + max_label_width + label_spacing;
-        ImGui::GetCursorPosX () < target_x)
-      ImGui::SetCursorPosX (target_x);
+    if (show_refresh) {
+      ImGui::SameLine ();
+      float btn_size = ImGui::GetTextLineHeight ();
+      float btn_x = line_start_x + avail_width - btn_size
+                    - ImGui::GetStyle ().FramePadding.x;
+      if (btn_x > ImGui::GetCursorPosX ())
+        ImGui::SetCursorPosX (btn_x);
 
-    if (draw_meta_object ("##value", value, prefab_value)) {
+      auto *editor_res = &m_editor_ctx->editor_resources;
+      auto img_id = m_editor_ctx->icon_refresh;
+      if (editor_res->state (img_id) == wsl::rsc::image_state::not_loaded) {
+        editor_res->load (img_id);
+      }
+      auto handle = editor_res->get (img_id);
+      if (handle
+          && editor_res->state (img_id) == wsl::rsc::image_state::loaded) {
+        wsl::gfx::image const *img = handle.handle ().get ();
+        if (img != nullptr && img->texture != nullptr) {
+          if (ImGui::ImageButton ("##refresh", (ImTextureID)img->texture,
+                                  ImVec2 (btn_size, btn_size))) {
+            data.set (object, *default_value);
+            changed = true;
+          }
+        } else {
+          if (ImGui::SmallButton ("R")) {
+            data.set (object, *default_value);
+            changed = true;
+          }
+        }
+      } else {
+        if (ImGui::SmallButton ("R")) {
+          data.set (object, *default_value);
+          changed = true;
+        }
+      }
+      if (ImGui::IsItemHovered ()) {
+        ImGui::SetTooltip ("Reset to default");
+      }
+    }
+
+    // --- Field value line below ---
+    ImGui::PushItemWidth (-1.0f);
+    if (draw_meta_object ("##value", value, prefab_value, default_value)) {
       data.set (object, value);
       changed = true;
     }
+    ImGui::PopItemWidth ();
 
     ImGui::PopID ();
   }
 
-  // NEW: after any edit, notify the object (e.g. rigid_body)
+  // after any edit, notify the object (e.g. rigid_body)
   if (changed) {
     if (auto on_changed
         = type.func (entt::hashed_string{ "on_inspector_changed" });
@@ -693,51 +810,10 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
   return changed;
 }
 
-static bool
-meta_any_equal (const entt::meta_any &a, const entt::meta_any &b)
-{
-  if (!a || !b) {
-    return false;
-  }
-  if (a.type () != b.type ()) {
-    return false;
-  }
-
-  auto type = a.type ();
-
-  // Try using meta equality operator if registered
-  if (auto eq = type.func (entt::hashed_string{ "operator==" }); eq) {
-    if (auto res = eq.invoke (a, b); res) {
-      return res.cast<bool> ();
-    }
-  }
-
-  // Fallback for common primitive types
-  if (type == entt::resolve<float> ()) {
-    return a.cast<float> () == b.cast<float> ();
-  }
-  if (type == entt::resolve<int> ()) {
-    return a.cast<int> () == b.cast<int> ();
-  }
-  if (type == entt::resolve<bool> ()) {
-    return a.cast<bool> () == b.cast<bool> ();
-  }
-  if (type == entt::resolve<std::string> ()) {
-    return a.cast<std::string> () == b.cast<std::string> ();
-  }
-  if (type == entt::resolve<entt::entity> ()) {
-    return a.cast<entt::entity> () == b.cast<entt::entity> ();
-  }
-  if (type == entt::resolve<uint32_t> ()) {
-    return a.cast<uint32_t> () == b.cast<uint32_t> ();
-  }
-
-  return false;
-}
-
 bool
 inspector::draw_meta_object (const char *label, entt::meta_any &object,
-                             entt::meta_any *prefab_object)
+                             entt::meta_any *prefab_object,
+                             entt::meta_any *default_object)
 {
 
   auto type = object.type ();
@@ -760,23 +836,23 @@ inspector::draw_meta_object (const char *label, entt::meta_any &object,
 
   // ---- existing logic continues below ----
   if (type == entt::resolve<entt::entity> ()) {
-    return draw_meta_value (label, object, prefab_object);
+    return draw_meta_value (label, object, prefab_object, default_object);
   }
 
   if (type == entt::resolve<std::string> ()) {
-    return draw_meta_value (label, object, prefab_object);
+    return draw_meta_value (label, object, prefab_object, default_object);
   }
 
   if (type == entt::resolve<wsl::rsc::model_id> ()) {
-    return draw_meta_value (label, object, prefab_object);
+    return draw_meta_value (label, object, prefab_object, default_object);
   }
 
   if (type == entt::resolve<wsl::rsc::cubemap_id> ()) {
-    return draw_meta_value (label, object, prefab_object);
+    return draw_meta_value (label, object, prefab_object, default_object);
   }
 
   if (type == entt::resolve<wsl::rsc::audio_id> ()) {
-    return draw_meta_value (label, object, prefab_object);
+    return draw_meta_value (label, object, prefab_object, default_object);
   }
 
   if (type.is_enum ()) {
@@ -788,13 +864,13 @@ inspector::draw_meta_object (const char *label, entt::meta_any &object,
     return draw_meta_sequence (label, object);
   else if (type.is_class ()) {
     if (ImGui::TreeNode (label)) {
-      bool changed
-          = draw_meta_class (object, { 1.0f, 1.0f, 1.0f }, prefab_object);
+      bool changed = draw_meta_class (object, { 1.0f, 1.0f, 1.0f },
+                                      prefab_object, default_object);
       ImGui::TreePop ();
       return changed;
     }
   } else {
-    return draw_meta_value (label, object, prefab_object);
+    return draw_meta_value (label, object, prefab_object, default_object);
   }
   return false;
 }
@@ -891,7 +967,8 @@ inspector::draw_meta_sequence (const char *label, entt::meta_any &object)
 
 bool
 inspector::draw_meta_value (const char *label, entt::meta_any &object,
-                            entt::meta_any *prefab_object)
+                            entt::meta_any *prefab_object,
+                            entt::meta_any * /*default_object*/)
 {
   auto type = object.type ();
 

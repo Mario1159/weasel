@@ -45,8 +45,9 @@ struct directional_light : world_component
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("color", color),
-             cereal::make_nvp ("intensity", intensity));
+    directional_light def{};
+    serialize_field_if_diff (archive, "color", color, def.color);
+    serialize_field_if_diff (archive, "intensity", intensity, def.intensity);
   }
 };
 

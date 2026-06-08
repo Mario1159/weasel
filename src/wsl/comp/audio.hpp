@@ -89,26 +89,63 @@ struct audio : world_component
   {
     using namespace cereal;
     auto *mgr = rsc::resource_manager::serialization_context::get ();
+    audio def{};
 
-    if constexpr (std::is_base_of_v<cereal::detail::OutputArchiveBase,
-                                    Archive>) {
+    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
       std::string path = "None";
-      if (mgr) {
+      if (mgr && audio_resource.value != entt::null) {
         path = mgr->get_resource_path (audio_resource);
       }
-      archive (make_nvp ("audio_path", path), make_nvp ("loop", loop),
-               make_nvp ("play_on_start", play_on_start),
-               make_nvp ("volume", volume));
-    } else {
+      if (path != "None") {
+        archive (make_nvp ("audio_path", path));
+      }
+      serialize_field_if_diff (archive, "loop", loop, def.loop);
+      serialize_field_if_diff (archive, "play_on_start", play_on_start,
+                               def.play_on_start);
+      serialize_field_if_diff (archive, "volume", volume, def.volume);
+    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
       std::string path;
-      archive (make_nvp ("audio_path", path), make_nvp ("loop", loop),
-               make_nvp ("play_on_start", play_on_start),
-               make_nvp ("volume", volume));
+      loop = def.loop;
+      play_on_start = def.play_on_start;
+      volume = def.volume;
+      try {
+        archive (make_nvp ("audio_path", path));
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (archive, "loop", loop, def.loop);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (archive, "play_on_start", play_on_start,
+                                 def.play_on_start);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (archive, "volume", volume, def.volume);
+      } catch (...) {
+      }
 
       if (path != "None" && !path.empty () && mgr) {
         audio_resource = mgr->register_audio (path);
       } else {
         audio_resource.value = entt::null;
+      }
+    } else {
+      std::string path = "None";
+      if (mgr && audio_resource.value != entt::null) {
+        path = mgr->get_resource_path (audio_resource);
+      }
+      archive (make_nvp ("audio_path", path), make_nvp ("loop", loop),
+               make_nvp ("play_on_start", play_on_start),
+               make_nvp ("volume", volume));
+      if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
+                                      Archive>) {
+        if (path != "None" && !path.empty () && mgr) {
+          audio_resource = mgr->register_audio (path);
+        } else {
+          audio_resource.value = entt::null;
+        }
       }
     }
   }

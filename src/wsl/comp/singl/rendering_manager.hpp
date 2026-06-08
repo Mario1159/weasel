@@ -213,28 +213,46 @@ struct rendering_manager : singleton_component
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("skybox", skybox.value),
-             cereal::make_nvp ("clear_color", clear_color),
-             cereal::make_nvp ("clear_alpha", clear_alpha),
-             cereal::make_nvp ("ambient_color", ambient_color),
-             cereal::make_nvp ("ambient_intensity", ambient_intensity),
-             cereal::make_nvp ("sun_altitude", sun_altitude),
-             cereal::make_nvp ("sun_azimuth", sun_azimuth),
-             cereal::make_nvp ("exposure", exposure),
-             cereal::make_nvp ("bloom_threshold", bloom_threshold),
-             cereal::make_nvp ("bloom_knee", bloom_knee),
-             cereal::make_nvp ("bloom_intensity", bloom_intensity),
-             cereal::make_nvp ("ibl_intensity", ibl_intensity),
-             cereal::make_nvp ("ssao_enabled", ssao_enabled),
-             cereal::make_nvp ("ssao_radius", ssao_radius),
-             cereal::make_nvp ("ssao_bias", ssao_bias),
-             cereal::make_nvp ("ssao_power", ssao_power),
-             cereal::make_nvp ("ssao_intensity", ssao_intensity),
-             cereal::make_nvp ("outline_color", outline_color),
-             cereal::make_nvp ("outline_alpha", outline_alpha),
-             cereal::make_nvp ("outline_width", outline_width),
-             cereal::make_nvp ("shadow_bias", shadow_bias),
-             cereal::make_nvp ("shadow_strength", shadow_strength));
+    rendering_manager def{};
+    serialize_field_if_diff (archive, "skybox", skybox.value, def.skybox.value);
+    serialize_field_if_diff (archive, "clear_color", clear_color,
+                             def.clear_color);
+    serialize_field_if_diff (archive, "clear_alpha", clear_alpha,
+                             def.clear_alpha);
+    serialize_field_if_diff (archive, "ambient_color", ambient_color,
+                             def.ambient_color);
+    serialize_field_if_diff (archive, "ambient_intensity", ambient_intensity,
+                             def.ambient_intensity);
+    serialize_field_if_diff (archive, "sun_altitude", sun_altitude,
+                             def.sun_altitude);
+    serialize_field_if_diff (archive, "sun_azimuth", sun_azimuth,
+                             def.sun_azimuth);
+    serialize_field_if_diff (archive, "exposure", exposure, def.exposure);
+    serialize_field_if_diff (archive, "bloom_threshold", bloom_threshold,
+                             def.bloom_threshold);
+    serialize_field_if_diff (archive, "bloom_knee", bloom_knee, def.bloom_knee);
+    serialize_field_if_diff (archive, "bloom_intensity", bloom_intensity,
+                             def.bloom_intensity);
+    serialize_field_if_diff (archive, "ibl_intensity", ibl_intensity,
+                             def.ibl_intensity);
+    serialize_field_if_diff (archive, "ssao_enabled", ssao_enabled,
+                             def.ssao_enabled);
+    serialize_field_if_diff (archive, "ssao_radius", ssao_radius,
+                             def.ssao_radius);
+    serialize_field_if_diff (archive, "ssao_bias", ssao_bias, def.ssao_bias);
+    serialize_field_if_diff (archive, "ssao_power", ssao_power, def.ssao_power);
+    serialize_field_if_diff (archive, "ssao_intensity", ssao_intensity,
+                             def.ssao_intensity);
+    serialize_field_if_diff (archive, "outline_color", outline_color,
+                             def.outline_color);
+    serialize_field_if_diff (archive, "outline_alpha", outline_alpha,
+                             def.outline_alpha);
+    serialize_field_if_diff (archive, "outline_width", outline_width,
+                             def.outline_width);
+    serialize_field_if_diff (archive, "shadow_bias", shadow_bias,
+                             def.shadow_bias);
+    serialize_field_if_diff (archive, "shadow_strength", shadow_strength,
+                             def.shadow_strength);
   }
 };
 

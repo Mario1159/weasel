@@ -2,6 +2,10 @@
 
 #include <entt/entt.hpp>
 
+#include <cereal/archives/binary.hpp>
+#include <cereal/archives/json.hpp>
+#include <cereal/cereal.hpp>
+
 #include <cctype>
 #include <concepts>
 #include <optional>
@@ -9,7 +13,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-
 
 /**
  * @namespace wsl
@@ -73,8 +76,7 @@ register_component_meta ()
    ...);
 }
 
-template <typename T>
-struct type_traits
+template <typename T> struct type_traits
 {
   static constexpr std::string_view
   name ()
@@ -141,7 +143,10 @@ humanize_identifier (std::string_view identifier)
     const char ch = name[index];
     const unsigned char value = static_cast<unsigned char> (ch);
 
-    if (ch == '_' || ch == '-' || ((((((((std::isspace (value) != 0) != 0) != 0) != 0) != 0) != 0) != 0) != 0)) {
+    if (ch == '_' || ch == '-'
+        || ((((((((std::isspace (value) != 0) != 0) != 0) != 0) != 0) != 0)
+             != 0)
+            != 0)) {
       if (!out.empty () && out.back () != ' ') {
         out.push_back (' ');
       }
@@ -150,13 +155,27 @@ humanize_identifier (std::string_view identifier)
     }
 
     const bool split_camel_case
-        = index > 0 && !capitalize_next && ((((((((std::isupper (value) != 0) != 0) != 0) != 0) != 0) != 0) != 0) != 0)
-          && ((((((((std::islower (static_cast<unsigned char> (name[index - 1])) != 0) != 0) != 0) != 0) != 0) != 0) != 0) != 0);
+        = index > 0 && !capitalize_next
+          && ((((((((std::isupper (value) != 0) != 0) != 0) != 0) != 0) != 0)
+               != 0)
+              != 0)
+          && ((((((((std::islower (static_cast<unsigned char> (name[index - 1]))
+                     != 0)
+                    != 0)
+                   != 0)
+                  != 0)
+                 != 0)
+                != 0)
+               != 0)
+              != 0);
     if (split_camel_case && !out.empty () && out.back () != ' ') {
       out.push_back (' ');
     }
 
-    if (capitalize_next && ((((((((std::isalpha (value) != 0) != 0) != 0) != 0) != 0) != 0) != 0) != 0)) {
+    if (capitalize_next
+        && ((((((((std::isalpha (value) != 0) != 0) != 0) != 0) != 0) != 0)
+             != 0)
+            != 0)) {
       out.push_back (static_cast<char> (std::toupper (value)));
     } else {
       out.push_back (ch);
@@ -194,9 +213,8 @@ reflect_type (entt::id_type type_id, std::string_view display_name = {},
   info.description = std::string (description);
   info.icon_path = std::string (icon_path);
 
-  return entt::meta_factory<T> ()
-      .type (type_id)
-      .template custom<meta_info> (std::move (info));
+  return entt::meta_factory<T> ().type (type_id).template custom<meta_info> (
+      std::move (info));
 }
 
 /*!
@@ -216,14 +234,13 @@ reflect_field (entt::meta_factory<T> factory, std::string_view identifier,
                std::string_view description = {})
 {
   meta_info info{};
-  info.display_name = display_name.empty ()
-                          ? humanize_identifier (identifier)
-                          : std::string (display_name);
+  info.display_name = display_name.empty () ? humanize_identifier (identifier)
+                                            : std::string (display_name);
   info.description = std::string (description);
 
-  return factory.template data<Member> (
-                    entt::hashed_string::value (identifier.data (),
-                                                identifier.size ()))
+  return factory
+      .template data<Member> (
+          entt::hashed_string::value (identifier.data (), identifier.size ()))
       .template custom<meta_info> (std::move (info));
 }
 
@@ -234,7 +251,7 @@ get_meta_info (const entt::meta_type &meta)
     return std::nullopt;
   }
 
-  if (const auto *info = meta.custom ().operator const meta_info * ()) {
+  if (const auto *info = meta.custom ().operator const meta_info *()) {
     return *info;
   }
 
@@ -248,7 +265,7 @@ get_meta_info (const entt::meta_data &meta)
     return std::nullopt;
   }
 
-  if (const auto *info = meta.custom ().operator const meta_info * ()) {
+  if (const auto *info = meta.custom ().operator const meta_info *()) {
     return *info;
   }
 
@@ -290,6 +307,41 @@ meta_icon_path (const entt::meta_type &meta)
   }
 
   return "";
+}
+
+/*!
+ * \brief Serializes a field only if it differs from its default value.
+ *
+ * For JSON output archives, the field is skipped when it matches the default.
+ * For JSON input archives, missing fields are ignored (the current value is
+ * retained, which should be the default if the object was default-constructed).
+ * Binary archives always serialize the field unconditionally.
+ *
+ * \tparam Archive Cereal archive type.
+ * \tparam T Field type.
+ * \param ar The archive to serialize into/from.
+ * \param name The name of the field.
+ * \param field The field value to serialize.
+ * \param default_value The default value to compare against.
+ */
+template <class Archive, typename T>
+inline void
+serialize_field_if_diff (Archive &ar, const char *name, T &field,
+                         const T &default_value)
+{
+  if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
+    if (field != default_value) {
+      ar (cereal::make_nvp (name, field));
+    }
+  } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+    try {
+      ar (cereal::make_nvp (name, field));
+    } catch (const std::exception &) {
+      /* keep current value (default) */
+    }
+  } else {
+    ar (cereal::make_nvp (name, field));
+  }
 }
 
 } // namespace comp

@@ -59,6 +59,51 @@ scene_snapshot_serializer::scene_snapshot_serializer (
 {
 }
 
+void
+entity_snapshot_wrapper::save_json (cereal::JSONOutputArchive &ar) const
+{
+  auto &storage = registry.storage<entt::entity> ();
+
+  ar (cereal::make_nvp ("alive_count",
+                        static_cast<std::size_t> (storage.size ())));
+  ar (cereal::make_nvp ("free_list_count",
+                        static_cast<std::size_t> (storage.free_list ())));
+
+  std::vector<entt::entity> entities;
+  entities.reserve (storage.size ());
+  for (auto it = storage.rbegin (), last = storage.rend (); it != last; ++it) {
+    entities.push_back (*it);
+  }
+  ar (cereal::make_nvp ("entities", entities));
+}
+
+void
+entity_snapshot_wrapper::load_json (cereal::JSONInputArchive &ar)
+{
+  auto &storage = registry.storage<entt::entity> ();
+
+  std::size_t alive_count{};
+  std::size_t free_list_count{};
+  std::vector<entt::entity> entities;
+
+  ar (cereal::make_nvp ("alive_count", alive_count));
+  ar (cereal::make_nvp ("free_list_count", free_list_count));
+  ar (cereal::make_nvp ("entities", entities));
+
+  storage.reserve (alive_count);
+
+  entt::entity placeholder{};
+  for (entt::entity e : entities) {
+    storage.generate (e);
+    placeholder = (e > placeholder) ? e : placeholder;
+  }
+
+  entt::entity next_after_last = entt::entity{ static_cast<entt::id_type> (
+      entt::to_integral (placeholder) + 1u) };
+  storage.start_from (next_after_last);
+  storage.free_list (free_list_count);
+}
+
 template <typename Archive>
 void
 scene_snapshot_serializer::save_scene (Archive &archive) const
@@ -91,10 +136,15 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
 
   archive (cereal::make_nvp ("header", header));
 
-  entt::snapshot const snapshot{ scene_ref.get_registry () };
   entt::registry &registry = scene_ref.get_registry ();
 
-  snapshot.get<entt::entity> (archive);
+  if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
+    archive (
+        cereal::make_nvp ("entities", entity_snapshot_wrapper{ registry }));
+  } else {
+    entt::snapshot const snapshot{ registry };
+    snapshot.get<entt::entity> (archive);
+  }
 
   for (const reg::component_registry::descriptor *desc :
        runtime_ctx->component_registry.get_world_components (
@@ -107,7 +157,6 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
       runtime_ctx->component_registry.save_world_component_binary (
           archive, registry, desc->type_id);
     } else if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      archive.setNextName ("data");
       runtime_ctx->component_registry.save_world_component_json (
           archive, registry, desc->type_id);
     }
@@ -129,7 +178,6 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
         runtime_ctx->singleton_registry.save_singleton_binary (
             archive, registry, desc->type_id);
       } else if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-        archive.setNextName ("data");
         runtime_ctx->singleton_registry.save_singleton_json (archive, registry,
                                                              desc->type_id);
       }
@@ -179,9 +227,15 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   }
 
   wsl::log::rsc ()->trace ("Loading entities");
-  entt::snapshot_loader loader{ scene_ref.get_registry () };
+  entt::registry &registry = scene_ref.get_registry ();
 
-  loader.get<entt::entity> (archive);
+  entt::snapshot_loader loader{ registry };
+  if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+    archive (
+        cereal::make_nvp ("entities", entity_snapshot_wrapper{ registry }));
+  } else {
+    loader.get<entt::entity> (archive);
+  }
 
   wsl::log::rsc ()->trace ("Loading components");
   for (const reg::component_registry::descriptor *desc :
@@ -196,23 +250,20 @@ scene_snapshot_serializer::load_scene (Archive &archive)
         runtime_ctx->component_registry.load_world_component_binary (
             archive, loader, desc->type_id);
       } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        archive.setNextName ("data");
         runtime_ctx->component_registry.load_world_component_json (
-            archive, loader, desc->type_id);
+            archive, scene_ref.get_registry (), desc->type_id);
       }
-    } catch (const std::exception &e) {
-      if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        wsl::log::rsc ()->warn (
-            "Component {} data not found or invalid in JSON scene: {}",
-            desc->type_name, e.what ());
-      } else {
+    } catch (const std::exception &) {
+      if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>) {
         throw;
       }
+      /* JSON: missing component data is expected for empty/new scenes.
+         Leave the storage at its default (empty) state silently. */
     }
   }
 
   wsl::log::rsc ()->trace ("Loading singletons");
-  entt::registry &reg = scene_ref.get_registry ();
+  entt::registry &scene_registry = scene_ref.get_registry ();
   for (const reg::singleton_registry::descriptor *desc :
        runtime_ctx->singleton_registry.get_singleton_components (
            reg::singleton_component_order::type_id)) {
@@ -227,23 +278,20 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
       if (has && !header.is_prefab) {
         if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>) {
-          runtime_ctx->singleton_registry.load_singleton_binary (archive, reg,
-                                                                 desc->type_id);
+          runtime_ctx->singleton_registry.load_singleton_binary (
+              archive, scene_registry, desc->type_id);
         } else if constexpr (std::is_same_v<Archive,
                                             cereal::JSONInputArchive>) {
-          archive.setNextName ("data");
-          runtime_ctx->singleton_registry.load_singleton_json (archive, reg,
-                                                               desc->type_id);
+          runtime_ctx->singleton_registry.load_singleton_json (
+              archive, scene_registry, desc->type_id);
         }
       }
-    } catch (const std::exception &e) {
-      if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        wsl::log::rsc ()->warn (
-            "Singleton {} data not found or invalid in JSON scene: {}",
-            desc->type_name, e.what ());
-      } else {
+    } catch (const std::exception &) {
+      if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>) {
         throw;
       }
+      /* JSON: missing singleton flag or data is expected for empty/new
+         scenes. Leave the singleton at its default state silently. */
     }
   }
 
@@ -284,7 +332,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   // RECREATE PHYSICS OBJECTS AFTER LOAD
   // -------------------------------------------------
   wsl::log::rsc ()->debug ("Recreating physics objects");
-  if (!reg.ctx ().contains<comp::singl::physics_manager> ()) {
+  if (!scene_registry.ctx ().contains<comp::singl::physics_manager> ()) {
     wsl::log::rsc ()->warn (
         "scene_snapshot_serializer: loaded scene is missing its "
         "physics manager; skipping physics object recreation");
@@ -301,7 +349,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   }
 
   comp::singl::physics_manager &physics
-      = reg.ctx ().get<comp::singl::physics_manager> ();
+      = scene_registry.ctx ().get<comp::singl::physics_manager> ();
   phys::engine &engine = physics.ensure_engine ();
 
   // CRITICAL: Clear all existing bodies before recreating.
@@ -310,7 +358,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   // Recreate rigid bodies
   {
-    auto view = reg.view<comp::rigid_body> ();
+    auto view = scene_registry.view<comp::rigid_body> ();
     wsl::log::rsc ()->debug ("Recreating {} rigid bodies",
                              std::distance (view.begin (), view.end ()));
     for (entt::entity e : view) {
@@ -321,14 +369,14 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
       glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
-      if (auto *wt = reg.try_get<comp::world_transform> (e); wt) {
+      if (auto *wt = scene_registry.try_get<comp::world_transform> (e); wt) {
         glm::mat4 const &wm = wt->value;
         world_pos = glm::vec3 (wm[3]);
         world_rot = glm::quat_cast (wm);
         scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
                            glm::length (glm::vec3 (wm[1])),
                            glm::length (glm::vec3 (wm[2])));
-      } else if (auto *t = reg.try_get<comp::transform> (e); t) {
+      } else if (auto *t = scene_registry.try_get<comp::transform> (e); t) {
         world_pos = (glm::vec3)t->position;
         world_rot = (glm::quat)t->rotation;
         scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
@@ -344,7 +392,8 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   // Recreate character controllers
   {
-    auto view = reg.view<comp::character_body, comp::world_transform> ();
+    auto view
+        = scene_registry.view<comp::character_body, comp::world_transform> ();
     wsl::log::rsc ()->debug ("Recreating {} characters",
                              std::distance (view.begin (), view.end ()));
     for (entt::entity e : view) {
@@ -359,7 +408,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   // Recreate area sensors
   {
-    auto view = reg.view<comp::area> ();
+    auto view = scene_registry.view<comp::area> ();
     wsl::log::rsc ()->debug ("Recreating {} area sensors",
                              std::distance (view.begin (), view.end ()));
     for (entt::entity e : view) {
@@ -369,14 +418,14 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
       glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
-      if (auto *wt = reg.try_get<comp::world_transform> (e); wt) {
+      if (auto *wt = scene_registry.try_get<comp::world_transform> (e); wt) {
         glm::mat4 const &wm = wt->value;
         world_pos = glm::vec3 (wm[3]);
         world_rot = glm::quat_cast (wm);
         scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
                            glm::length (glm::vec3 (wm[1])),
                            glm::length (glm::vec3 (wm[2])));
-      } else if (auto *t = reg.try_get<comp::transform> (e); t) {
+      } else if (auto *t = scene_registry.try_get<comp::transform> (e); t) {
         world_pos = (glm::vec3)t->position;
         world_rot = (glm::quat)t->rotation;
         scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);

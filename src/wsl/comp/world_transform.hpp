@@ -31,7 +31,8 @@ struct world_transform : world_component
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("matrix", value));
+    world_transform def{};
+    serialize_field_if_diff (archive, "matrix", value, def.value);
   }
 };
 

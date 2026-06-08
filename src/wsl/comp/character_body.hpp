@@ -94,9 +94,11 @@ public:
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("height", height),
-             cereal::make_nvp ("radius", radius),
-             cereal::make_nvp ("desired_vel", desired_velocity));
+    character_body def{};
+    serialize_field_if_diff (archive, "height", height, def.height);
+    serialize_field_if_diff (archive, "radius", radius, def.radius);
+    serialize_field_if_diff (archive, "desired_vel", desired_velocity,
+                             def.desired_velocity);
 
     if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>
                   || std::is_same_v<Archive, cereal::JSONInputArchive>) {

@@ -7,6 +7,7 @@
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/archives/json.hpp>
+#include <cereal/types/vector.hpp>
 #include <entt/entt.hpp>
 #include <entt/core/type_info.hpp>
 
@@ -91,8 +92,7 @@ public:
     //! Saves component data to a JSON archive.
     void (*save_json) (cereal::JSONOutputArchive &, entt::registry &) = nullptr;
     //! Loads component data from a JSON archive.
-    void (*load_json) (cereal::JSONInputArchive &, entt::snapshot_loader &)
-        = nullptr;
+    void (*load_json) (cereal::JSONInputArchive &, entt::registry &) = nullptr;
   };
 
   using world_component_descriptor = descriptor;
@@ -200,7 +200,7 @@ public:
    * \brief Loads one registered world component storage from a JSON archive.
    */
   bool load_world_component_json (cereal::JSONInputArchive &archive,
-                                  entt::snapshot_loader &loader,
+                                  entt::registry &registry,
                                   entt::id_type component_type_id) const;
 
   /*!
@@ -261,6 +261,98 @@ public:
   }
 
 private:
+  // ------------------------------------------------------------------
+  // Named JSON snapshot wrappers.
+  //
+  // EnTT's entt::snapshot / entt::snapshot_loader write the per-entity,
+  // per-component stream as a flat sequence of unnamed values, which
+  // Cereal's JSON output renders as auto-incremented "value0", "value1",
+  // ... names. The wrappers below reimplement the snapshot protocol for
+  // JSON archives so that the produced JSON is human readable:
+  //
+  //   {
+  //     "count": <number of entries>,
+  //     "entries": [
+  //       { "entity": <entt::entity>, "data": <component T> },
+  //       { "entity": null }              // tombstone (in-place storage)
+  //     ]
+  //   }
+  //
+  // Binary archives keep using EnTT's snapshot directly.
+  // ------------------------------------------------------------------
+
+  /*! \brief JSON save logic for one component type. */
+  template <typename T>
+  static void
+  save_component_json (cereal::JSONOutputArchive &ar, entt::registry &registry)
+  {
+    using storage_t = entt::registry::storage_for_type<T>;
+    const auto &const_registry = registry;
+    const storage_t *storage = const_registry.template storage<T> ();
+
+    if (storage == nullptr) {
+      entt::entity zero{};
+      ar (cereal::make_nvp ("count", zero));
+      return;
+    }
+
+    ar (cereal::make_nvp ("count", storage->size ()));
+
+    std::vector<detail::component_save_entry<T>> entries;
+    entries.reserve (storage->size ());
+
+    if constexpr (detail::is_in_place_storage_v<T>) {
+      for (auto it = storage->rbegin (), last = storage->rend (); it != last;
+           ++it) {
+        const auto ent = *it;
+        if (ent == entt::tombstone) {
+          detail::component_save_entry<T> tomb;
+          tomb.data = nullptr;
+          entries.push_back (tomb);
+        } else {
+          entries.push_back (
+              detail::component_save_entry<T>{ ent, &storage->get (ent) });
+        }
+      }
+    } else {
+      for (auto elem : storage->reach ()) {
+        entries.push_back (detail::component_save_entry<T>{
+            std::get<0> (elem), &std::get<1> (elem) });
+      }
+    }
+
+    ar (cereal::make_nvp ("entries", entries));
+  }
+
+  /*! \brief JSON load logic for one component type. */
+  template <typename T>
+  static void
+  load_component_json (cereal::JSONInputArchive &ar, entt::registry &registry)
+  {
+    using storage_t = entt::registry::storage_for_type<T>;
+    storage_t &storage = registry.template storage<T> ();
+
+    std::size_t count{};
+    ar (cereal::make_nvp ("count", count));
+
+    if (count == 0u) {
+      return;
+    }
+
+    std::vector<detail::component_load_entry<T>> entries;
+    ar (cereal::make_nvp ("entries", entries));
+
+    for (auto &entry : entries) {
+      if (!entry.is_tombstone) {
+        if (storage.contains (entry.entity_id)) {
+          storage.get (entry.entity_id) = std::move (entry.data);
+        } else {
+          storage.emplace (entry.entity_id, std::move (entry.data));
+        }
+      }
+    }
+  }
+
   // Internal wrappers previously in rsc::detail. Moved here to avoid an
   // additional namespace and keep implementation details private to this
   // class.
@@ -271,8 +363,16 @@ private:
     void
     serialize (Archive &ar)
     {
-      entt::snapshot const snapshot{ registry };
-      snapshot.get<T> (ar);
+      if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
+        save_component_json<T> (ar, registry);
+      } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+        // Loading is performed by component_loader_wrapper. This branch
+        // exists so the wrapper is symmetric when reused.
+        (void)ar;
+      } else {
+        entt::snapshot const snapshot{ registry };
+        snapshot.get<T> (ar);
+      }
     }
   };
 
@@ -283,7 +383,20 @@ private:
     void
     serialize (Archive &ar)
     {
-      loader.get<T> (ar);
+      loader.template get<T> (ar);
+    }
+  };
+
+  template <typename T> struct component_json_loader_wrapper
+  {
+    entt::registry &registry;
+    template <class Archive>
+    void
+    serialize (Archive &ar)
+    {
+      if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+        load_component_json<T> (ar, registry);
+      }
     }
   };
 
@@ -377,13 +490,13 @@ component_registry::register_world_component (
                                          entt::type_name<T> ().value ()),
               component_registry::component_snapshot_wrapper<T>{ registry }));
         };
-  desc.load_json
-      = +[] (cereal::JSONInputArchive &archive, entt::snapshot_loader &loader) {
-          archive (cereal::make_nvp (
-              detail::make_archive_name ("component_data_",
-                                         entt::type_name<T> ().value ()),
-              component_registry::component_loader_wrapper<T>{ loader }));
-        };
+  desc.load_json = +[] (cereal::JSONInputArchive &archive,
+                        entt::registry &registry) {
+    archive (cereal::make_nvp (
+        detail::make_archive_name ("component_data_",
+                                   entt::type_name<T> ().value ()),
+        component_registry::component_json_loader_wrapper<T>{ registry }));
+  };
 
   m_descriptors[type_id] = std::move (desc);
 }

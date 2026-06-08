@@ -53,6 +53,20 @@ struct mat33f
   }
 
   bool
+  operator== (const mat33f &other) const
+  {
+    for (int i = 0; i < 9; ++i)
+      if (data[i] != other.data[i])
+        return false;
+    return true;
+  }
+  bool
+  operator!= (const mat33f &other) const
+  {
+    return !(*this == other);
+  }
+
+  bool
   custom_inspect (const char *label)
   {
     ImGui::PushID (label);
@@ -91,12 +105,16 @@ struct mat33f
   void
   serialize (Archive &archive)
   {
-    archive (
-        cereal::make_nvp ("m00", data[0]), cereal::make_nvp ("m01", data[1]),
-        cereal::make_nvp ("m02", data[2]), cereal::make_nvp ("m10", data[3]),
-        cereal::make_nvp ("m11", data[4]), cereal::make_nvp ("m12", data[5]),
-        cereal::make_nvp ("m20", data[6]), cereal::make_nvp ("m21", data[7]),
-        cereal::make_nvp ("m22", data[8]));
+    mat33f def{};
+    wsl::comp::serialize_field_if_diff (archive, "m00", data[0], def.data[0]);
+    wsl::comp::serialize_field_if_diff (archive, "m01", data[1], def.data[1]);
+    wsl::comp::serialize_field_if_diff (archive, "m02", data[2], def.data[2]);
+    wsl::comp::serialize_field_if_diff (archive, "m10", data[3], def.data[3]);
+    wsl::comp::serialize_field_if_diff (archive, "m11", data[4], def.data[4]);
+    wsl::comp::serialize_field_if_diff (archive, "m12", data[5], def.data[5]);
+    wsl::comp::serialize_field_if_diff (archive, "m20", data[6], def.data[6]);
+    wsl::comp::serialize_field_if_diff (archive, "m21", data[7], def.data[7]);
+    wsl::comp::serialize_field_if_diff (archive, "m22", data[8], def.data[8]);
   }
 };
 
@@ -149,6 +167,20 @@ struct mat44f
   }
 
   bool
+  operator== (const mat44f &other) const
+  {
+    for (int i = 0; i < 16; ++i)
+      if (data[i] != other.data[i])
+        return false;
+    return true;
+  }
+  bool
+  operator!= (const mat44f &other) const
+  {
+    return !(*this == other);
+  }
+
+  bool
   custom_inspect (const char *label)
   {
     ImGui::PushID (label);
@@ -187,15 +219,23 @@ struct mat44f
   void
   serialize (Archive &archive)
   {
-    archive (
-        cereal::make_nvp ("m00", data[0]), cereal::make_nvp ("m01", data[1]),
-        cereal::make_nvp ("m02", data[2]), cereal::make_nvp ("m03", data[3]),
-        cereal::make_nvp ("m10", data[4]), cereal::make_nvp ("m11", data[5]),
-        cereal::make_nvp ("m12", data[6]), cereal::make_nvp ("m13", data[7]),
-        cereal::make_nvp ("m20", data[8]), cereal::make_nvp ("m21", data[9]),
-        cereal::make_nvp ("m22", data[10]), cereal::make_nvp ("m23", data[11]),
-        cereal::make_nvp ("m30", data[12]), cereal::make_nvp ("m31", data[13]),
-        cereal::make_nvp ("m32", data[14]), cereal::make_nvp ("m33", data[15]));
+    mat44f def{};
+    wsl::comp::serialize_field_if_diff (archive, "m00", data[0], def.data[0]);
+    wsl::comp::serialize_field_if_diff (archive, "m01", data[1], def.data[1]);
+    wsl::comp::serialize_field_if_diff (archive, "m02", data[2], def.data[2]);
+    wsl::comp::serialize_field_if_diff (archive, "m03", data[3], def.data[3]);
+    wsl::comp::serialize_field_if_diff (archive, "m10", data[4], def.data[4]);
+    wsl::comp::serialize_field_if_diff (archive, "m11", data[5], def.data[5]);
+    wsl::comp::serialize_field_if_diff (archive, "m12", data[6], def.data[6]);
+    wsl::comp::serialize_field_if_diff (archive, "m13", data[7], def.data[7]);
+    wsl::comp::serialize_field_if_diff (archive, "m20", data[8], def.data[8]);
+    wsl::comp::serialize_field_if_diff (archive, "m21", data[9], def.data[9]);
+    wsl::comp::serialize_field_if_diff (archive, "m22", data[10], def.data[10]);
+    wsl::comp::serialize_field_if_diff (archive, "m23", data[11], def.data[11]);
+    wsl::comp::serialize_field_if_diff (archive, "m30", data[12], def.data[12]);
+    wsl::comp::serialize_field_if_diff (archive, "m31", data[13], def.data[13]);
+    wsl::comp::serialize_field_if_diff (archive, "m32", data[14], def.data[14]);
+    wsl::comp::serialize_field_if_diff (archive, "m33", data[15], def.data[15]);
   }
 };
 

@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-
 namespace wsl
 {
 
@@ -44,8 +43,7 @@ component_registry::find_world_component (entt::id_type type_id) const
       = m_internal_to_stable.find (type_id);
       it != m_internal_to_stable.end ()) {
     if (std::unordered_map<entt::id_type, descriptor>::const_iterator const
-            stable_it
-        = m_descriptors.find (it->second);
+            stable_it = m_descriptors.find (it->second);
         stable_it != m_descriptors.end ()) {
       return &stable_it->second;
     }
@@ -145,10 +143,10 @@ component_registry::get_addable_world_components (entt::registry &registry,
 
 bool
 component_registry::copy_world_component (entt::registry &src_registry,
-                                         entt::entity src_entity,
-                                         entt::registry &dst_registry,
-                                         entt::entity dst_entity,
-                                         entt::id_type component_type_id) const
+                                          entt::entity src_entity,
+                                          entt::registry &dst_registry,
+                                          entt::entity dst_entity,
+                                          entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
   if ((desc == nullptr) || (desc->copy == nullptr)) {
@@ -202,17 +200,16 @@ component_registry::save_world_component_json (
 }
 
 bool
-component_registry::load_world_component_json (cereal::JSONInputArchive &archive,
-                                              entt::snapshot_loader &loader,
-                                              entt::id_type component_type_id)
-    const
+component_registry::load_world_component_json (
+    cereal::JSONInputArchive &archive, entt::registry &registry,
+    entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
   if ((desc == nullptr) || (desc->load_json == nullptr)) {
     return false;
   }
 
-  desc->load_json (archive, loader);
+  desc->load_json (archive, registry);
   return true;
 }
 

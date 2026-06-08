@@ -60,9 +60,10 @@ struct hierarchy : world_component
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("parent", parent),
-             cereal::make_nvp ("first", first),
-             cereal::make_nvp ("next", next));
+    hierarchy def{};
+    serialize_field_if_diff (archive, "parent", parent, def.parent);
+    serialize_field_if_diff (archive, "first", first, def.first);
+    serialize_field_if_diff (archive, "next", next, def.next);
   }
 };
 

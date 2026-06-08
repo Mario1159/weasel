@@ -99,9 +99,10 @@ struct transform : world_component
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("position", position),
-             cereal::make_nvp ("rotation", rotation),
-             cereal::make_nvp ("scale", scale));
+    transform def{};
+    serialize_field_if_diff (archive, "position", position, def.position);
+    serialize_field_if_diff (archive, "rotation", rotation, def.rotation);
+    serialize_field_if_diff (archive, "scale", scale, def.scale);
   }
 };
 

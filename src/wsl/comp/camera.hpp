@@ -71,10 +71,14 @@ struct camera : world_component
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("fov", fov), cereal::make_nvp ("near", near),
-             cereal::make_nvp ("far", far),
-             cereal::make_nvp ("aspect_ratio", aspect_ratio),
-             cereal::make_nvp ("only_for_editor", only_for_editor));
+    camera def{};
+    serialize_field_if_diff (archive, "fov", fov, def.fov);
+    serialize_field_if_diff (archive, "near", near, def.near);
+    serialize_field_if_diff (archive, "far", far, def.far);
+    serialize_field_if_diff (archive, "aspect_ratio", aspect_ratio,
+                             def.aspect_ratio);
+    serialize_field_if_diff (archive, "only_for_editor", only_for_editor,
+                             def.only_for_editor);
   }
 };
 

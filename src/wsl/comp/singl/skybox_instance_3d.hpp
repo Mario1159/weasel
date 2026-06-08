@@ -45,7 +45,8 @@ public:
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("cubemap_id", id.value));
+    skybox_instance_3d def{};
+    serialize_field_if_diff (archive, "cubemap_id", id.value, def.id.value);
   }
 };
 

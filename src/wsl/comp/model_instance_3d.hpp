@@ -7,7 +7,6 @@
 
 #include <cereal/cereal.hpp>
 
-
 namespace wsl
 {
 
@@ -45,23 +44,50 @@ struct model_instance_3d : world_component
   {
     using namespace cereal;
     auto *mgr = rsc::resource_manager::serialization_context::get ();
+    model_instance_3d def{};
 
-    if constexpr (std::is_base_of_v<cereal::detail::OutputArchiveBase, Archive>) {
+    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
       std::string path = "None";
-      if (mgr) {
+      if (mgr && id.value != entt::null) {
         path = mgr->get_resource_path (id);
       }
-      archive (make_nvp ("model_path", path),
-               make_nvp ("scene_index", scene_index));
-    } else {
+      if (path != "None") {
+        archive (make_nvp ("model_path", path));
+      }
+      serialize_field_if_diff (archive, "scene_index", scene_index,
+                               def.scene_index);
+    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
       std::string path;
-      archive (make_nvp ("model_path", path),
-               make_nvp ("scene_index", scene_index));
+      scene_index = def.scene_index;
+      try {
+        archive (make_nvp ("model_path", path));
+      } catch (const std::exception &) {
+      }
+      try {
+        serialize_field_if_diff (archive, "scene_index", scene_index,
+                                 def.scene_index);
+      } catch (const std::exception &) {
+      }
 
       if (path != "None" && !path.empty () && mgr) {
         id = mgr->register_model (path);
       } else {
         id.value = entt::null;
+      }
+    } else {
+      std::string path = "None";
+      if (mgr && id.value != entt::null) {
+        path = mgr->get_resource_path (id);
+      }
+      archive (make_nvp ("model_path", path),
+               make_nvp ("scene_index", scene_index));
+      if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
+                                      Archive>) {
+        if (path != "None" && !path.empty () && mgr) {
+          id = mgr->register_model (path);
+        } else {
+          id.value = entt::null;
+        }
       }
     }
   }

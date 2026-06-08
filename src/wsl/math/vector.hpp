@@ -37,6 +37,17 @@ struct vec3f
   operator glm::vec3 () const { return glm::vec3{ x, y, z }; }
   operator JPH::Vec3 () const { return JPH::Vec3{ x, y, z }; }
 
+  bool
+  operator== (const vec3f &other) const
+  {
+    return x == other.x && y == other.y && z == other.z;
+  }
+  bool
+  operator!= (const vec3f &other) const
+  {
+    return !(*this == other);
+  }
+
   vec3f &
   operator+= (const glm::vec3 &v)
   {
@@ -135,8 +146,10 @@ struct vec3f
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("x", x), cereal::make_nvp ("y", y),
-             cereal::make_nvp ("z", z));
+    vec3f def{};
+    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
+    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
+    wsl::comp::serialize_field_if_diff (archive, "z", z, def.z);
   }
 };
 
@@ -149,6 +162,17 @@ struct quatf
   quatf (const glm::quat &q) : x (q.x), y (q.y), z (q.z), w (q.w) {}
 
   operator glm::quat () const { return glm::quat{ w, x, y, z }; }
+
+  bool
+  operator== (const quatf &other) const
+  {
+    return x == other.x && y == other.y && z == other.z && w == other.w;
+  }
+  bool
+  operator!= (const quatf &other) const
+  {
+    return !(*this == other);
+  }
 
   bool
   custom_inspect (const char *label)
@@ -224,8 +248,11 @@ struct quatf
   void
   serialize (Archive &archive)
   {
-    archive (cereal::make_nvp ("x", x), cereal::make_nvp ("y", y),
-             cereal::make_nvp ("z", z), cereal::make_nvp ("w", w));
+    quatf def{};
+    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
+    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
+    wsl::comp::serialize_field_if_diff (archive, "z", z, def.z);
+    wsl::comp::serialize_field_if_diff (archive, "w", w, def.w);
   }
 };
 
