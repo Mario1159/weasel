@@ -421,6 +421,28 @@ cli_handler::parse (int argc, char **argv)
   rsc_info->add_option ("name", rsc_info_name, "Resource name or path")
       ->required ();
 
+  auto *prefab_cmd = app.add_subcommand ("prefab", "Manage prefab scenes");
+  auto *prefab_ls = prefab_cmd->add_subcommand (
+      "ls", "List prefab assets in the loaded project");
+  auto *prefab_save = prefab_cmd->add_subcommand (
+      "save", "Save the active scene as a prefab");
+  std::string prefab_save_path;
+  prefab_save->add_option ("path", prefab_save_path,
+                           "Optional override save path");
+  auto *prefab_load = prefab_cmd->add_subcommand (
+      "load", "Load a prefab scene as the active scene");
+  std::string prefab_load_path;
+  prefab_load->add_option ("path", prefab_load_path, "Path to the prefab file")
+      ->required ();
+  auto *prefab_instantiate = prefab_cmd->add_subcommand (
+      "instantiate", "Instantiate a prefab into the active scene");
+  std::string prefab_instantiate_name, prefab_instantiate_parent;
+  prefab_instantiate
+      ->add_option ("name", prefab_instantiate_name, "Prefab name or path")
+      ->required ();
+  prefab_instantiate->add_option ("parent_id", prefab_instantiate_parent,
+                                  "Optional parent entity id");
+
   try {
     app.parse (argc, argv);
   } catch (const CLI::ParseError &e) {
@@ -748,6 +770,23 @@ cli_handler::parse (int argc, char **argv)
   } else if (*rsc_info) {
     repl_command
         = build_repl_command ({ "rsc", "info", rsc_info_type, rsc_info_name });
+  } else if (*prefab_ls) {
+    repl_command = build_repl_command ({ "prefab", "ls" });
+  } else if (*prefab_save) {
+    std::vector<std::string> args{ "prefab", "save" };
+    if (!prefab_save_path.empty ()) {
+      args.push_back (prefab_save_path);
+    }
+    repl_command = build_repl_command (args);
+  } else if (*prefab_load) {
+    repl_command = build_repl_command ({ "prefab", "load", prefab_load_path });
+  } else if (*prefab_instantiate) {
+    std::vector<std::string> args{ "prefab", "instantiate",
+                                   prefab_instantiate_name };
+    if (!prefab_instantiate_parent.empty ()) {
+      args.push_back (prefab_instantiate_parent);
+    }
+    repl_command = build_repl_command (args);
   }
 
   auto extras = app.remaining ();

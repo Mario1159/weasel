@@ -55,18 +55,40 @@ engine_ui::handle_event (const SDL_Event &event)
 
   auto &input_map = m_runtime_ctx->get_current_input_map ()->bindings;
   auto toggle_it = input_map.find ("toggle_game_focus");
-  if (toggle_it == input_map.end ()
-      || !toggle_it->second.matches_event (event.key)) {
+  if (toggle_it != input_map.end ()
+      && toggle_it->second.matches_event (event.key)) {
+    m_game_focus = !m_game_focus;
+
+    SDL_SetWindowRelativeMouseMode (m_runtime_ctx->window.handler,
+                                    !m_game_focus);
+    SDL_ShowCursor ();
+
+    wsl::reg::sig::emit<game_focus_toggled> (
+        m_runtime_ctx->signal_hub, game_focus_toggled{ m_game_focus });
     return;
   }
 
-  m_game_focus = !m_game_focus;
+  // Editor toolbar shortcuts
+  if (event.key.scancode == SDL_SCANCODE_F5) {
+    if (!m_runtime_ctx->is_running) {
+      m_runtime_ctx->set_running (true);
+    }
+    return;
+  }
 
-  SDL_SetWindowRelativeMouseMode (m_runtime_ctx->window.handler, !m_game_focus);
-  SDL_ShowCursor ();
+  if (event.key.scancode == SDL_SCANCODE_F7) {
+    if (m_runtime_ctx->is_running) {
+      m_runtime_ctx->set_running (false);
+    }
+    return;
+  }
 
-  wsl::reg::sig::emit<game_focus_toggled> (m_runtime_ctx->signal_hub,
-                                           game_focus_toggled{ m_game_focus });
+  if (event.key.scancode == SDL_SCANCODE_F8) {
+    if (m_runtime_ctx->in_play_session) {
+      m_runtime_ctx->stop ();
+    }
+    return;
+  }
 }
 
 static int bd_count = 0;

@@ -1056,6 +1056,8 @@ command_executor::execute (const std::string &line)
     cmd_check (tokens);
   else if (family == "rsc")
     cmd_rsc (tokens);
+  else if (family == "prefab")
+    cmd_prefab (tokens);
   else if (family == "help")
     cmd_help ();
   else if (family == "exit" || family == "quit")
@@ -3120,6 +3122,231 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
 }
 
 void
+command_executor::cmd_prefab (const std::vector<std::string> &tokens)
+{
+  if (tokens.size () < 2) {
+    m_output << "Usage: prefab <ls|save|load|instantiate> [args...]\n";
+    return;
+  }
+
+  const std::string &action = tokens[1];
+
+  if (action == "ls") {
+    if (!m_current_project) {
+      m_output << "No project loaded.\n";
+      return;
+    }
+    auto assets = wsl::rsc::project_loader::scan_assets (*m_current_project);
+    m_output << "Prefabs in project:\n";
+    bool found_any = false;
+    for (const auto &s : assets.scenes) {
+      if (std::filesystem::path (s).extension () == ".prefab") {
+        found_any = true;
+        std::string header_name;
+        try {
+          std::ifstream sf (s);
+          if (sf) {
+            nlohmann::json j;
+            sf >> j;
+            if (j.contains ("header") && j["header"].contains ("scene_name"))
+              header_name = j["header"]["scene_name"].get<std::string> ();
+          }
+        } catch (...) {
+        }
+        std::filesystem::path p (s);
+        std::string filename = p.filename ().string ();
+        if (!header_name.empty ())
+          m_output << " - " << header_name << " (" << filename << ")\n";
+        else
+          m_output << " - " << filename << "\n";
+      }
+    }
+    if (!found_any)
+      m_output << " (none)\n";
+    return;
+  }
+
+  if (action == "save") {
+    auto *scene = get_active_scene ();
+    if (!scene) {
+      m_output << "No active scene.\n";
+      return;
+    }
+    std::string path;
+    if (tokens.size () > 2) {
+      path = tokens[2];
+      if (m_current_project && !std::filesystem::path (path).is_absolute ()) {
+        path = (std::filesystem::path (m_current_project->root_path) / path)
+                   .string ();
+      }
+    } else {
+      if (m_current_project) {
+        std::filesystem::path scenes_dir (m_current_project->root_path);
+        scenes_dir /= m_current_project->scenes_path;
+        std::string sname
+            = std::filesystem::path (scene->get_name ()).filename ().string ();
+        if (sname.ends_with (".prefab"))
+          sname.resize (sname.size () - 7);
+        else if (sname.ends_with (".wscn.json"))
+          sname.resize (sname.size () - 10);
+        else if (sname.ends_with (".json"))
+          sname.resize (sname.size () - 5);
+        path = (scenes_dir / (sname + ".prefab")).string ();
+      } else {
+        std::string sname
+            = std::filesystem::path (scene->get_name ()).filename ().string ();
+        if (sname.ends_with (".prefab"))
+          sname.resize (sname.size () - 7);
+        else if (sname.ends_with (".wscn.json"))
+          sname.resize (sname.size () - 10);
+        else if (sname.ends_with (".json"))
+          sname.resize (sname.size () - 5);
+        path = sname + ".prefab";
+      }
+    }
+    if (!path.ends_with (".prefab"))
+      path += ".prefab";
+    std::error_code ec;
+    std::filesystem::create_directories (
+        std::filesystem::path (path).parent_path (), ec);
+    if (m_rtc.resource_manager.save_scene (*scene, path, true)) {
+      m_output << "Prefab saved to " << path << "\n";
+    } else {
+      m_output << "Failed to save prefab.\n";
+    }
+    return;
+  }
+
+  if (action == "load") {
+    if (tokens.size () < 3) {
+      m_output << "Usage: prefab load <path>\n";
+      return;
+    }
+    if (!m_current_project) {
+      m_output << "Error: Load a project first.\n";
+      return;
+    }
+    std::string load_path = tokens[2];
+    if (!std::filesystem::path (load_path).is_absolute ()) {
+      std::string rooted
+          = (std::filesystem::path (m_current_project->root_path) / load_path)
+                .string ();
+      if (std::filesystem::exists (rooted))
+        load_path = rooted;
+    }
+    if (!std::filesystem::exists (load_path)) {
+      std::filesystem::path scenes_dir (m_current_project->root_path);
+      scenes_dir /= m_current_project->scenes_path;
+      std::string candidate = (scenes_dir / (load_path + ".prefab")).string ();
+      if (std::filesystem::exists (candidate)) {
+        load_path = candidate;
+      } else {
+        candidate = (scenes_dir / load_path).string ();
+        if (std::filesystem::exists (candidate))
+          load_path = candidate;
+      }
+    }
+    if (!std::filesystem::exists (load_path)) {
+      m_output << "Failed to load prefab: file not found '" << tokens[2]
+               << "'.\n";
+      return;
+    }
+    ensure_runtime_module_loaded ();
+    std::string scene_name
+        = std::filesystem::path (load_path).stem ().stem ().string ();
+    try {
+      auto &scene = m_rtc.scene_manager.create_scene (scene_name, true);
+      wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, scene);
+      if (serializer.load_json (load_path)) {
+        m_output << "Prefab loaded from " << load_path << "\n";
+        m_active_scene_source_path = load_path;
+      } else {
+        m_output << "Failed to load prefab from '" << load_path
+                 << "' (could not open file).\n";
+      }
+    } catch (const std::exception &e) {
+      m_output << "Failed to load prefab from '" << load_path
+               << "': " << e.what () << "\n";
+    } catch (...) {
+      m_output << "Failed to load prefab from '" << load_path
+               << "': unknown error.\n";
+    }
+    return;
+  }
+
+  if (action == "instantiate") {
+    if (tokens.size () < 3) {
+      m_output << "Usage: prefab instantiate <name|path> [parent_id]\n";
+      return;
+    }
+    auto *scene = get_active_scene ();
+    if (!scene) {
+      m_output << "No active scene.\n";
+      return;
+    }
+    auto &mgr = m_rtc.resource_manager;
+    const std::string &name_or_path = tokens[2];
+
+    std::optional<wsl::rsc::scene_id> prefab_id;
+    wsl::rsc::scene_id id{ entt::hashed_string::value (name_or_path.c_str (),
+                                                       name_or_path.size ()) };
+    if (mgr.contains (id)) {
+      auto info = mgr.info (id);
+      if (info && info->is_prefab)
+        prefab_id = id;
+    }
+    if (!prefab_id) {
+      for (auto &info : mgr.list_scenes ()) {
+        if (info.is_prefab
+            && (info.name == name_or_path || info.path == name_or_path)) {
+          prefab_id = wsl::rsc::scene_id{ info.id };
+          break;
+        }
+      }
+    }
+    if (!prefab_id && m_current_project) {
+      std::filesystem::path scenes_dir (m_current_project->root_path);
+      scenes_dir /= m_current_project->scenes_path;
+      std::string candidate
+          = (scenes_dir / (name_or_path + ".prefab")).string ();
+      if (!std::filesystem::exists (candidate))
+        candidate = (scenes_dir / name_or_path).string ();
+      if (std::filesystem::exists (candidate)) {
+        id = mgr.import_scene (candidate, true);
+        if (mgr.contains (id)) {
+          auto info = mgr.info (id);
+          if (info && info->is_prefab)
+            prefab_id = id;
+        }
+      }
+    }
+    if (!prefab_id) {
+      m_output << "Prefab not found: " << name_or_path << "\n";
+      return;
+    }
+
+    entt::entity parent = entt::null;
+    if (tokens.size () > 3) {
+      parent = resolve_entity_token (tokens[3], scene);
+      if (parent == entt::null) {
+        m_output << "Unknown parent entity: " << tokens[3] << "\n";
+        return;
+      }
+    }
+
+    mgr.instantiate_prefab (*prefab_id, parent);
+    m_output << "Prefab instantiated";
+    if (parent != entt::null)
+      m_output << " under entity " << tokens[3];
+    m_output << ".\n";
+    auto_save_scene ();
+    return;
+  }
+
+  m_output << "Unknown prefab action: " << action << "\n";
+}
+
+void
 command_executor::cmd_help ()
 {
   m_output
@@ -3200,6 +3427,12 @@ command_executor::cmd_help ()
       << "  rsc info <type> <name>     Show resource metadata\n"
       << "    Types: model, image, cubemap, scene, audio, font, shader, "
          "layout\n\n"
+      << "Prefab:\n"
+      << "  prefab ls                  List prefab assets in the project\n"
+      << "  prefab save [path]         Save active scene as a prefab\n"
+      << "  prefab load <path>         Load a prefab as the active scene\n"
+      << "  prefab instantiate <name> [parent_id]  Spawn prefab into active "
+         "scene\n\n"
       << "Other:\n"
       << "  help                       Show this help message\n"
       << "  cls                        Clear the terminal screen\n"

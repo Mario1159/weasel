@@ -516,6 +516,73 @@ TEST_CASE ("rsc with --project flag builds command")
   CHECK (*res.project_to_load == "/proj");
 }
 
+// ===== REPL Subcommands - prefab family =====
+
+TEST_CASE ("prefab ls builds command")
+{
+  const char *argv[] = { "weasel-cli", "prefab", "ls" };
+  auto res = cli_handler ().parse (3, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "prefab ls");
+}
+
+TEST_CASE ("prefab save without path builds command")
+{
+  const char *argv[] = { "weasel-cli", "prefab", "save" };
+  auto res = cli_handler ().parse (3, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "prefab save");
+}
+
+TEST_CASE ("prefab save with path builds command")
+{
+  const char *argv[] = { "weasel-cli", "prefab", "save", "my.prefab" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "prefab save my.prefab");
+}
+
+TEST_CASE ("prefab load <path> builds command")
+{
+  const char *argv[] = { "weasel-cli", "prefab", "load", "enemy.prefab" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "prefab load enemy.prefab");
+}
+
+TEST_CASE ("prefab instantiate <name> builds command")
+{
+  const char *argv[] = { "weasel-cli", "prefab", "instantiate", "enemy" };
+  auto res = cli_handler ().parse (4, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "prefab instantiate enemy");
+}
+
+TEST_CASE ("prefab instantiate <name> <parent> builds command")
+{
+  const char *argv[] = { "weasel-cli", "prefab", "instantiate", "enemy", "42" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "prefab instantiate enemy 42");
+}
+
+TEST_CASE ("prefab with --project flag builds command")
+{
+  const char *argv[] = { "weasel-cli", "--project", "/proj", "prefab", "ls" };
+  auto res = cli_handler ().parse (5, const_cast<char **> (argv));
+  CHECK (res.should_exit == false);
+  REQUIRE (res.command.has_value ());
+  CHECK (*res.command == "prefab ls");
+  REQUIRE (res.project_to_load.has_value ());
+  CHECK (*res.project_to_load == "/proj");
+}
+
 // ===== Error Cases =====
 
 TEST_CASE ("--interactive with subcommand produces error")

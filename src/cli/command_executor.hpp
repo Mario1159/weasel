@@ -42,6 +42,7 @@ private:
   void cmd_sys (const std::vector<std::string> &tokens);
   void cmd_check (const std::vector<std::string> &tokens);
   void cmd_rsc (const std::vector<std::string> &tokens);
+  void cmd_prefab (const std::vector<std::string> &tokens);
   void cmd_help ();
 
   entt::entity resolve_entity_token (const std::string &token,
