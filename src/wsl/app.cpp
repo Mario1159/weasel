@@ -142,6 +142,10 @@ app::run ()
   wsl::log::core ()->trace ("Entering main loop");
   on_init ();
 
+  if (m_runtime_context->editor_ctx == nullptr) {
+    m_runtime_context->set_running (true);
+  }
+
   uint64_t last_time = SDL_GetTicks ();
   bool quit = false;
 
