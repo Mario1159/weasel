@@ -117,6 +117,59 @@ sort_infos (std::vector<Info> &infos)
              });
 }
 
+static bool
+path_is_inside_project (const fs::path &file, const fs::path &root)
+{
+  fs::path const abs_file = fs::absolute (file);
+  fs::path const abs_root = fs::absolute (root);
+  std::string f = abs_file.string ();
+  std::string r = abs_root.string ();
+  if (!r.empty () && r.back () != fs::path::preferred_separator) {
+    r += fs::path::preferred_separator;
+  }
+  return f.size () > r.size () && f.compare (0, r.size (), r) == 0;
+}
+
+static std::optional<std::string>
+copy_import_to_project (const std::string &source_path,
+                        const std::string &project_subdir,
+                        const std::string &project_root)
+{
+  fs::path const src (source_path);
+  if (!fs::exists (src)) {
+    wsl::log::rsc ()->warn ("Import source does not exist: {}", source_path);
+    return std::nullopt;
+  }
+
+  fs::path const root (project_root);
+  fs::path const abs_root = fs::absolute (root);
+  fs::path const abs_src = fs::absolute (src);
+
+  if (path_is_inside_project (abs_src, abs_root)) {
+    return "res://" + fs::relative (abs_src, abs_root).generic_string ();
+  }
+
+  fs::path dest_dir = abs_root / project_subdir;
+  try {
+    fs::create_directories (dest_dir);
+  } catch (const std::exception &e) {
+    wsl::log::rsc ()->error ("Failed to create import directory {}: {}",
+                             dest_dir.string (), e.what ());
+    return std::nullopt;
+  }
+
+  fs::path dest = dest_dir / src.filename ();
+  try {
+    fs::copy_file (src, dest, fs::copy_options::overwrite_existing);
+  } catch (const std::exception &e) {
+    wsl::log::rsc ()->error ("Failed to copy imported file from {} to {}: {}",
+                             source_path, dest.string (), e.what ());
+    return std::nullopt;
+  }
+
+  return "res://" + fs::relative (dest, abs_root).generic_string ();
+}
+
 } // namespace
 
 rsc::resource_manager::resource_manager (
@@ -302,7 +355,14 @@ rsc::resource_manager::register_model (const std::string &path)
 rsc::model_id
 rsc::resource_manager::import_model (const std::string &path, bool request_load)
 {
-  model_id id = register_model (path);
+  std::string import_path = path;
+  if (m_active_project) {
+    if (auto copied = copy_import_to_project (
+            path, m_active_project->models_path, m_active_project->root_path)) {
+      import_path = *copied;
+    }
+  }
+  model_id id = register_model (import_path);
   if (request_load) {
     load (id);
   }
@@ -383,9 +443,21 @@ rsc::resource_manager::get (model_id id)
 rsc::image_id
 rsc::resource_manager::register_image (const std::string &path)
 {
+  std::string normalized = path;
+  if (m_active_project && path.rfind ("res://", 0) != 0
+      && path.rfind ("builtin://", 0) != 0
+      && path.rfind ("engine://", 0) != 0) {
+    std::filesystem::path const root (m_active_project->root_path);
+    std::filesystem::path const p (path);
+    if (path.find (m_active_project->root_path) == 0) {
+      normalized
+          = "res://" + std::filesystem::relative (p, root).generic_string ();
+    }
+  }
+
   return image_id{
     register_resource<std::unordered_map<entt::id_type, detail::image_record>,
-                      detail::image_record> (m_image_table, path,
+                      detail::image_record> (m_image_table, normalized,
                                              image_state::not_loaded)
   };
 }
@@ -393,7 +465,14 @@ rsc::resource_manager::register_image (const std::string &path)
 rsc::image_id
 rsc::resource_manager::import_image (const std::string &path, bool request_load)
 {
-  image_id id = register_image (path);
+  std::string import_path = path;
+  if (m_active_project) {
+    if (auto copied = copy_import_to_project (
+            path, m_active_project->images_path, m_active_project->root_path)) {
+      import_path = *copied;
+    }
+  }
+  image_id id = register_image (import_path);
   if (request_load) {
     load (id);
   }
@@ -478,9 +557,21 @@ rsc::resource_manager::list_images () const
 rsc::cubemap_id
 rsc::resource_manager::register_cubemap (const std::string &path)
 {
+  std::string normalized = path;
+  if (m_active_project && path.rfind ("res://", 0) != 0
+      && path.rfind ("builtin/", 0) != 0 && path.rfind ("builtin://", 0) != 0
+      && path.rfind ("engine://", 0) != 0) {
+    std::filesystem::path const root (m_active_project->root_path);
+    std::filesystem::path const p (path);
+    if (path.find (m_active_project->root_path) == 0) {
+      normalized
+          = "res://" + std::filesystem::relative (p, root).generic_string ();
+    }
+  }
+
   return cubemap_id{
     register_resource<std::unordered_map<entt::id_type, detail::cubemap_record>,
-                      detail::cubemap_record> (m_cubemap_table, path,
+                      detail::cubemap_record> (m_cubemap_table, normalized,
                                                cubemap_state::not_loaded)
   };
 }
@@ -489,7 +580,15 @@ rsc::cubemap_id
 rsc::resource_manager::import_cubemap (const std::string &path,
                                        bool request_load)
 {
-  cubemap_id id = register_cubemap (path);
+  std::string import_path = path;
+  if (m_active_project) {
+    if (auto copied
+        = copy_import_to_project (path, m_active_project->cubemaps_path,
+                                  m_active_project->root_path)) {
+      import_path = *copied;
+    }
+  }
+  cubemap_id id = register_cubemap (import_path);
   if (request_load) {
     load (id);
   }
@@ -575,13 +674,25 @@ rsc::resource_manager::list_cubemaps () const
 rsc::scene_id
 rsc::resource_manager::register_scene (const std::string &path)
 {
-  const entt::id_type id = entt::hashed_string{ path.c_str () };
-  std::filesystem::path const p (path);
+  std::string normalized = path;
+  if (m_active_project && path.rfind ("res://", 0) != 0
+      && path.rfind ("builtin://", 0) != 0
+      && path.rfind ("engine://", 0) != 0) {
+    std::filesystem::path const root (m_active_project->root_path);
+    std::filesystem::path const p (path);
+    if (path.find (m_active_project->root_path) == 0) {
+      normalized
+          = "res://" + std::filesystem::relative (p, root).generic_string ();
+    }
+  }
+
+  const entt::id_type id = entt::hashed_string{ normalized.c_str () };
+  std::filesystem::path const p (normalized);
   bool const is_prefab = p.extension () == ".prefab";
 
   m_scene_table.try_emplace (
-      id, detail::scene_record{ .path = path,
-                                .name = basename_no_ext (path),
+      id, detail::scene_record{ .path = normalized,
+                                .name = basename_no_ext (normalized),
                                 .state = scene_state::not_loaded,
                                 .is_prefab = is_prefab });
   return scene_id{ id };
@@ -590,7 +701,14 @@ rsc::resource_manager::register_scene (const std::string &path)
 rsc::scene_id
 rsc::resource_manager::import_scene (const std::string &path, bool request_load)
 {
-  scene_id id = register_scene (path);
+  std::string import_path = path;
+  if (m_active_project) {
+    if (auto copied = copy_import_to_project (
+            path, m_active_project->scenes_path, m_active_project->root_path)) {
+      import_path = *copied;
+    }
+  }
+  scene_id id = register_scene (import_path);
   if (request_load) {
     load (id);
   }
@@ -821,7 +939,14 @@ rsc::resource_manager::register_audio (const std::string &path)
 rsc::audio_id
 rsc::resource_manager::import_audio (const std::string &path, bool request_load)
 {
-  audio_id id = register_audio (path);
+  std::string import_path = path;
+  if (m_active_project) {
+    if (auto copied = copy_import_to_project (
+            path, m_active_project->audio_path, m_active_project->root_path)) {
+      import_path = *copied;
+    }
+  }
+  audio_id id = register_audio (import_path);
   if (request_load) {
     load (id);
   }
