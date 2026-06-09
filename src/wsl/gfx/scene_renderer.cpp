@@ -749,6 +749,21 @@ gfx::scene_renderer::create_pipeline ()
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
   ctd[1].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
 
+  for (int i = 0; i < 2; ++i) {
+    ctd[i].blend_state.enable_blend = true;
+    ctd[i].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    ctd[i].blend_state.dst_color_blendfactor
+        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    ctd[i].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    ctd[i].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    ctd[i].blend_state.dst_alpha_blendfactor
+        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    ctd[i].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    ctd[i].blend_state.color_write_mask
+        = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+          | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
+  }
+
   pipe.target_info.num_color_targets = 2;
   pipe.target_info.color_target_descriptions = ctd;
 
@@ -1352,6 +1367,21 @@ gfx::scene_renderer::create_unlit_pipeline ()
   SDL_GPUColorTargetDescription ctd[2]{};
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT; // scene
   ctd[1].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT; // bloom
+
+  for (int i = 0; i < 2; ++i) {
+    ctd[i].blend_state.enable_blend = true;
+    ctd[i].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    ctd[i].blend_state.dst_color_blendfactor
+        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    ctd[i].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    ctd[i].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    ctd[i].blend_state.dst_alpha_blendfactor
+        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    ctd[i].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    ctd[i].blend_state.color_write_mask
+        = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+          | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
+  }
 
   pipe.target_info.num_color_targets = 2;
   pipe.target_info.color_target_descriptions = ctd;

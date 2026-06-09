@@ -16,6 +16,7 @@
 
 #include <entt/core/hashed_string.hpp>
 
+#include "../comp/component_meta.hpp"
 #include "scene.hpp"
 
 namespace wsl
@@ -62,6 +63,8 @@ struct scene_header
   std::vector<reg::sig::signal_connection_data> connections;
   //! Resources that should be automatically loaded with the scene.
   std::vector<resource_ref_serialized> autoload;
+  //! The active camera entity in this scene.
+  uint32_t camera = entt::null;
 
   template <class Archive>
   void
@@ -73,6 +76,8 @@ struct scene_header
         cereal::make_nvp ("entity_names", entity_names),
         cereal::make_nvp ("connections", connections),
         cereal::make_nvp ("autoload", autoload));
+    uint32_t const camera_default = entt::null;
+    wsl::comp::serialize_field_if_diff (ar, "camera", camera, camera_default);
   }
 };
 

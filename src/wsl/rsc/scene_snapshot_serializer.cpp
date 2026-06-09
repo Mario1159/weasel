@@ -134,6 +134,8 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
     header.autoload.push_back ({ ref.type, path });
   }
 
+  header.camera = static_cast<uint32_t> (entt::to_integral (scene_ref.camera));
+
   archive (cereal::make_nvp ("header", header));
 
   entt::registry &registry = scene_ref.get_registry ();
@@ -204,6 +206,9 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   // Restore the scene name from the saved header
   scene_ref.set_name (header.scene_name);
+
+  // Restore the active camera entity
+  scene_ref.camera = entt::entity{ static_cast<entt::id_type> (header.camera) };
 
   // ---- RESTORE SYSTEMS ----
   wsl::log::rsc ()->trace ("Restoring {} systems", header.systems.size ());

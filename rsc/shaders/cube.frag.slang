@@ -459,6 +459,9 @@ PSOut main(PSInput input)
         u_BaseColorTex.Sample(u_Samplers[0], input.uv) *
         u_BaseColorFactor;
 
+    if (baseColor.a < 0.01)
+        discard;
+
     float3 albedo = baseColor.rgb;
 
     float2 mr = u_MetallicRoughnessTex.Sample(u_Samplers[1], input.uv).gb;

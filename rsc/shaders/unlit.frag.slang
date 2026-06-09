@@ -50,6 +50,9 @@ PSOut main(PSInput input)
     float4 baseColor = u_BaseColorTex.Sample(u_Sampler, input.uv) * u_BaseColorFactor;
     float3 emissive  = u_EmissiveTex.Sample(u_Sampler, input.uv).rgb * u_EmissiveFactor;
 
+    if (baseColor.a < 0.01)
+        discard;
+
     PSOut o;
     o.color = float4(baseColor.rgb + emissive, baseColor.a);
     o.bloom = float4(emissive, 1.0); // or threshold it if you want
