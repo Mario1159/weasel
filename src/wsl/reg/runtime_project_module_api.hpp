@@ -198,7 +198,7 @@ using runtime_detail = runtime_registrar;
     }                                                                          \
   };                                                                           \
   }                                                                            \
-  inline void WEASEL_DETAIL_CAT (weasel_runtime_component_register_, N) (      \
+  static void WEASEL_DETAIL_CAT (weasel_runtime_component_register_, N) (      \
       wsl::reg::runtime::runtime_module_registration_context & ctx)            \
   {                                                                            \
     wsl::reg::runtime::runtime_detail::register_component<Type> (              \
@@ -224,7 +224,7 @@ using runtime_detail = runtime_registrar;
     }                                                                          \
   };                                                                           \
   }                                                                            \
-  inline void WEASEL_DETAIL_CAT (weasel_runtime_system_register_, N) (         \
+  static void WEASEL_DETAIL_CAT (weasel_runtime_system_register_, N) (         \
       wsl::reg::runtime::runtime_module_registration_context & ctx)            \
   {                                                                            \
     wsl::reg::runtime::runtime_detail::register_system<Type> (                 \
@@ -250,7 +250,7 @@ using runtime_detail = runtime_registrar;
     }                                                                          \
   };                                                                           \
   }                                                                            \
-  inline void WEASEL_DETAIL_CAT (weasel_runtime_singleton_register_, N) (      \
+  static void WEASEL_DETAIL_CAT (weasel_runtime_singleton_register_, N) (      \
       wsl::reg::runtime::runtime_module_registration_context & ctx)            \
   {                                                                            \
     wsl::reg::runtime::runtime_detail::register_singleton<Type> (              \

@@ -443,6 +443,11 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       area.create_body (engine, world_pos, world_rot, scale);
     }
   }
+  // After restoring everything, the scene must be marked initialised so
+  // that a subsequent resume() (e.g. after hitting Play in the editor)
+  // actually re-activates its systems.
+  scene_ref.init ();
+
   wsl::log::rsc ()->trace ("Scene load finished");
 }
 

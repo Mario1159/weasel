@@ -389,6 +389,14 @@ comp::singl::runtime_context::stop ()
     }
   }
 
+  // After restoring the scene, its camera entity may have changed (or been
+  // recreated with a new identifier), so sync the runtime game_camera to the
+  // active scene's camera so that systems like MouseRotateSystem see a
+  // consistent value on the next play session.
+  if (rsc::scene *active_scene = scene_manager.get_active ()) {
+    game_camera = active_scene->camera;
+  }
+
   scene_save_states.clear ();
   play_session_origin_scene_id = rsc::scene_id{ entt::null };
   play_session_origin_scene = nullptr;
