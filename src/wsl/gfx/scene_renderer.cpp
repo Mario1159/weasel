@@ -1259,15 +1259,10 @@ gfx::scene_renderer::draw_skybox (const gfx::cubemap &cubemap,
   glm::mat3 const rot = glm::transpose (glm::mat3 (view));
   glm::mat4 const camera_rot = glm::mat4 (rot);
 
-  // We need an inverse projection that maps SDL_GPU clip space (Y-down)
-  // to camera view space (Y-up).
-  glm::mat4 flipped_proj = proj;
-  flipped_proj[1][1] *= -1.0F;
-
   // Apply optional skybox rotation to the sampling direction.
   glm::mat4 const skybox_rot
       = glm::mat4_cast (glm::conjugate (skybox_rotation));
-  glm::mat4 inv_vp = skybox_rot * camera_rot * glm::inverse (flipped_proj);
+  glm::mat4 inv_vp = skybox_rot * camera_rot * glm::inverse (proj);
 
   SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &inv_vp,
                                 sizeof (glm::mat4));

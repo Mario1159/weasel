@@ -16,10 +16,6 @@ PSOut main(PSInput input)
 {
     float3 dir = normalize(input.dir);
 
-    // Invert the Y axis to correct the 'sky at the bottom' issue.
-    // This flips the skybox vertically without affecting IBL baking.
-    dir.y = -dir.y;
-
     float4 c = u_Skybox.Sample(u_Sampler, dir);
 
     PSOut o;
