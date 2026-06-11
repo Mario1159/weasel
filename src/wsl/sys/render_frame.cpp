@@ -128,4 +128,44 @@ sys::build_render_frame (entt::registry &registry,
   return out.view.valid;
 }
 
+gfx::scene_renderer::view_state
+sys::build_camera_view_state (entt::registry &registry,
+                              entt::entity camera_entity,
+                              entt::entity fallback_camera,
+                              const gfx::viewport &vp, uint32_t window_width,
+                              uint32_t window_height)
+{
+  gfx::scene_renderer::view_state out{};
+  out.aspect_ratio = vp.aspect_ratio (window_width, window_height);
+
+  if (camera_entity == entt::null) {
+    camera_entity = fallback_camera;
+  }
+
+  if (camera_entity != entt::null
+      && registry.all_of<comp::camera, comp::world_transform> (camera_entity)) {
+    const auto &cam = registry.get<comp::camera> (camera_entity);
+    const auto &wt = registry.get<comp::world_transform> (camera_entity);
+    glm::mat4 const wtm = wt.value;
+
+    out.valid = true;
+    out.world_position = glm::vec3 (wtm[3]);
+    out.view = glm::inverse (wtm);
+    out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
+                                 cam.near, cam.far);
+    out.view_proj = out.proj * out.view;
+  } else {
+    // Fallback camera
+    out.valid = true;
+    out.world_position = glm::vec3 (0, 0, 5);
+    out.view
+        = glm::lookAt (out.world_position, glm::vec3 (0), glm::vec3 (0, 1, 0));
+    out.proj = glm::perspective (glm::radians (60.0F), out.aspect_ratio, 0.1F,
+                                 1000.0F);
+    out.view_proj = out.proj * out.view;
+  }
+
+  return out;
+}
+
 } // namespace wsl

@@ -1,8 +1,9 @@
 #pragma once
 
+#include "viewport.hpp"
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
-
 
 namespace wsl
 {
@@ -54,6 +55,15 @@ public:
 
   void begin_ui_render_pass (SDL_GPUTexture *swapchain);
   void end_ui_render_pass ();
+
+  //! Sets the GPU viewport on the active main render pass.
+  void set_viewport (const SDL_GPUViewport &vp);
+  //! Sets the GPU scissor rect on the active main render pass.
+  void set_scissor_rect (const SDL_Rect &rect);
+  //! Resets the viewport to the full render target.
+  void reset_viewport (uint32_t width, uint32_t height);
+  //! Resets the scissor rect to the full render target.
+  void reset_scissor_rect (uint32_t width, uint32_t height);
 
   SDL_GPUDevice *gpu_device = nullptr;
   SDL_GPUCommandBuffer *main_cmd = nullptr;

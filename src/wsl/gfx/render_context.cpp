@@ -273,4 +273,44 @@ gfx::render_context::end_ui_render_pass ()
   ui_pass = nullptr;
 }
 
+void
+gfx::render_context::set_viewport (const SDL_GPUViewport &vp)
+{
+  if (main_pass != nullptr) {
+    SDL_SetGPUViewport (main_pass, &vp);
+  }
+}
+
+void
+gfx::render_context::set_scissor_rect (const SDL_Rect &rect)
+{
+  if (main_pass != nullptr) {
+    SDL_SetGPUScissor (main_pass, &rect);
+  }
+}
+
+void
+gfx::render_context::reset_viewport (uint32_t width, uint32_t height)
+{
+  SDL_GPUViewport vp{};
+  vp.x = 0.0F;
+  vp.y = 0.0F;
+  vp.w = static_cast<float> (width);
+  vp.h = static_cast<float> (height);
+  vp.min_depth = 0.0F;
+  vp.max_depth = 1.0F;
+  set_viewport (vp);
+}
+
+void
+gfx::render_context::reset_scissor_rect (uint32_t width, uint32_t height)
+{
+  SDL_Rect rect{};
+  rect.x = 0;
+  rect.y = 0;
+  rect.w = static_cast<int> (width);
+  rect.h = static_cast<int> (height);
+  set_scissor_rect (rect);
+}
+
 } // namespace wsl

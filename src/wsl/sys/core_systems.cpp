@@ -440,7 +440,6 @@ core_systems::render_impl (wsl::gfx::render_window &window,
     apply_rendering_manager (registry, *m_runtime_ctx);
 
     renderer = &m_runtime_ctx->get_active_scene_renderer ();
-    renderer->begin_frame (submission.view);
     renderer->set_visible_draws (std::move (submission.draw_commands));
     renderer->set_environment (submission.environment);
 
@@ -450,6 +449,9 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
     // These systems open their own offscreen passes, so they must run before
     // the main scene render pass is active.
+    // begin_frame() must be called first so has_active_frame() is true.
+    renderer->begin_frame (submission.view);
+
     if (shadow_sys) {
       shadow_sys->render_record_draw_cmd (&registry);
     }
@@ -457,33 +459,84 @@ core_systems::render_impl (wsl::gfx::render_window &window,
       lighting_sys->render_record_draw_cmd (&registry);
     }
 
-    window.begin_3d_pass ();
+    // Check if we have active viewports.
+    auto *rendering = m_runtime_ctx->get_active_rendering_manager ();
+    bool const has_viewports
+        = (rendering != nullptr) && !rendering->viewports.empty ();
 
-    if (skybox_sys) {
-      skybox_sys->render_record_draw_cmd (&registry);
-    }
-    if (render_3d_sys) {
-      render_3d_sys->render_record_draw_cmd (&registry);
-    }
-    if (physics_sys) {
-      physics_sys->render_record_draw_cmd (&registry);
-    }
+    uint32_t win_w = 0;
+    uint32_t win_h = 0;
+    m_runtime_ctx->window.get_size (win_w, win_h);
 
-    if (scene != nullptr) {
-      for (auto &sys : scene->systems) {
-        if (sys == nullptr) {
-          continue;
+    if (has_viewports) {
+      // Single 3D pass for all viewports.
+      window.begin_3d_pass ();
+
+      for (size_t i = 0; i < rendering->viewports.size (); ++i) {
+        auto const &vp = rendering->viewports[i];
+        window.apply_viewport (vp);
+
+        // Build the view state for this viewport.
+        auto view = sys::build_camera_view_state (
+            registry, vp.camera, scene->camera, vp, win_w, win_h);
+        renderer->begin_frame (view);
+
+        if (skybox_sys) {
+          skybox_sys->render_record_draw_cmd (&registry);
         }
-        if (std::binary_search (core_ids.begin (), core_ids.end (),
-                                sys->get_type_id ())) {
-          continue;
+        if (render_3d_sys) {
+          render_3d_sys->render_record_draw_cmd (&registry);
         }
-        sys->render_record_draw_cmd (&registry);
+        if (physics_sys) {
+          physics_sys->render_record_draw_cmd (&registry);
+        }
+
+        if (scene != nullptr) {
+          for (auto &sys : scene->systems) {
+            if (sys == nullptr) {
+              continue;
+            }
+            if (std::binary_search (core_ids.begin (), core_ids.end (),
+                                    sys->get_type_id ())) {
+              continue;
+            }
+            sys->render_record_draw_cmd (&registry);
+          }
+        }
       }
-    }
 
-    window.end_3d_pass ();
-    renderer->end_frame ();
+      window.end_3d_pass ();
+      renderer->end_frame ();
+    } else {
+      // Full-screen rendering (legacy path).
+      window.begin_3d_pass ();
+
+      if (skybox_sys) {
+        skybox_sys->render_record_draw_cmd (&registry);
+      }
+      if (render_3d_sys) {
+        render_3d_sys->render_record_draw_cmd (&registry);
+      }
+      if (physics_sys) {
+        physics_sys->render_record_draw_cmd (&registry);
+      }
+
+      if (scene != nullptr) {
+        for (auto &sys : scene->systems) {
+          if (sys == nullptr) {
+            continue;
+          }
+          if (std::binary_search (core_ids.begin (), core_ids.end (),
+                                  sys->get_type_id ())) {
+            continue;
+          }
+          sys->render_record_draw_cmd (&registry);
+        }
+      }
+
+      window.end_3d_pass ();
+      renderer->end_frame ();
+    }
   }
 
   if (render_ui_sys) {

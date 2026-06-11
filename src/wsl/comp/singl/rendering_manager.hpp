@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../gfx/scene_renderer.hpp"
+#include "../../gfx/viewport.hpp"
 #include "../../rsc/resource_manager.hpp"
 #include "../component_meta.hpp"
 #include "../transform.hpp"
@@ -8,6 +9,7 @@
 #include <cereal/cereal.hpp>
 #include <entt/entt.hpp>
 #include <memory>
+#include <vector>
 
 namespace wsl
 {
@@ -48,6 +50,9 @@ struct rendering_manager : singleton_component
 
   float shadow_bias = 0.0025F;
   float shadow_strength = 1.0F;
+
+  //! Active viewports for this scene. If empty, the scene renders full-screen.
+  std::vector<gfx::viewport> viewports;
 
   gfx::scene_renderer &
   ensure_renderer (wsl::gfx::render_window &window,
@@ -262,6 +267,7 @@ struct rendering_manager : singleton_component
                              def.shadow_bias);
     serialize_field_if_diff (archive, "shadow_strength", shadow_strength,
                              def.shadow_strength);
+    serialize_field_if_diff (archive, "viewports", viewports, def.viewports);
   }
 };
 

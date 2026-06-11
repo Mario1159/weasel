@@ -288,7 +288,7 @@ render_window::create_depth_texture ()
 }
 
 void
-render_window::begin_3d_pass () const
+render_window::begin_3d_pass (bool clear_color, bool clear_depth) const
 {
   if ((msaa_hdr_scene == nullptr) || (msaa_hdr_bloom == nullptr)
       || (hdr_scene == nullptr) || (hdr_bloom_src == nullptr)
@@ -302,14 +302,14 @@ render_window::begin_3d_pass () const
 
   // Scene HDR
   ct[0].texture = msaa_hdr_scene;
-  ct[0].load_op = SDL_GPU_LOADOP_CLEAR;
+  ct[0].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ct[0].store_op = SDL_GPU_STOREOP_RESOLVE;
   ct[0].clear_color = scene_clear_color;
   ct[0].resolve_texture = hdr_scene;
 
   // Bloom source HDR
   ct[1].texture = msaa_hdr_bloom;
-  ct[1].load_op = SDL_GPU_LOADOP_CLEAR;
+  ct[1].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ct[1].store_op = SDL_GPU_STOREOP_RESOLVE;
   ct[1].clear_color = { 0.0F, 0.0F, 0.0F, 1.0F };
   ct[1].resolve_texture = hdr_bloom_src;
@@ -318,22 +318,49 @@ render_window::begin_3d_pass () const
   SDL_zero (ds);
   ds.texture = depth_texture;
   ds.clear_depth = 1.0F;
-  ds.load_op = SDL_GPU_LOADOP_CLEAR;
+  ds.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ds.store_op = SDL_GPU_STOREOP_STORE;
 
   ctx->begin_main_render_pass (ct, 2, &ds);
+
+  // If a viewport is active, set it on the render pass.
+  if (has_active_viewport ()) {
+    auto vp = current_viewport ();
+    int w, h;
+    SDL_GetWindowSizeInPixels (handler, &w, &h);
+    auto pix
+        = vp.to_pixels (static_cast<uint32_t> (w), static_cast<uint32_t> (h));
+
+    SDL_GPUViewport gpu_vp{};
+    gpu_vp.x = static_cast<float> (pix.x);
+    gpu_vp.y = static_cast<float> (pix.y);
+    gpu_vp.w = static_cast<float> (pix.width);
+    gpu_vp.h = static_cast<float> (pix.height);
+    gpu_vp.min_depth = vp.min_depth;
+    gpu_vp.max_depth = vp.max_depth;
+    ctx->set_viewport (gpu_vp);
+
+    SDL_Rect scissor{};
+    scissor.x = pix.x;
+    scissor.y = pix.y;
+    scissor.w = pix.width;
+    scissor.h = pix.height;
+    ctx->set_scissor_rect (scissor);
+  }
 }
 
 void
-render_window::end_3d_pass ()
+render_window::end_3d_pass (bool run_postprocess)
 {
   if (ctx->has_main_render_pass ()) {
     ctx->end_main_render_pass ();
   }
 
-  // Always build present_tex (Game View samples this).
-  // Only also write to swapchain if present_to_swapchain is true.
-  postprocess_hdr_bloom ();
+  if (run_postprocess) {
+    // Always build present_tex (Game View samples this).
+    // Only also write to swapchain if present_to_swapchain is true.
+    postprocess_hdr_bloom ();
+  }
 }
 
 void
@@ -346,6 +373,73 @@ void
 render_window::end_ui_pass () const
 {
   ctx->end_ui_render_pass ();
+}
+
+void
+render_window::push_viewport (const gfx::viewport &vp)
+{
+  m_viewport_stack.push_back (vp);
+}
+
+void
+render_window::pop_viewport ()
+{
+  if (!m_viewport_stack.empty ()) {
+    m_viewport_stack.pop_back ();
+  }
+}
+
+void
+render_window::reset_viewports ()
+{
+  m_viewport_stack.clear ();
+}
+
+bool
+render_window::has_active_viewport () const
+{
+  return !m_viewport_stack.empty ();
+}
+
+size_t
+render_window::viewport_count () const
+{
+  return m_viewport_stack.size ();
+}
+
+gfx::viewport
+render_window::current_viewport () const
+{
+  if (!m_viewport_stack.empty ()) {
+    return m_viewport_stack.back ();
+  }
+  // Default full-screen viewport.
+  return gfx::viewport{};
+}
+
+void
+render_window::apply_viewport (const gfx::viewport &vp) const
+{
+  int w, h;
+  SDL_GetWindowSizeInPixels (handler, &w, &h);
+  auto pix
+      = vp.to_pixels (static_cast<uint32_t> (w), static_cast<uint32_t> (h));
+
+  SDL_GPUViewport gpu_vp{};
+  gpu_vp.x = static_cast<float> (pix.x);
+  gpu_vp.y = static_cast<float> (pix.y);
+  gpu_vp.w = static_cast<float> (pix.width);
+  gpu_vp.h = static_cast<float> (pix.height);
+  gpu_vp.min_depth = vp.min_depth;
+  gpu_vp.max_depth = vp.max_depth;
+  ctx->set_viewport (gpu_vp);
+
+  SDL_Rect scissor{};
+  scissor.x = pix.x;
+  scissor.y = pix.y;
+  scissor.w = pix.width;
+  scissor.h = pix.height;
+  ctx->set_scissor_rect (scissor);
 }
 
 void

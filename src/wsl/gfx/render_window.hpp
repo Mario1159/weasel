@@ -3,15 +3,20 @@
 #include "wsl/comp/camera.hpp"
 #include "wsl/gfx/mesh.hpp"
 #include "wsl/gfx/render_context.hpp"
+#include "wsl/gfx/viewport.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
 #include <entt/entt.hpp>
+#include <vector>
 
 namespace wsl
 {
 
-namespace rsc { class resource_manager; }
+namespace rsc
+{
+class resource_manager;
+}
 
 namespace gfx
 {
@@ -21,8 +26,7 @@ class render_window
 public:
   render_window (const char *name, int width, int height,
                  wsl::gfx::render_context *ctx,
-                 wsl::rsc::resource_manager *res_mgr,
-                 bool headless = false);
+                 wsl::rsc::resource_manager *res_mgr, bool headless = false);
   ~render_window ();
 
   void get_size (uint32_t &width, uint32_t &height) const;
@@ -66,28 +70,54 @@ public:
   float bloom_intensity = 1.0F;
 
   void create_depth_texture ();
-  void begin_3d_pass () const;
-  void end_3d_pass ();
+  void begin_3d_pass (bool clear_color = true, bool clear_depth = true) const;
+  void end_3d_pass (bool run_postprocess = true);
   void begin_ui_pass () const;
   void end_ui_pass () const;
   void new_swapchain ();
   void on_resize ();
   void postprocess_hdr_bloom ();
 
-  [[nodiscard]] wsl::rsc::resource_manager *resource_manager () const { return m_res_mgr; }
+  //! Push a viewport onto the stack. The active viewport is applied to the
+  //! main render pass on the next begin_3d_pass().
+  void push_viewport (const gfx::viewport &vp);
+  //! Pop the top viewport. If no viewports remain, full-screen rendering
+  //! resumes.
+  void pop_viewport ();
+  //! Remove all viewports and return to full-screen rendering.
+  void reset_viewports ();
+  //! Returns true when at least one viewport is active.
+  [[nodiscard]] bool has_active_viewport () const;
+  //! Returns the number of active viewports.
+  [[nodiscard]] size_t viewport_count () const;
+  //! Returns the currently active viewport (top of stack), or a full-screen
+  //! default if none are pushed.
+  [[nodiscard]] gfx::viewport current_viewport () const;
+
+  //! Applies the given viewport directly to the active main render pass.
+  //! Does not use the viewport stack.
+  void apply_viewport (const gfx::viewport &vp) const;
+
+  [[nodiscard]] wsl::rsc::resource_manager *
+  resource_manager () const
+  {
+    return m_res_mgr;
+  }
 
 private:
   SDL_GPUSampler *ensure_linear_sampler ();
   void destroy_texture (SDL_GPUTexture *&texture) const;
-  SDL_GPUGraphicsPipeline *create_fullscreen_pipe (
-      const char *frag_shader_path, SDL_GPUTextureFormat out_format,
-      int num_uniform_buffers, int num_samplers);
+  SDL_GPUGraphicsPipeline *
+  create_fullscreen_pipe (const char *frag_shader_path,
+                          SDL_GPUTextureFormat out_format,
+                          int num_uniform_buffers, int num_samplers);
   SDL_GPUGraphicsPipeline *create_composite_pipe ();
   SDL_GPUGraphicsPipeline *create_downsample_pipe ();
   SDL_GPUGraphicsPipeline *create_blur_pipe ();
 
 private:
   wsl::rsc::resource_manager *m_res_mgr = nullptr;
+  std::vector<gfx::viewport> m_viewport_stack;
 };
 
 } // namespace gfx

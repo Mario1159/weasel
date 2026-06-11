@@ -13,6 +13,7 @@
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/comp/singl/engine_resources.hpp"
+#include <imgui.h>
 
 namespace wsl
 {
@@ -197,17 +198,19 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
       float const scale_y
           = (float)runtime_ctx.window.present_tex.height / img_h;
 
+      ImVec2 const mouse_pos = ImGui::GetMousePos ();
+
       if (ev.type == SDL_EVENT_MOUSE_MOTION) {
-        adjusted_ev.motion.x = (ev.motion.x - img_x) * scale_x;
-        adjusted_ev.motion.y = (ev.motion.y - img_y) * scale_y;
+        adjusted_ev.motion.x = (mouse_pos.x - img_x) * scale_x;
+        adjusted_ev.motion.y = (mouse_pos.y - img_y) * scale_y;
       } else if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN
                  || ev.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-        adjusted_ev.button.x = (ev.button.x - img_x) * scale_x;
-        adjusted_ev.button.y = (ev.button.y - img_y) * scale_y;
+        adjusted_ev.button.x = (mouse_pos.x - img_x) * scale_x;
+        adjusted_ev.button.y = (mouse_pos.y - img_y) * scale_y;
 
         // Optional: ignore clicks outside the game view
-        if (ev.button.x < img_x || ev.button.x > img_x + img_w
-            || ev.button.y < img_y || ev.button.y > img_y + img_h) {
+        if (mouse_pos.x < img_x || mouse_pos.x > img_x + img_w
+            || mouse_pos.y < img_y || mouse_pos.y > img_y + img_h) {
           process = false;
         }
       }
