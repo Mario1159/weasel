@@ -5,7 +5,7 @@
 #include "lighting.hpp"
 #include "mesh.hpp"
 #include "model_3d.hpp"
-#include "render_context.hpp"
+#include "renderer.hpp"
 
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_pixels.h>
@@ -34,7 +34,7 @@ namespace gfx
  * Owns GPU pipelines, per-frame submission state, and supporting passes such
  * as shadows, SSAO, skybox rendering, and outlines.
  */
-class scene_renderer
+class scene_renderer : public renderer
 {
 public:
   /*!
@@ -278,12 +278,6 @@ public:
 
 private:
   // High-level scene drawing helpers.
-  [[nodiscard]] auto create_1x1_texture (uint8_t red, uint8_t green,
-                                         uint8_t blue, uint8_t alpha) const
-      -> SDL_GPUTexture *;
-  [[nodiscard]] auto create_1x1_cubemap (uint8_t red, uint8_t green,
-                                         uint8_t blue, uint8_t alpha) const
-      -> SDL_GPUTexture *;
   static auto extract_position (const glm::mat4 &matrix) -> glm::vec3;
   auto select_lod (gfx::node &n) const -> gfx::mesh *;
   void bind_pipeline ();
@@ -349,10 +343,6 @@ private:
   void create_grid_pipeline ();
   void destroy_grid_pipeline ();
 
-  // External dependencies and transient per-frame state.
-  wsl::gfx::render_window *m_window = nullptr;
-  render_context *m_ctx = nullptr;
-  wsl::rsc::resource_manager *m_res_mgr = nullptr;
   view_state m_active_view{};
   std::vector<draw_command> m_visible_draws;
   const gfx::cubemap *m_active_env = nullptr;

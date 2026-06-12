@@ -110,6 +110,7 @@ core_systems::register_factory_types (comp::singl::runtime_context &rtc)
   factory.register_system_type<transform_system> ({ "Transform" });
   factory.register_system_type<physics_system> ({ "Physics" });
   factory.register_system_type<render_3d_system> ({ "3D Render" });
+  factory.register_system_type<render_2d_system> ({ "2D Render" });
   factory.register_system_type<audio_system> ({ "Audio" });
   factory.register_system_type<lighting_system> ({ "Lighting" });
   factory.register_system_type<skybox_system> ({ "Skybox" });
@@ -129,6 +130,9 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
 
   if (!render_3d_sys) {
     render_3d_sys = std::make_unique<render_3d_system> ("3D Render System");
+  }
+  if (!render_2d_sys) {
+    render_2d_sys = std::make_unique<render_2d_system> ("2D Render System");
   }
   if (!physics_sys) {
     physics_sys = std::make_unique<physics_system> ("Jolt Physics System");
@@ -312,6 +316,7 @@ core_systems::to_vec () const
   push (lighting_sys.get ());
   push (skybox_sys.get ());
   push (render_3d_sys.get ());
+  push (render_2d_sys.get ());
   push (render_ui_sys.get ());
 
   return out;
@@ -538,6 +543,12 @@ core_systems::render_impl (wsl::gfx::render_window &window,
       renderer->end_frame ();
     }
   }
+
+  window.begin_3d_pass (false, false);
+  if (render_2d_sys) {
+    render_2d_sys->render_record_draw_cmd (&registry);
+  }
+  window.end_3d_pass ();
 
   if (render_ui_sys) {
     render_ui_sys->render_record_draw_cmd (&registry);

@@ -3,6 +3,7 @@
 #include "lighting_system.hpp"
 #include "audio_system.hpp"
 #include "physics_system.hpp"
+#include "render_2d_system.hpp"
 #include "render_3d_system.hpp"
 #include "render_ui_system.hpp"
 #include "shadow_system.hpp"
@@ -59,6 +60,7 @@ public:
   std::vector<sys::ecs_system *> to_vec () const;
 
   std::unique_ptr<render_3d_system> render_3d_sys;
+  std::unique_ptr<render_2d_system> render_2d_sys;
   std::unique_ptr<physics_system> physics_sys;
 
   std::unique_ptr<render_ui_system> render_ui_sys;

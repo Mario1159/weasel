@@ -54,13 +54,15 @@ app::app (const std::string &name, int width, int height,
         "Application will likely crash.");
   }
 
-  register_components<
-      wsl::comp::hierarchy, wsl::comp::world_transform, wsl::comp::transform,
-      wsl::math::vec3f, wsl::math::quatf, wsl::math::mat33f, wsl::math::mat44f,
-      wsl::rsc::model_id, wsl::comp::model_instance_3d, wsl::comp::camera,
-      wsl::comp::point_light, wsl::comp::spot_light,
-      wsl::comp::directional_light, wsl::comp::rigid_body, wsl::comp::area,
-      wsl::comp::character_body, wsl::comp::prefab_instance> ();
+  register_components<wsl::comp::hierarchy, wsl::comp::world_transform,
+                      wsl::comp::transform, wsl::math::vec2f, wsl::math::vec3f,
+                      wsl::math::vec4f, wsl::math::quatf, wsl::math::mat33f,
+                      wsl::math::mat44f, wsl::rsc::model_id, wsl::rsc::image_id,
+                      wsl::comp::model_instance_3d, wsl::comp::camera,
+                      wsl::comp::point_light, wsl::comp::spot_light,
+                      wsl::comp::directional_light, wsl::comp::rigid_body,
+                      wsl::comp::area, wsl::comp::character_body,
+                      wsl::comp::prefab_instance, wsl::comp::sprite_2d> ();
 
   // Register primitive types for the inspector
   using namespace entt::literals;

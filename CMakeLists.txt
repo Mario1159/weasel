@@ -384,6 +384,7 @@ set(VERTEX_SHADER_SOURCES
     "${SHADER_SOURCE_DIR}/ssao_prepass.vert.slang"
     "${SHADER_SOURCE_DIR}/outline.vert.slang"
     "${SHADER_SOURCE_DIR}/grid.vert.slang"
+    "${SHADER_SOURCE_DIR}/sprite_2d.vert.slang"
 )
 
 set(FRAGMENT_SHADER_SOURCES
@@ -393,6 +394,7 @@ set(FRAGMENT_SHADER_SOURCES
     "${SHADER_SOURCE_DIR}/flat.frag.slang"
     "${SHADER_SOURCE_DIR}/ui.frag.slang"
     "${SHADER_SOURCE_DIR}/ui_texture.frag.slang"
+    "${SHADER_SOURCE_DIR}/sprite_2d.frag.slang"
     "${SHADER_SOURCE_DIR}/skybox.frag.slang"
     "${SHADER_SOURCE_DIR}/procedural_skybox.frag.slang"
     "${SHADER_SOURCE_DIR}/brdf_lut.frag.slang"

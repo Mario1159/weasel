@@ -2115,6 +2115,75 @@ rsc::audio_id::register_meta ()
       .data<&rsc::audio_id::value> ("value"_hs);
 }
 
+bool
+rsc::image_id::custom_inspect (const char *label,
+                               comp::singl::runtime_context *runtime)
+{
+  rsc::resource_manager *res_mgr
+      = (runtime != nullptr) ? &runtime->resource_manager : nullptr;
+  if (res_mgr == nullptr) {
+    ImGui::TextDisabled ("No resource manager");
+    return false;
+  }
+
+  const char *preview = "None";
+  char preview_buf[256];
+
+  if (value != entt::null) {
+    if (std::optional<image_resource_info> rec
+        = res_mgr->info (image_id{ value })) {
+      std::snprintf (preview_buf, sizeof (preview_buf), "%s (%s)",
+                     rec->name.c_str (), rec->path.c_str ());
+    } else {
+      std::snprintf (preview_buf, sizeof (preview_buf), "(%08X)",
+                     (uint32_t)value);
+    }
+    preview = preview_buf;
+  }
+
+  bool changed = false;
+
+  if (ImGui::BeginCombo (label, preview)) {
+    if (ImGui::Selectable ("None", value == entt::null)) {
+      value = entt::null;
+      changed = true;
+    }
+
+    for (const image_resource_info &rec : res_mgr->list_images ()) {
+      const bool selected = (rec.id == value);
+
+      char item_buf[256];
+      std::snprintf (item_buf, sizeof (item_buf), "%s (%s)", rec.name.c_str (),
+                     rec.path.c_str ());
+
+      if (ImGui::Selectable (item_buf, selected)) {
+        value = rec.id;
+        res_mgr->load (image_id{ rec.id });
+        changed = true;
+      }
+
+      if (selected) {
+        ImGui::SetItemDefaultFocus ();
+      }
+    }
+
+    ImGui::EndCombo ();
+  }
+
+  return changed;
+}
+
+void
+rsc::image_id::register_meta ()
+{
+  using namespace entt::literals;
+
+  entt::meta_factory<rsc::image_id> ()
+      .type (entt::type_hash<rsc::image_id>::value ())
+      .func<&rsc::image_id::custom_inspect> ("custom_inspect"_hs)
+      .data<&rsc::image_id::value> ("value"_hs);
+}
+
 rsc::shader_id
 rsc::resource_manager::register_shader (const std::string &path)
 {

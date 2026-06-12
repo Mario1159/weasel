@@ -25,6 +25,84 @@ namespace wsl
 namespace math
 {
 
+struct vec2f
+{
+  float x{ 0 }, y{ 0 };
+
+  vec2f () = default;
+  vec2f (float x, float y) : x (x), y (y) {}
+  vec2f (const glm::vec2 &v) : x (v.x), y (v.y) {}
+
+  operator glm::vec2 () const { return glm::vec2{ x, y }; }
+
+  bool
+  operator== (const vec2f &other) const
+  {
+    return x == other.x && y == other.y;
+  }
+  bool
+  operator!= (const vec2f &other) const
+  {
+    return !(*this == other);
+  }
+
+  bool
+  custom_inspect (const char *label)
+  {
+    auto draw_drag_with_stripe
+        = [] (const char *id, float &v, ImU32 stripe_col) -> bool {
+      ImGui::SetNextItemWidth (ImMax (1.0F, ImGui::CalcItemWidth ()));
+      bool const changed = ImGui::DragFloat (id, &v, 0.1F);
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      ImVec2 const mn = ImGui::GetItemRectMin ();
+      ImVec2 const mx = ImGui::GetItemRectMax ();
+      const float stripe_w = 3.0F;
+      dl->AddRectFilled (mn, ImVec2 (mn.x + stripe_w, mx.y), stripe_col);
+      return changed;
+    };
+
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const w = (full - spacing) / 2.0F;
+
+    bool changed = false;
+
+    ImGui::SetNextItemWidth (w);
+    changed |= draw_drag_with_stripe ("##x", x, IM_COL32 (255, 0, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (w);
+    changed |= draw_drag_with_stripe ("##y", y, IM_COL32 (0, 200, 0, 255));
+
+    ImGui::PopID ();
+    return changed;
+  }
+
+  template <class Archive>
+  void
+  serialize (Archive &archive)
+  {
+    vec2f def{};
+    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
+    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
+  }
+
+  static void
+  register_meta ()
+  {
+    using namespace entt::literals;
+    entt::meta_factory<vec2f> ()
+        .type (entt::type_hash<vec2f>::value ())
+        .func<&vec2f::custom_inspect> ("custom_inspect"_hs)
+        .data<&vec2f::x> ("x"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
+        .data<&vec2f::y> ("y"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" });
+  }
+};
+
 struct vec3f
 {
   float x{ 0 }, y{ 0 }, z{ 0 };
@@ -150,6 +228,99 @@ struct vec3f
     wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
     wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
     wsl::comp::serialize_field_if_diff (archive, "z", z, def.z);
+  }
+};
+
+struct vec4f
+{
+  float x{ 0 }, y{ 0 }, z{ 0 }, w{ 0 };
+
+  vec4f () = default;
+  vec4f (float x, float y, float z, float w) : x (x), y (y), z (z), w (w) {}
+  vec4f (const glm::vec4 &v) : x (v.x), y (v.y), z (v.z), w (v.w) {}
+
+  operator glm::vec4 () const { return glm::vec4{ x, y, z, w }; }
+
+  bool
+  operator== (const vec4f &other) const
+  {
+    return x == other.x && y == other.y && z == other.z && w == other.w;
+  }
+  bool
+  operator!= (const vec4f &other) const
+  {
+    return !(*this == other);
+  }
+
+  bool
+  custom_inspect (const char *label)
+  {
+    auto draw_drag_with_stripe
+        = [] (const char *id, float &v, ImU32 stripe_col) -> bool {
+      ImGui::SetNextItemWidth (ImMax (1.0F, ImGui::CalcItemWidth ()));
+      bool const changed = ImGui::DragFloat (id, &v, 0.1F);
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      ImVec2 const mn = ImGui::GetItemRectMin ();
+      ImVec2 const mx = ImGui::GetItemRectMax ();
+      const float stripe_w = 3.0F;
+      dl->AddRectFilled (mn, ImVec2 (mn.x + stripe_w, mx.y), stripe_col);
+      return changed;
+    };
+
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const item_w = (full - spacing * 3.0F) / 4.0F;
+
+    bool changed = false;
+
+    ImGui::SetNextItemWidth (item_w);
+    changed |= draw_drag_with_stripe ("##x", x, IM_COL32 (255, 0, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (item_w);
+    changed |= draw_drag_with_stripe ("##y", y, IM_COL32 (0, 200, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (item_w);
+    changed |= draw_drag_with_stripe ("##z", z, IM_COL32 (0, 128, 255, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (item_w);
+    changed |= draw_drag_with_stripe ("##w", this->w,
+                                      IM_COL32 (255, 255, 255, 255));
+
+    ImGui::PopID ();
+    return changed;
+  }
+
+  template <class Archive>
+  void
+  serialize (Archive &archive)
+  {
+    vec4f def{};
+    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
+    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
+    wsl::comp::serialize_field_if_diff (archive, "z", z, def.z);
+    wsl::comp::serialize_field_if_diff (archive, "w", w, def.w);
+  }
+
+  static void
+  register_meta ()
+  {
+    using namespace entt::literals;
+    entt::meta_factory<vec4f> ()
+        .type (entt::type_hash<vec4f>::value ())
+        .func<&vec4f::custom_inspect> ("custom_inspect"_hs)
+        .data<&vec4f::x> ("x"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
+        .data<&vec4f::y> ("y"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
+        .data<&vec4f::z> ("z"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" })
+        .data<&vec4f::w> ("w"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "w", "W Coordinate", "" });
   }
 };
 

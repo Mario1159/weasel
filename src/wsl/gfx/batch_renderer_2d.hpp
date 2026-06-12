@@ -1,0 +1,77 @@
+#pragma once
+
+#include "renderer.hpp"
+#include "wsl/rsc/resource_ids.hpp"
+#include <glm/glm.hpp>
+#include <vector>
+#include <map>
+
+namespace wsl::gfx
+{
+
+/*!
+ * \brief High-performance 2D renderer using batching.
+ *
+ * Groups sprites by texture to minimize draw calls and state changes.
+ * Supports transparency and z-index sorting.
+ */
+class batch_renderer_2d : public renderer
+{
+public:
+  struct vertex_2d
+  {
+    glm::vec2 pos;
+    glm::vec2 uv;
+    glm::vec4 color;
+  };
+
+  struct draw_command
+  {
+    wsl::rsc::image_id image;
+    glm::vec2 position;
+    glm::vec2 size;
+    float rotation = 0.0F;
+    glm::vec4 color{ 1.0F };
+    glm::vec2 uv_offset{ 0.0F };
+    glm::vec2 uv_scale{ 1.0F };
+    int z_index = 0;
+    bool flip_h = false;
+    bool flip_v = false;
+  };
+
+  batch_renderer_2d (wsl::gfx::render_window &window, render_context *ctx,
+                     wsl::rsc::resource_manager *res_mgr);
+  ~batch_renderer_2d () override;
+
+  //! Submits a sprite for rendering in the current frame.
+  void submit (const draw_command &cmd);
+
+  //! Renders all submitted sprites and clears the queue.
+  void flush ();
+
+private:
+  void create_pipeline ();
+  void destroy_pipeline ();
+  void create_buffers ();
+  void destroy_buffers ();
+
+  struct batch
+  {
+    SDL_GPUTexture *texture = nullptr;
+    uint32_t first_vertex = 0;
+    uint32_t vertex_count = 0;
+  };
+
+  std::vector<draw_command> m_queue;
+  std::vector<vertex_2d> m_vertices;
+  
+  SDL_GPUGraphicsPipeline *m_pipeline = nullptr;
+  SDL_GPUSampler *m_sampler = nullptr;
+  SDL_GPUBuffer *m_vbo = nullptr;
+  SDL_GPUTransferBuffer *m_vbo_transfer = nullptr;
+
+  static constexpr uint32_t max_sprites_per_flush = 4096;
+  static constexpr uint32_t max_vertices = max_sprites_per_flush * 6;
+};
+
+} // namespace wsl::gfx

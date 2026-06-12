@@ -855,6 +855,10 @@ inspector::draw_meta_object (const char *label, entt::meta_any &object,
     return draw_meta_value (label, object, prefab_object, default_object);
   }
 
+  if (type == entt::resolve<wsl::rsc::image_id> ()) {
+    return draw_meta_value (label, object, prefab_object, default_object);
+  }
+
   if (type.is_enum ()) {
     {
       return draw_meta_enum (label, object);
@@ -1084,6 +1088,13 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   } else if (type == entt::resolve<wsl::rsc::audio_id> ()) {
     auto &current = object.cast<wsl::rsc::audio_id &> ();
+    if (current.custom_inspect (label, runtime_ctx)) {
+      changed = true;
+    }
+    draw_restore_button ();
+    return changed;
+  } else if (type == entt::resolve<wsl::rsc::image_id> ()) {
+    auto &current = object.cast<wsl::rsc::image_id &> ();
     if (current.custom_inspect (label, runtime_ctx)) {
       changed = true;
     }

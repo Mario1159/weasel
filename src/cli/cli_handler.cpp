@@ -62,8 +62,8 @@ register_all (wsl::comp::singl::runtime_context &rtc)
   wsl::comp::register_component_meta<
       wsl::comp::hierarchy, wsl::comp::world_transform, wsl::comp::transform,
       wsl::math::vec3f, wsl::math::quatf, wsl::math::mat33f, wsl::math::mat44f,
-      wsl::rsc::model_id, wsl::comp::model_instance_3d, wsl::comp::camera,
-      wsl::comp::point_light, wsl::comp::spot_light,
+      wsl::rsc::model_id, wsl::rsc::image_id, wsl::comp::model_instance_3d,
+      wsl::comp::camera, wsl::comp::point_light, wsl::comp::spot_light,
       wsl::comp::directional_light, wsl::comp::rigid_body, wsl::comp::area,
       wsl::comp::character_body, wsl::rsc::scene_manager,
       wsl::rsc::resource_manager_view> ();

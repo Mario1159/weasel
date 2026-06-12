@@ -8,6 +8,7 @@
 #include "hierarchy.hpp"
 #include "model_instance_3d.hpp"
 #include "point_light.hpp"
+#include "sprite_2d.hpp"
 #include "prefab_instance.hpp"
 #include "rigid_body.hpp"
 #include "singl/ui_manager.hpp"
@@ -42,7 +43,7 @@ using component_types
     = entt::type_list<hierarchy, world_transform, transform, model_instance_3d,
                       camera, point_light, spot_light, directional_light,
                       rigid_body, area, character_body, audio,
-                      prefab_instance>;
+                      prefab_instance, sprite_2d>;
 
 using singleton_types
     = entt::type_list<comp::singl::runtime_context, comp::singl::editor_context,

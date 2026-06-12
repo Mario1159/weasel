@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../gfx/scene_renderer.hpp"
+#include "../../gfx/batch_renderer_2d.hpp"
 #include "../../gfx/viewport.hpp"
 #include "../../rsc/resource_manager.hpp"
 #include "../component_meta.hpp"
@@ -20,6 +21,7 @@ namespace comp::singl
 struct rendering_manager : singleton_component
 {
   std::unique_ptr<gfx::scene_renderer> renderer;
+  std::unique_ptr<gfx::batch_renderer_2d> renderer_2d;
   rsc::cubemap_id skybox{};
   math::quatf skybox_rotation{};
 
@@ -77,6 +79,31 @@ struct rendering_manager : singleton_component
   try_renderer () const
   {
     return renderer.get ();
+  }
+
+  gfx::batch_renderer_2d &
+  ensure_renderer_2d (wsl::gfx::render_window &window,
+                      gfx::render_context &render_ctx,
+                      wsl::rsc::resource_manager *res_mgr)
+  {
+    if (!renderer_2d) {
+      renderer_2d = std::make_unique<gfx::batch_renderer_2d> (window, &render_ctx,
+                                                            res_mgr);
+    }
+
+    return *renderer_2d;
+  }
+
+  gfx::batch_renderer_2d *
+  try_renderer_2d ()
+  {
+    return renderer_2d.get ();
+  }
+
+  const gfx::batch_renderer_2d *
+  try_renderer_2d () const
+  {
+    return renderer_2d.get ();
   }
 
   glm::vec3
