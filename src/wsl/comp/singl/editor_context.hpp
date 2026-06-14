@@ -15,8 +15,14 @@
 #include <imgui.h>
 #endif
 
-namespace wsl::gfx { class imgui_renderer_interface; }
-namespace wsl::debug { class debug_renderer_interface; }
+namespace wsl::gfx
+{
+class imgui_renderer_interface;
+}
+namespace wsl::debug
+{
+class debug_renderer_interface;
+}
 
 namespace wsl
 {
@@ -34,14 +40,14 @@ public:
   explicit editor_context (wsl::comp::singl::runtime_context &runtime_ctx);
   ~editor_context (); // Defined in .cpp where renderer types are complete
 
-  editor_context(const editor_context&) = delete;
-  editor_context& operator=(const editor_context&) = delete;
-  editor_context(editor_context&&) = delete;
-  editor_context& operator=(editor_context&&) = delete;
+  editor_context (const editor_context &) = delete;
+  editor_context &operator= (const editor_context &) = delete;
+  editor_context (editor_context &&) = delete;
+  editor_context &operator= (editor_context &&) = delete;
 
   static void register_meta ();
   bool custom_inspect (const char *label,
-                        wsl::comp::singl::runtime_context *runtime_ctx);
+                       wsl::comp::singl::runtime_context *runtime_ctx);
 
   wsl::comp::singl::runtime_context &runtime_ctx;
 
@@ -49,8 +55,8 @@ public:
   std::unique_ptr<wsl::gfx::imgui_renderer_interface> imgui_renderer;
   std::unique_ptr<wsl::debug::debug_renderer_interface> debug_renderer;
 
-  wsl::gfx::imgui_renderer_interface* get_imgui_renderer() const;
-  wsl::debug::debug_renderer_interface* get_debug_renderer() const;
+  wsl::gfx::imgui_renderer_interface *get_imgui_renderer () const;
+  wsl::debug::debug_renderer_interface *get_debug_renderer () const;
 
   enum class game_view_cam_mode
   {
@@ -59,6 +65,10 @@ public:
   };
   game_view_cam_mode game_view_camera_mode = game_view_cam_mode::engine_default;
   entt::entity game_view_camera_entity = entt::null;
+
+  // Camera combobox selection in the game view toolbar.
+  // entt::null = "Default" (use rendering_manager::main_camera).
+  entt::entity game_view_selected_camera = entt::null;
 
   // Editor state (engine default camera = NOT an entity)
   wsl::comp::camera editor_camera{};
@@ -100,7 +110,7 @@ public:
   std::string wsl_library_path;
   bool is_loading_project = false;
 
-  void re_register_editor_resources();
+  void re_register_editor_resources ();
 
   glm::vec2 last_img_min{ 0.0F, 0.0F };
   glm::vec2 last_img_size{ 0.0F, 0.0F };
@@ -134,9 +144,9 @@ public:
   // Resolves the camera used to render the Game View:
   // - Running: scene->camera
   // - Paused:  (entity override if selected) else engine default camera
-  bool resolve_game_view_camera (entt::registry &registry, wsl::rsc::scene *scene,
+  bool resolve_game_view_camera (entt::registry &registry,
+                                 wsl::rsc::scene *scene,
                                  resolved_camera &out) const;
-
 
   // Camera helpers
   void reset_editor_camera (); // default: look at origin from a fixed distance
@@ -152,8 +162,8 @@ public:
 private:
   // Internal: compute a camera rotation so that camera looks at target
   static glm::quat make_look_at_quat (const glm::vec3 &cam_pos,
-                               const glm::vec3 &target,
-                               const glm::vec3 &up) ;
+                                      const glm::vec3 &target,
+                                      const glm::vec3 &up);
 
   struct camera_anim
   {

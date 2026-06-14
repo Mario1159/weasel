@@ -7,6 +7,11 @@
 #include "component_meta.hpp"
 #include "world_transform.hpp"
 
+namespace comp::singl
+{
+class runtime_context;
+}
+
 namespace wsl
 {
 
@@ -21,6 +26,9 @@ struct camera : world_component
   float aspect_ratio = 1.0F;
 
   bool only_for_editor = false;
+
+  bool custom_inspect (const char *label,
+                       comp::singl::runtime_context *runtime_ctx);
 
   static glm::mat4
   view (const world_transform &wt)
@@ -47,25 +55,7 @@ struct camera : world_component
     return r.get<camera> (e);
   }
 
-  static void
-  register_meta ()
-  {
-    using namespace entt::literals;
-
-    entt::meta_factory<comp::camera> ()
-        .type (entt::type_hash<comp::camera>::value ())
-        .custom<comp::meta_info> (meta_info{ "Camera",
-                                             "Projection parameters only",
-                                             "engine://icons/comp_camera.svg" })
-        .data<&camera::fov> ("fov"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "FOV", "Field of view in degrees", "" })
-        .data<&camera::near> ("near"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "Near", "Near clipping plane", "" })
-        .data<&camera::far> ("far"_hs)
-        .custom<comp::meta_info> (meta_info{ "Far", "Far clipping plane", "" });
-  }
+  static void register_meta ();
 
   template <class Archive>
   void

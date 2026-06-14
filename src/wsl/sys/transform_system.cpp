@@ -1,9 +1,10 @@
 #include "transform_system.hpp"
 
 #include "../comp/hierarchy.hpp"
-#include "reg/sig/signal_hub.hpp"
 #include "../comp/transform.hpp"
+#include "../comp/transform_2d.hpp"
 #include "../comp/world_transform.hpp"
+#include "reg/sig/signal_hub.hpp"
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
@@ -73,7 +74,9 @@ transform_system::update_world_transforms (entt::registry &reg,
                                            double /*unused*/)
 {
   // 1. Process roots (no hierarchy or parent == null)
-  auto view = reg.view<comp::transform, comp::world_transform> ();
+  // Skip entities with transform_2d — they use a separate 2D transform path.
+  auto view = reg.view<comp::transform, comp::world_transform> (
+      entt::exclude<comp::transform_2d>);
 
   for (entt::entity const e : view) {
     auto *h = reg.try_get<comp::hierarchy> (e);

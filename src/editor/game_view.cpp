@@ -6,6 +6,7 @@
 #include "rsc/resource_ids.hpp"
 #include "wsl/comp/hierarchy.hpp"
 #include "wsl/comp/model_instance_3d.hpp"
+#include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/transform.hpp"
@@ -30,6 +31,7 @@
 #include <glm/matrix.hpp>
 #include <imgui.h>
 #include <limits>
+#include <unordered_set>
 #include <utility>
 
 namespace editor
@@ -482,7 +484,13 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
     block_entity_gizmo = (ImViewGuizmo::IsUsing () || ImViewGuizmo::IsOver ());
   }
 
-  if ((m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running && have_cam) {
+  // Detect whether the active camera is a 2D camera.
+  bool const is_2d_camera
+      = (rc.entity != entt::null)
+        && registry.all_of<wsl::comp::camera_2d> (rc.entity);
+
+  if (!is_2d_camera && (m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running
+      && have_cam) {
     ImGuizmo::BeginFrame ();
 
     // IMPORTANT: set rect to the IMAGE rect, not the whole window
@@ -589,6 +597,9 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         m_current_op = ImGuizmo::SCALE;
       }
     }
+  } else if (is_2d_camera) {
+    // When a 2D camera is active, hide the 3D ground grid.
+    m_editor_ctx->grid_visible = false;
   }
 
   ImGui::End ();
@@ -757,6 +768,84 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::Dummy (ImVec2 (8.0F, 0.0F));
   ImGui::SameLine ();
 
+  // ===================== camera combo =====================
+  auto *scene = m_runtime_ctx->scene_manager.get_active ();
+  if (runtime_ctx.is_running) {
+    ImGui::BeginDisabled ();
+  }
+
+  wsl::comp::singl::editor_context &ed = *this->m_editor_ctx;
+  const char *combo_preview = "Default";
+  char combo_buf[256];
+  if (ed.game_view_selected_camera != entt::null && scene != nullptr) {
+    auto const &reg = scene->get_registry ();
+    if (reg.valid (ed.game_view_selected_camera)) {
+      std::snprintf (
+          combo_buf, sizeof (combo_buf), "%s",
+          scene->get_entity_name (ed.game_view_selected_camera).c_str ());
+      combo_preview = combo_buf;
+    }
+  }
+
+  if (ImGui::BeginCombo ("##camera_combo", combo_preview,
+                         ImGuiComboFlags_WidthFitPreview)) {
+    if (ImGui::Selectable ("Default",
+                           ed.game_view_selected_camera == entt::null)) {
+      ed.game_view_selected_camera = entt::null;
+      ed.game_view_camera_mode = wsl::comp::singl::editor_context::
+          game_view_cam_mode::engine_default;
+      ed.game_view_camera_entity = entt::null;
+    }
+    if (ed.game_view_selected_camera == entt::null) {
+      ImGui::SetItemDefaultFocus ();
+    }
+
+    if (scene != nullptr) {
+      auto const &reg = scene->get_registry ();
+      // Collect unique camera entities (both 3D cameras and 2D cameras)
+      std::unordered_set<entt::entity> seen;
+      auto cam_view = reg.view<wsl::comp::camera> ();
+      for (entt::entity const e : cam_view) {
+        std::string const &name = scene->get_entity_name (e);
+        bool const selected = (e == ed.game_view_selected_camera);
+        if (ImGui::Selectable (name.c_str (), selected)) {
+          ed.game_view_selected_camera = e;
+          ed.game_view_camera_mode
+              = wsl::comp::singl::editor_context::game_view_cam_mode::entity;
+          ed.game_view_camera_entity = e;
+        }
+        if (selected) {
+          ImGui::SetItemDefaultFocus ();
+        }
+        seen.emplace (e);
+      }
+      auto cam2d_view = reg.view<wsl::comp::camera_2d> ();
+      for (entt::entity const e : cam2d_view) {
+        if (seen.contains (e)) {
+          continue;
+        }
+        std::string const &name = scene->get_entity_name (e);
+        bool const selected = (e == ed.game_view_selected_camera);
+        if (ImGui::Selectable (name.c_str (), selected)) {
+          ed.game_view_selected_camera = e;
+          ed.game_view_camera_mode
+              = wsl::comp::singl::editor_context::game_view_cam_mode::entity;
+          ed.game_view_camera_entity = e;
+        }
+        if (selected) {
+          ImGui::SetItemDefaultFocus ();
+        }
+      }
+    }
+    ImGui::EndCombo ();
+  }
+
+  if (runtime_ctx.is_running) {
+    ImGui::EndDisabled ();
+  }
+
+  ImGui::SameLine ();
+
   // ===================== reset camera button =====================
   bool clicked_reset = false;
   draw_icon_button (m_editor_ctx, m_editor_ctx->icon_reset_cam, "Reset Camera",
@@ -766,10 +855,10 @@ game_view::draw_camera_header (entt::registry &registry,
     m_orbit_pivot = glm::vec3 (0.0F, 0.0F, 0.0F);
     m_editor_ctx->reset_editor_camera ();
 
-    wsl::comp::singl::editor_context &ed = *this->m_editor_ctx;
     ed.game_view_camera_mode
         = wsl::comp::singl::editor_context::game_view_cam_mode::engine_default;
     ed.game_view_camera_entity = entt::null;
+    ed.game_view_selected_camera = entt::null;
   }
 
   ImGui::SameLine ();
@@ -791,6 +880,7 @@ game_view::draw_camera_header (entt::registry &registry,
     ed.game_view_camera_mode
         = wsl::comp::singl::editor_context::game_view_cam_mode::engine_default;
     ed.game_view_camera_entity = entt::null;
+    ed.game_view_selected_camera = entt::null;
 
     const wsl::comp::world_transform &wt
         = registry.get<wsl::comp::world_transform> (

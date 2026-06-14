@@ -5,6 +5,8 @@
 #include "gfx/image.hpp"
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_manager.hpp"
+#include "wsl/comp/camera.hpp"
+#include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/hierarchy.hpp"
 #include "wsl/comp/prefab_instance.hpp"
 #include "wsl/comp/transform.hpp"
@@ -789,7 +791,18 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
 
     // --- Field value line below ---
     ImGui::PushItemWidth (-1.0f);
-    if (draw_meta_object ("##value", value, prefab_value, default_value)) {
+
+    // Special-case main_camera entity fields to show only camera entities.
+    bool field_changed = false;
+    if (data.type () == entt::resolve<entt::entity> ()
+        && id == entt::hashed_string{ "main_camera" }) {
+      field_changed = draw_main_camera_field (value);
+    } else {
+      field_changed
+          = draw_meta_object ("##value", value, prefab_value, default_value);
+    }
+
+    if (field_changed) {
       data.set (object, value);
       changed = true;
     }
@@ -807,6 +820,66 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
     }
   }
 
+  return changed;
+}
+
+bool
+inspector::draw_main_camera_field (entt::meta_any &object)
+{
+  auto &scene = *runtime_ctx->scene_manager.get_active ();
+  auto &registry = scene.get_registry ();
+
+  entt::entity current = object.cast<entt::entity> ();
+
+  const char *preview = "None";
+  if (current != entt::null && registry.valid (current)) {
+    preview = scene.get_entity_name (current).c_str ();
+  }
+
+  bool changed = false;
+  if (ImGui::BeginCombo ("##value", preview)) {
+    if (ImGui::Selectable ("None", current == entt::null)) {
+      object = entt::null;
+      changed = true;
+    }
+
+    auto cam_view = registry.view<wsl::comp::camera> ();
+    for (entt::entity const e : cam_view) {
+      wsl::comp::camera const &cam = cam_view.get<wsl::comp::camera> (e);
+      if (cam.only_for_editor) {
+        continue;
+      }
+      const std::string &name = scene.get_entity_name (e);
+      bool const selected = (e == current);
+      if (ImGui::Selectable (name.c_str (), selected)) {
+        object = e;
+        changed = true;
+      }
+      if (selected) {
+        ImGui::SetItemDefaultFocus ();
+      }
+    }
+
+    auto cam2d_view = registry.view<wsl::comp::camera_2d> ();
+    for (entt::entity const e : cam2d_view) {
+      wsl::comp::camera_2d const &cam2d
+          = cam2d_view.get<wsl::comp::camera_2d> (e);
+      if (cam2d.only_for_editor) {
+        continue;
+      }
+      const std::string &name = scene.get_entity_name (e);
+      bool const selected = (e == current);
+      if (ImGui::Selectable (name.c_str (), selected)) {
+        object = e;
+        changed = true;
+      }
+      if (selected) {
+        ImGui::SetItemDefaultFocus ();
+      }
+    }
+
+    ImGui::EndCombo ();
+  }
   return changed;
 }
 

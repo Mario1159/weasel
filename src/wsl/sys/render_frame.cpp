@@ -6,6 +6,8 @@
 #include "../comp/singl/runtime_context.hpp"
 #include "../comp/world_transform.hpp"
 #include "comp/camera.hpp"
+#include "comp/camera_2d.hpp"
+#include "comp/transform_2d.hpp"
 #include "gfx/scene_renderer.hpp"
 #include <cstdint>
 #include <entt/entity/entity.hpp>
@@ -153,6 +155,24 @@ sys::build_camera_view_state (entt::registry &registry,
     out.view = glm::inverse (wtm);
     out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
                                  cam.near, cam.far);
+    out.view_proj = out.proj * out.view;
+  } else if (camera_entity != entt::null
+             && registry.all_of<comp::camera_2d, comp::transform_2d> (
+                 camera_entity)) {
+    const auto &cam2d = registry.get<comp::camera_2d> (camera_entity);
+    const auto &t2d = registry.get<comp::transform_2d> (camera_entity);
+
+    float const vp_w = static_cast<float> (window_width);
+    float const vp_h = static_cast<float> (window_height);
+    float const half_w = vp_w * 0.5F / cam2d.zoom;
+    float const half_h = vp_h * 0.5F / cam2d.zoom;
+
+    out.valid = true;
+    out.world_position = glm::vec3 (t2d.position.x, t2d.position.y, 0.0F);
+    out.view = glm::mat4 (1.0F);
+    out.proj = glm::ortho (t2d.position.x - half_w, t2d.position.x + half_w,
+                           t2d.position.y + half_h, t2d.position.y - half_h,
+                           -1.0F, 1.0F);
     out.view_proj = out.proj * out.view;
   } else {
     // Fallback camera

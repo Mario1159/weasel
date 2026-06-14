@@ -53,8 +53,12 @@ struct rendering_manager : singleton_component
   float shadow_bias = 0.0025F;
   float shadow_strength = 1.0F;
 
-  //! Active viewports for this scene. If empty, the scene renders full-screen.
+  //! Active viewports for this scene. If empty, a fullscreen root viewport is
+  //! used.
   std::vector<gfx::viewport> viewports;
+
+  //! The main camera entity for the scene.
+  entt::entity main_camera = entt::null;
 
   gfx::scene_renderer &
   ensure_renderer (wsl::gfx::render_window &window,
@@ -87,8 +91,8 @@ struct rendering_manager : singleton_component
                       wsl::rsc::resource_manager *res_mgr)
   {
     if (!renderer_2d) {
-      renderer_2d = std::make_unique<gfx::batch_renderer_2d> (window, &render_ctx,
-                                                            res_mgr);
+      renderer_2d = std::make_unique<gfx::batch_renderer_2d> (
+          window, &render_ctx, res_mgr);
     }
 
     return *renderer_2d;
@@ -240,7 +244,12 @@ struct rendering_manager : singleton_component
         .data<&comp::singl::rendering_manager::shadow_strength> (
             "shadow_strength"_hs)
         .custom<comp::meta_info> (meta_info{
-            "Shadow Strength", "Default shadow darkness multiplier.", "" });
+            "Shadow Strength", "Default shadow darkness multiplier.", "" })
+
+        .data<&comp::singl::rendering_manager::main_camera> ("main_camera"_hs)
+        .custom<comp::meta_info> (
+            meta_info{ "Main Camera",
+                       "Active camera entity used for the game view.", "" });
 
     entt::meta_factory<rsc::cubemap_id> ()
         .type (entt::type_hash<rsc::cubemap_id>::value ())

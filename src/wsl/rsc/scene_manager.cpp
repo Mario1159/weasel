@@ -93,7 +93,9 @@ rsc::scene_manager::set_active (scene *scene_ptr)
       const entt::entity active_camera
           = resolve_active_game_camera (*m_active_scene);
       m_active_scene->camera = active_camera;
-      runtime_ctx->game_camera = active_camera;
+      if (ctx.contains<comp::singl::rendering_manager> ()) {
+        ctx.get<comp::singl::rendering_manager> ().main_camera = active_camera;
+      }
 
       if (ctx.contains<comp::singl::ui_manager *> ()) {
         auto &ui = *ctx.get<comp::singl::ui_manager *> ();

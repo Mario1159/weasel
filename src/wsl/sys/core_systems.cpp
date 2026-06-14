@@ -14,8 +14,10 @@
 #include <SDL3/SDL_events.h>
 #include <algorithm>
 #include <entt/entity/fwd.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #ifdef WEASEL_BUILD_EDITOR
@@ -23,6 +25,11 @@
 #endif
 #include "../comp/singl/rendering_manager.hpp"
 #include "../comp/singl/runtime_context.hpp"
+#include "../comp/camera.hpp"
+#include "../comp/camera_2d.hpp"
+#include "../comp/hierarchy.hpp"
+#include "../comp/subviewport.hpp"
+#include "../comp/transform_2d.hpp"
 #include "render_frame.hpp"
 
 #include <utility>
@@ -394,6 +401,17 @@ core_systems::render_impl (wsl::gfx::render_window &window,
     }
   }
 
+  // Snapshot the 2D draw queue so it can be replayed per-viewport.
+  std::vector<gfx::batch_renderer_2d::draw_command> saved_2d_queue;
+  if (render_2d_sys) {
+    auto *r = m_runtime_ctx->get_active_rendering_manager ();
+    if (r != nullptr) {
+      if (auto *r2d = r->try_renderer_2d ()) {
+        saved_2d_queue = r2d->snapshot_queue ();
+      }
+    }
+  }
+
   m_runtime_ctx->render_ctx.begin_cmd ();
   if (!m_runtime_ctx->render_ctx.has_active_frame ()) {
     return;
@@ -440,6 +458,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
   gfx::scene_renderer *renderer = nullptr;
   sys::render_submission submission{};
 
+  std::vector<gfx::viewport> active_viewports;
+
   if ((scene != nullptr)
       && sys::build_render_frame (registry, *m_runtime_ctx, submission)) {
     apply_rendering_manager (registry, *m_runtime_ctx);
@@ -464,57 +484,114 @@ core_systems::render_impl (wsl::gfx::render_window &window,
       lighting_sys->render_record_draw_cmd (&registry);
     }
 
-    // Check if we have active viewports.
+    // Collect subviewport components from the scene.
+    // Always create a root viewport first (index 0) for cameras without
+    // a subviewport ancestor. Subviewports are added after.
     auto *rendering = m_runtime_ctx->get_active_rendering_manager ();
-    bool const has_viewports
-        = (rendering != nullptr) && !rendering->viewports.empty ();
+    // Map subviewport entity → index in active_viewports
+    std::unordered_map<entt::entity, size_t> viewport_entity_to_index;
+
+    // Root viewport (fullscreen) - cameras without subviewport ancestor use
+    // this
+    if (rendering != nullptr && !rendering->viewports.empty ()) {
+      active_viewports = rendering->viewports;
+    } else {
+      active_viewports.emplace_back (); // fullscreen root viewport
+    }
+
+    auto sv_view = registry.view<comp::subviewport> ();
+    if (!sv_view.empty ()) {
+      for (entt::entity const e : sv_view) {
+        auto const &sv = sv_view.get<comp::subviewport> (e);
+        gfx::viewport vp{};
+        vp.x = sv.x;
+        vp.y = sv.y;
+        vp.width = sv.width;
+        vp.height = sv.height;
+        vp.clear_color = sv.clear_color;
+        vp.clear_depth = sv.clear_depth;
+        vp.clear_color_value.r = sv.clear_r;
+        vp.clear_color_value.g = sv.clear_g;
+        vp.clear_color_value.b = sv.clear_b;
+        vp.clear_color_value.a = sv.clear_a;
+        viewport_entity_to_index[e] = active_viewports.size ();
+        active_viewports.push_back (vp);
+      }
+      // Walk up hierarchy from each camera to find its parent subviewport.
+      auto cam_view = registry.view<comp::camera> ();
+      for (entt::entity const e : cam_view) {
+        entt::entity ancestor = e;
+        while (true) {
+          auto *h = registry.try_get<comp::hierarchy> (ancestor);
+          if (h == nullptr || h->parent == entt::null) {
+            break;
+          }
+          ancestor = h->parent;
+          auto it = viewport_entity_to_index.find (ancestor);
+          if (it != viewport_entity_to_index.end ()) {
+            active_viewports[it->second].camera = e;
+            break;
+          }
+        }
+      }
+      // Also handle 2D cameras for subviewport assignment.
+      auto cam2d_view = registry.view<comp::camera_2d> ();
+      for (entt::entity const e : cam2d_view) {
+        entt::entity ancestor = e;
+        while (true) {
+          auto *h = registry.try_get<comp::hierarchy> (ancestor);
+          if (h == nullptr || h->parent == entt::null) {
+            break;
+          }
+          ancestor = h->parent;
+          auto it = viewport_entity_to_index.find (ancestor);
+          if (it != viewport_entity_to_index.end ()) {
+            active_viewports[it->second].camera = e;
+            break;
+          }
+        }
+      }
+    }
 
     uint32_t win_w = 0;
     uint32_t win_h = 0;
     m_runtime_ctx->window.get_size (win_w, win_h);
 
-    if (has_viewports) {
-      // Single 3D pass for all viewports.
-      window.begin_3d_pass ();
-
-      for (size_t i = 0; i < rendering->viewports.size (); ++i) {
-        auto const &vp = rendering->viewports[i];
-        window.apply_viewport (vp);
-
-        // Build the view state for this viewport.
-        auto view = sys::build_camera_view_state (
-            registry, vp.camera, scene->camera, vp, win_w, win_h);
-        renderer->begin_frame (view);
-
-        if (skybox_sys) {
-          skybox_sys->render_record_draw_cmd (&registry);
-        }
-        if (render_3d_sys) {
-          render_3d_sys->render_record_draw_cmd (&registry);
-        }
-        if (physics_sys) {
-          physics_sys->render_record_draw_cmd (&registry);
-        }
-
-        if (scene != nullptr) {
-          for (auto &sys : scene->systems) {
-            if (sys == nullptr) {
-              continue;
-            }
-            if (std::binary_search (core_ids.begin (), core_ids.end (),
-                                    sys->get_type_id ())) {
-              continue;
-            }
-            sys->render_record_draw_cmd (&registry);
-          }
+    // Determine the effective camera to use as fallback for each viewport.
+    // In the editor this respects the game view toolbar combo selection;
+    // otherwise it falls back to the rendering_manager's main_camera.
+    entt::entity fallback_cam = scene->camera;
+#ifdef WEASEL_BUILD_EDITOR
+    if (m_editor_ctx != nullptr) {
+      wsl::comp::singl::editor_context::resolved_camera editor_rc{};
+      if (m_editor_ctx->resolve_game_view_camera (registry, scene, editor_rc)) {
+        if (editor_rc.entity != entt::null) {
+          fallback_cam = editor_rc.entity;
         }
       }
+    }
+#endif
 
-      window.end_3d_pass ();
-      renderer->end_frame ();
-    } else {
-      // Full-screen rendering (legacy path).
-      window.begin_3d_pass ();
+    // Single 3D pass for all viewports.
+    window.begin_3d_pass ();
+
+    for (size_t i = 0; i < active_viewports.size (); ++i) {
+      auto const &vp = active_viewports[i];
+      window.apply_viewport (vp);
+
+      // Does this viewport use a different camera than the submission?
+      // If vp.camera is set (from subviewport hierarchy) AND it differs from
+      // the fallback (the camera used by build_render_frame / submission.view),
+      // we need a per-viewport begin_frame. Otherwise reuse submission.view
+      // to keep the shadow maps and main scene on the exact same camera.
+      bool const has_own_camera
+          = (vp.camera != entt::null) && (vp.camera != fallback_cam);
+
+      if (has_own_camera) {
+        gfx::scene_renderer::view_state view = sys::build_camera_view_state (
+            registry, vp.camera, entt::null, vp, win_w, win_h);
+        renderer->begin_frame (view);
+      }
 
       if (skybox_sys) {
         skybox_sys->render_record_draw_cmd (&registry);
@@ -538,17 +615,49 @@ core_systems::render_impl (wsl::gfx::render_window &window,
           sys->render_record_draw_cmd (&registry);
         }
       }
+    }
 
-      window.end_3d_pass ();
-      renderer->end_frame ();
+    window.end_3d_pass ();
+    renderer->end_frame ();
+  }
+
+  // Per-viewport 2D passes (no clearing).
+  if (render_2d_sys && !saved_2d_queue.empty ()
+      && m_runtime_ctx->get_active_rendering_manager () != nullptr) {
+    auto *r2d
+        = m_runtime_ctx->get_active_rendering_manager ()->try_renderer_2d ();
+    if (r2d != nullptr) {
+      uint32_t win_w, win_h;
+      m_runtime_ctx->window.get_size (win_w, win_h);
+      // Determine active viewport list for 2D pass.
+      std::vector<gfx::viewport> const &active_vps
+          = (active_viewports.empty ()) ? std::vector<gfx::viewport>{ {} }
+                                        : active_viewports;
+      for (size_t i = 0; i < active_vps.size (); ++i) {
+        window.begin_3d_pass (false, false);
+        window.apply_viewport (active_vps[i]);
+        r2d->restore_queue (saved_2d_queue);
+
+        entt::entity const cam_entity = active_vps[i].camera;
+        if (cam_entity != entt::null
+            && registry.all_of<comp::camera_2d, comp::transform_2d> (
+                cam_entity)) {
+          auto const &cam2d = registry.get<comp::camera_2d> (cam_entity);
+          auto const &t2d = registry.get<comp::transform_2d> (cam_entity);
+          float const vp_w = static_cast<float> (win_w);
+          float const vp_h = static_cast<float> (win_h);
+          float const half_w = vp_w * 0.5F / cam2d.zoom;
+          float const half_h = vp_h * 0.5F / cam2d.zoom;
+          glm::mat4 const proj = glm::ortho (
+              t2d.position.x - half_w, t2d.position.x + half_w,
+              t2d.position.y + half_h, t2d.position.y - half_h, -1.0F, 1.0F);
+          r2d->set_projection (proj);
+        }
+        render_2d_sys->render_record_draw_cmd (&registry);
+        window.end_3d_pass ();
+      }
     }
   }
-
-  window.begin_3d_pass (false, false);
-  if (render_2d_sys) {
-    render_2d_sys->render_record_draw_cmd (&registry);
-  }
-  window.end_3d_pass ();
 
   if (render_ui_sys) {
     render_ui_sys->render_record_draw_cmd (&registry);

@@ -3,6 +3,7 @@
 #include "renderer.hpp"
 #include "wsl/rsc/resource_ids.hpp"
 #include <glm/glm.hpp>
+#include <optional>
 #include <vector>
 #include <map>
 
@@ -46,8 +47,18 @@ public:
   //! Submits a sprite for rendering in the current frame.
   void submit (const draw_command &cmd);
 
+  //! Overrides the orthographic projection used during flush.
+  //! Default is glm::ortho(0, w, h, 0, -1, 1) for screen-space rendering.
+  void set_projection (const glm::mat4 &proj);
+
   //! Renders all submitted sprites and clears the queue.
   void flush ();
+
+  //! Returns a copy of the current draw queue (for multi-viewport replay).
+  [[nodiscard]] std::vector<draw_command> snapshot_queue () const;
+
+  //! Replaces the draw queue with a previously saved snapshot.
+  void restore_queue (const std::vector<draw_command> &cmds);
 
 private:
   void create_pipeline ();
@@ -64,7 +75,8 @@ private:
 
   std::vector<draw_command> m_queue;
   std::vector<vertex_2d> m_vertices;
-  
+  std::optional<glm::mat4> m_override_projection;
+
   SDL_GPUGraphicsPipeline *m_pipeline = nullptr;
   SDL_GPUSampler *m_sampler = nullptr;
   SDL_GPUBuffer *m_vbo = nullptr;

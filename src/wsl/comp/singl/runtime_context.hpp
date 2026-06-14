@@ -59,10 +59,6 @@ public:
   /*! \brief Register reflection metadata for this class. */
   static void register_meta ();
 
-  /*! \brief ImGui inspector for runtime context state. */
-  bool custom_inspect (const char *label,
-                       comp::singl::runtime_context *runtime_ctx_ptr);
-
   /*! \brief Returns the active rendering manager from the current scene. */
   rendering_manager *get_active_rendering_manager () const;
 
@@ -163,7 +159,6 @@ public:
   bool m_headless = false;
   std::unique_ptr<sys::core_systems> core_systems;
 
-  entt::entity game_camera = entt::null;
   bool is_running = false;
   bool in_play_session = false;
 

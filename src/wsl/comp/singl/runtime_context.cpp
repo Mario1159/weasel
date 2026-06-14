@@ -3,7 +3,6 @@
 #include "../../rsc/resource_manager.hpp"
 #include "../../rsc/scene.hpp"
 #include "../../rsc/scene_snapshot_serializer.hpp"
-#include "../camera.hpp"
 #include "comp/component_meta.hpp"
 #include "comp/singl/physics_manager.hpp"
 #include "comp/singl/rendering_manager.hpp"
@@ -24,7 +23,6 @@
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/factory.hpp>
-#include <imgui.h>
 #include <memory>
 #include <utility>
 
@@ -80,80 +78,7 @@ comp::singl::runtime_context::register_meta ()
       .type (entt::type_hash<comp::singl::runtime_context>::value ())
       .custom<comp::meta_info> (comp::meta_info{
           "Runtime Context", "Global state for the running game application.",
-          "" })
-      .func<&comp::singl::runtime_context::custom_inspect> (
-          "custom_inspect"_hs);
-}
-
-bool
-comp::singl::runtime_context::custom_inspect (
-    const char *label, comp::singl::runtime_context *runtime_ctx_ptr)
-{
-  (void)label;
-  comp::singl::runtime_context &ctx
-      = (runtime_ctx_ptr != nullptr) ? *runtime_ctx_ptr : *this;
-
-  rsc::scene *scene = ctx.scene_manager.get_active ();
-  if (scene == nullptr) {
-    ImGui::TextDisabled ("No active scene.");
-    return false;
-  }
-
-  bool changed = false;
-  entt::registry &registry = scene->get_registry ();
-
-  // If scene->camera changes, we sync here if they were different,
-  // but let's just use scene->camera as the source of truth for now
-  // or add game_camera as its own thing.
-  // The user asked for "game camera" UI field in runtime context.
-
-  entt::entity const current_cam = ctx.game_camera;
-  const char *preview = "None";
-  if (current_cam != entt::null) {
-    preview = scene->get_entity_name (current_cam).c_str ();
-  }
-
-  if (ImGui::BeginCombo ("Game Camera", preview)) {
-    if (ImGui::Selectable ("None", current_cam == entt::null)) {
-      ctx.game_camera = entt::null;
-      scene->camera = entt::null;
-      changed = true;
-    }
-
-    auto view = registry.view<comp::camera> ();
-    for (entt::entity const e : view) {
-      comp::camera const &cam = view.get<comp::camera> (e);
-      if (cam.only_for_editor) {
-        continue;
-      }
-
-      const std::string &name = scene->get_entity_name (e);
-      bool const selected = (e == current_cam);
-
-      if (ImGui::Selectable (name.c_str (), selected)) {
-        ctx.game_camera = e;
-        scene->camera = e; // Sync with scene camera
-        changed = true;
-      }
-
-      if (selected) {
-        ImGui::SetItemDefaultFocus ();
-      }
-    }
-    ImGui::EndCombo ();
-  }
-
-  // Also sync from scene back to context if they diverge
-  if (scene->camera != ctx.game_camera) {
-    ctx.game_camera = scene->camera;
-  }
-
-  ImGui::Separator ();
-  ImGui::Value ("Is Running", ctx.is_running);
-  ImGui::Value ("In Play Session", ctx.in_play_session);
-  ImGui::Value ("Saved Scene Count", (int)ctx.scene_save_states.size ());
-
-  return changed;
+          "" });
 }
 
 comp::singl::runtime_context::sdl_init_guard::sdl_init_guard (bool headless)
@@ -390,11 +315,16 @@ comp::singl::runtime_context::stop ()
   }
 
   // After restoring the scene, its camera entity may have changed (or been
-  // recreated with a new identifier), so sync the runtime game_camera to the
-  // active scene's camera so that systems like MouseRotateSystem see a
-  // consistent value on the next play session.
+  // recreated with a new identifier), so sync the rendering manager's
+  // main_camera to the active scene's camera so that systems like
+  // MouseRotateSystem see a consistent value on the next play session.
   if (rsc::scene *active_scene = scene_manager.get_active ()) {
-    game_camera = active_scene->camera;
+    auto &reg = active_scene->get_registry ();
+    auto &ctx = reg.ctx ();
+    if (ctx.contains<comp::singl::rendering_manager> ()) {
+      ctx.get<comp::singl::rendering_manager> ().main_camera
+          = active_scene->camera;
+    }
   }
 
   scene_save_states.clear ();

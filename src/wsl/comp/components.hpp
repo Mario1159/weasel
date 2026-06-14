@@ -2,6 +2,7 @@
 
 #include "area3d.hpp"
 #include "audio.hpp"
+#include "camera_2d.hpp"
 #include "camera.hpp"
 #include "character_body.hpp"
 #include "directional_light.hpp"
@@ -14,6 +15,8 @@
 #include "singl/ui_manager.hpp"
 #include "singl/physics_manager.hpp"
 #include "singl/rendering_manager.hpp"
+#include "subviewport.hpp"
+#include "transform_2d.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "spot_light.hpp"
 #include "transform.hpp"
@@ -41,15 +44,15 @@ template <typename... Types> struct for_each_type<entt::type_list<Types...>>
 
 using component_types
     = entt::type_list<hierarchy, world_transform, transform, model_instance_3d,
-                      camera, point_light, spot_light, directional_light,
-                      rigid_body, area, character_body, audio,
-                      prefab_instance, sprite_2d>;
+                      camera, camera_2d, point_light, spot_light,
+                      directional_light, rigid_body, area, character_body,
+                      audio, prefab_instance, sprite_2d, subviewport,
+                      transform_2d>;
 
 using singleton_types
     = entt::type_list<comp::singl::runtime_context, comp::singl::editor_context,
                       rsc::scene_manager, rsc::resource_manager_view,
-                      comp::singl::ui_manager,
-                      comp::singl::rendering_manager,
+                      comp::singl::ui_manager, comp::singl::rendering_manager,
                       comp::singl::physics_manager>;
 
 } // namespace comp

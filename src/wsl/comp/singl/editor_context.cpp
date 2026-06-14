@@ -5,7 +5,9 @@
 #include "debug/debug_renderer.hpp"
 #include "input.hpp"
 #include "wsl/comp/camera.hpp"
+#include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/comp/transform_2d.hpp"
 #include "wsl/rsc/scene.hpp"
 #include "wsl/log/log.hpp"
 
@@ -272,14 +274,27 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
 
   bool const running = runtime_ctx.is_running;
 
-  if (running && scene->camera != entt::null) {
-    out.entity = scene->camera;
-    out.using_engine_default = false;
-  } else if (game_view_camera_mode == game_view_cam_mode::entity
-             && game_view_camera_entity != entt::null) {
-    out.entity = game_view_camera_entity;
+  if (running) {
+    // During play mode, always use the rendering manager's main camera.
+    auto &scene_reg = scene->get_registry ();
+    auto &ctx = scene_reg.ctx ();
+    if (ctx.contains<comp::singl::rendering_manager> ()) {
+      auto &rendering = ctx.get<comp::singl::rendering_manager> ();
+      if (rendering.main_camera != entt::null) {
+        out.entity = rendering.main_camera;
+        out.using_engine_default = false;
+      } else {
+        out.using_engine_default = true;
+      }
+    } else {
+      out.using_engine_default = true;
+    }
+  } else if (game_view_selected_camera != entt::null) {
+    // A specific camera is selected in the toolbar combo.
+    out.entity = game_view_selected_camera;
     out.using_engine_default = false;
   } else {
+    // "Default" in combo → use editor camera (engine default) in edit mode.
     out.using_engine_default = true;
   }
 
@@ -297,17 +312,40 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
                             editor_camera.near, editor_camera.far);
     out.valid = true;
   } else {
-    if (registry.valid (out.entity)
-        && registry.all_of<wsl::comp::camera> (out.entity)) {
-      const auto &cam = registry.get<wsl::comp::camera> (out.entity);
-      if (registry.all_of<wsl::comp::world_transform> (out.entity)) {
-        const auto &wt = registry.get<wsl::comp::world_transform> (out.entity);
-        glm::mat4 const wtm = wt.value;
-        out.world_pos = glm::vec3 (wtm[3]);
-        out.view = glm::inverse (wtm);
-        out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
-                                     cam.near, cam.far);
-        out.valid = true;
+    if (registry.valid (out.entity)) {
+      if (registry.all_of<wsl::comp::camera> (out.entity)) {
+        const auto &cam = registry.get<wsl::comp::camera> (out.entity);
+        if (registry.all_of<wsl::comp::world_transform> (out.entity)) {
+          const auto &wt
+              = registry.get<wsl::comp::world_transform> (out.entity);
+          glm::mat4 const wtm = wt.value;
+          out.world_pos = glm::vec3 (wtm[3]);
+          out.view = glm::inverse (wtm);
+          out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
+                                       cam.near, cam.far);
+          out.valid = true;
+        }
+      } else if (registry.all_of<wsl::comp::camera_2d> (out.entity)) {
+        const auto &cam2d = registry.get<wsl::comp::camera_2d> (out.entity);
+        if (registry.all_of<wsl::comp::transform_2d> (out.entity)) {
+          const auto &t2d = registry.get<wsl::comp::transform_2d> (out.entity);
+          uint32_t win_w, win_h;
+          runtime_ctx.window.get_size (win_w, win_h);
+          float const vp_w = cam2d.use_window_as_viewport
+                                 ? static_cast<float> (win_w)
+                                 : cam2d.viewport_size.x;
+          float const vp_h = cam2d.use_window_as_viewport
+                                 ? static_cast<float> (win_h)
+                                 : cam2d.viewport_size.y;
+          float const half_w = vp_w * 0.5F / cam2d.zoom;
+          float const half_h = vp_h * 0.5F / cam2d.zoom;
+          out.world_pos = glm::vec3 (t2d.position.x, t2d.position.y, 0.0F);
+          out.view = glm::mat4 (1.0F);
+          out.proj = glm::ortho (
+              t2d.position.x - half_w, t2d.position.x + half_w,
+              t2d.position.y + half_h, t2d.position.y - half_h, -1.0F, 1.0F);
+          out.valid = true;
+        }
       }
     }
   }
