@@ -82,7 +82,7 @@ float DistributionGGX(float3 N, float3 H, float roughness)
 }
 
 [shader("fragment")]
-float4 main(PSInput input) : SV_Target
+float4 fsMain(PSInput input) : SV_Target
 {
     float2 uv = input.uv;
 

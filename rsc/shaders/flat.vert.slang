@@ -14,7 +14,7 @@ struct VSOutput {
 };
 
 [shader("vertex")]
-VSOutput main(VSInput input)
+VSOutput vsMain(VSInput input)
 {
     VSOutput o;
     o.pos = mul(u_VP, float4(input.pos, 1.0));

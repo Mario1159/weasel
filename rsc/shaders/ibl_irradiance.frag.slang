@@ -40,7 +40,7 @@ float3 FaceUVToDir(int face, float2 uv)
 // Cosine-weighted hemisphere sampling around N.
 // We do a simple numerical integration over phi/theta (good enough for low-res irradiance maps).
 [shader("fragment")]
-float4 main(PSInput input) : SV_Target
+float4 fsMain(PSInput input) : SV_Target
 {
     float2 uv = input.uv;
     // If your fullscreen triangle doesn't provide uv, you must derive it; same note as BRDF.

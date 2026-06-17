@@ -144,7 +144,7 @@ float3 sunWithBloom(float3 rayDir, float3 sunDir) {
 }
 
 [shader("fragment")]
-float4 main(PSInput input) : SV_Target {
+float4 fsMain(PSInput input) : SV_Target {
     float3 rayDir = normalize(input.dir);
     float3 sunDir = normalize(-u_SunDir);
 

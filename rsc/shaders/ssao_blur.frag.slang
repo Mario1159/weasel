@@ -15,7 +15,7 @@ Texture2D u_AOTex : register(t0, space2);
 SamplerState u_Samplers[1] : register(s0, space2);
 
 [shader("fragment")]
-float main(FSIn input) : SV_Target0
+float fsMain(FSIn input) : SV_Target0
 {
     float sum = 0.0;
     float wsum = 0.0;

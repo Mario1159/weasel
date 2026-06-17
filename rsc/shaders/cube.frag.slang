@@ -439,7 +439,7 @@ float3 SoftThreshold(float3 c, float threshold, float knee)
 //////////////////////////////////////
 
 [shader("fragment")]
-PSOut main(PSInput input)
+PSOut fsMain(PSInput input)
 {
     int u_NumPoint = u_Counts.x;
     int u_NumDir   = u_Counts.y;

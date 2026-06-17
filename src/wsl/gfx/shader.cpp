@@ -15,6 +15,19 @@ namespace wsl
 namespace gfx
 {
 
+static const char *
+entrypoint_for_stage (SDL_GPUShaderStage stage)
+{
+  switch (stage) {
+  case SDL_GPU_SHADERSTAGE_VERTEX:
+    return "vsMain";
+  case SDL_GPU_SHADERSTAGE_FRAGMENT:
+    return "fsMain";
+  default:
+    return "main";
+  }
+}
+
 SDL_GPUShader *
 shader::load_from_manager (SDL_GPUDevice *device,
                            rsc::resource_manager *res_mgr, rsc::shader_id id,
@@ -34,7 +47,7 @@ shader::load_from_manager (SDL_GPUDevice *device,
   info.code = handle->bytecode.data ();
   info.code_size = static_cast<Uint32> (handle->bytecode.size ());
   info.stage = stage;
-  info.entrypoint = "main";
+  info.entrypoint = entrypoint_for_stage (stage);
   info.format = native_format ();
 
   info.num_uniform_buffers = num_uniform_buffers;
@@ -62,7 +75,7 @@ shader::load (SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage,
   info.code = static_cast<Uint8 *> (data);
   info.code_size = static_cast<Uint32> (size);
   info.stage = stage;
-  info.entrypoint = "main";
+  info.entrypoint = entrypoint_for_stage (stage);
   info.format = native_format ();
 
   // Use caller-provided reflection counts (required for IBL + other variants).
@@ -93,7 +106,7 @@ shader::load_ui_shader (SDL_GPUDevice *device, const char *path,
   info.code = static_cast<Uint8 *> (data);
   info.code_size = static_cast<Uint32> (size);
   info.stage = stage;
-  info.entrypoint = "main";
+  info.entrypoint = entrypoint_for_stage (stage);
   info.format = native_format ();
 
   info.num_uniform_buffers = 1;
@@ -122,7 +135,7 @@ shader::load_skybox_shader (SDL_GPUDevice *device, const char *path,
   info.code = static_cast<Uint8 *> (data);
   info.code_size = static_cast<Uint32> (size);
   info.stage = stage;
-  info.entrypoint = "main";
+  info.entrypoint = entrypoint_for_stage (stage);
   info.format = native_format ();
 
   if (stage == SDL_GPU_SHADERSTAGE_VERTEX) {

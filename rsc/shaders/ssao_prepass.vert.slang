@@ -24,7 +24,7 @@ cbuffer Matrices : register(b0, space1)
 };
 
 [shader("vertex")]
-VSOut main(VSInput input)
+VSOut vsMain(VSInput input)
 {
     VSOut o;
 

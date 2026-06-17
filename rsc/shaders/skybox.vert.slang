@@ -10,7 +10,7 @@ struct VSOutput {
 };
 
 [shader("vertex")]
-VSOutput main(uint id : SV_VertexID)
+VSOutput vsMain(uint id : SV_VertexID)
 {
     // Fullscreen triangle in clip space
     float2 pos;

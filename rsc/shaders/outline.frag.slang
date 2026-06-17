@@ -16,7 +16,7 @@ struct PSOutput
 };
 
 [shader("fragment")]
-PSOutput main(PSInput input)
+PSOutput fsMain(PSInput input)
 {
     PSOutput o;
     o.color0 = u_OutlineColor;

@@ -1,5 +1,5 @@
 [shader("fragment")]
-void main()
+void fsMain()
 {
     // depth-only
 }

@@ -5,7 +5,7 @@ struct PSOut
 };
 
 [shader("fragment")]
-PSOut main(float4 color : COLOR0)
+PSOut fsMain(float4 color : COLOR0)
 {
     PSOut o;
     o.color = color;

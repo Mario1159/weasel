@@ -37,7 +37,7 @@ float3 ReconstructViewPos(float2 uv, float linearDepth)
 }
 
 [shader("fragment")]
-float main(FSIn input) : SV_Target0
+float fsMain(FSIn input) : SV_Target0
 {
     float4 nd = u_NormalDepthTex.Sample(u_Samplers[0], input.uv);
     float3 N = normalize(nd.xyz);

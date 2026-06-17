@@ -441,6 +441,7 @@ else()
     set(SLANG_SHADER_TARGET spirv)
     set(SHADER_EXT ".spv")
     set(SLANG_DXC_FLAGS "")
+    set(SLANG_SPIRV_FLAGS "-fvk-use-entrypoint-name")
 endif()
 
 if(WIN32)
@@ -457,7 +458,7 @@ foreach(SHADER_FILE IN LISTS VERTEX_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.vert.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_VERT_PROFILE} -o "${OUTPUT_FILE}" -fvk-t-shift 0 0 -fvk-s-shift 0 0 -fvk-b-shift 0 1 -warnings-disable 40100 ${SLANG_DXC_FLAGS}
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_VERT_PROFILE} -entry vsMain -o "${OUTPUT_FILE}" -fvk-t-shift 0 0 -fvk-s-shift 0 0 -fvk-b-shift 0 1 ${SLANG_DXC_FLAGS} ${SLANG_SPIRV_FLAGS}
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM
@@ -470,7 +471,7 @@ foreach(SHADER_FILE IN LISTS FRAGMENT_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.frag.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_FRAG_PROFILE} -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 -warnings-disable 40100 ${SLANG_DXC_FLAGS}
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_FRAG_PROFILE} -entry fsMain -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 ${SLANG_DXC_FLAGS} ${SLANG_SPIRV_FLAGS}
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
         VERBATIM

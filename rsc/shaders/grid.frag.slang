@@ -33,7 +33,7 @@ float getGrid(float2 worldXZ, float res)
 }
 
 [shader("fragment")]
-PSOut main(PSInput input)
+PSOut fsMain(PSInput input)
 {
     // 1. Performance: Early exit for Fog of War
     float d = length(input.worldPos - u_FogCenter);

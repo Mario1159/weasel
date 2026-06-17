@@ -24,7 +24,7 @@ struct PSIn {
 float3 tonemap_reinhard(float3 x) { return x / (1.0 + x); }
 
 [shader("fragment")]
-float4 main(PSIn i) : SV_Target
+float4 fsMain(PSIn i) : SV_Target
 {
     float2 uvScene = float2(i.uv.x, 1.0 - i.uv.y); // <-- flip only scene
     float2 uvBloom = i.uv;                         // <-- keep bloom as-is

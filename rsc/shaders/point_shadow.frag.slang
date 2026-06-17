@@ -17,7 +17,7 @@ cbuffer PointShadowParams : register(b0, space3)
 };
 
 [shader("fragment")]
-float main(PSInput input) : SV_Depth
+float fsMain(PSInput input) : SV_Depth
 {
     float3 lightPos = u_LightPosFar.xyz;
     float  farPlane = max(u_LightPosFar.w, 0.0001);

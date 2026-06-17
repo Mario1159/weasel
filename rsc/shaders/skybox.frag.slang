@@ -12,7 +12,7 @@ struct PSOut {
 };
 
 [shader("fragment")]
-PSOut main(PSInput input)
+PSOut fsMain(PSInput input)
 {
     float3 dir = normalize(input.dir);
 

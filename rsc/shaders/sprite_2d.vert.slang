@@ -17,7 +17,7 @@ cbuffer PushConstants : register(b0, space1)
 };
 
 [shader("vertex")]
-VSOutput main(VSInput input)
+VSOutput vsMain(VSInput input)
 {
     VSOutput o;
     o.pos = mul(projection, float4(input.position, 0.0, 1.0));

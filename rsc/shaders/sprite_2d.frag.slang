@@ -11,7 +11,7 @@ struct PSInput {
 };
 
 [shader("fragment")]
-float4 main(PSInput input) : SV_Target
+float4 fsMain(PSInput input) : SV_Target
 {
     float4 tex = u_Texture.Sample(u_Sampler, input.uv);
     return tex * input.color;

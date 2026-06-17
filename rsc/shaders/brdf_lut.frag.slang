@@ -110,7 +110,7 @@ float2 IntegrateBRDF(float NdotV, float roughness)
 }
 
 [shader("fragment")]
-float4 main(PSInput input) : SV_Target
+float4 fsMain(PSInput input) : SV_Target
 {
     float2 uv = saturate(input.uv);
 

@@ -4,7 +4,7 @@ struct VSOut {
 };
 
 [shader("vertex")]
-VSOut main(uint id : SV_VertexID)
+VSOut vsMain(uint id : SV_VertexID)
 {
     float2 p = (id == 0) ? float2(-1, -1) :
                (id == 1) ? float2(-1,  3) :

@@ -13,7 +13,7 @@ struct VSOutput {
 };
 
 [shader("vertex")]
-VSOutput main(VSInput v)
+VSOutput vsMain(VSInput v)
 {
     VSOutput o;
     float4 world = mul(u_Model, float4(v.pos, 1.0));

@@ -45,7 +45,7 @@ struct PSOut {
 };
 
 [shader("fragment")]
-PSOut main(PSInput input)
+PSOut fsMain(PSInput input)
 {
     float4 baseColor = u_BaseColorTex.Sample(u_Sampler, input.uv) * u_BaseColorFactor;
     float3 emissive  = u_EmissiveTex.Sample(u_Sampler, input.uv).rgb * u_EmissiveFactor;

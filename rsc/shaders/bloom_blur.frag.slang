@@ -10,7 +10,7 @@ cbuffer Blur : register(b0, space3)
 struct VSOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 
 [shader("fragment")]
-float4 main(VSOut i) : SV_Target
+float4 fsMain(VSOut i) : SV_Target
 {
     float2 o = u_TexelSize * u_Dir;
 

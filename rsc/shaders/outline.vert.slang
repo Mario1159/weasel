@@ -25,7 +25,7 @@ cbuffer OutlineParamsVS : register(b1, space1)
 };
 
 [shader("vertex")]
-VSOutput main(VSInput input)
+VSOutput vsMain(VSInput input)
 {
     VSOutput o;
 

@@ -33,7 +33,7 @@ float2 sample_equirect(float3 v) {
 }
 
 [shader("fragment")]
-float4 main(VSOutput input) : SV_Target {
+float4 fsMain(VSOutput input) : SV_Target {
     float3 dir = normalize(input.world_pos);
     float2 uv = sample_equirect(dir);
     return equirect_map.Sample(equirect_sampler, uv);

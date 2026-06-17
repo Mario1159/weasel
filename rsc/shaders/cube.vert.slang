@@ -25,7 +25,7 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput main(VSInput input)
+VSOutput vsMain(VSInput input)
 {
     VSOutput o;
 

@@ -11,7 +11,7 @@ cbuffer SceneData : register(b0, space1)
 };
 
 [shader("vertex")]
-VSOutput main(uint v_id : SV_VertexID)
+VSOutput vsMain(uint v_id : SV_VertexID)
 {
     // Generate a quad centered at the Fog of War center
     float2 positions[6] = {

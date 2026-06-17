@@ -13,7 +13,7 @@ struct PSOut {
 };
 
 [shader("fragment")]
-PSOut main(float4 pos : SV_Position)
+PSOut fsMain(float4 pos : SV_Position)
 {
     float2 p = pos.xy / max(u_CheckSizePx, 1.0);
     int cx = (int)floor(p.x);
