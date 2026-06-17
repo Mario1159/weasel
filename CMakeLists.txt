@@ -199,6 +199,18 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
+    NAME ImGizmo2D
+    GITHUB_REPOSITORY Miisan-png/ImGizmo2D
+    GIT_TAG main
+    DOWNLOAD_ONLY TRUE
+)
+
+if(DEFINED ImGizmo2D_SOURCE_DIR)
+    add_library(imgizmo2d INTERFACE)
+    target_include_directories(imgizmo2d INTERFACE ${ImGizmo2D_SOURCE_DIR})
+endif()
+
+CPMAddPackage(
     NAME ImGuiTextSelect
     GITHUB_REPOSITORY Mario1159/ImGuiTextSelect
     GIT_TAG main

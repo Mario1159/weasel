@@ -315,15 +315,16 @@ comp::singl::runtime_context::stop ()
   }
 
   // After restoring the scene, its camera entity may have changed (or been
-  // recreated with a new identifier), so sync the rendering manager's
-  // main_camera to the active scene's camera so that systems like
-  // MouseRotateSystem see a consistent value on the next play session.
+  // recreated with a new identifier). The rendering manager's render_viewport
+  // is a viewport entity (subviewport or root), not a camera, so we leave it
+  // as-is. The scene's camera is already restored by scene_manager::set_active.
   if (rsc::scene *active_scene = scene_manager.get_active ()) {
     auto &reg = active_scene->get_registry ();
     auto &ctx = reg.ctx ();
     if (ctx.contains<comp::singl::rendering_manager> ()) {
-      ctx.get<comp::singl::rendering_manager> ().main_camera
-          = active_scene->camera;
+      // render_viewport is a viewport entity, not a camera.
+      // Default to root viewport (entt::null) after stopping.
+      ctx.get<comp::singl::rendering_manager> ().render_viewport = entt::null;
     }
   }
 

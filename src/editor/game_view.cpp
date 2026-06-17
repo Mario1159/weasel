@@ -6,14 +6,19 @@
 #include "rsc/resource_ids.hpp"
 #include "wsl/comp/hierarchy.hpp"
 #include "wsl/comp/model_instance_3d.hpp"
+#include "wsl/comp/subviewport.hpp"
 #include "wsl/comp/camera_2d.hpp"
+#include "wsl/comp/sprite_2d.hpp"
+#include "wsl/comp/transform_2d.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
+#include "wsl/comp/singl/rendering_manager.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/world_transform.hpp"
 
 #include <ImGuizmo.h>
 #include "imviewguizmo.hpp"
+#include <ImGizmo2D.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -212,6 +217,71 @@ pick_entity_from_game_view (
   return best;
 }
 
+static entt::entity
+pick_entity_2d (entt::registry &registry,
+                const wsl::comp::singl::editor_context::resolved_camera &rc,
+                const ImVec2 &img_min, const ImVec2 &img_size,
+                const ImVec2 &mouse_pos, int tex_width, int tex_height)
+{
+  if (img_size.x <= 0.0F || img_size.y <= 0.0F || tex_width <= 0
+      || tex_height <= 0) {
+    return entt::null;
+  }
+
+  // Map mouse from displayed-image space back to window/texture space
+  float const scale_x = static_cast<float> (tex_width) / img_size.x;
+  float const scale_y = static_cast<float> (tex_height) / img_size.y;
+  float const px = (mouse_pos.x - img_min.x) * scale_x;
+  float const py = (mouse_pos.y - img_min.y) * scale_y;
+
+  float const ndc_x = (px / tex_width) * 2.0F - 1.0F;
+  float const ndc_y = 1.0F - (py / tex_height) * 2.0F;
+
+  glm::mat4 const inv_vp = glm::inverse (rc.vp);
+  glm::vec4 world = inv_vp * glm::vec4 (ndc_x, ndc_y, 0.0F, 1.0F);
+  world /= world.w;
+  glm::vec2 const mouse_world (world.x, world.y);
+
+  auto view = registry.view<wsl::comp::sprite_2d, wsl::comp::transform_2d> ();
+
+  entt::entity best = entt::null;
+  int best_z = std::numeric_limits<int>::min ();
+
+  for (entt::entity const entity : view) {
+    wsl::comp::sprite_2d const &sprite
+        = view.get<wsl::comp::sprite_2d> (entity);
+    wsl::comp::transform_2d const &t2d
+        = view.get<wsl::comp::transform_2d> (entity);
+
+    // Compute sprite AABB in world space (top-left origin)
+    glm::vec2 const position = t2d.position;
+    glm::vec2 const pivot = t2d.pivot;
+    glm::vec2 const size = sprite.size;
+    glm::vec2 const scale = t2d.scale;
+    glm::vec2 const pos = position - pivot * size * scale;
+    glm::vec2 const half_size = size * scale * 0.5F;
+    glm::vec2 const center = pos + half_size;
+
+    // Transform mouse into sprite-local space and apply inverse rotation
+    glm::vec2 const local = mouse_world - center;
+    float const rad = glm::radians (-t2d.rotation);
+    float const cos_r = std::cos (rad);
+    float const sin_r = std::sin (rad);
+    glm::vec2 const rotated (local.x * cos_r - local.y * sin_r,
+                             local.x * sin_r + local.y * cos_r);
+
+    if (std::abs (rotated.x) <= half_size.x
+        && std::abs (rotated.y) <= half_size.y) {
+      if (sprite.z_index > best_z) {
+        best_z = sprite.z_index;
+        best = entity;
+      }
+    }
+  }
+
+  return best;
+}
+
 static glm::vec3
 extract_translation (const glm::mat4 &m)
 {
@@ -346,260 +416,377 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   ImGui::Image ((ImTextureID)m_render_texture, size, ImVec2 (0, 0),
                 ImVec2 (1, 1));
 
-  // ---------- View gizmo (ENGINE DEFAULT camera only, paused) ----------
-  bool show_view_gizmo = false;
-  if ((m_editor_ctx != nullptr) && (m_runtime_ctx != nullptr)
-      && !m_runtime_ctx->is_running) {
-    wsl::comp::singl::editor_context const &ed = *this->m_editor_ctx;
-    show_view_gizmo = (ed.game_view_camera_mode
-                       == wsl::comp::singl::editor_context::game_view_cam_mode::
-                           engine_default);
-  }
-
-  if (show_view_gizmo) {
-    ImViewGuizmo::SetContext (0x47414D45U); // 'GAME'
-    ImViewGuizmo::BeginFrame ();
-
-    auto &style = ImViewGuizmo::GetStyle ();
-    style.scale = 0.30F;
-    style.animateSnap = true;
-
-    const float gizmo_diameter = 256.0F * style.scale;
-    const float half = gizmo_diameter * 0.5F;
-    const float pad = 8.0F;
-
-    // ImViewGuizmo expects center pos
-    ImVec2 const rotate_center (img_min.x + img_size.x - half - pad,
-                                img_min.y + half + pad);
-
-    ImVec2 const tool_anchor = rotate_center;
-
-    glm::vec3 cam_pos = m_editor_ctx->editor_cam_pos;
-    glm::quat cam_rot = m_editor_ctx->editor_cam_rot;
-
-    // Orbit around selected entity if possible, otherwise keep current
-    // pivot.
-    glm::vec3 pivot (0.0F);
-
-    if ((m_selection != nullptr) && m_selection->kind == selection_kind::entity
-        && m_selection->selected_entity != entt::null
-        && registry.all_of<wsl::comp::world_transform> (
-            m_selection->selected_entity)) {
-      const wsl::comp::world_transform &wt
-          = registry.get<wsl::comp::world_transform> (
-              m_selection->selected_entity);
-      pivot = extract_translation (wt.value);
-    }
-
-    m_orbit_pivot = pivot;
-
-    // Keep camera at a sane distance from the pivot; otherwise free-rotate
-    // has no leverage.
-    const float min_dist = 0.10F; // tweak (0.05..0.25)
-
-    glm::vec3 v = cam_pos - pivot;
-    float d2 = glm::dot (v, v);
-
-    if (d2 < min_dist * min_dist) {
-      if (d2 < 1e-8F) {
-        // Push back using the camera forward direction if possible.
-        glm::vec3 forward = cam_rot * glm::vec3 (0.0F, 0.0F, -1.0F);
-        if (glm::length2 (forward) < 1e-8F) {
-          forward = glm::vec3 (0.0F, 0.0F, -1.0F);
-        }
-        v = -glm::normalize (forward);
-        d2 = 1.0F;
-      }
-      cam_pos = pivot + (v / std::sqrt (d2)) * min_dist;
-    }
-
-    bool modified = false;
-
-    modified
-        |= ImViewGuizmo::Rotate (cam_pos, cam_rot, pivot, rotate_center, 0.01F);
-
-    ImVec2 btn_pos (tool_anchor.x + half
-                        - ((style.toolButtonRadius * style.scale) * 2.0F),
-                    tool_anchor.y + half + 8.0F);
-
-    modified |= ImViewGuizmo::Dolly (cam_pos, cam_rot, btn_pos, 0.05F);
-
-    btn_pos.y += ((style.toolButtonRadius * style.scale) * 2.0F) + 6.0F;
-    modified |= ImViewGuizmo::Pan (cam_pos, cam_rot, btn_pos, 0.01F);
-
-    if (modified || ImViewGuizmo::IsUsing ()) {
-      m_editor_ctx->editor_cam_pos = cam_pos;
-      m_editor_ctx->editor_cam_rot = cam_rot;
-      m_editor_ctx->cancel_editor_camera_anim ();
-    }
-  }
-
-  // ---------- Resolve the SAME camera used to render the Game View ----------
+  // Resolve the SAME camera used to render the Game View
   auto *scene = ((m_runtime_ctx) != nullptr)
                     ? m_runtime_ctx->scene_manager.get_active ()
                     : nullptr;
 
   wsl::comp::singl::editor_context::resolved_camera rc{};
   bool have_cam = false;
+  wsl::comp::singl::editor_context::game_view_mode current_mode
+      = wsl::comp::singl::editor_context::game_view_mode::mode_3d_edit;
+
   if ((scene != nullptr) && (m_editor_ctx != nullptr)) {
     have_cam = m_editor_ctx->resolve_game_view_camera (registry, scene, rc);
+    if (!m_runtime_ctx->is_running) {
+      current_mode = m_editor_ctx->resolve_game_view_mode (registry, scene);
+    }
   }
 
   const bool img_hovered = ImGui::IsMouseHoveringRect (
       img_min, ImVec2 (img_min.x + img_size.x, img_min.y + img_size.y), false);
 
+  // ---------- Mode-specific editor interactions (paused only) ----------
   bool block_picking = false;
-  if (show_view_gizmo) {
-    block_picking = (ImViewGuizmo::IsUsing () || ImViewGuizmo::IsOver ());
-  }
-
-  if (!block_picking) {
-    block_picking = ImGuizmo::IsUsing () || ImGuizmo::IsOver ();
-  }
-
-  if (!m_runtime_ctx->is_running && have_cam && (m_selection != nullptr)
-      && img_hovered && !block_picking
-      && ImGui::IsMouseClicked (ImGuiMouseButton_Left)) {
-
-    entt::entity const picked = pick_entity_from_game_view (
-        registry, m_runtime_ctx, rc, img_min, img_size, ImGui::GetMousePos ());
-
-    if (picked != entt::null) {
-      m_selection->select_entity (picked);
-      m_editor_ctx->selected_entity = picked;
-    } else {
-      m_selection->clear_entity_singleton ();
-      m_editor_ctx->selected_entity = entt::null;
-    }
-  }
-
-  if ((scene != nullptr) && (m_editor_ctx != nullptr)) {
-    have_cam = m_editor_ctx->resolve_game_view_camera (registry, scene, rc);
-  }
-
-  // ---------- ImGuizmo (entity transform gizmo, paused) ----------
   bool block_entity_gizmo = false;
-  if (show_view_gizmo) {
-    // Only block when the view gizmo is actually shown (avoid stale state)
-    block_entity_gizmo = (ImViewGuizmo::IsUsing () || ImViewGuizmo::IsOver ());
-  }
 
-  // Detect whether the active camera is a 2D camera.
-  bool const is_2d_camera
-      = (rc.entity != entt::null)
-        && registry.all_of<wsl::comp::camera_2d> (rc.entity);
+  if ((m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running && have_cam) {
+    switch (current_mode) {
+    case wsl::comp::singl::editor_context::game_view_mode::mode_3d_edit:
+    case wsl::comp::singl::editor_context::game_view_mode::mode_3d_fly: {
+      // 3D view gizmo
+      bool show_view_gizmo = false;
+      if (m_editor_ctx != nullptr) {
+        show_view_gizmo = (m_editor_ctx->game_view_camera_selection
+                           == wsl::comp::singl::editor_context::
+                               game_view_camera_sel::default_editor)
+                          || (m_editor_ctx->game_view_camera_selection
+                              == wsl::comp::singl::editor_context::
+                                  game_view_camera_sel::editor_3d);
+      }
 
-  if (!is_2d_camera && (m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running
-      && have_cam) {
-    ImGuizmo::BeginFrame ();
+      if (show_view_gizmo) {
+        ImViewGuizmo::SetContext (0x47414D45U); // 'GAME'
+        ImViewGuizmo::BeginFrame ();
 
-    // IMPORTANT: set rect to the IMAGE rect, not the whole window
-    ImGuizmo::SetDrawlist ();
-    ImGuizmo::SetRect (img_min.x, img_min.y, img_size.x, img_size.y);
+        auto &style = ImViewGuizmo::GetStyle ();
+        style.scale = 0.30F;
+        style.animateSnap = true;
 
-    glm::mat4 view = rc.view;
-    glm::mat4 proj = rc.proj;
+        const float gizmo_diameter = 256.0F * style.scale;
+        const float half = gizmo_diameter * 0.5F;
+        const float pad = 8.0F;
 
-    if (m_show_grid) {
-      glm::vec3 const forward = -glm::vec3 (view[0][2], view[1][2], view[2][2]);
-      float const tilt = std::abs (forward.y);
+        ImVec2 const rotate_center (img_min.x + img_size.x - half - pad,
+                                    img_min.y + half + pad);
+        ImVec2 const tool_anchor = rotate_center;
 
-      // Distance to the point the camera is looking at on the ground.
-      float const ground_t
-          = (tilt > 0.01F) ? (std::abs (rc.world_pos.y) / tilt) : 500.0F;
+        glm::vec3 cam_pos = m_editor_ctx->editor_cam_pos;
+        glm::quat cam_rot = m_editor_ctx->editor_cam_rot;
+        glm::vec3 pivot (0.0F);
 
-      /*!
-       * The visibility radius scales with the distance to the look-at point.
-       * Formula: d * sqrt(d) + 10, capped at 250 units.
-       */
-      float const base_fog_radius
-          = std::min (250.0F, (ground_t * std::sqrt (ground_t)) + 10.0F);
+        if ((m_selection != nullptr)
+            && m_selection->kind == selection_kind::entity
+            && m_selection->selected_entity != entt::null
+            && registry.all_of<wsl::comp::world_transform> (
+                m_selection->selected_entity)) {
+          const wsl::comp::world_transform &wt
+              = registry.get<wsl::comp::world_transform> (
+                  m_selection->selected_entity);
+          pivot = extract_translation (wt.value);
+        }
 
-      glm::vec3 const flat_fwd
-          = (glm::length (glm::vec2 (forward.x, forward.z)) > 0.001F)
-                ? glm::normalize (glm::vec3 (forward.x, 0.0F, forward.z))
-                : glm::vec3 (0, 0, 0);
+        m_orbit_pivot = pivot;
 
-      // Shift fog center towards gaze to keep focus area solid.
-      float const shift_dist = std::min (ground_t, base_fog_radius * 0.5F);
-      glm::vec3 const fog_center = glm::vec3 (rc.world_pos.x, 0, rc.world_pos.z)
-                                   + flat_fwd * shift_dist;
+        const float min_dist = 0.10F;
+        glm::vec3 v = cam_pos - pivot;
+        float d2 = glm::dot (v, v);
 
-      // Update editor context with grid parameters for the 3D pass.
-      m_editor_ctx->grid_visible = true;
-      m_editor_ctx->grid_camera_pos = rc.world_pos;
-      m_editor_ctx->grid_fog_center = fog_center;
-      m_editor_ctx->grid_fog_radius = base_fog_radius;
+        if (d2 < min_dist * min_dist) {
+          if (d2 < 1e-8F) {
+            glm::vec3 forward = cam_rot * glm::vec3 (0.0F, 0.0F, -1.0F);
+            if (glm::length2 (forward) < 1e-8F) {
+              forward = glm::vec3 (0.0F, 0.0F, -1.0F);
+            }
+            v = -glm::normalize (forward);
+            d2 = 1.0F;
+          }
+          cam_pos = pivot + (v / std::sqrt (d2)) * min_dist;
+        }
 
-      /*
-      // Debug Grid Parameters (Top-Left overlay)
-      ImGui::SetCursorScreenPos (ImVec2 (img_min.x + 10, img_min.y + 10));
-      ImGui::BeginGroup ();
-      ImGui::TextColored (ImVec4 (1, 1, 0, 1), "--- Grid Debug ---");
-      ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Tilt:       %.3f", tilt);
-      ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Gaze Dist:  %.1f", ground_t);
-      ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Fog Radius: %.1f",
-      base_fog_radius); ImGui::TextColored (ImVec4 (1, 1, 1, 1), "Fog Shift:
-      %.1f", shift_dist); ImGui::EndGroup ();
-      */
-    } else {
-      m_editor_ctx->grid_visible = false;
-    }
-    if ((m_selection != nullptr) && m_selection->kind == selection_kind::entity
-        && !block_entity_gizmo) {
-      entt::entity const e = m_selection->selected_entity;
+        bool modified = false;
+        modified |= ImViewGuizmo::Rotate (cam_pos, cam_rot, pivot,
+                                          rotate_center, 0.01F);
 
-      if (registry.all_of<wsl::comp::transform, wsl::comp::world_transform> (
-              e)) {
-        wsl::comp::transform &tr = registry.get<wsl::comp::transform> (e);
-        wsl::comp::world_transform const &wt
-            = registry.get<wsl::comp::world_transform> (e);
+        ImVec2 btn_pos (tool_anchor.x + half
+                            - ((style.toolButtonRadius * style.scale) * 2.0F),
+                        tool_anchor.y + half + 8.0F);
 
-        glm::mat4 world = wt.value;
+        modified |= ImViewGuizmo::Dolly (cam_pos, cam_rot, btn_pos, 0.05F);
 
-        ImGuizmo::SetOrthographic (false);
-        ImGuizmo::Manipulate (glm::value_ptr (view), glm::value_ptr (proj),
-                              m_current_op, ImGuizmo::WORLD,
-                              glm::value_ptr (world));
+        btn_pos.y += ((style.toolButtonRadius * style.scale) * 2.0F) + 6.0F;
+        modified |= ImViewGuizmo::Pan (cam_pos, cam_rot, btn_pos, 0.01F);
 
-        if (ImGuizmo::IsUsing ()) {
-          glm::mat4 local = world;
+        if (modified || ImViewGuizmo::IsUsing ()) {
+          m_editor_ctx->editor_cam_pos = cam_pos;
+          m_editor_ctx->editor_cam_rot = cam_rot;
+          m_editor_ctx->cancel_editor_camera_anim ();
+        }
 
-          if (auto *h = registry.try_get<wsl::comp::hierarchy> (e)) {
-            if (h->parent != entt::null
-                && registry.all_of<wsl::comp::world_transform> (h->parent)) {
-              const wsl::comp::world_transform &pwt
-                  = registry.get<wsl::comp::world_transform> (h->parent);
-              local = glm::inverse (static_cast<glm::mat4> (pwt.value)) * world;
+        block_picking = (ImViewGuizmo::IsUsing () || ImViewGuizmo::IsOver ());
+        block_entity_gizmo = block_picking;
+      }
+
+      // 3D entity gizmo
+      if (!block_entity_gizmo) {
+        ImGuizmo::BeginFrame ();
+        ImGuizmo::SetDrawlist ();
+        ImGuizmo::SetRect (img_min.x, img_min.y, img_size.x, img_size.y);
+
+        glm::mat4 view = rc.view;
+        glm::mat4 proj = rc.proj;
+
+        if (m_show_grid) {
+          glm::vec3 const forward
+              = -glm::vec3 (view[0][2], view[1][2], view[2][2]);
+          float const tilt = std::abs (forward.y);
+          float const ground_t
+              = (tilt > 0.01F) ? (std::abs (rc.world_pos.y) / tilt) : 500.0F;
+          float const base_fog_radius
+              = std::min (250.0F, (ground_t * std::sqrt (ground_t)) + 10.0F);
+          glm::vec3 const flat_fwd
+              = (glm::length (glm::vec2 (forward.x, forward.z)) > 0.001F)
+                    ? glm::normalize (glm::vec3 (forward.x, 0.0F, forward.z))
+                    : glm::vec3 (0, 0, 0);
+          float const shift_dist = std::min (ground_t, base_fog_radius * 0.5F);
+          glm::vec3 const fog_center
+              = glm::vec3 (rc.world_pos.x, 0, rc.world_pos.z)
+                + flat_fwd * shift_dist;
+
+          m_editor_ctx->grid_visible = true;
+          m_editor_ctx->grid_camera_pos = rc.world_pos;
+          m_editor_ctx->grid_fog_center = fog_center;
+          m_editor_ctx->grid_fog_radius = base_fog_radius;
+        } else {
+          m_editor_ctx->grid_visible = false;
+        }
+
+        if ((m_selection != nullptr)
+            && m_selection->kind == selection_kind::entity
+            && !block_entity_gizmo) {
+          entt::entity const e = m_selection->selected_entity;
+
+          if (registry.all_of<wsl::comp::transform,
+                              wsl::comp::world_transform> (e)) {
+            wsl::comp::transform &tr = registry.get<wsl::comp::transform> (e);
+            wsl::comp::world_transform const &wt
+                = registry.get<wsl::comp::world_transform> (e);
+
+            glm::mat4 world = wt.value;
+
+            ImGuizmo::SetOrthographic (false);
+            ImGuizmo::Manipulate (glm::value_ptr (view), glm::value_ptr (proj),
+                                  m_current_op, ImGuizmo::WORLD,
+                                  glm::value_ptr (world));
+
+            if (ImGuizmo::IsUsing ()) {
+              glm::mat4 local = world;
+
+              if (auto *h = registry.try_get<wsl::comp::hierarchy> (e)) {
+                if (h->parent != entt::null
+                    && registry.all_of<wsl::comp::world_transform> (
+                        h->parent)) {
+                  const wsl::comp::world_transform &pwt
+                      = registry.get<wsl::comp::world_transform> (h->parent);
+                  local = glm::inverse (static_cast<glm::mat4> (pwt.value))
+                          * world;
+                }
+              }
+
+              glm::vec3 pos;
+              glm::vec3 scl;
+              glm::quat rot;
+              extract_trs (local, pos, rot, scl);
+
+              tr.position = wsl::math::vec3f{ pos };
+              tr.rotation = wsl::math::quatf{ rot };
+              tr.scale = wsl::math::vec3f{ scl };
             }
           }
+        }
 
-          glm::vec3 pos;
-          glm::vec3 scl;
-          glm::quat rot;
-          extract_trs (local, pos, rot, scl);
-
-          tr.position = wsl::math::vec3f{ pos };
-          tr.rotation = wsl::math::quatf{ rot };
-          tr.scale = wsl::math::vec3f{ scl };
+        if (!block_picking) {
+          block_picking = ImGuizmo::IsUsing () || ImGuizmo::IsOver ();
         }
       }
+
+      // 3D picking
+      if (!block_picking && (m_selection != nullptr) && img_hovered
+          && ImGui::IsMouseClicked (ImGuiMouseButton_Left)) {
+        entt::entity const picked
+            = pick_entity_from_game_view (registry, m_runtime_ctx, rc, img_min,
+                                          img_size, ImGui::GetMousePos ());
+
+        if (picked != entt::null) {
+          m_selection->select_entity (picked);
+          m_editor_ctx->selected_entity = picked;
+        } else {
+          m_selection->clear_entity_singleton ();
+          m_editor_ctx->selected_entity = entt::null;
+        }
+      }
+      break;
     }
 
-    if (ImGui::IsWindowFocused (ImGuiFocusedFlags_RootAndChildWindows)) {
-      if (ImGui::IsKeyPressed (ImGuiKey_W)) {
-        m_current_op = ImGuizmo::TRANSLATE;
+    case wsl::comp::singl::editor_context::game_view_mode::mode_2d_edit: {
+      // Hide 3D grid
+      m_editor_ctx->grid_visible = false;
+
+      // 2D camera controls (pan / zoom)
+      if (img_hovered) {
+        float const wheel = ImGui::GetIO ().MouseWheel;
+        if (wheel != 0.0F) {
+          float &zoom = m_editor_ctx->editor_camera_2d.zoom;
+          zoom = std::clamp (zoom + wheel * 0.1F, 0.01F, 100.0F);
+        }
+
+        if (ImGui::IsMouseDown (ImGuiMouseButton_Middle)) {
+          ImVec2 const delta = ImGui::GetIO ().MouseDelta;
+          if (delta.x != 0.0F || delta.y != 0.0F) {
+            float const inv_zoom = 1.0F / m_editor_ctx->editor_camera_2d.zoom;
+            m_editor_ctx->editor_cam_2d_pos.x -= delta.x * inv_zoom;
+            m_editor_ctx->editor_cam_2d_pos.y += delta.y * inv_zoom;
+          }
+        }
       }
-      if (ImGui::IsKeyPressed (ImGuiKey_E)) {
-        m_current_op = ImGuizmo::ROTATE;
+
+      // Clip gizmo and boundary to the displayed image area
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      dl->PushClipRect (img_min,
+                        ImVec2 (img_min.x + img_size.x, img_min.y + img_size.y),
+                        true);
+
+      // ImGizmo2D for selected entity
+      if ((m_selection != nullptr)
+          && m_selection->kind == selection_kind::entity
+          && m_selection->selected_entity != entt::null
+          && registry.all_of<wsl::comp::transform_2d> (
+              m_selection->selected_entity)) {
+        // The camera projection is built from the window/framebuffer size,
+        // but ImGizmo2D works in the fitted display rect (img_size).
+        // Compute the effective zoom so that world-to-screen mapping matches
+        // the rendered image exactly.
+        float const half_w = 1.0F / rc.proj[0][0];
+        float const effective_zoom = img_size.x / (2.0F * half_w);
+
+        ImGizmo2D::SetDrawList (dl);
+        ImGizmo2D::SetViewRect (img_min, img_size);
+        ImGizmo2D::SetViewTransform (m_editor_ctx->editor_cam_2d_pos.x,
+                                     m_editor_ctx->editor_cam_2d_pos.y,
+                                     effective_zoom);
+        ImGizmo2D::BeginFrame ();
+
+        wsl::comp::transform_2d &t2d = registry.get<wsl::comp::transform_2d> (
+            m_selection->selected_entity);
+
+        bool modified = false;
+        switch (m_current_op) {
+        case ImGuizmo::TRANSLATE: {
+          float pos_x = t2d.position.x;
+          float pos_y = t2d.position.y;
+          modified = ImGizmo2D::Translate ("selected", &pos_x, &pos_y);
+          if (modified) {
+            t2d.position.x = pos_x;
+            t2d.position.y = pos_y;
+          }
+          break;
+        }
+        case ImGuizmo::ROTATE: {
+          float angle = t2d.rotation;
+          modified = ImGizmo2D::Rotate ("selected", &t2d.position.x,
+                                        &t2d.position.y, &angle);
+          if (modified) {
+            t2d.rotation = angle;
+          }
+          break;
+        }
+        case ImGuizmo::SCALE: {
+          float sx = t2d.scale.x;
+          float sy = t2d.scale.y;
+          modified = ImGizmo2D::Scale ("selected", &t2d.position.x,
+                                       &t2d.position.y, &sx, &sy);
+          if (modified) {
+            t2d.scale.x = sx;
+            t2d.scale.y = sy;
+          }
+          break;
+        }
+        default:
+          break;
+        }
+
+        block_picking = ImGizmo2D::IsActive () || ImGizmo2D::IsHovered ();
       }
-      if (ImGui::IsKeyPressed (ImGuiKey_R)) {
-        m_current_op = ImGuizmo::SCALE;
+
+      // Draw root viewport virtual size boundary
+      if (registry.ctx ().contains<wsl::comp::singl::rendering_manager> ()) {
+        auto &rendering
+            = registry.ctx ().get<wsl::comp::singl::rendering_manager> ();
+        float const vw = rendering.root_viewport_virtual_size.x;
+        float const vh = rendering.root_viewport_virtual_size.y;
+
+        glm::vec3 const corners[4] = {
+          glm::vec3 (-vw * 0.5F, -vh * 0.5F, 0.0F),
+          glm::vec3 (vw * 0.5F, -vh * 0.5F, 0.0F),
+          glm::vec3 (vw * 0.5F, vh * 0.5F, 0.0F),
+          glm::vec3 (-vw * 0.5F, vh * 0.5F, 0.0F),
+        };
+
+        ImVec2 screen[4];
+        for (int i = 0; i < 4; ++i) {
+          glm::vec4 ndc = rc.vp * glm::vec4 (corners[i], 1.0F);
+          if (ndc.w != 0.0F) {
+            ndc /= ndc.w;
+          }
+          screen[i].x = img_min.x + (ndc.x * 0.5F + 0.5F) * img_size.x;
+          screen[i].y = img_min.y + (1.0F - ndc.y) * 0.5F * img_size.y;
+        }
+
+        ImU32 const col = IM_COL32 (255, 255, 255, 128);
+        for (int i = 0; i < 4; ++i) {
+          dl->AddLine (screen[i], screen[(i + 1) % 4], col, 2.0F);
+        }
       }
+
+      dl->PopClipRect ();
+
+      // 2D picking (AABB based on sprite bounds)
+      if (!block_picking && (m_selection != nullptr) && img_hovered
+          && ImGui::IsMouseClicked (ImGuiMouseButton_Left)) {
+        entt::entity const picked
+            = pick_entity_2d (registry, rc, img_min, img_size,
+                              ImGui::GetMousePos (), m_tex_width, m_tex_height);
+
+        if (picked != entt::null) {
+          m_selection->select_entity (picked);
+          m_editor_ctx->selected_entity = picked;
+        } else {
+          m_selection->clear_entity_singleton ();
+          m_editor_ctx->selected_entity = entt::null;
+        }
+      }
+      break;
     }
-  } else if (is_2d_camera) {
-    // When a 2D camera is active, hide the 3D ground grid.
-    m_editor_ctx->grid_visible = false;
+
+    case wsl::comp::singl::editor_context::game_view_mode::mode_2d_view:
+    case wsl::comp::singl::editor_context::game_view_mode::mode_3d_view:
+      // View mode: no editor gizmos, no picking
+      m_editor_ctx->grid_visible = false;
+      break;
+    }
+  }
+
+  // Tool shortcuts (shared between 3D and 2D edit modes)
+  if (ImGui::IsWindowFocused (ImGuiFocusedFlags_RootAndChildWindows)) {
+    if (ImGui::IsKeyPressed (ImGuiKey_W)) {
+      m_current_op = ImGuizmo::TRANSLATE;
+    }
+    if (ImGui::IsKeyPressed (ImGuiKey_E)) {
+      m_current_op = ImGuizmo::ROTATE;
+    }
+    if (ImGui::IsKeyPressed (ImGuiKey_R)) {
+      m_current_op = ImGuizmo::SCALE;
+    }
   }
 
   ImGui::End ();
@@ -665,13 +852,14 @@ game_view::draw_camera_header (entt::registry &registry,
 {
   wsl::comp::singl::runtime_context &runtime_ctx = *this->m_runtime_ctx;
 
-  // Center icons
   const float btn_size = m_toolbar_height;
   const float spacing = ImGui::GetStyle ().ItemSpacing.x;
-  // 8 buttons (Play, Stop, T, R, S, Reset, Focus, Grid)
-  // 3 dummies (8.0f each)
-  // Spacings: between every element (10 total)
-  float const group_w = (8.0F * btn_size) + 24.0F + (10.0F * spacing);
+  const float combo_vp_w = 100.0F;
+  const float combo_cam_w = 120.0F;
+
+  // Total width = 8 buttons + 3 dummies + 2 combos + spacing between items
+  float const group_w = (8.0F * btn_size) + (3.0F * 8.0F) + combo_vp_w
+                        + combo_cam_w + (12.0F * spacing);
 
   float const avail = ImGui::GetContentRegionAvail ().x;
   float const offset = (avail - group_w) * 0.5F;
@@ -768,75 +956,159 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::Dummy (ImVec2 (8.0F, 0.0F));
   ImGui::SameLine ();
 
-  // ===================== camera combo =====================
+  // ===================== viewport combo =====================
   auto *scene = m_runtime_ctx->scene_manager.get_active ();
   if (runtime_ctx.is_running) {
     ImGui::BeginDisabled ();
   }
 
   wsl::comp::singl::editor_context &ed = *this->m_editor_ctx;
-  const char *combo_preview = "Default";
-  char combo_buf[256];
-  if (ed.game_view_selected_camera != entt::null && scene != nullptr) {
+
+  // ===================== viewport combo =====================
+  const char *vp_preview = "Root Viewport";
+  char vp_buf[256];
+  if (ed.game_view_selected_viewport != entt::null && scene != nullptr) {
     auto const &reg = scene->get_registry ();
-    if (reg.valid (ed.game_view_selected_camera)) {
+    if (reg.valid (ed.game_view_selected_viewport)) {
       std::snprintf (
-          combo_buf, sizeof (combo_buf), "%s",
-          scene->get_entity_name (ed.game_view_selected_camera).c_str ());
-      combo_preview = combo_buf;
+          vp_buf, sizeof (vp_buf), "%s",
+          scene->get_entity_name (ed.game_view_selected_viewport).c_str ());
+      vp_preview = vp_buf;
     }
   }
 
-  if (ImGui::BeginCombo ("##camera_combo", combo_preview,
-                         ImGuiComboFlags_WidthFitPreview)) {
-    if (ImGui::Selectable ("Default",
-                           ed.game_view_selected_camera == entt::null)) {
-      ed.game_view_selected_camera = entt::null;
-      ed.game_view_camera_mode = wsl::comp::singl::editor_context::
-          game_view_cam_mode::engine_default;
-      ed.game_view_camera_entity = entt::null;
+  ImGui::SetNextItemWidth (combo_vp_w);
+  if (ImGui::BeginCombo ("##viewport_combo", vp_preview)) {
+    if (ImGui::Selectable ("Root Viewport",
+                           ed.game_view_selected_viewport == entt::null)) {
+      ed.game_view_selected_viewport = entt::null;
+      ed.game_view_camera_selection = wsl::comp::singl::editor_context::
+          game_view_camera_sel::default_editor;
+      ed.game_view_selected_camera_entity = entt::null;
     }
-    if (ed.game_view_selected_camera == entt::null) {
+    if (ed.game_view_selected_viewport == entt::null) {
       ImGui::SetItemDefaultFocus ();
     }
 
     if (scene != nullptr) {
       auto const &reg = scene->get_registry ();
-      // Collect unique camera entities (both 3D cameras and 2D cameras)
-      std::unordered_set<entt::entity> seen;
-      auto cam_view = reg.view<wsl::comp::camera> ();
-      for (entt::entity const e : cam_view) {
+      auto sv_view = reg.view<wsl::comp::subviewport> ();
+      for (entt::entity const e : sv_view) {
         std::string const &name = scene->get_entity_name (e);
-        bool const selected = (e == ed.game_view_selected_camera);
+        bool const selected = (e == ed.game_view_selected_viewport);
         if (ImGui::Selectable (name.c_str (), selected)) {
-          ed.game_view_selected_camera = e;
-          ed.game_view_camera_mode
-              = wsl::comp::singl::editor_context::game_view_cam_mode::entity;
-          ed.game_view_camera_entity = e;
-        }
-        if (selected) {
-          ImGui::SetItemDefaultFocus ();
-        }
-        seen.emplace (e);
-      }
-      auto cam2d_view = reg.view<wsl::comp::camera_2d> ();
-      for (entt::entity const e : cam2d_view) {
-        if (seen.contains (e)) {
-          continue;
-        }
-        std::string const &name = scene->get_entity_name (e);
-        bool const selected = (e == ed.game_view_selected_camera);
-        if (ImGui::Selectable (name.c_str (), selected)) {
-          ed.game_view_selected_camera = e;
-          ed.game_view_camera_mode
-              = wsl::comp::singl::editor_context::game_view_cam_mode::entity;
-          ed.game_view_camera_entity = e;
+          ed.game_view_selected_viewport = e;
+          ed.game_view_camera_selection = wsl::comp::singl::editor_context::
+              game_view_camera_sel::default_editor;
+          ed.game_view_selected_camera_entity = entt::null;
         }
         if (selected) {
           ImGui::SetItemDefaultFocus ();
         }
       }
     }
+    ImGui::EndCombo ();
+  }
+
+  ImGui::SameLine ();
+
+  // ===================== camera combo =====================
+  const char *cam_preview = "Default Editor Camera";
+  char cam_buf[256];
+
+  auto get_camera_preview_name = [&] () -> const char * {
+    switch (ed.game_view_camera_selection) {
+    case wsl::comp::singl::editor_context::game_view_camera_sel::default_editor:
+      return "Default Editor Camera";
+    case wsl::comp::singl::editor_context::game_view_camera_sel::editor_3d:
+      return "Editor 3D Camera";
+    case wsl::comp::singl::editor_context::game_view_camera_sel::editor_2d:
+      return "Editor 2D Camera";
+    case wsl::comp::singl::editor_context::game_view_camera_sel::
+        default_runtime:
+      return "Default Runtime Camera";
+    case wsl::comp::singl::editor_context::game_view_camera_sel::entity:
+      if (ed.game_view_selected_camera_entity != entt::null
+          && scene != nullptr) {
+        auto const &reg = scene->get_registry ();
+        if (reg.valid (ed.game_view_selected_camera_entity)) {
+          std::snprintf (
+              cam_buf, sizeof (cam_buf), "%s",
+              scene->get_entity_name (ed.game_view_selected_camera_entity)
+                  .c_str ());
+          return cam_buf;
+        }
+      }
+      return "Camera";
+    }
+    return "Default Editor Camera";
+  };
+
+  cam_preview = get_camera_preview_name ();
+
+  ImGui::SetNextItemWidth (combo_cam_w);
+  if (ImGui::BeginCombo ("##camera_combo", cam_preview)) {
+    // Fixed options
+    struct option
+    {
+      wsl::comp::singl::editor_context::game_view_camera_sel sel;
+      const char *label;
+    };
+    const option fixed_opts[] = {
+      { wsl::comp::singl::editor_context::game_view_camera_sel::default_editor,
+        "Default Editor Camera" },
+      { wsl::comp::singl::editor_context::game_view_camera_sel::editor_3d,
+        "Editor 3D Camera" },
+      { wsl::comp::singl::editor_context::game_view_camera_sel::editor_2d,
+        "Editor 2D Camera" },
+      { wsl::comp::singl::editor_context::game_view_camera_sel::default_runtime,
+        "Default Runtime Camera" },
+    };
+
+    for (auto const &opt : fixed_opts) {
+      bool const selected = (ed.game_view_camera_selection == opt.sel
+                             && opt.sel
+                                    != wsl::comp::singl::editor_context::
+                                        game_view_camera_sel::entity);
+      if (ImGui::Selectable (opt.label, selected)) {
+        ed.game_view_camera_selection = opt.sel;
+        ed.game_view_selected_camera_entity = entt::null;
+      }
+      if (selected) {
+        ImGui::SetItemDefaultFocus ();
+      }
+    }
+
+    // Entity cameras that belong to the current viewport
+    if (scene != nullptr) {
+      auto &reg = scene->get_registry ();
+      entt::entity const target_vp = ed.game_view_selected_viewport;
+
+      auto add_camera_opts = [&] (auto cam_view) {
+        for (entt::entity const e : cam_view) {
+          if (wsl::comp::find_nearest_viewport (reg, e) != target_vp) {
+            continue;
+          }
+          const std::string &name = scene->get_entity_name (e);
+          bool const selected = (ed.game_view_camera_selection
+                                     == wsl::comp::singl::editor_context::
+                                         game_view_camera_sel::entity
+                                 && e == ed.game_view_selected_camera_entity);
+          if (ImGui::Selectable (name.c_str (), selected)) {
+            ed.game_view_camera_selection = wsl::comp::singl::editor_context::
+                game_view_camera_sel::entity;
+            ed.game_view_selected_camera_entity = e;
+          }
+          if (selected) {
+            ImGui::SetItemDefaultFocus ();
+          }
+        }
+      };
+
+      add_camera_opts (reg.view<wsl::comp::camera> ());
+      add_camera_opts (reg.view<wsl::comp::camera_2d> ());
+    }
+
     ImGui::EndCombo ();
   }
 
@@ -855,10 +1127,10 @@ game_view::draw_camera_header (entt::registry &registry,
     m_orbit_pivot = glm::vec3 (0.0F, 0.0F, 0.0F);
     m_editor_ctx->reset_editor_camera ();
 
-    ed.game_view_camera_mode
-        = wsl::comp::singl::editor_context::game_view_cam_mode::engine_default;
-    ed.game_view_camera_entity = entt::null;
-    ed.game_view_selected_camera = entt::null;
+    ed.game_view_camera_selection = wsl::comp::singl::editor_context::
+        game_view_camera_sel::default_editor;
+    ed.game_view_selected_camera_entity = entt::null;
+    ed.game_view_selected_viewport = entt::null;
   }
 
   ImGui::SameLine ();
@@ -877,10 +1149,10 @@ game_view::draw_camera_header (entt::registry &registry,
 
   if (clicked_focus && can_focus) {
     wsl::comp::singl::editor_context &ed = *this->m_editor_ctx;
-    ed.game_view_camera_mode
-        = wsl::comp::singl::editor_context::game_view_cam_mode::engine_default;
-    ed.game_view_camera_entity = entt::null;
-    ed.game_view_selected_camera = entt::null;
+    ed.game_view_camera_selection = wsl::comp::singl::editor_context::
+        game_view_camera_sel::default_editor;
+    ed.game_view_selected_camera_entity = entt::null;
+    ed.game_view_selected_viewport = entt::null;
 
     const wsl::comp::world_transform &wt
         = registry.get<wsl::comp::world_transform> (

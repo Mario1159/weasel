@@ -10,9 +10,8 @@ struct VSOutput {
     float4 color : COLOR0;
 };
 
-// Projection matrix passed via push constant (ortho)
-[[vk::push_constant]]
-cbuffer PushConstants
+// Projection matrix passed via uniform buffer (ortho)
+cbuffer PushConstants : register(b0, space1)
 {
     float4x4 projection;
 };

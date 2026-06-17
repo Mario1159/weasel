@@ -39,7 +39,7 @@ private:
                         const glm::vec3 &scale = { 1.0F, 1.0F, 1.0F },
                         entt::meta_any *prefab_object = nullptr,
                         entt::meta_any *default_object = nullptr);
-  bool draw_main_camera_field (entt::meta_any &object);
+  bool draw_render_viewport_field (entt::meta_any &object);
   bool draw_meta_object (const char *label, entt::meta_any &object,
                          entt::meta_any *prefab_object = nullptr,
                          entt::meta_any *default_object = nullptr);

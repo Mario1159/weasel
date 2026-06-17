@@ -132,7 +132,10 @@ image_loader::load_cpu (const std::string &path)
 gfx::image
 image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
 {
-  SDL_GPUTextureFormat gpu_format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+  // Most image files (PNG, JPG) store pixels in sRGB space. Use the SRGB
+  // texture format so the GPU performs automatic sRGB->linear conversion
+  // during sampling, which is required for correct colors in the HDR pipeline.
+  SDL_GPUTextureFormat gpu_format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
   SDL_PixelFormat convert_format = SDL_PIXELFORMAT_RGBA32;
   Uint32 bytes_per_pixel = 4;
 

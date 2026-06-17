@@ -51,7 +51,16 @@ public:
   //! Default is glm::ortho(0, w, h, 0, -1, 1) for screen-space rendering.
   void set_projection (const glm::mat4 &proj);
 
-  //! Renders all submitted sprites and clears the queue.
+  //! Builds vertex data from the current queue and uploads it to the GPU.
+  //! Must be called OUTSIDE an active render pass.
+  void build_and_upload ();
+
+  //! Draws the previously-uploaded batches. Must be called INSIDE a render
+  //! pass.
+  void draw ();
+
+  //! Convenience: uploads (if needed) and draws in one call.
+  //! Only safe when no render pass is active during upload.
   void flush ();
 
   //! Returns a copy of the current draw queue (for multi-viewport replay).
@@ -75,6 +84,8 @@ private:
 
   std::vector<draw_command> m_queue;
   std::vector<vertex_2d> m_vertices;
+  std::vector<batch> m_batches;
+  glm::mat4 m_projection{ 1.0F };
   std::optional<glm::mat4> m_override_projection;
 
   SDL_GPUGraphicsPipeline *m_pipeline = nullptr;

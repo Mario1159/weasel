@@ -57,8 +57,12 @@ struct rendering_manager : singleton_component
   //! used.
   std::vector<gfx::viewport> viewports;
 
-  //! The main camera entity for the scene.
-  entt::entity main_camera = entt::null;
+  //! The active render viewport entity (null = Root Viewport).
+  entt::entity render_viewport = entt::null;
+
+  //! Design/virtual size for the root viewport, used by the editor 2D game view
+  //! as a guizmo reference.
+  math::vec2f root_viewport_virtual_size{ 1920.0F, 1080.0F };
 
   gfx::scene_renderer &
   ensure_renderer (wsl::gfx::render_window &window,
@@ -246,10 +250,19 @@ struct rendering_manager : singleton_component
         .custom<comp::meta_info> (meta_info{
             "Shadow Strength", "Default shadow darkness multiplier.", "" })
 
-        .data<&comp::singl::rendering_manager::main_camera> ("main_camera"_hs)
+        .data<&comp::singl::rendering_manager::render_viewport> (
+            "render_viewport"_hs)
         .custom<comp::meta_info> (
-            meta_info{ "Main Camera",
-                       "Active camera entity used for the game view.", "" });
+            meta_info{ "Render Viewport",
+                       "Active viewport entity used for the game view.", "" })
+
+        .data<&comp::singl::rendering_manager::root_viewport_virtual_size> (
+            "root_viewport_virtual_size"_hs)
+        .custom<comp::meta_info> (
+            meta_info{ "Root Viewport Virtual Size",
+                       "Design size for the root viewport used in the editor "
+                       "2D game view.",
+                       "" });
 
     entt::meta_factory<rsc::cubemap_id> ()
         .type (entt::type_hash<rsc::cubemap_id>::value ())
@@ -304,6 +317,11 @@ struct rendering_manager : singleton_component
     serialize_field_if_diff (archive, "shadow_strength", shadow_strength,
                              def.shadow_strength);
     serialize_field_if_diff (archive, "viewports", viewports, def.viewports);
+    serialize_field_if_diff (archive, "render_viewport", render_viewport,
+                             def.render_viewport);
+    serialize_field_if_diff (archive, "root_viewport_virtual_size",
+                             root_viewport_virtual_size,
+                             def.root_viewport_virtual_size);
   }
 };
 

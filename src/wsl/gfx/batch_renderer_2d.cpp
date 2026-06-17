@@ -3,7 +3,6 @@
 #include "render_window.hpp"
 #include "shader.hpp"
 #include "wsl/rsc/resource_manager.hpp"
-#include "wsl/log/log.hpp"
 #include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -52,8 +51,9 @@ batch_renderer_2d::restore_queue (const std::vector<draw_command> &cmds)
 }
 
 void
-batch_renderer_2d::flush ()
+batch_renderer_2d::build_and_upload ()
 {
+  m_batches.clear ();
   if (m_queue.empty ()) {
     return;
   }
@@ -68,14 +68,12 @@ batch_renderer_2d::flush ()
 
   uint32_t w, h;
   m_window->get_size (w, h);
-  glm::mat4 projection
-      = m_override_projection.has_value ()
-            ? *m_override_projection
-            : glm::ortho (0.0F, (float)w, (float)h, 0.0F, -1.0F, 1.0F);
+  m_projection = m_override_projection.has_value ()
+                     ? *m_override_projection
+                     : glm::ortho (0.0F, (float)w, (float)h, 0.0F, -1.0F, 1.0F);
   m_override_projection.reset ();
 
   m_vertices.clear ();
-  std::vector<batch> batches;
 
   SDL_GPUTexture *current_texture = nullptr;
   uint32_t batch_start = 0;
@@ -86,15 +84,13 @@ batch_renderer_2d::flush ()
 
     if (tex != current_texture || m_vertices.size () + 6 > max_vertices) {
       if (current_texture != nullptr || !m_vertices.empty ()) {
-        batches.push_back ({ current_texture, batch_start,
-                             (uint32_t)m_vertices.size () - batch_start });
+        m_batches.push_back ({ current_texture, batch_start,
+                               (uint32_t)m_vertices.size () - batch_start });
       }
       current_texture = tex;
       batch_start = (uint32_t)m_vertices.size ();
 
       if (m_vertices.size () + 6 > max_vertices) {
-        // We could flush here, but for simplicity we'll just stop adding to
-        // this frame's vertices and ideally max_vertices is large enough.
         break;
       }
     }
@@ -142,8 +138,8 @@ batch_renderer_2d::flush ()
   }
 
   if (!m_vertices.empty ()) {
-    batches.push_back ({ current_texture, batch_start,
-                         (uint32_t)m_vertices.size () - batch_start });
+    m_batches.push_back ({ current_texture, batch_start,
+                           (uint32_t)m_vertices.size () - batch_start });
   }
 
   // Upload vertices
@@ -163,31 +159,48 @@ batch_renderer_2d::flush ()
     SDL_UploadToGPUBuffer (copy, &src, &dst, false);
     SDL_EndGPUCopyPass (copy);
   }
+}
 
-  // Render batches
+void
+batch_renderer_2d::draw ()
+{
+  if (m_batches.empty ()) {
+    m_queue.clear ();
+    return;
+  }
+
   SDL_GPURenderPass *pass = m_ctx->main_render_pass ();
-  if (pass != nullptr) {
-    SDL_BindGPUGraphicsPipeline (pass, m_pipeline);
-    SDL_GPUBufferBinding vbo_binding{ m_vbo, 0 };
-    SDL_BindGPUVertexBuffers (pass, 0, &vbo_binding, 1);
+  if (pass == nullptr) {
+    return;
+  }
 
-    // Push projection matrix
-    SDL_PushGPUVertexUniformData (m_ctx->command_buffer (), 0, &projection,
-                                  sizeof (projection));
+  SDL_BindGPUGraphicsPipeline (pass, m_pipeline);
+  SDL_GPUBufferBinding vbo_binding{ m_vbo, 0 };
+  SDL_BindGPUVertexBuffers (pass, 0, &vbo_binding, 1);
 
-    for (const auto &b : batches) {
-      SDL_GPUTexture *t = b.texture
-                              ? b.texture
-                              : m_window->hdr_scene; // fallback or just null?
-      if (t) {
-        SDL_GPUTextureSamplerBinding tex_binding{ t, m_sampler };
-        SDL_BindGPUFragmentSamplers (pass, 0, &tex_binding, 1);
-      }
-      SDL_DrawGPUPrimitives (pass, b.vertex_count, 1, b.first_vertex, 0);
+  // Push projection matrix
+  SDL_PushGPUVertexUniformData (m_ctx->command_buffer (), 0, &m_projection,
+                                sizeof (m_projection));
+
+  for (const auto &b : m_batches) {
+    SDL_GPUTexture *t = b.texture ? b.texture : m_window->hdr_scene;
+    if (t) {
+      SDL_GPUTextureSamplerBinding tex_binding{ t, m_sampler };
+      SDL_BindGPUFragmentSamplers (pass, 0, &tex_binding, 1);
     }
+    SDL_DrawGPUPrimitives (pass, b.vertex_count, 1, b.first_vertex, 0);
   }
 
   m_queue.clear ();
+  m_batches.clear ();
+  m_vertices.clear ();
+}
+
+void
+batch_renderer_2d::flush ()
+{
+  build_and_upload ();
+  draw ();
 }
 
 void

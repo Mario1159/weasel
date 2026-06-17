@@ -7,6 +7,8 @@
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/comp/subviewport.hpp"
+#include "wsl/comp/transform.hpp"
 #include "wsl/comp/transform_2d.hpp"
 #include "wsl/rsc/scene.hpp"
 #include "wsl/log/log.hpp"
@@ -225,7 +227,7 @@ editor_context::custom_inspect (
                 pending_project_load.value_or ("None").c_str () != nullptr);
   ImGui::Value ("Selected Entity", (uint32_t)selected_entity);
 
-  if (ImGui::TreeNode ("Editor Camera")) {
+  if (ImGui::TreeNode ("Editor 3D Camera")) {
     ImGui::DragFloat3 ("Position", &editor_cam_pos.x, 0.1F);
 
     glm::vec3 euler = glm::degrees (glm::eulerAngles (editor_cam_rot));
@@ -237,9 +239,16 @@ editor_context::custom_inspect (
     ImGui::DragFloat ("Near", &editor_camera.near, 0.01F, 0.01F, 10.0F);
     ImGui::DragFloat ("Far", &editor_camera.far, 10.0F, 10.0F, 10000.0F);
 
-    if (ImGui::Button ("Reset Camera")) {
+    if (ImGui::Button ("Reset 3D Camera")) {
       reset_editor_camera ();
     }
+
+    ImGui::TreePop ();
+  }
+
+  if (ImGui::TreeNode ("Editor 2D Camera")) {
+    ImGui::DragFloat2 ("Position", &editor_cam_2d_pos.x, 0.1F);
+    ImGui::DragFloat ("Zoom", &editor_camera_2d.zoom, 0.01F, 0.01F, 100.0F);
 
     ImGui::TreePop ();
   }
@@ -261,6 +270,104 @@ editor_context::resolved_camera::reset ()
   vp = glm::mat4{ 1.0F };
 }
 
+editor_context::game_view_mode
+editor_context::resolve_game_view_mode (entt::registry &registry,
+                                        wsl::rsc::scene *scene) const
+{
+  if (scene == nullptr) {
+    return game_view_mode::mode_3d_edit;
+  }
+
+  // Determine target viewport
+  entt::entity target_viewport = entt::null;
+  if (game_view_selected_viewport != entt::null) {
+    target_viewport = game_view_selected_viewport;
+  } else {
+    auto &ctx = scene->get_registry ().ctx ();
+    if (ctx.contains<comp::singl::rendering_manager> ()) {
+      target_viewport
+          = ctx.get<comp::singl::rendering_manager> ().render_viewport;
+    }
+  }
+
+  switch (game_view_camera_selection) {
+  case game_view_camera_sel::editor_3d:
+    return game_view_mode::mode_3d_edit;
+
+  case game_view_camera_sel::editor_2d:
+    return game_view_mode::mode_2d_edit;
+
+  case game_view_camera_sel::default_runtime:
+  case game_view_camera_sel::entity: {
+    entt::entity cam_entity = entt::null;
+    if (game_view_camera_selection == game_view_camera_sel::default_runtime) {
+      if (target_viewport != entt::null) {
+        if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
+          cam_entity = sv->camera.value;
+        }
+      } else {
+        cam_entity = scene->camera;
+      }
+    } else {
+      cam_entity = game_view_selected_camera_entity;
+    }
+
+    if (cam_entity != entt::null && registry.valid (cam_entity)) {
+      if (registry.all_of<comp::camera_2d> (cam_entity)) {
+        return game_view_mode::mode_2d_view;
+      } else if (registry.all_of<comp::camera> (cam_entity)) {
+        return game_view_mode::mode_3d_view;
+      }
+    }
+    // Fallback to 3D edit if no valid camera
+    return game_view_mode::mode_3d_edit;
+  }
+
+  case game_view_camera_sel::default_editor:
+  default: {
+    // Check if subviewport has render_2d_only
+    if (target_viewport != entt::null) {
+      if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
+        if (sv->render_2d_only) {
+          return game_view_mode::mode_2d_edit;
+        }
+      }
+    }
+
+    // Analyze viewport contents
+    bool has_3d = false;
+    bool has_2d = false;
+
+    auto t3d_view = registry.view<comp::transform> ();
+    for (auto e : t3d_view) {
+      if (comp::find_nearest_viewport (registry, e) == target_viewport) {
+        has_3d = true;
+        break;
+      }
+    }
+
+    if (!has_3d) {
+      auto t2d_view = registry.view<comp::transform_2d> ();
+      for (auto e : t2d_view) {
+        if (comp::find_nearest_viewport (registry, e) == target_viewport) {
+          has_2d = true;
+          break;
+        }
+      }
+    }
+
+    if (has_3d) {
+      return game_view_mode::mode_3d_edit;
+    } else if (has_2d) {
+      return game_view_mode::mode_2d_edit;
+    } else {
+      // No entities - default to 3d edit
+      return game_view_mode::mode_3d_edit;
+    }
+  }
+  }
+}
+
 bool
 editor_context::resolve_game_view_camera (entt::registry &registry,
                                           wsl::rsc::scene *scene,
@@ -273,29 +380,28 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
   }
 
   bool const running = runtime_ctx.is_running;
+  entt::entity target_viewport = entt::null;
 
   if (running) {
-    // During play mode, always use the rendering manager's main camera.
+    // During play mode, always use the rendering manager's active viewport.
     auto &scene_reg = scene->get_registry ();
     auto &ctx = scene_reg.ctx ();
     if (ctx.contains<comp::singl::rendering_manager> ()) {
       auto &rendering = ctx.get<comp::singl::rendering_manager> ();
-      if (rendering.main_camera != entt::null) {
-        out.entity = rendering.main_camera;
-        out.using_engine_default = false;
-      } else {
-        out.using_engine_default = true;
-      }
-    } else {
-      out.using_engine_default = true;
+      target_viewport = rendering.render_viewport;
     }
-  } else if (game_view_selected_camera != entt::null) {
-    // A specific camera is selected in the toolbar combo.
-    out.entity = game_view_selected_camera;
-    out.using_engine_default = false;
   } else {
-    // "Default" in combo → use editor camera (engine default) in edit mode.
-    out.using_engine_default = true;
+    // In edit mode, use the toolbar selection.
+    if (game_view_selected_viewport != entt::null) {
+      target_viewport = game_view_selected_viewport;
+    } else {
+      auto &scene_reg = scene->get_registry ();
+      auto &ctx = scene_reg.ctx ();
+      if (ctx.contains<comp::singl::rendering_manager> ()) {
+        auto &rendering = ctx.get<comp::singl::rendering_manager> ();
+        target_viewport = rendering.render_viewport;
+      }
+    }
   }
 
   uint32_t w;
@@ -303,39 +409,107 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
   runtime_ctx.window.get_size (w, h);
   out.aspect_ratio = (float)w / (float)h;
 
-  if (out.using_engine_default) {
-    out.world_pos = editor_cam_pos;
-    out.view = glm::mat4_cast (glm::inverse (editor_cam_rot));
-    out.view = glm::translate (out.view, -editor_cam_pos);
-    out.proj
-        = glm::perspective (glm::radians (editor_camera.fov), out.aspect_ratio,
-                            editor_camera.near, editor_camera.far);
-    out.valid = true;
+  // During play mode, preserve previous behavior
+  if (running) {
+    // Resolve camera from the target viewport
+    if (target_viewport != entt::null && registry.valid (target_viewport)) {
+      if (auto *sv
+          = registry.try_get<wsl::comp::subviewport> (target_viewport)) {
+        if (sv->camera.value != entt::null
+            && registry.valid (sv->camera.value)) {
+          out.entity = sv->camera.value;
+          out.using_engine_default = false;
+        } else {
+          out.using_engine_default = true;
+        }
+      } else {
+        bool is_camera
+            = registry.all_of<wsl::comp::camera> (target_viewport)
+              || registry.all_of<wsl::comp::camera_2d> (target_viewport);
+        if (is_camera) {
+          out.entity = target_viewport;
+          out.using_engine_default = false;
+        } else {
+          out.using_engine_default = true;
+        }
+      }
+    } else {
+      out.using_engine_default = true;
+      out.entity = scene->camera;
+      if (out.entity != entt::null) {
+        out.using_engine_default = false;
+      }
+    }
   } else {
-    if (registry.valid (out.entity)) {
-      if (registry.all_of<wsl::comp::camera> (out.entity)) {
-        const auto &cam = registry.get<wsl::comp::camera> (out.entity);
-        if (registry.all_of<wsl::comp::world_transform> (out.entity)) {
-          const auto &wt
-              = registry.get<wsl::comp::world_transform> (out.entity);
+    // Edit mode: use camera selection
+    auto mode = resolve_game_view_mode (registry, scene);
+
+    switch (mode) {
+    case game_view_mode::mode_2d_edit:
+      out.using_engine_default = true;
+      {
+        float const half_w = (float)w * 0.5F / editor_camera_2d.zoom;
+        float const half_h = (float)h * 0.5F / editor_camera_2d.zoom;
+        out.world_pos
+            = glm::vec3 (editor_cam_2d_pos.x, editor_cam_2d_pos.y, 0.0F);
+        out.view = glm::mat4 (1.0F);
+        out.proj = glm::ortho (editor_cam_2d_pos.x - half_w,
+                               editor_cam_2d_pos.x + half_w,
+                               editor_cam_2d_pos.y + half_h,
+                               editor_cam_2d_pos.y - half_h, -1.0F, 1.0F);
+        out.valid = true;
+      }
+      break;
+
+    case game_view_mode::mode_3d_edit:
+    case game_view_mode::mode_3d_fly:
+      out.using_engine_default = true;
+      out.world_pos = editor_cam_pos;
+      out.view = glm::mat4_cast (glm::inverse (editor_cam_rot));
+      out.view = glm::translate (out.view, -editor_cam_pos);
+      out.proj = glm::perspective (glm::radians (editor_camera.fov),
+                                   out.aspect_ratio, editor_camera.near,
+                                   editor_camera.far);
+      out.valid = true;
+      break;
+
+    case game_view_mode::mode_2d_view:
+    case game_view_mode::mode_3d_view: {
+      entt::entity cam_entity = entt::null;
+      if (game_view_camera_selection == game_view_camera_sel::default_runtime) {
+        if (target_viewport != entt::null) {
+          if (auto *sv
+              = registry.try_get<comp::subviewport> (target_viewport)) {
+            cam_entity = sv->camera.value;
+          }
+        } else {
+          cam_entity = scene->camera;
+        }
+      } else {
+        cam_entity = game_view_selected_camera_entity;
+      }
+
+      if (cam_entity != entt::null && registry.valid (cam_entity)) {
+        if (registry.all_of<comp::camera, comp::world_transform> (cam_entity)) {
+          const auto &cam = registry.get<comp::camera> (cam_entity);
+          const auto &wt = registry.get<comp::world_transform> (cam_entity);
           glm::mat4 const wtm = wt.value;
           out.world_pos = glm::vec3 (wtm[3]);
           out.view = glm::inverse (wtm);
           out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
                                        cam.near, cam.far);
           out.valid = true;
-        }
-      } else if (registry.all_of<wsl::comp::camera_2d> (out.entity)) {
-        const auto &cam2d = registry.get<wsl::comp::camera_2d> (out.entity);
-        if (registry.all_of<wsl::comp::transform_2d> (out.entity)) {
-          const auto &t2d = registry.get<wsl::comp::transform_2d> (out.entity);
-          uint32_t win_w, win_h;
-          runtime_ctx.window.get_size (win_w, win_h);
+          out.entity = cam_entity;
+          out.using_engine_default = false;
+        } else if (registry.all_of<comp::camera_2d, comp::transform_2d> (
+                       cam_entity)) {
+          const auto &cam2d = registry.get<comp::camera_2d> (cam_entity);
+          const auto &t2d = registry.get<comp::transform_2d> (cam_entity);
           float const vp_w = cam2d.use_window_as_viewport
-                                 ? static_cast<float> (win_w)
+                                 ? static_cast<float> (w)
                                  : cam2d.viewport_size.x;
           float const vp_h = cam2d.use_window_as_viewport
-                                 ? static_cast<float> (win_h)
+                                 ? static_cast<float> (h)
                                  : cam2d.viewport_size.y;
           float const half_w = vp_w * 0.5F / cam2d.zoom;
           float const half_h = vp_h * 0.5F / cam2d.zoom;
@@ -345,9 +519,51 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
               t2d.position.x - half_w, t2d.position.x + half_w,
               t2d.position.y + half_h, t2d.position.y - half_h, -1.0F, 1.0F);
           out.valid = true;
+          out.entity = cam_entity;
+          out.using_engine_default = false;
         }
       }
+      break;
     }
+    }
+  }
+
+  // Compute matrices for play-mode runtime cameras
+  if (running && out.entity != entt::null && registry.valid (out.entity)) {
+    if (registry.all_of<comp::camera, comp::world_transform> (out.entity)) {
+      const auto &cam = registry.get<comp::camera> (out.entity);
+      const auto &wt = registry.get<comp::world_transform> (out.entity);
+      glm::mat4 const wtm = wt.value;
+      out.world_pos = glm::vec3 (wtm[3]);
+      out.view = glm::inverse (wtm);
+      out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
+                                   cam.near, cam.far);
+      out.valid = true;
+    } else if (registry.all_of<comp::camera_2d, comp::transform_2d> (
+                   out.entity)) {
+      const auto &cam2d = registry.get<comp::camera_2d> (out.entity);
+      const auto &t2d = registry.get<comp::transform_2d> (out.entity);
+      float const vp_w = cam2d.use_window_as_viewport ? static_cast<float> (w)
+                                                      : cam2d.viewport_size.x;
+      float const vp_h = cam2d.use_window_as_viewport ? static_cast<float> (h)
+                                                      : cam2d.viewport_size.y;
+      float const half_w = vp_w * 0.5F / cam2d.zoom;
+      float const half_h = vp_h * 0.5F / cam2d.zoom;
+      out.world_pos = glm::vec3 (t2d.position.x, t2d.position.y, 0.0F);
+      out.view = glm::mat4 (1.0F);
+      out.proj = glm::ortho (t2d.position.x - half_w, t2d.position.x + half_w,
+                             t2d.position.y + half_h, t2d.position.y - half_h,
+                             -1.0F, 1.0F);
+      out.valid = true;
+    }
+  } else if (running && out.using_engine_default) {
+    out.world_pos = editor_cam_pos;
+    out.view = glm::mat4_cast (glm::inverse (editor_cam_rot));
+    out.view = glm::translate (out.view, -editor_cam_pos);
+    out.proj
+        = glm::perspective (glm::radians (editor_camera.fov), out.aspect_ratio,
+                            editor_camera.near, editor_camera.far);
+    out.valid = true;
   }
 
   if (out.valid) {

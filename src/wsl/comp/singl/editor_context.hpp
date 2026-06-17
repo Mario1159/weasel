@@ -4,6 +4,7 @@
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/input.hpp"
 #include "wsl/comp/camera.hpp"
+#include "wsl/comp/camera_2d.hpp"
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -66,14 +67,42 @@ public:
   game_view_cam_mode game_view_camera_mode = game_view_cam_mode::engine_default;
   entt::entity game_view_camera_entity = entt::null;
 
+  // Viewport combobox selection in the game view toolbar.
+  // entt::null = root viewport (use rendering_manager::render_viewport).
+  entt::entity game_view_selected_viewport = entt::null;
+
+  // Game view mode determines editor interactions and camera.
+  enum class game_view_mode
+  {
+    mode_2d_edit,
+    mode_3d_edit,
+    mode_2d_view,
+    mode_3d_view,
+    mode_3d_fly,
+  };
+
   // Camera combobox selection in the game view toolbar.
-  // entt::null = "Default" (use rendering_manager::main_camera).
-  entt::entity game_view_selected_camera = entt::null;
+  enum class game_view_camera_sel
+  {
+    default_editor,
+    editor_3d,
+    editor_2d,
+    default_runtime,
+    entity,
+  };
+
+  game_view_camera_sel game_view_camera_selection
+      = game_view_camera_sel::default_editor;
+  entt::entity game_view_selected_camera_entity = entt::null;
 
   // Editor state (engine default camera = NOT an entity)
   wsl::comp::camera editor_camera{};
   glm::vec3 editor_cam_pos{ 6.64463F, 3.4202F, 6.64463F };
   glm::quat editor_cam_rot{ glm::radians (glm::vec3 (-20.0F, 45.0F, 0.0F)) };
+
+  // Editor 2D camera state
+  wsl::comp::camera_2d editor_camera_2d{};
+  glm::vec2 editor_cam_2d_pos{ 0.0F, 0.0F };
 
   // Editor selection used by rendering/editor overlays
   entt::entity selected_entity = entt::null;
@@ -140,6 +169,10 @@ public:
 
     void reset ();
   };
+
+  // Resolves the game view mode based on camera selection and viewport.
+  game_view_mode resolve_game_view_mode (entt::registry &registry,
+                                         wsl::rsc::scene *scene) const;
 
   // Resolves the camera used to render the Game View:
   // - Running: scene->camera

@@ -94,7 +94,8 @@ rsc::scene_manager::set_active (scene *scene_ptr)
           = resolve_active_game_camera (*m_active_scene);
       m_active_scene->camera = active_camera;
       if (ctx.contains<comp::singl::rendering_manager> ()) {
-        ctx.get<comp::singl::rendering_manager> ().main_camera = active_camera;
+        // Default to root viewport (entt::null) when switching scenes.
+        ctx.get<comp::singl::rendering_manager> ().render_viewport = entt::null;
       }
 
       if (ctx.contains<comp::singl::ui_manager *> ()) {
