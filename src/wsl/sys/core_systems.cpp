@@ -459,9 +459,17 @@ core_systems::render_impl (wsl::gfx::render_window &window,
     entt::entity main_viewport
         = (rendering != nullptr) ? rendering->render_viewport : entt::null;
 
+    // Defensive: if render_viewport points to a non-subviewport entity
+    // (e.g. stale code writing to the old main_camera field), treat as root.
+    if (main_viewport != entt::null
+        && !registry.all_of<comp::subviewport> (main_viewport)) {
+      main_viewport = entt::null;
+    }
+
 #ifdef WEASEL_BUILD_EDITOR
     if (m_editor_ctx != nullptr) {
-      if (m_editor_ctx->game_view_selected_viewport != entt::null) {
+      if (m_editor_ctx->game_view_selected_viewport != entt::null
+          && !m_runtime_ctx->is_running) {
         main_viewport = m_editor_ctx->game_view_selected_viewport;
       }
     }
