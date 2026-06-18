@@ -461,6 +461,20 @@ model_loader::upload_next_batch (upload_session &session,
         dst_prim.mat.emissive_tex
             = create_gpu_texture (*mat.emissive.tex, true);
       }
+
+      // Create a shared sampler for this material's textures.
+      if (dst_prim.mat.sampler == nullptr) {
+        SDL_GPUSamplerCreateInfo sampler_info{};
+        sampler_info.min_filter = SDL_GPU_FILTER_LINEAR;
+        sampler_info.mag_filter = SDL_GPU_FILTER_LINEAR;
+        sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
+        sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+        sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+        sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+        sampler_info.max_lod = 1000.0F;
+        dst_prim.mat.sampler
+            = SDL_CreateGPUSampler (m_ctx->gpu_device, &sampler_info);
+      }
       break;
     }
     }
@@ -942,6 +956,16 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
     return nullptr;
   }
 
+  auto mip_count_2d = [] (uint32_t w, uint32_t h) {
+    uint32_t levels = 1;
+    while (w > 1 || h > 1) {
+      w = (w > 1) ? (w >> 1) : 1;
+      h = (h > 1) ? (h >> 1) : 1;
+      ++levels;
+    }
+    return levels;
+  };
+
   SDL_GPUTextureCreateInfo ti{};
   ti.type = SDL_GPU_TEXTURETYPE_2D;
   ti.format = srgb ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
@@ -949,7 +973,7 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
   ti.width = tex.width;
   ti.height = tex.height;
   ti.layer_count_or_depth = 1;
-  ti.num_levels = 1;
+  ti.num_levels = mip_count_2d (tex.width, tex.height);
   ti.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
   SDL_GPUTexture *gpu_tex = SDL_CreateGPUTexture (m_ctx->gpu_device, &ti);
@@ -987,6 +1011,11 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
 
   SDL_UploadToGPUTexture (cp, &src, &dst, true);
   SDL_EndGPUCopyPass (cp);
+
+  if (ti.num_levels > 1) {
+    SDL_GenerateMipmapsForGPUTexture (cmd, gpu_tex);
+  }
+
   SDL_SubmitGPUCommandBuffer (cmd);
 
   SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, upload);

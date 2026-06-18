@@ -71,6 +71,12 @@ public:
     entt::entity entity = entt::null;
     //! True when the submission should also receive an outline pass.
     bool draw_outline = false;
+    //! Per-instance texture mip LOD bias.
+    float mip_lod_bias = 0.0F;
+    //! Per-instance geometry LOD aggressiveness bias.
+    float geometry_lod_bias = 0.0F;
+    //! Per-instance max draw distance (0 = unlimited).
+    float visibility_range = 0.0F;
   };
 
   /*!
@@ -140,7 +146,9 @@ public:
    * \brief Draws a model immediately using explicit transform data.
    */
   void draw_model (gfx::model_3d &model, size_t scene_index,
-                   const glm::mat4 &model_matrix, const glm::mat4 &view_proj);
+                   const glm::mat4 &model_matrix, const glm::mat4 &view_proj,
+                   float mip_lod_bias = 0.0F, float geometry_lod_bias = 0.0F,
+                   float visibility_range = 0.0F);
 
   //! Overrides the cached camera position used by shading.
   void set_camera_position (const glm::vec3 &position);
@@ -279,12 +287,18 @@ public:
 private:
   // High-level scene drawing helpers.
   static auto extract_position (const glm::mat4 &matrix) -> glm::vec3;
-  auto select_lod (gfx::node &n) const -> gfx::mesh *;
+  auto select_lod (gfx::node &n, float geometry_lod_bias = 0.0F) const
+      -> gfx::mesh *;
   void bind_pipeline ();
   void render_mesh (const glm::mat4 &model, const glm::mat4 &view_proj,
-                    const mesh &mesh);
-  inline void render_node (gfx::node &n, const glm::mat4 &view_proj);
-  void render_scene (gfx::scene &scene, const glm::mat4 &view_proj);
+                    const mesh &mesh, float mip_lod_bias = 0.0F);
+  inline void render_node (gfx::node &n, const glm::mat4 &view_proj,
+                           float mip_lod_bias = 0.0F,
+                           float geometry_lod_bias = 0.0F,
+                           float visibility_range = 0.0F);
+  void render_scene (gfx::scene &scene, const glm::mat4 &view_proj,
+                     float mip_lod_bias = 0.0F, float geometry_lod_bias = 0.0F,
+                     float visibility_range = 0.0F);
   void update_node_world (gfx::node &n, const glm::mat4 &parent);
 
   // Main scene resource management.

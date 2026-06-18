@@ -18,6 +18,10 @@ struct model_instance_3d : world_component
   rsc::model_id id{};
   uint32_t scene_index = 0;
 
+  float mip_lod_bias = 0.0f;
+  float geometry_lod_bias = 0.0f;
+  float visibility_range = 0.0f;
+
   static void
   register_meta ()
   {
@@ -35,7 +39,25 @@ struct model_instance_3d : world_component
 
         .data<&comp::model_instance_3d::scene_index> ("scene_index"_hs)
         .custom<comp::meta_info> (
-            meta_info{ "Scene Index", "Scene inside the model to render", "" });
+            meta_info{ "Scene Index", "Scene inside the model to render", "" })
+
+        .data<&comp::model_instance_3d::mip_lod_bias> ("mip_lod_bias"_hs)
+        .custom<comp::meta_info> (
+            meta_info{ "Mip LOD Bias",
+                       "Texture sharpness bias (<0 sharper, >0 softer)", "" })
+
+        .data<&comp::model_instance_3d::geometry_lod_bias> (
+            "geometry_lod_bias"_hs)
+        .custom<comp::meta_info> (meta_info{
+            "Geometry LOD Bias",
+            "Mesh LOD aggressiveness (<0 less aggressive, >0 more aggressive)",
+            "" })
+
+        .data<&comp::model_instance_3d::visibility_range> (
+            "visibility_range"_hs)
+        .custom<comp::meta_info> (meta_info{
+            "Visibility Range",
+            "Max draw distance in world units (0 = unlimited)", "" });
   }
 
   template <class Archive>
@@ -56,6 +78,12 @@ struct model_instance_3d : world_component
       }
       serialize_field_if_diff (archive, "scene_index", scene_index,
                                def.scene_index);
+      serialize_field_if_diff (archive, "mip_lod_bias", mip_lod_bias,
+                               def.mip_lod_bias);
+      serialize_field_if_diff (archive, "geometry_lod_bias", geometry_lod_bias,
+                               def.geometry_lod_bias);
+      serialize_field_if_diff (archive, "visibility_range", visibility_range,
+                               def.visibility_range);
     } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
       std::string path;
       scene_index = def.scene_index;
@@ -66,6 +94,21 @@ struct model_instance_3d : world_component
       try {
         serialize_field_if_diff (archive, "scene_index", scene_index,
                                  def.scene_index);
+      } catch (const std::exception &) {
+      }
+      try {
+        serialize_field_if_diff (archive, "mip_lod_bias", mip_lod_bias,
+                                 def.mip_lod_bias);
+      } catch (const std::exception &) {
+      }
+      try {
+        serialize_field_if_diff (archive, "geometry_lod_bias",
+                                 geometry_lod_bias, def.geometry_lod_bias);
+      } catch (const std::exception &) {
+      }
+      try {
+        serialize_field_if_diff (archive, "visibility_range", visibility_range,
+                                 def.visibility_range);
       } catch (const std::exception &) {
       }
 
@@ -80,7 +123,10 @@ struct model_instance_3d : world_component
         path = mgr->get_resource_path (id);
       }
       archive (make_nvp ("model_path", path),
-               make_nvp ("scene_index", scene_index));
+               make_nvp ("scene_index", scene_index),
+               make_nvp ("mip_lod_bias", mip_lod_bias),
+               make_nvp ("geometry_lod_bias", geometry_lod_bias),
+               make_nvp ("visibility_range", visibility_range));
       if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
                                       Archive>) {
         if (path != "None" && !path.empty () && mgr) {

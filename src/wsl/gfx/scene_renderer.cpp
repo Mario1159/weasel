@@ -49,6 +49,7 @@ gfx::scene_renderer::create_default_texture ()
   sinfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   sinfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   sinfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  sinfo.max_lod = 1000.0F;
 
   m_default_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &sinfo);
 
@@ -86,7 +87,8 @@ gfx::scene_renderer::extract_position (const glm::mat4 &m) -> glm::vec3
 }
 
 auto
-gfx::scene_renderer::select_lod (gfx::node &n) const -> gfx::mesh *
+gfx::scene_renderer::select_lod (gfx::node &n, float geometry_lod_bias) const
+    -> gfx::mesh *
 {
   if (n.mesh_lods.empty ()) {
     return nullptr;
@@ -98,12 +100,13 @@ gfx::scene_renderer::select_lod (gfx::node &n) const -> gfx::mesh *
 
   const glm::vec3 node_pos = extract_position (n.world_transform);
   const float dist = glm::length (m_camera_pos - node_pos);
+  const float effective_dist = dist * (1.0F + geometry_lod_bias);
 
-  if (dist < 10.0F) {
+  if (effective_dist < 10.0F) {
     return n.mesh_lods[0];
   }
 
-  if (dist < 30.0F && n.mesh_lods.size () > 1) {
+  if (effective_dist < 30.0F && n.mesh_lods.size () > 1) {
     return n.mesh_lods[1];
   }
 
@@ -111,27 +114,39 @@ gfx::scene_renderer::select_lod (gfx::node &n) const -> gfx::mesh *
 }
 
 inline void
-gfx::scene_renderer::render_node (gfx::node &n, const glm::mat4 &view_proj)
+gfx::scene_renderer::render_node (gfx::node &n, const glm::mat4 &view_proj,
+                                  float mip_lod_bias, float geometry_lod_bias,
+                                  float visibility_range)
 {
-
   if (!n.mesh_lods.empty ()) {
-    gfx::mesh const *m = select_lod (n);
+    if (visibility_range > 0.0F) {
+      const glm::vec3 node_pos = extract_position (n.world_transform);
+      const float dist = glm::length (m_camera_pos - node_pos);
+      if (dist > visibility_range) {
+        return;
+      }
+    }
+
+    gfx::mesh const *m = select_lod (n, geometry_lod_bias);
     if (m != nullptr) {
-      render_mesh (n.world_transform, view_proj, *m);
+      render_mesh (n.world_transform, view_proj, *m, mip_lod_bias);
     }
   }
 
   for (gfx::node &child : n.children) {
-    render_node (child, view_proj);
+    render_node (child, view_proj, mip_lod_bias, geometry_lod_bias,
+                 visibility_range);
   }
 }
 
 void
-gfx::scene_renderer::render_scene (gfx::scene &s, const glm::mat4 &view_proj)
+gfx::scene_renderer::render_scene (gfx::scene &s, const glm::mat4 &view_proj,
+                                   float mip_lod_bias, float geometry_lod_bias,
+                                   float visibility_range)
 {
-
   for (gfx::node &root : s.roots) {
-    render_node (root, view_proj);
+    render_node (root, view_proj, mip_lod_bias, geometry_lod_bias,
+                 visibility_range);
   }
 }
 
@@ -146,8 +161,8 @@ gfx::scene_renderer::update_node_world (gfx::node &n, const glm::mat4 &parent)
 }
 
 gfx::scene_renderer::scene_renderer (wsl::gfx::render_window &window,
-                                      render_context *ctx,
-                                      wsl::rsc::resource_manager *res_mgr)
+                                     render_context *ctx,
+                                     wsl::rsc::resource_manager *res_mgr)
     : renderer (window, ctx, res_mgr)
 {
 
@@ -238,7 +253,8 @@ gfx::scene_renderer::draw_visible_models ()
     }
 
     draw_model (*draw.model, draw.scene_index, draw.transform,
-                m_active_view.view_proj);
+                m_active_view.view_proj, draw.mip_lod_bias,
+                draw.geometry_lod_bias, draw.visibility_range);
   }
 }
 
@@ -749,7 +765,9 @@ gfx::scene_renderer::bind_pipeline ()
 void
 gfx::scene_renderer::draw_model (gfx::model_3d &model, size_t scene_index,
                                  const glm::mat4 &model_matrix,
-                                 const glm::mat4 &view_proj)
+                                 const glm::mat4 &view_proj, float mip_lod_bias,
+                                 float geometry_lod_bias,
+                                 float visibility_range)
 {
   if (scene_index >= model.scenes.size ()) {
     return;
@@ -764,12 +782,14 @@ gfx::scene_renderer::draw_model (gfx::model_3d &model, size_t scene_index,
     update_node_world (root, model_matrix);
   }
 
-  render_scene (scene, view_proj);
+  render_scene (scene, view_proj, mip_lod_bias, geometry_lod_bias,
+                visibility_range);
 }
 
 void
 gfx::scene_renderer::render_mesh (const glm::mat4 &model,
-                                  const glm::mat4 &view_proj, const mesh &m)
+                                  const glm::mat4 &view_proj, const mesh &m,
+                                  float mip_lod_bias)
 {
 
   struct alignas (16) matrices
@@ -813,6 +833,7 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
     gpu_mat.metallic = prim.mat.metallic_factor;
     gpu_mat.roughness = prim.mat.roughness_factor;
     gpu_mat.emissive = prim.mat.emissive_factor;
+    gpu_mat.mip_lod_bias = mip_lod_bias;
 
     SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &gpu_mat,
                                     sizeof (gfx::gpu_material));

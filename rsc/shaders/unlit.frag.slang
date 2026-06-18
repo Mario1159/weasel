@@ -14,7 +14,7 @@ cbuffer Material : register(b0, space3)
     float2 pad_m0;
 
     float3 u_EmissiveFactor;
-    float  pad_m1;
+    float  u_MipLodBias;
 };
 
 // Keep the same texture + sampler layout your engine already binds
@@ -47,8 +47,8 @@ struct PSOut {
 [shader("fragment")]
 PSOut fsMain(PSInput input)
 {
-    float4 baseColor = u_BaseColorTex.Sample(u_Sampler, input.uv) * u_BaseColorFactor;
-    float3 emissive  = u_EmissiveTex.Sample(u_Sampler, input.uv).rgb * u_EmissiveFactor;
+    float4 baseColor = u_BaseColorTex.SampleBias(u_Sampler, input.uv, u_MipLodBias) * u_BaseColorFactor;
+    float3 emissive  = u_EmissiveTex.SampleBias(u_Sampler, input.uv, u_MipLodBias).rgb * u_EmissiveFactor;
 
     if (baseColor.a < 0.01)
         discard;

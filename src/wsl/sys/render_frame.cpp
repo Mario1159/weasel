@@ -176,6 +176,9 @@ sys::build_render_frame (entt::registry &registry,
           .transform = static_cast<glm::mat4> (world.value),
           .entity = entity,
           .draw_outline = (entity == selected_entity),
+          .mip_lod_bias = instance.mip_lod_bias,
+          .geometry_lod_bias = instance.geometry_lod_bias,
+          .visibility_range = instance.visibility_range,
       });
     }
 

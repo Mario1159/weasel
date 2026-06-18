@@ -127,7 +127,7 @@ struct gpu_material
   float roughness;
   float pad0[2]{};
   glm::vec3 emissive;
-  float pad1 = 0.0F;
+  float mip_lod_bias = 0.0F;
 };
 
 } // namespace gfx

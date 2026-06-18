@@ -54,7 +54,7 @@ cbuffer Material : register(b0, space3)
     float2 pad_m0;
 
     float3 u_EmissiveFactor;
-    float  pad_m1;
+    float  u_MipLodBias;
 };
 
 struct PointLight
@@ -294,7 +294,7 @@ float3 ApplyNormalMap(float3 N, float4 tangent, float2 uv)
 
     float3 B = normalize(cross(N, T) * tangent.w);
 
-    float3 nTS = UnpackNormal(u_NormalTex.Sample(u_Samplers[2], uv).xyz);
+    float3 nTS = UnpackNormal(u_NormalTex.SampleBias(u_Samplers[2], uv, u_MipLodBias).xyz);
 
     float3x3 TBN = float3x3(T, B, N);
     return normalize(mul(nTS, TBN));
@@ -456,7 +456,7 @@ PSOut fsMain(PSInput input)
     float3 V  = normalize(u_CameraPos.xyz - input.worldPos);
 
     float4 baseColor =
-        u_BaseColorTex.Sample(u_Samplers[0], input.uv) *
+        u_BaseColorTex.SampleBias(u_Samplers[0], input.uv, u_MipLodBias) *
         u_BaseColorFactor;
 
     if (baseColor.a < 0.01)
@@ -464,7 +464,7 @@ PSOut fsMain(PSInput input)
 
     float3 albedo = baseColor.rgb;
 
-    float2 mr = u_MetallicRoughnessTex.Sample(u_Samplers[1], input.uv).gb;
+    float2 mr = u_MetallicRoughnessTex.SampleBias(u_Samplers[1], input.uv, u_MipLodBias).gb;
     float roughness = clamp(mr.x * u_RoughnessFactor, 0.04, 1.0);
     float metallic  = mr.y * u_MetallicFactor;
 
@@ -655,7 +655,7 @@ PSOut fsMain(PSInput input)
     ambient *= ao;
 
     float3 emissive =
-        u_EmissiveTex.Sample(u_Samplers[3], input.uv).rgb *
+        u_EmissiveTex.SampleBias(u_Samplers[3], input.uv, u_MipLodBias).rgb *
         u_EmissiveFactor;
 
     float3 scene = ambient + Lo + emissive;
