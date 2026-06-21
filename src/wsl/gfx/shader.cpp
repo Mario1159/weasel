@@ -32,7 +32,7 @@ SDL_GPUShader *
 shader::load_from_manager (SDL_GPUDevice *device,
                            rsc::resource_manager *res_mgr, rsc::shader_id id,
                            SDL_GPUShaderStage stage, Uint32 num_uniform_buffers,
-                           Uint32 num_samplers)
+                           Uint32 num_samplers, Uint32 num_storage_buffers)
 {
   if (res_mgr == nullptr) {
     return nullptr;
@@ -53,7 +53,7 @@ shader::load_from_manager (SDL_GPUDevice *device,
   info.num_uniform_buffers = num_uniform_buffers;
   info.num_samplers = num_samplers;
 
-  info.num_storage_buffers = 0;
+  info.num_storage_buffers = num_storage_buffers;
   info.num_storage_textures = 0;
   info.props = 0;
 
@@ -62,7 +62,8 @@ shader::load_from_manager (SDL_GPUDevice *device,
 
 SDL_GPUShader *
 shader::load (SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage,
-              Uint32 num_uniform_buffers, Uint32 num_samplers)
+              Uint32 num_uniform_buffers, Uint32 num_samplers,
+              Uint32 num_storage_buffers)
 {
   size_t size = 0;
   void *data = SDL_LoadFile (path, &size);
@@ -82,7 +83,7 @@ shader::load (SDL_GPUDevice *device, const char *path, SDL_GPUShaderStage stage,
   info.num_uniform_buffers = num_uniform_buffers;
   info.num_samplers = num_samplers;
 
-  info.num_storage_buffers = 0;
+  info.num_storage_buffers = num_storage_buffers;
   info.num_storage_textures = 0;
   info.props = 0;
 

@@ -15,6 +15,8 @@
 #include <glm/ext/vector_float3.hpp>
 #include <glm/geometric.hpp>
 
+#include <tracy/Tracy.hpp>
+
 namespace wsl
 {
 
@@ -24,6 +26,7 @@ namespace sys
 void
 sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
 {
+  ZoneScoped;
   auto &ctx = registry.ctx ();
 
   // Robust check for runtime_context pointer in context storage

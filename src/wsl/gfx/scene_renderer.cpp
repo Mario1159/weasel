@@ -35,6 +35,8 @@
 #include <utility>
 #include <vector>
 
+#include <tracy/Tracy.hpp>
+
 namespace wsl
 {
 
@@ -163,7 +165,7 @@ gfx::scene_renderer::update_node_world (gfx::node &n, const glm::mat4 &parent)
 gfx::scene_renderer::scene_renderer (wsl::gfx::render_window &window,
                                      render_context *ctx,
                                      wsl::rsc::resource_manager *res_mgr)
-    : renderer (window, ctx, res_mgr)
+    : renderer (window, ctx, res_mgr), m_clustered (ctx, res_mgr)
 {
 
   create_pipeline ();
@@ -185,6 +187,7 @@ gfx::scene_renderer::scene_renderer (wsl::gfx::render_window &window,
 void
 gfx::scene_renderer::begin_frame (const view_state &view)
 {
+  ZoneScoped;
   m_active_view = view;
   m_camera_pos = view.world_position;
 
@@ -193,11 +196,23 @@ gfx::scene_renderer::begin_frame (const view_state &view)
   } else {
     m_light_vp = glm::mat4 (1.0F);
   }
+
+  // Inform the clustered lighting module of the screen size. Camera
+  // parameters (view/proj/near/far) are refreshed inside
+  // `run_clustered_lighting` because the lighting system has access to
+  // the camera's near/far values.
+  if (m_clustered.is_active ()) {
+    uint32_t w = 0;
+    uint32_t h = 0;
+    m_window->get_size (w, h);
+    m_clustered.on_resize (w, h);
+  }
 }
 
 void
 gfx::scene_renderer::end_frame ()
 {
+  ZoneScoped;
   m_active_view = view_state{};
   m_visible_draws.clear ();
 }
@@ -243,18 +258,24 @@ gfx::scene_renderer::bind_main_pipeline ()
 void
 gfx::scene_renderer::draw_visible_models ()
 {
+  ZoneScoped;
   if (!m_active_view.valid) {
     return;
   }
 
-  for (const draw_command &draw : m_visible_draws) {
-    if (draw.model == nullptr) {
-      continue;
-    }
+  {
+    ZoneScopedN ("scene_renderer::draw_visible_models::loop");
+    TracyPlot ("draw_commands", (int64_t)m_visible_draws.size ());
 
-    draw_model (*draw.model, draw.scene_index, draw.transform,
-                m_active_view.view_proj, draw.mip_lod_bias,
-                draw.geometry_lod_bias, draw.visibility_range);
+    for (const draw_command &draw : m_visible_draws) {
+      if (draw.model == nullptr) {
+        continue;
+      }
+
+      draw_model (*draw.model, draw.scene_index, draw.transform,
+                  m_active_view.view_proj, draw.mip_lod_bias,
+                  draw.geometry_lod_bias, draw.visibility_range);
+    }
   }
 }
 
@@ -278,6 +299,7 @@ gfx::scene_renderer::draw_visible_model_outlines ()
 void
 gfx::scene_renderer::build_ssao_for_visible_models ()
 {
+  ZoneScoped;
   if (!m_active_view.valid || !ssao_enabled) {
     return;
   }
@@ -318,8 +340,48 @@ gfx::scene_renderer::draw_active_environment (const glm::quat &skybox_rotation)
 void
 gfx::scene_renderer::upload_lighting (const lighting_ubo &lighting)
 {
+  ZoneScoped;
   SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 1, &lighting,
                                   sizeof (lighting));
+}
+
+void
+gfx::scene_renderer::run_clustered_lighting (
+    std::span<const gpu_point_light> point_lights, const glm::mat4 &view,
+    float z_near, float z_far)
+{
+  ZoneScoped;
+  if (!m_clustered.is_active ()) {
+    return;
+  }
+  if (m_ctx == nullptr || m_ctx->main_cmd == nullptr) {
+    return;
+  }
+
+  uint32_t w = 0;
+  uint32_t h = 0;
+  m_window->get_size (w, h);
+  m_clustered.on_resize (w, h);
+  m_clustered.on_camera_changed (view, m_active_view.proj, z_near, z_far);
+
+  TracyPlot ("point_lights", (int64_t)point_lights.size ());
+
+  // Convert the lighting system's `gpu_point_light` array (already in
+  // world space) into the layout expected by the compute shader.
+  // Both structs are identical for now; copy via span.
+  std::vector<gpu_cluster_light> cluster_lights;
+  cluster_lights.reserve (point_lights.size ());
+  for (const auto &src : point_lights) {
+    gpu_cluster_light dst{};
+    dst.pos_radius = src.pos_radius;
+    dst.color_intensity = src.color_intensity;
+    dst.shadow_info = src.shadow_info;
+    cluster_lights.push_back (dst);
+  }
+
+  m_clustered.update (m_ctx->main_cmd, cluster_lights, view);
+  TracyPlot ("clustered_lights",
+             (int64_t)std::min<size_t> (cluster_lights.size (), 4096));
 }
 
 void
@@ -596,9 +658,11 @@ gfx::scene_renderer::create_pipeline ()
   SDL_GPUShader *vert = gfx::shader::load_from_manager (
       m_ctx->gpu_device, m_res_mgr, vert_id, SDL_GPU_SHADERSTAGE_VERTEX, 1, 0);
 
-  SDL_GPUShader *frag
-      = gfx::shader::load_from_manager (m_ctx->gpu_device, m_res_mgr, frag_id,
-                                        SDL_GPU_SHADERSTAGE_FRAGMENT, 4, 15);
+  SDL_GPUShader *frag = gfx::shader::load_from_manager (
+      m_ctx->gpu_device, m_res_mgr, frag_id, SDL_GPU_SHADERSTAGE_FRAGMENT,
+      /*num_uniform_buffers=*/5, // Material, Lighting, IBL, Post, ClusterParams
+      /*num_samplers=*/15,
+      /*num_storage_buffers=*/2); // point light SSBO, cluster SSBO
 
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
@@ -791,12 +855,14 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
                                   const glm::mat4 &view_proj, const mesh &m,
                                   float mip_lod_bias)
 {
+  ZoneScoped;
 
   struct alignas (16) matrices
   {
     glm::mat4 model;
     glm::mat4 viewproj;
     glm::mat4 normal; // padded & matches HLSL float4x4
+    glm::mat4 view;
   };
   glm::mat3 n3 = glm::transpose (glm::inverse (glm::mat3 (model)));
 
@@ -805,10 +871,21 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
   n4[0] = glm::vec4 (n3[0], 0.0F);
   n4[1] = glm::vec4 (n3[1], 0.0F);
   n4[2] = glm::vec4 (n3[2], 0.0F);
-
-  matrices mat{ model, view_proj, n4 };
+  // Recover the view matrix from the cached view_proj if not supplied.
+  glm::mat4 view = m_active_view.valid ? m_active_view.view : glm::mat4 (1.0F);
+  matrices mat{ model, view_proj, n4, view };
 
   SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &mat, sizeof (matrices));
+
+  // Push ClusterParams cbuffer (b4, space3 in Slang -> slot 4 here).
+  if (m_clustered.is_active ()) {
+    uint32_t sw = 0;
+    uint32_t sh = 0;
+    m_window->get_size (sw, sh);
+    m_clustered.push_graphics_uniforms (
+        m_ctx->main_cmd, glm::inverse (m_active_view.proj),
+        glm::vec2 (static_cast<float> (sw), static_cast<float> (sh)));
+  }
 
   for (const primitive &prim : m.primitives) {
 
@@ -1003,6 +1080,9 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
                               : m_default_sampler;
 
     SDL_BindGPUFragmentSamplers (m_ctx->main_pass, 0, texbind, 15);
+
+    // Bind the clustered lighting SSBOs (light + cluster buffers).
+    m_clustered.bind_for_graphics (m_ctx->main_pass);
 
     SDL_DrawGPUIndexedPrimitives (m_ctx->main_pass,
                                   static_cast<Uint32> (prim.indices.size ()), 1,
@@ -2335,6 +2415,7 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
 void
 gfx::scene_renderer::begin_shadow_pass ()
 {
+  ZoneScoped;
   if (!m_shadows_enabled || (m_shadow_depth == nullptr)
       || (m_shadow_pipe == nullptr) || (m_shadow_pass != nullptr)
       || (m_ctx->main_cmd == nullptr)) {

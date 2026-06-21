@@ -34,6 +34,7 @@ target_link_libraries(wsl PUBLIC
     RmlUi::RmlUi
     Jolt
     fastgltf
+    meshoptimizer
     EnTT::EnTT
     spdlog
     cereal

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wsl/gfx/render_window.hpp"
+#include "clustered_lighting.hpp"
 #include "cubemap.hpp"
 #include "lighting.hpp"
 #include "mesh.hpp"
@@ -15,6 +16,7 @@
 #include <array>
 #include <cstddef>
 #include <deque>
+#include <span>
 #include <vector>
 
 namespace wsl
@@ -141,6 +143,22 @@ public:
 
   //! Uploads the frame lighting buffer.
   void upload_lighting (const lighting_ubo &lighting);
+
+  //! Dispatches the clustered-light compute passes for the active frame.
+  //! `point_lights` holds world-space lights in `gpu_point_light` layout;
+  //! the renderer copies them into the GPU SSBO and assigns them to the
+  //! cluster grid. When `clustered_lighting` is disabled, the call is a
+  //! no-op and the lights stay in the UBO fallback path.
+  void run_clustered_lighting (std::span<const gpu_point_light> point_lights,
+                               const glm::mat4 &view, float z_near,
+                               float z_far);
+
+  //! Returns true when the clustered-light compute passes are active.
+  [[nodiscard]] bool
+  clustered_lighting_enabled () const
+  {
+    return m_clustered.is_active ();
+  }
 
   /*!
    * \brief Draws a model immediately using explicit transform data.
@@ -450,6 +468,10 @@ private:
   // Grid resources.
   //! Graphics pipeline for the procedural projected grid.
   SDL_GPUGraphicsPipeline *m_pipeline_grid = nullptr;
+
+  //! Clustered forward lighting. Owns the SSBOs and compute pipelines
+  //! used by `cube.frag.slang` to shade point lights in clusters.
+  clustered_lighting m_clustered;
 };
 
 } // namespace gfx

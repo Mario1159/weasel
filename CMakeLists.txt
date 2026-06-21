@@ -71,7 +71,30 @@ endif()
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
 
 # --- Dependencies ---
-find_package(SDL3 CONFIG REQUIRED)
+# Use the vendored SDL3 main branch by default. The system's SDL3 (3.4.x
+# on most distros) has a Vulkan-backend bug on AMDVK/Mesa where storage
+# buffer descriptors come back as `VkBuffer 0x0` because the underlying
+# allocation isn't completed before the first descriptor update, which
+# segfaults the next compute dispatch. The SDL3 main branch (3.5+) has
+# the fix. Toggle off to fall back to the system SDL3 (e.g. for a
+# release build once 3.5+ is widely packaged).
+option(WEASEL_USE_VENDORED_SDL3 "Build against the vendored SDL3 in vendor/sdl3" ON)
+if(WEASEL_USE_VENDORED_SDL3)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/sdl3/CMakeLists.txt")
+        message(FATAL_ERROR
+            "WEASEL_USE_VENDORED_SDL3=ON but vendor/sdl3 is missing. "
+            "Run: git clone --depth 1 --branch main "
+            "https://github.com/libsdl-org/SDL.git vendor/sdl3")
+    endif()
+    # SDL3's CMakeLists.txt is at the repo root; it creates the
+    # `SDL3::SDL3` target plus all the sub-targets the engine links
+    # against (SDL3_image, SDL3_mixer use the same SDL3::SDL3).
+    add_subdirectory(vendor/sdl3 EXCLUDE_FROM_ALL)
+    message(STATUS "Using vendored SDL3 from vendor/sdl3")
+else()
+    find_package(SDL3 CONFIG REQUIRED)
+    message(STATUS "Using system SDL3 from ${SDL3_DIR}")
+endif()
 find_package(LibArchive REQUIRED)
 find_package(PkgConfig REQUIRED)
 
@@ -231,7 +254,12 @@ CPMAddPackage(
     OPTIONS
         "TRACY_ENABLE ON"
         "TRACY_ON_DEMAND ON"
-        "TRACY_STATIC ON"
+        # Tracy must be a SHARED library (TRACY_STATIC OFF). As a static
+        # lib, both `wsl.dll` and the editor executable would carry their
+        # own `Profiler` instance and the `s_instance` assertion would
+        # fire on the second construction. With a shared lib there is
+        # exactly one `Profiler` global for the whole process.
+        "TRACY_STATIC OFF"
     SYSTEM ON
 )
 
@@ -270,6 +298,15 @@ CPMAddPackage(
     NAME fastgltf
     GITHUB_REPOSITORY spnda/fastgltf
     GIT_TAG main
+    SYSTEM ON
+)
+
+# meshoptimizer is amalgamated (single .cpp + header). Used by the model
+# loader to reorder indices for GPU vertex cache efficiency before upload.
+CPMAddPackage(
+    NAME meshoptimizer
+    GITHUB_REPOSITORY zeux/meshoptimizer
+    GIT_TAG v0.24
     SYSTEM ON
 )
 
@@ -425,6 +462,11 @@ set(FRAGMENT_SHADER_SOURCES
     "${SHADER_SOURCE_DIR}/grid.frag.slang"
 )
 
+set(COMPUTE_SHADER_SOURCES
+    "${SHADER_SOURCE_DIR}/cluster_build.slang"
+    "${SHADER_SOURCE_DIR}/light_cull.slang"
+)
+
 set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/compiled_shaders")
 file(MAKE_DIRECTORY "${SHADER_OUTPUT_DIR}")
 
@@ -441,7 +483,19 @@ else()
     set(SLANG_SHADER_TARGET spirv)
     set(SHADER_EXT ".spv")
     set(SLANG_DXC_FLAGS "")
-    set(SLANG_SPIRV_FLAGS "-fvk-use-entrypoint-name")
+    # Slang's direct SPIR-V emitter produces generic SPIR-V 1.5 that
+    # pulls in Vulkan 1.1+ capabilities (DrawParameters,
+    # SPV_KHR_storage_buffer_storage_class) without declaring a
+    # matching target environment. SDL_GPU's Vulkan backend then
+    # reports the device as Vulkan 1.0 to the validation layer, the
+    # validator rejects the SPIR-V, and the AMDVK driver ends up
+    # parsing the rest as Vulkan 1.0 — the fragment-stage storage
+    # buffer descriptor comes back as `VkBuffer 0x0`
+    # (validation: "buffer is VK_NULL_HANDLE ... invalid or has been
+    # destroyed") and the next `SDL_DispatchGPUCompute` segfaults.
+    # Routing through glslang (which is on PATH) emits Vulkan 1.0
+    # compatible SPIR-V by default and the driver parses it correctly.
+    set(SLANG_SPIRV_FLAGS "-emit-spirv-via-glsl" "-fvk-use-entrypoint-name")
 endif()
 
 if(WIN32)
@@ -471,9 +525,25 @@ foreach(SHADER_FILE IN LISTS FRAGMENT_SHADER_SOURCES)
     set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.frag.slang${SHADER_EXT}")
     add_custom_command(
         OUTPUT "${OUTPUT_FILE}"
-        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_FRAG_PROFILE} -entry fsMain -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 ${SLANG_DXC_FLAGS} ${SLANG_SPIRV_FLAGS}
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} ${SLANG_FRAG_PROFILE} -entry fsMain -o "${OUTPUT_FILE}" -fvk-t-shift 0 2 -fvk-s-shift 0 2 -fvk-b-shift 0 3 -fvk-u-shift 0 2 ${SLANG_DXC_FLAGS} ${SLANG_SPIRV_FLAGS}
         DEPENDS "${SHADER_FILE}"
         COMMENT "Compiling shader: ${SHADER_FILE}"
+        VERBATIM
+    )
+    list(APPEND COMPILED_SHADERS "${OUTPUT_FILE}")
+endforeach()
+
+foreach(SHADER_FILE IN LISTS COMPUTE_SHADER_SOURCES)
+    get_filename_component(SHADER_BASE "${SHADER_FILE}" NAME_WE)
+    set(OUTPUT_FILE "${SHADER_OUTPUT_DIR}/${SHADER_BASE}.slang${SHADER_EXT}")
+    add_custom_command(
+        OUTPUT "${OUTPUT_FILE}"
+        # Compute shaders use explicit [[vk::binding(set, binding)]]
+        # attributes for all resources. The -fvk-*-shift flags would
+        # override those bindings, so they are intentionally omitted.
+        COMMAND "${SLANG_EXE}" "${SHADER_FILE}" -target ${SLANG_SHADER_TARGET} -entry csMain -o "${OUTPUT_FILE}" ${SLANG_DXC_FLAGS} ${SLANG_SPIRV_FLAGS}
+        DEPENDS "${SHADER_FILE}"
+        COMMENT "Compiling compute shader: ${SHADER_FILE}"
         VERBATIM
     )
     list(APPEND COMPILED_SHADERS "${OUTPUT_FILE}")
@@ -597,6 +667,19 @@ install(TARGETS weasel-cli
 install(TARGETS weasel-mcp-server
     RUNTIME DESTINATION bin COMPONENT McpServer
 )
+
+# Tracy must ship with the engine: it's a SHARED library and weasel/wsl
+# dynamically link against libTracyClient.so. Without it, `weasel` and
+# `libwsl.so` would each carry their own Profiler globals and the
+# `s_instance` assertion would fire on the second construction.
+if(TARGET TracyClient)
+    install(TARGETS TracyClient
+        RUNTIME DESTINATION bin COMPONENT Engine
+        LIBRARY DESTINATION lib COMPONENT Engine
+        ARCHIVE DESTINATION lib COMPONENT Engine
+        COMPONENT Engine
+    )
+endif()
 
 # Generate a manual WeaselTargets.cmake with an imported target for wsl.
 # This avoids CMake export issues with wsl's many CPM-based PUBLIC dependencies.

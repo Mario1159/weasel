@@ -3,7 +3,6 @@
 #include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 
-
 namespace wsl
 {
 
@@ -56,9 +55,11 @@ struct alignas (16) gpu_shadowed_point
 
 struct alignas (16) lighting_ubo
 {
+  // x = num_dir, y = num_spot. Point lights are no longer in this UBO;
+  // they live in the clustered-light SSBO and are shaded via the cluster
+  // grid in `cube.frag.slang`.
   glm::ivec4 counts;
 
-  gpu_point_light points[max_point_lights];
   gpu_dir_light dirs[max_dir_lights];
   gpu_spot_light spots[max_spot_lights];
 

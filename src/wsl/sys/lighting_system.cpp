@@ -1,5 +1,6 @@
 #include "lighting_system.hpp"
 
+#include "../comp/camera.hpp"
 #include "../comp/directional_light.hpp"
 #include "../comp/point_light.hpp"
 #include "../comp/singl/rendering_manager.hpp"
@@ -10,9 +11,13 @@
 #include "../gfx/scene_renderer.hpp"
 #include "gfx/lighting.hpp"
 
+#include <cmath>
 #include <entt/entity/fwd.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/geometric.hpp>
+#include <vector>
+
+#include <tracy/Tracy.hpp>
 
 namespace wsl
 {
@@ -23,6 +28,7 @@ namespace sys
 void
 lighting_system::on_render_record_draw_cmd (entt::registry &registry)
 {
+  ZoneScoped;
   auto &ctx = registry.ctx ();
   if (!ctx.contains<comp::singl::runtime_context *> ()) {
     return;
@@ -63,51 +69,52 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
     lighting.shadowed_points[i].params = glm::vec4 (0.0F);
   }
 
+  // ----- Point lights: build a separate vector and feed the clustered
+  // compute pass. The UBO no longer carries point lights.
+  std::vector<gpu_point_light> point_lights;
   int next_point_shadow_slot = 0;
   const auto &point_shadows = renderer->point_shadow_maps ();
 
   auto point_light_view
       = registry.view<comp::world_transform, comp::point_light> ();
-  for (entt::entity const entity : point_light_view) {
-    if (lighting.counts.x >= max_point_lights) {
-      break;
-    }
+  point_lights.reserve (point_light_view.size_hint ());
 
+  for (entt::entity const entity : point_light_view) {
     const comp::world_transform &world
         = point_light_view.get<comp::world_transform> (entity);
     const comp::point_light &light
         = point_light_view.get<comp::point_light> (entity);
 
-    gpu_point_light &gpu_light = lighting.points[lighting.counts.x++];
     glm::mat4 const wm = world.value;
     const glm::vec3 position = glm::vec3 (wm[3]);
 
+    gpu_point_light gpu_light{};
     gpu_light.pos_radius = glm::vec4 (position, light.radius);
     gpu_light.color_intensity
         = glm::vec4 (static_cast<glm::vec3> (light.color), light.intensity);
     gpu_light.shadow_info = glm::ivec4 (-1, 0, 0, 0);
 
-    if (!light.cast_shadows
-        || next_point_shadow_slot >= max_shadowed_point_lights) {
-      continue;
+    if (light.cast_shadows
+        && next_point_shadow_slot < max_shadowed_point_lights) {
+      gpu_light.shadow_info.x = next_point_shadow_slot;
+      gpu_light.shadow_info.y = 1;
+
+      const auto &shadow = point_shadows[next_point_shadow_slot];
+      lighting.shadowed_points[next_point_shadow_slot].pos_far
+          = glm::vec4 (shadow.light_pos, shadow.far_plane);
+      lighting.shadowed_points[next_point_shadow_slot].params = glm::vec4 (
+          shadow.bias, shadow.strength, shadow.enabled ? 1.0F : 0.0F, 0.0F);
+
+      ++next_point_shadow_slot;
     }
 
-    gpu_light.shadow_info.x = next_point_shadow_slot;
-    gpu_light.shadow_info.y = 1;
-
-    const auto &shadow = point_shadows[next_point_shadow_slot];
-    lighting.shadowed_points[next_point_shadow_slot].pos_far
-        = glm::vec4 (shadow.light_pos, shadow.far_plane);
-    lighting.shadowed_points[next_point_shadow_slot].params = glm::vec4 (
-        shadow.bias, shadow.strength, shadow.enabled ? 1.0F : 0.0F, 0.0F);
-
-    ++next_point_shadow_slot;
+    point_lights.push_back (gpu_light);
   }
 
   auto dir_light_view
       = registry.view<comp::world_transform, comp::directional_light> ();
   for (entt::entity const entity : dir_light_view) {
-    if (lighting.counts.y >= max_dir_lights) {
+    if (lighting.counts.x >= max_dir_lights) {
       break;
     }
 
@@ -116,7 +123,7 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
     const comp::directional_light &light
         = dir_light_view.get<comp::directional_light> (entity);
 
-    gpu_dir_light &gpu_light = lighting.dirs[lighting.counts.y++];
+    gpu_dir_light &gpu_light = lighting.dirs[lighting.counts.x++];
     glm::mat4 const wm = world.value;
     const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
 
@@ -128,7 +135,7 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
   auto spot_light_view
       = registry.view<comp::world_transform, comp::spot_light> ();
   for (entt::entity const entity : spot_light_view) {
-    if (lighting.counts.z >= max_spot_lights) {
+    if (lighting.counts.y >= max_spot_lights) {
       break;
     }
 
@@ -137,7 +144,7 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
     const comp::spot_light &light
         = spot_light_view.get<comp::spot_light> (entity);
 
-    gpu_spot_light &gpu_light = lighting.spots[lighting.counts.z++];
+    gpu_spot_light &gpu_light = lighting.spots[lighting.counts.y++];
     glm::mat4 const wm = world.value;
     const glm::vec3 position = glm::vec3 (wm[3]);
     const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
@@ -192,6 +199,23 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
     ++shadow_spot_index;
   }
 
+  // Resolve camera near/far for the cluster pass. Prefer the active
+  // camera entity; fall back to safe defaults otherwise.
+  float z_near = 0.1F;
+  float z_far = 100.0F;
+  const auto &view = renderer->frame_view ();
+  if (view.valid) {
+    // Recover near/far from the perspective projection matrix:
+    //   m[2][2] = f / (n - f)
+    //   m[3][2] = (n * f) / (n - f)
+    const glm::mat4 &p = view.proj;
+    if (std::abs (p[2][2] + 1.0F) > 1e-5F) {
+      z_far = p[3][2] / (p[2][2] + 1.0F);
+      z_near = (p[3][2] * z_far) / (p[3][2] - z_far * (p[2][2] + 1.0F));
+    }
+  }
+
+  renderer->run_clustered_lighting (point_lights, view.view, z_near, z_far);
   renderer->upload_lighting (lighting);
 }
 

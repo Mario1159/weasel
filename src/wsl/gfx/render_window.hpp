@@ -24,13 +24,46 @@ namespace gfx
 class render_window
 {
 public:
+  //! Construct a render window.
+  //!
+  //! @param try_disable_vsync_on_startup When true (default), the
+  //!   constructor requests `IMMEDIATE` present mode so the GPU's
+  //!   present doesn't block on vblank. If the call fails, a spdlog
+  //!   error is logged and the swapchain stays in vsync-paced mode.
+  //!   Pass false to skip the attempt entirely (e.g. on drivers where
+  //!   changing the present mode corrupts the compute queue).
   render_window (const char *name, int width, int height,
                  wsl::gfx::render_context *ctx,
-                 wsl::rsc::resource_manager *res_mgr, bool headless = false);
+                 wsl::rsc::resource_manager *res_mgr, bool headless = false,
+                 bool try_disable_vsync_on_startup = true);
   ~render_window ();
 
   void get_size (uint32_t &width, uint32_t &height) const;
   void get_size (int &width, int &height) const;
+
+  //! Toggle the swapchain present mode. When @p enabled is true, requests
+  //! `MAILBOX` if the backend supports it (lower-latency vsync), otherwise
+  //! `VSYNC`. When false, requests `IMMEDIATE` (no vblank sync).
+  //!
+  //! Returns true if the GPU swapchain was actually reconfigured.
+  //! Returns false (and logs a spdlog error) if the backend refuses the
+  //! request — the previous mode remains active in that case.
+  //!
+  //! @note On the Vulkan backend with AMDVK, both `IMMEDIATE` and
+  //!   `MAILBOX` are reported as supported and accepted by
+  //!   `SDL_SetGPUSwapchainParameters`, but the next compute dispatch
+  //!   can segfault on those drivers. If you hit that crash, call
+  //!   `set_vsync(true)` early in startup (or pass
+  //!   `try_disable_vsync_on_startup = false` to the ctor).
+  bool set_vsync (bool enabled);
+
+  //! Current vsync state: true means the swapchain is in VSYNC or
+  //! MAILBOX mode, false means IMMEDIATE.
+  [[nodiscard]] bool
+  vsync () const
+  {
+    return m_vsync;
+  }
 
   SDL_Window *handler = nullptr;
   wsl::gfx::texture swapchain;
@@ -107,6 +140,15 @@ public:
 private:
   SDL_GPUSampler *ensure_linear_sampler ();
   void destroy_texture (SDL_GPUTexture *&texture) const;
+
+  //! Tracked vsync state. Defaults to true (VSYNC) so the engine is
+  //! safe to use on any driver before the first `set_vsync` call.
+  bool m_vsync = true;
+  //! Tracked swapchain composition. SDL has no "get current
+  //! composition" query, so we remember what we last set (or the
+  //! default, SDR, if we have never set it).
+  SDL_GPUSwapchainComposition m_swapchain_composition
+      = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
   SDL_GPUGraphicsPipeline *
   create_fullscreen_pipe (const char *frag_shader_path,
                           SDL_GPUTextureFormat out_format,

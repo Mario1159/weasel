@@ -10,6 +10,8 @@
 #include "comp/camera.hpp"
 #include "comp/camera_2d.hpp"
 #include "comp/transform_2d.hpp"
+
+#include <tracy/Tracy.hpp>
 #include "gfx/scene_renderer.hpp"
 #include <cstdint>
 #include <entt/entity/entity.hpp>
@@ -35,6 +37,7 @@ sys::build_render_frame (entt::registry &registry,
                          comp::singl::runtime_context &runtime_ctx,
                          render_submission &out, entt::entity target_viewport)
 {
+  ZoneScoped;
   out.reset ();
 
   auto *scene = runtime_ctx.scene_manager.get_active ();

@@ -33,6 +33,8 @@
 #include <span>
 #include "gfx/model_3d.hpp"
 #include "rsc/cpu_model.hpp"
+
+#include <meshoptimizer.h>
 #include "wsl/log/log.hpp"
 
 #include <array>
@@ -915,6 +917,23 @@ model_loader::load_cpu (const std::string &path) const
     cpu->default_scene = *gltf.defaultScene;
   } else {
     cpu->default_scene = 0;
+  }
+
+  // -------- meshoptimizer pass --------
+  // Reorder triangle indices for GPU vertex cache efficiency. This is a
+  // pure data transform: the vertex set is unchanged, only the triangle
+  // order changes. Typical speedup is 1.5-3x in vertex throughput for
+  // large meshes (per the meshoptimizer documentation). Done here, once
+  // per model load, so the GPU upload path and the per-frame render loop
+  // see the optimized indices without any extra work.
+  for (raw::cpu_mesh &mesh : cpu->meshes) {
+    for (raw::cpu_primitive &prim : mesh.primitives) {
+      if (prim.indices.size () < 3 || prim.vertices.empty ()) {
+        continue;
+      }
+      meshopt_optimizeVertexCache (prim.indices.data (), prim.indices.data (),
+                                   prim.indices.size (), prim.vertices.size ());
+    }
   }
 
   return cpu;

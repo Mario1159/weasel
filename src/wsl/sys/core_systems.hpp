@@ -57,7 +57,9 @@ public:
   void render (wsl::gfx::render_window &window,
                const render_callbacks &callbacks = {});
 
-  std::vector<sys::ecs_system *> to_vec () const;
+  //! Returns the cached list of core systems. The vector is built once in
+  //! `init()` and never mutated again; iterating it is allocation-free.
+  const std::vector<sys::ecs_system *> &to_vec () const;
 
   std::unique_ptr<render_3d_system> render_3d_sys;
   std::unique_ptr<render_2d_system> render_2d_sys;
@@ -73,6 +75,7 @@ public:
 private:
   void register_debug_metadata ();
   void ensure_dummy_context_bindings ();
+  void rebuild_system_cache ();
   void render_impl (wsl::gfx::render_window &window,
                     const render_callbacks &callbacks);
 
@@ -80,6 +83,17 @@ private:
   comp::singl::editor_context *m_editor_ctx = nullptr;
   entt::registry *m_bound_registry = nullptr;
   entt::registry m_dummy_registry;
+
+  //! Cached list of non-null core system pointers. Built once in
+  //! `rebuild_system_cache()` (called from `init()` and whenever the
+  //! systems change at runtime). Returned by `to_vec()` as a const ref so
+  //! per-frame callers do not allocate.
+  std::vector<sys::ecs_system *> m_cached_systems;
+
+  //! Sorted set of type_ids for the cached core systems. Used by
+  //! `render_impl` to skip scene-system duplicates via
+  //! `std::binary_search`. Built alongside `m_cached_systems`.
+  std::vector<entt::id_type> m_cached_core_ids;
 };
 
 } // namespace sys

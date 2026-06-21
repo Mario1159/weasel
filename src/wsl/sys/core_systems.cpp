@@ -13,6 +13,8 @@
 #include <SDL3/SDL_events.h>
 #include <algorithm>
 #include <entt/entity/fwd.hpp>
+
+#include <tracy/Tracy.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <memory>
@@ -169,6 +171,11 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
 
   register_debug_metadata ();
 
+  // Build the cached system list + sorted id set now that all unique_ptr
+  // members have been constructed. This is the only place the cache needs
+  // to be built at runtime — the system membership is fixed after init.
+  rebuild_system_cache ();
+
   sync_activation ();
 
   wsl::log::sys ()->debug ("Initialized {} built-in systems",
@@ -303,15 +310,15 @@ core_systems::render (wsl::gfx::render_window &window,
   render_impl (window, callbacks);
 }
 
-std::vector<sys::ecs_system *>
-core_systems::to_vec () const
+void
+core_systems::rebuild_system_cache ()
 {
-  std::vector<sys::ecs_system *> out;
-  out.reserve (10);
+  m_cached_systems.clear ();
+  m_cached_systems.reserve (10);
 
-  const auto push = [&out] (sys::ecs_system *sys) {
+  const auto push = [this] (sys::ecs_system *sys) {
     if (sys) {
-      out.push_back (sys);
+      m_cached_systems.push_back (sys);
     }
   };
 
@@ -325,7 +332,18 @@ core_systems::to_vec () const
   push (render_2d_sys.get ());
   push (render_ui_sys.get ());
 
-  return out;
+  m_cached_core_ids.clear ();
+  m_cached_core_ids.reserve (m_cached_systems.size ());
+  for (sys::ecs_system *sys : m_cached_systems) {
+    m_cached_core_ids.push_back (sys->get_type_id ());
+  }
+  std::sort (m_cached_core_ids.begin (), m_cached_core_ids.end ());
+}
+
+const std::vector<sys::ecs_system *> &
+core_systems::to_vec () const
+{
+  return m_cached_systems;
 }
 
 void
@@ -367,250 +385,333 @@ core_systems::ensure_dummy_context_bindings ()
     m_runtime_ctx->singleton_registry.apply_core_singletons (m_dummy_registry);
   }
 }
-
 void
 core_systems::render_impl (wsl::gfx::render_window &window,
                            const render_callbacks &callbacks)
 {
+  ZoneScoped;
   if (m_runtime_ctx == nullptr) {
     return;
   }
 
-  sync_activation ();
+  rsc::scene *scene = nullptr;
+  entt::registry *registry_ptr = nullptr;
+  {
+    ZoneScopedN ("render_impl::setup");
+    sync_activation ();
 
-  rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
-  entt::registry &registry
-      = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
-
-  for (sys::ecs_system *sys : to_vec ()) {
-    if (sys == nullptr) {
-      continue;
-    }
-
-    sys->render_build_draw_data (&registry);
+    scene = m_runtime_ctx->scene_manager.get_active ();
+    registry_ptr
+        = (scene != nullptr) ? &scene->get_registry () : &m_dummy_registry;
   }
+  entt::registry &registry = *registry_ptr;
 
-  if (callbacks.build_draw_data) {
-    callbacks.build_draw_data (registry);
-  }
+  {
+    ZoneScopedN ("render_impl::build_draw_data");
+    for (sys::ecs_system *sys : to_vec ()) {
+      if (sys == nullptr) {
+        continue;
+      }
 
-  if (scene != nullptr) {
-    for (auto &sys : scene->systems) {
       sys->render_build_draw_data (&registry);
     }
+
+    if (callbacks.build_draw_data) {
+      callbacks.build_draw_data (registry);
+    }
+
+    if (scene != nullptr) {
+      for (auto &sys : scene->systems) {
+        sys->render_build_draw_data (&registry);
+      }
+    }
   }
 
-  // Snapshot the 2D draw queue is NO LONGER NEEDED as we render per-viewport
-  // m_runtime_ctx->render_ctx.begin_cmd (); ...
-
-  // ... (rest of prepare_gpu_rsc)
-
-  m_runtime_ctx->render_ctx.begin_cmd ();
+  {
+    ZoneScopedN ("render_impl::begin_cmd");
+    m_runtime_ctx->render_ctx.begin_cmd ();
+  }
   if (!m_runtime_ctx->render_ctx.has_active_frame ()) {
     return;
   }
 
-  window.new_swapchain ();
-
-  // Pre-compute set of core system type_ids so that scene-system loops can
-  // skip duplicate entries (they have uninitialised render state).
-  std::vector<entt::id_type> core_ids;
-  core_ids.reserve (to_vec ().size ());
-  for (sys::ecs_system *sys : to_vec ()) {
-    if (sys != nullptr) {
-      core_ids.push_back (sys->get_type_id ());
-    }
-  }
-  std::sort (core_ids.begin (), core_ids.end ());
-
-  for (sys::ecs_system *sys : to_vec ()) {
-    if (sys == nullptr) {
-      continue;
-    }
-
-    sys->render_prepare_gpu_rsc (&registry);
+  {
+    ZoneScopedN ("render_impl::acquire_swapchain");
+    window.new_swapchain ();
   }
 
-  if (callbacks.prepare_gpu_rsc) {
-    callbacks.prepare_gpu_rsc (registry);
-  }
+  // `core_ids` is the sorted set of type_ids for the built-in core
+  // systems. It is built once in `init()` (see `rebuild_system_cache`) and
+  // is used below to skip scene-system duplicates that would otherwise
+  // double-render. The previous version of this code rebuilt and sorted
+  // `core_ids` every frame, which became a measurable hot spot.
+  const std::vector<entt::id_type> &core_ids = m_cached_core_ids;
 
-  if (scene != nullptr) {
-    for (auto &sys : scene->systems) {
+  {
+    ZoneScopedN ("render_impl::prepare_gpu_rsc");
+    for (sys::ecs_system *sys : to_vec ()) {
       if (sys == nullptr) {
         continue;
       }
-      if (std::binary_search (core_ids.begin (), core_ids.end (),
-                              sys->get_type_id ())) {
-        continue;
-      }
+
       sys->render_prepare_gpu_rsc (&registry);
+    }
+
+    if (callbacks.prepare_gpu_rsc) {
+      callbacks.prepare_gpu_rsc (registry);
+    }
+
+    if (scene != nullptr) {
+      for (auto &sys : scene->systems) {
+        if (sys == nullptr) {
+          continue;
+        }
+        if (std::binary_search (core_ids.begin (), core_ids.end (),
+                                sys->get_type_id ())) {
+          continue;
+        }
+        sys->render_prepare_gpu_rsc (&registry);
+      }
     }
   }
 
   gfx::scene_renderer *renderer = nullptr;
   sys::render_submission submission{};
+  entt::entity main_viewport = entt::null;
 
   if (scene != nullptr) {
-    apply_rendering_manager (registry, *m_runtime_ctx);
-    renderer = &m_runtime_ctx->get_active_scene_renderer ();
-
-    auto *rendering = m_runtime_ctx->get_active_rendering_manager ();
-    entt::entity main_viewport
-        = (rendering != nullptr) ? rendering->render_viewport : entt::null;
-
-    // Defensive: if render_viewport points to a non-subviewport entity
-    // (e.g. stale code writing to the old main_camera field), treat as root.
-    if (main_viewport != entt::null
-        && !registry.all_of<comp::subviewport> (main_viewport)) {
-      main_viewport = entt::null;
+    {
+      ZoneScopedN ("render_impl::apply_rendering_manager");
+      apply_rendering_manager (registry, *m_runtime_ctx);
     }
+    {
+      ZoneScopedN ("render_impl::resolve_scene");
+      renderer = &m_runtime_ctx->get_active_scene_renderer ();
+
+      auto *rendering = m_runtime_ctx->get_active_rendering_manager ();
+      main_viewport
+          = (rendering != nullptr) ? rendering->render_viewport : entt::null;
+
+      // Defensive: if render_viewport points to a non-subviewport entity
+      // (e.g. stale code writing to the old main_camera field), treat as
+      // root.
+      if (main_viewport != entt::null
+          && !registry.all_of<comp::subviewport> (main_viewport)) {
+        main_viewport = entt::null;
+      }
 
 #ifdef WEASEL_BUILD_EDITOR
-    if (m_editor_ctx != nullptr) {
-      if (m_editor_ctx->game_view_selected_viewport != entt::null
-          && !m_runtime_ctx->is_running) {
-        main_viewport = m_editor_ctx->game_view_selected_viewport;
+      if (m_editor_ctx != nullptr) {
+        if (m_editor_ctx->game_view_selected_viewport != entt::null
+            && !m_runtime_ctx->is_running) {
+          main_viewport = m_editor_ctx->game_view_selected_viewport;
+        }
       }
-    }
 #endif
+    }
 
-    if (sys::build_render_frame (registry, *m_runtime_ctx, submission,
-                                 main_viewport)) {
-      renderer->set_environment (submission.environment);
+    {
+      ZoneScopedN ("render_impl::build_render_frame");
+      if (sys::build_render_frame (registry, *m_runtime_ctx, submission,
+                                   main_viewport)) {
 
-      // Shadow and lighting passes (global)
-      renderer->begin_frame (submission.view);
-      if (shadow_sys) {
-        shadow_sys->render_record_draw_cmd (&registry);
-      }
-      if (lighting_sys) {
-        lighting_sys->render_record_draw_cmd (&registry);
-      }
+        {
+          ZoneScopedN ("render_impl::set_environment");
+          renderer->set_environment (submission.environment);
+        }
 
-      // Helper to render a viewport (3D + 2D)
-      auto render_viewport_full = [&] (entt::entity vp_entity,
-                                       const sys::render_submission &sub) {
-        // Set context for systems that need to know which viewport they are in
-        // (e.g. render_2d)
-        registry.ctx ().insert_or_assign (vp_entity);
-
-        window.begin_3d_pass (true,
-                              true); // Use clearing from viewport settings?
-
-        if (vp_entity != entt::null) {
-          if (auto *sv = registry.try_get<comp::subviewport> (vp_entity)) {
-            gfx::viewport vp{};
-            vp.x = sv->x;
-            vp.y = sv->y;
-            vp.width = sv->width;
-            vp.height = sv->height;
-            vp.clear_color = sv->clear_color;
-            vp.clear_depth = sv->clear_depth;
-            vp.clear_color_value.r = sv->clear_r;
-            vp.clear_color_value.g = sv->clear_g;
-            vp.clear_color_value.b = sv->clear_b;
-            vp.clear_color_value.a = sv->clear_a;
-            window.apply_viewport (vp);
+        // Shadow and lighting passes (global)
+        {
+          ZoneScopedN ("render_impl::global_shadow_and_light");
+          renderer->begin_frame (submission.view);
+          if (shadow_sys) {
+            shadow_sys->render_record_draw_cmd (&registry);
+          }
+          if (lighting_sys) {
+            lighting_sys->render_record_draw_cmd (&registry);
           }
         }
 
-        // Re-bind draws for this viewport
-        renderer->set_visible_draws (sub.draw_commands);
-        renderer->begin_frame (sub.view);
+        // Helper to render a viewport (3D + 2D)
+        auto render_viewport_full = [&] (entt::entity vp_entity,
+                                         const sys::render_submission &sub) {
+          ZoneScopedN ("render_viewport_full");
 
-        if (!sub.is_2d_view) {
-          if (skybox_sys)
-            skybox_sys->render_record_draw_cmd (&registry);
-          if (render_3d_sys)
-            render_3d_sys->render_record_draw_cmd (&registry);
-          if (physics_sys)
-            physics_sys->render_record_draw_cmd (&registry);
-        }
+          // Set context for systems that need to know which viewport they
+          // are in (e.g. render_2d)
+          registry.ctx ().insert_or_assign (vp_entity);
 
-        if (scene != nullptr) {
-          for (auto &sys : scene->systems) {
-            if (sys == nullptr)
-              continue;
-            if (std::binary_search (core_ids.begin (), core_ids.end (),
-                                    sys->get_type_id ()))
-              continue;
-            sys->render_record_draw_cmd (&registry);
+          {
+            ZoneScopedN ("render_viewport_full::begin_3d_pass");
+            window.begin_3d_pass (true,
+                                  true); // Use clearing from viewport settings?
           }
-        }
-        window.end_3d_pass ();
 
-        // 2D Pass
-        if (render_2d_sys) {
-          auto &r2d_ref
-              = m_runtime_ctx->get_active_rendering_manager ()
-                    ->ensure_renderer_2d (window, m_runtime_ctx->render_ctx,
-                                          &m_runtime_ctx->resource_manager);
-          auto *r2d = &r2d_ref;
-
-          // Set 2D projection from the already-resolved camera matrix
-          r2d->set_projection (sub.view.proj);
-
-          // Build sprite queue (no GPU work yet)
-          render_2d_sys->render_record_draw_cmd (&registry);
-
-          // Upload vertices OUTSIDE the render pass (copy pass is illegal
-          // inside a render pass)
-          r2d->build_and_upload ();
-
-          window.begin_3d_pass (false, false);
-
-          // Apply viewport
-          if (vp_entity != entt::null) {
-            if (auto *sv = registry.try_get<comp::subviewport> (vp_entity)) {
-              gfx::viewport vp{};
-              vp.x = sv->x;
-              vp.y = sv->y;
-              vp.width = sv->width;
-              vp.height = sv->height;
-              window.apply_viewport (vp);
+          {
+            ZoneScopedN ("render_viewport_full::apply_viewport");
+            if (vp_entity != entt::null) {
+              if (auto *sv = registry.try_get<comp::subviewport> (vp_entity)) {
+                gfx::viewport vp{};
+                vp.x = sv->x;
+                vp.y = sv->y;
+                vp.width = sv->width;
+                vp.height = sv->height;
+                vp.clear_color = sv->clear_color;
+                vp.clear_depth = sv->clear_depth;
+                vp.clear_color_value.r = sv->clear_r;
+                vp.clear_color_value.g = sv->clear_g;
+                vp.clear_color_value.b = sv->clear_b;
+                vp.clear_color_value.a = sv->clear_a;
+                window.apply_viewport (vp);
+              }
             }
-          } else {
-            window.apply_viewport ({}); // Fullscreen
           }
 
-          // Draw already-uploaded batches INSIDE the render pass
-          r2d->draw ();
-          window.end_3d_pass ();
+          {
+            ZoneScopedN ("render_viewport_full::begin_frame");
+            // Re-bind draws for this viewport
+            renderer->set_visible_draws (sub.draw_commands);
+            renderer->begin_frame (sub.view);
+          }
+
+          if (!sub.is_2d_view) {
+            if (skybox_sys) {
+              ZoneScopedN ("render_viewport_full::skybox");
+              skybox_sys->render_record_draw_cmd (&registry);
+            }
+            if (render_3d_sys) {
+              ZoneScopedN ("render_viewport_full::render_3d");
+              render_3d_sys->render_record_draw_cmd (&registry);
+            }
+            if (physics_sys) {
+              ZoneScopedN ("render_viewport_full::physics");
+              physics_sys->render_record_draw_cmd (&registry);
+            }
+          }
+
+          if (scene != nullptr) {
+            ZoneScopedN ("render_viewport_full::scene_systems");
+            for (auto &sys : scene->systems) {
+              if (sys == nullptr)
+                continue;
+              if (std::binary_search (core_ids.begin (), core_ids.end (),
+                                      sys->get_type_id ()))
+                continue;
+              sys->render_record_draw_cmd (&registry);
+            }
+          }
+          {
+            ZoneScopedN ("render_viewport_full::end_3d_pass");
+            window.end_3d_pass ();
+          }
+
+          // 2D Pass
+          if (render_2d_sys) {
+            ZoneScopedN ("render_viewport_full::render_2d");
+            auto &r2d_ref
+                = m_runtime_ctx->get_active_rendering_manager ()
+                      ->ensure_renderer_2d (window, m_runtime_ctx->render_ctx,
+                                            &m_runtime_ctx->resource_manager);
+            auto *r2d = &r2d_ref;
+
+            {
+              ZoneScopedN ("render_viewport_full::2d_setup");
+              // Set 2D projection from the already-resolved camera matrix
+              r2d->set_projection (sub.view.proj);
+
+              // Build sprite queue (no GPU work yet)
+              render_2d_sys->render_record_draw_cmd (&registry);
+
+              // Upload vertices OUTSIDE the render pass (copy pass is
+              // illegal inside a render pass)
+              r2d->build_and_upload ();
+            }
+
+            {
+              ZoneScopedN ("render_viewport_full::2d_begin_pass");
+              window.begin_3d_pass (false, false);
+            }
+
+            {
+              ZoneScopedN ("render_viewport_full::2d_apply_viewport");
+              // Apply viewport
+              if (vp_entity != entt::null) {
+                if (auto *sv
+                    = registry.try_get<comp::subviewport> (vp_entity)) {
+                  gfx::viewport vp{};
+                  vp.x = sv->x;
+                  vp.y = sv->y;
+                  vp.width = sv->width;
+                  vp.height = sv->height;
+                  window.apply_viewport (vp);
+                }
+              } else {
+                window.apply_viewport ({}); // Fullscreen
+              }
+            }
+
+            {
+              ZoneScopedN ("render_viewport_full::2d_draw");
+              // Draw already-uploaded batches INSIDE the render pass
+              r2d->draw ();
+            }
+            {
+              ZoneScopedN ("render_viewport_full::2d_end_pass");
+              window.end_3d_pass ();
+            }
+          }
+        };
+
+        // 1. Render main viewport
+        {
+          ZoneScopedN ("render_impl::main_viewport");
+          render_viewport_full (main_viewport, submission);
         }
-      };
 
-      // 1. Render main viewport
-      render_viewport_full (main_viewport, submission);
-
-      // 2. Render child viewports
-      auto sv_view = registry.view<comp::subviewport> ();
-      for (auto const e : sv_view) {
-        if (comp::find_nearest_viewport (registry, e) == main_viewport) {
-          sys::render_submission child_sub{};
-          if (sys::build_render_frame (registry, *m_runtime_ctx, child_sub,
-                                       e)) {
-            render_viewport_full (e, child_sub);
+        // 2. Render child viewports
+        {
+          ZoneScopedN ("render_impl::child_viewports");
+          auto sv_view = registry.view<comp::subviewport> ();
+          for (auto const e : sv_view) {
+            if (comp::find_nearest_viewport (registry, e) == main_viewport) {
+              sys::render_submission child_sub{};
+              {
+                ZoneScopedN ("render_impl::child_viewport_build");
+                if (sys::build_render_frame (registry, *m_runtime_ctx,
+                                             child_sub, e)) {
+                  render_viewport_full (e, child_sub);
+                }
+              }
+            }
           }
         }
+
+        {
+          ZoneScopedN ("render_impl::renderer_end_frame");
+          renderer->end_frame ();
+        }
+        registry.ctx ().erase<entt::entity> (); // clear viewport context
       }
-
-      renderer->end_frame ();
-      registry.ctx ().erase<entt::entity> (); // clear viewport context
     }
   }
 
-  if (render_ui_sys) {
-    render_ui_sys->render_record_draw_cmd (&registry);
+  {
+    ZoneScopedN ("render_impl::ui_pass");
+    if (render_ui_sys) {
+      render_ui_sys->render_record_draw_cmd (&registry);
+    }
+
+    window.begin_ui_pass ();
+    if (callbacks.record_ui_draw_cmd) {
+      callbacks.record_ui_draw_cmd (registry);
+    }
+    window.end_ui_pass ();
   }
 
-  window.begin_ui_pass ();
-  if (callbacks.record_ui_draw_cmd) {
-    callbacks.record_ui_draw_cmd (registry);
+  {
+    ZoneScopedN ("render_impl::end_cmd");
+    m_runtime_ctx->render_ctx.end_cmd ();
   }
-  window.end_ui_pass ();
-
-  m_runtime_ctx->render_ctx.end_cmd ();
 }
 
 } // namespace sys

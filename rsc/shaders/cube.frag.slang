@@ -1,7 +1,7 @@
 // cube.frag.slang
 // Supports:
 // - Directional lights
-// - Point lights
+// - Point lights (clustered, via SSBOs)
 // - Spot lights
 // - 1 directional shadow map
 // - up to 4 spotlight shadow maps
@@ -24,12 +24,18 @@
 // t12 = point shadow map 0
 // t13 = point shadow map 1
 // t14 = SSAO texture
+// t15 = point light SSBO (read-only)
+//
+// Storage buffer bindings:
+// u0  = cluster SSBO (read-only in fragment)
 //
 // Samplers must match the same indices.
 
 #define MAX_POINT_LIGHTS 16
 #define MAX_DIR_LIGHTS   4
 #define MAX_SPOT_LIGHTS  8
+
+#define MAX_LIGHTS_PER_CLUSTER 100
 
 #define MAX_SHADOWED_DIR_LIGHTS   1
 #define MAX_SHADOWED_SPOT_LIGHTS  4
@@ -44,6 +50,7 @@ struct PSInput
     float3 normal    : TEXCOORD1;
     float2 uv        : TEXCOORD2;
     float4 tangent   : TEXCOORD3; // xyz=tangent, w=sign
+    float3 viewPos   : TEXCOORD4; // view-space position for cluster lookup
 };
 
 cbuffer Material : register(b0, space3)
@@ -59,7 +66,7 @@ cbuffer Material : register(b0, space3)
 
 struct PointLight
 {
-    float4 pos_radius;      // xyz=pos, w=radius
+    float4 pos_radius;      // xyz=pos (world), w=radius
     float4 color_intensity; // rgb=color, w=intensity
     int4   shadow_info;     // x=shadow index, y=casts_shadows, z/w unused
 };
@@ -92,9 +99,8 @@ struct ShadowedPoint
 
 cbuffer Lighting : register(b1, space3)
 {
-    int4 u_Counts; // x=num_point, y=num_dir, z=num_spot, w=pad
+    int4 u_Counts; // x=num_dir, y=num_spot, z/w unused (point lights come from clusters)
 
-    PointLight u_PointLights[MAX_POINT_LIGHTS];
     DirLight   u_DirLights[MAX_DIR_LIGHTS];
     SpotLight  u_SpotLights[MAX_SPOT_LIGHTS];
 
@@ -119,6 +125,28 @@ cbuffer Post : register(b3, space3)
     float4 u_SSAOAndPad;    // x=ssaoIntensity, yzw=pad
 };
 
+cbuffer ClusterParams : register(b4, space3)
+{
+    float4x4 u_InverseProjection;
+    float2   u_ScreenSize;
+    float    u_ZNear;
+    float    u_ZFar;
+    uint3    u_GridSize;
+    uint     u_NumClusters;
+    uint3    u_ClusterPadding;
+    float4x4 u_View;
+    uint     u_NumPointLights;
+    uint3    u_LightPadding;
+};
+
+struct GpuCluster
+{
+    float4 minPoint;
+    float4 maxPoint;
+    uint   count;
+    uint   lightIndices[MAX_LIGHTS_PER_CLUSTER];
+};
+
 Texture2D u_BaseColorTex           : register(t0,  space2);
 Texture2D u_MetallicRoughnessTex   : register(t1,  space2);
 Texture2D u_NormalTex              : register(t2,  space2);
@@ -136,6 +164,29 @@ Texture2D<float>     u_SpotShadowMap3 : register(t11, space2);
 TextureCube<float>   u_PointShadowMap0 : register(t12, space2);
 TextureCube<float>   u_PointShadowMap1 : register(t13, space2);
 Texture2D            u_SSAOTex        : register(t14, space2);
+
+// RO point-light buffer: SPIR-V binding 15. The -fvk-t-shift 0 2 flag
+// places this at descriptor set 2, binding 15. The same GPU buffer
+// is bound from the compute stage at descriptor set 0, binding 15
+// (where the SPIR-V compute layout requires read-only storage).
+// SDL_GPU's first_slot parameter matches the SPIR-V binding number,
+// so both stages use slot 15 to bind this buffer.
+StructuredBuffer<PointLight> u_PointLightBuffer : register(t15, space2);
+// Cluster buffer: SPIR-V set 2, binding 16 in the fragment pipeline.
+// Must be `StructuredBuffer` (not `RWStructuredBuffer`) so that Slang
+// emits the `NonWritable` decoration — Vulkan requires fragment-stage
+// storage buffers to be read-only, and AMDVK on Mesa will segfault
+// the first descriptor dereference if that decoration is missing
+// (manifests as a crash in the next `SDL_DispatchGPUCompute` even
+// though the real cause is in the fragment pipeline).
+//
+// Register `t16` (rather than `u0`) is used because the `-fvk-t-shift`
+// and `-fvk-u-shift` flags both map into the same SPIR-V descriptor
+// set, so `u0` collides with the `t0` texture (`u_BaseColorTex`) and
+// produces two resources at SPIR-V set 2 binding 0. `t16` is the first
+// free `t` register after the textures (t0..t15). The matching C++
+// bind is `SDL_BindGPUFragmentStorageBuffers (pass, 16, ...)`.
+StructuredBuffer<GpuCluster>   u_ClusterBuffer : register(t16, space2);
 
 SamplerState u_Samplers[15] : register(s0, space2);
 
@@ -441,9 +492,8 @@ float3 SoftThreshold(float3 c, float threshold, float knee)
 [shader("fragment")]
 PSOut fsMain(PSInput input)
 {
-    int u_NumPoint = u_Counts.x;
-    int u_NumDir   = u_Counts.y;
-    int u_NumSpot  = u_Counts.z;
+    int u_NumDir   = u_Counts.x;
+    int u_NumSpot  = u_Counts.y;
 
     float u_BloomThreshold = u_BloomAndSSAO0.x;
     float u_BloomKnee      = u_BloomAndSSAO0.y;
@@ -495,58 +545,92 @@ PSOut fsMain(PSInput input)
         Lo += EvaluateLight(radiance, L, N, V, albedo, metallic, roughness);
     }
 
-    // -------- Point lights --------
-    for (int i = 0; i < u_NumPoint; ++i)
+    // -------- Point lights (clustered) --------
+    // Solve the cluster index from the view-space position and screen
+    // coordinates, then iterate only the lights assigned to that cluster.
     {
-        float3 lightPos = u_PointLights[i].pos_radius.xyz;
-        float  radius   = u_PointLights[i].pos_radius.w;
+        float  viewZ       = abs (input.viewPos.z);
+        float  zTileF      = (log (max (viewZ, 1e-4) / max (u_ZNear, 1e-4))
+                              * (float) u_GridSize.z)
+                             / log (max (u_ZFar / max (u_ZNear, 1e-4), 1.0001));
+        uint   zTile       = (uint) clamp ((int) zTileF, 0,
+                                            (int) u_GridSize.z - 1);
 
-        float3 toL = lightPos - input.worldPos;
-        float dist = length(toL);
-        if (dist > radius)
-            continue;
+        uint2  tileSize    = uint2 (max ((uint) (u_ScreenSize.x
+                                                 / (float) u_GridSize.x),
+                                         1u),
+                                    max ((uint) (u_ScreenSize.y
+                                                 / (float) u_GridSize.y),
+                                         1u));
+        uint2  tileXY      = uint2 (min ((uint) (input.pos.x) / tileSize.x,
+                                         u_GridSize.x - 1u),
+                                    min ((uint) (input.pos.y) / tileSize.y,
+                                         u_GridSize.y - 1u));
 
-        float3 L = toL / max(dist, 1e-6);
-        float atten = saturate(1.0 - dist / radius);
+        uint   tileIndex   = tileXY.x + (tileXY.y * u_GridSize.x)
+                             + (zTile * u_GridSize.x * u_GridSize.y);
 
-        float3 radiance =
-            (u_PointLights[i].color_intensity.rgb *
-             u_PointLights[i].color_intensity.w) * atten;
+        if (tileIndex < u_NumClusters) {
+            GpuCluster cluster = u_ClusterBuffer[tileIndex];
+            uint lightCount = min (cluster.count, (uint) MAX_LIGHTS_PER_CLUSTER);
 
-        int shadowIndex = u_PointLights[i].shadow_info.x;
-        int hasShadow   = u_PointLights[i].shadow_info.y;
+            [loop]
+            for (uint i = 0; i < lightCount; ++i) {
+                uint lightIndex = cluster.lightIndices[i];
+                if (lightIndex >= (uint) u_NumPointLights) continue;
 
-        if (hasShadow != 0 &&
-            shadowIndex >= 0 &&
-            shadowIndex < MAX_SHADOWED_POINT_LIGHTS)
-        {
-            float s = 1.0;
+                PointLight light = u_PointLightBuffer[lightIndex];
 
-            if (shadowIndex == 0)
-            {
-                s = SamplePointShadow(
-                    u_PointShadowMap0,
-                    u_Samplers[12],
-                    u_PointShadow[0].pos_far.xyz,
-                    u_PointShadow[0].pos_far.w,
-                    u_PointShadow[0].params,
-                    input.worldPos);
+                // The light position stored in the SSBO is in world space
+                // (it is uploaded as such by `lighting_system`). Compare
+                // against `input.worldPos` to keep the existing distance /
+                // attenuation math unchanged.
+                float3 lightPos = light.pos_radius.xyz;
+                float  radius   = light.pos_radius.w;
+
+                float3 toL  = lightPos - input.worldPos;
+                float  dist = length (toL);
+                if (dist > radius) continue;
+
+                float3 L = toL / max (dist, 1e-6);
+                float atten = saturate (1.0 - dist / radius);
+
+                float3 radiance
+                    = (light.color_intensity.rgb
+                       * light.color_intensity.w) * atten;
+
+                int shadowIndex = light.shadow_info.x;
+                int hasShadow   = light.shadow_info.y;
+
+                if (hasShadow != 0 && shadowIndex >= 0
+                    && shadowIndex < MAX_SHADOWED_POINT_LIGHTS) {
+                    float s = 1.0;
+
+                    if (shadowIndex == 0) {
+                        s = SamplePointShadow (
+                            u_PointShadowMap0,
+                            u_Samplers[12],
+                            u_PointShadow[0].pos_far.xyz,
+                            u_PointShadow[0].pos_far.w,
+                            u_PointShadow[0].params,
+                            input.worldPos);
+                    } else if (shadowIndex == 1) {
+                        s = SamplePointShadow (
+                            u_PointShadowMap1,
+                            u_Samplers[13],
+                            u_PointShadow[1].pos_far.xyz,
+                            u_PointShadow[1].pos_far.w,
+                            u_PointShadow[1].params,
+                            input.worldPos);
+                    }
+
+                    radiance *= s;
+                }
+
+                Lo += EvaluateLight (radiance, L, N, V, albedo, metallic,
+                                     roughness);
             }
-            else if (shadowIndex == 1)
-            {
-                s = SamplePointShadow(
-                    u_PointShadowMap1,
-                    u_Samplers[13],
-                    u_PointShadow[1].pos_far.xyz,
-                    u_PointShadow[1].pos_far.w,
-                    u_PointShadow[1].params,
-                    input.worldPos);
-            }
-
-            radiance *= s;
         }
-
-        Lo += EvaluateLight(radiance, L, N, V, albedo, metallic, roughness);
     }
 
     // -------- Spot lights --------

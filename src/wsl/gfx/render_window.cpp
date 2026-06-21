@@ -18,6 +18,8 @@
 #include <SDL3/SDL_pixels.h>
 
 #include <SDL3/SDL_stdinc.h>
+
+#include <tracy/Tracy.hpp>
 #include <SDL3/SDL_video.h>
 #include <algorithm>
 #include <cstdint>
@@ -163,7 +165,7 @@ render_window::create_blur_pipe ()
 render_window::render_window (const char *name, int width, int height,
                               wsl::gfx::render_context *ctx,
                               wsl::rsc::resource_manager *res_mgr,
-                              bool headless)
+                              bool headless, bool try_disable_vsync_on_startup)
     : ctx (ctx), m_res_mgr (res_mgr)
 {
   if (headless) {
@@ -177,6 +179,24 @@ render_window::render_window (const char *name, int width, int height,
   swapchain_format
       = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, handler);
 
+  // Default behavior: try to disable vsync so the triple-buffered
+  // pipeline can actually overlap frames. The change is wrapped in
+  // `set_vsync`, which spdlog-logs and bails out (keeping VSYNC) if
+  // the backend refuses. The known AMDVK / Mesa driver-side bug —
+  // where `SDL_WindowSupportsGPUPresentMode` and
+  // `SDL_SetGPUSwapchainParameters` both return success for
+  // IMMEDIATE/MAILBOX, but the next compute dispatch segfaults —
+  // is documented on `set_vsync`. AMDVK users should pass
+  // `try_disable_vsync_on_startup = false` to skip this attempt, or
+  // call `set_vsync(true)` immediately after construction.
+  if (try_disable_vsync_on_startup) {
+    if (!set_vsync (false)) {
+      wsl::log::gfx ()->error (
+          "render_window: failed to disable vsync on startup, "
+          "swapchain remains vsync-paced (VSYNC).");
+    }
+  }
+
   wsl::log::gfx ()->debug ("Window: {} ({}x{}), swapchain format={:#x}", name,
                            width, height,
                            static_cast<unsigned> (swapchain_format));
@@ -188,6 +208,64 @@ render_window::render_window (const char *name, int width, int height,
   pipe_downsample = create_downsample_pipe ();
   pipe_blur = create_blur_pipe ();
   pipe_composite = create_composite_pipe ();
+}
+
+bool
+render_window::set_vsync (bool enabled)
+{
+  if (handler == nullptr || ctx->gpu_device == nullptr) {
+    wsl::log::gfx ()->error ("render_window::set_vsync: no window or device");
+    return false;
+  }
+
+  // Pick the requested present mode based on the desired vsync state
+  // and what the backend actually supports. We re-query support on
+  // every call because the user may have moved the window to a
+  // different monitor with different capabilities between toggles.
+  SDL_GPUPresentMode requested;
+  if (enabled) {
+    // vsync ON: prefer MAILBOX (lower-latency vsync, drops pending
+    // images instead of queueing them) when available, fall back to
+    // plain VSYNC otherwise.
+    if (SDL_WindowSupportsGPUPresentMode (ctx->gpu_device, handler,
+                                          SDL_GPU_PRESENTMODE_MAILBOX)) {
+      requested = SDL_GPU_PRESENTMODE_MAILBOX;
+    } else {
+      requested = SDL_GPU_PRESENTMODE_VSYNC;
+    }
+  } else {
+    // vsync OFF: IMMEDIATE (no vblank sync). Bail with a spdlog error
+    // if the backend doesn't advertise it — we'd rather keep the
+    // previous mode than call `SDL_SetGPUSwapchainParameters` with a
+    // mode that's known to fail.
+    if (!SDL_WindowSupportsGPUPresentMode (ctx->gpu_device, handler,
+                                           SDL_GPU_PRESENTMODE_IMMEDIATE)) {
+      wsl::log::gfx ()->error (
+          "render_window::set_vsync: IMMEDIATE present mode not "
+          "supported by the backend, vsync stays enabled");
+      return false;
+    }
+    requested = SDL_GPU_PRESENTMODE_IMMEDIATE;
+  }
+
+  if (!SDL_SetGPUSwapchainParameters (ctx->gpu_device, handler,
+                                      m_swapchain_composition, requested)) {
+    wsl::log::gfx ()->error (
+        "render_window::set_vsync: SDL_SetGPUSwapchainParameters "
+        "rejected the request ({})",
+        SDL_GetError ());
+    return false;
+  }
+
+  m_vsync = enabled;
+  char const *mode_name
+      = (requested == SDL_GPU_PRESENTMODE_VSYNC)       ? "VSYNC"
+        : (requested == SDL_GPU_PRESENTMODE_MAILBOX)   ? "MAILBOX"
+        : (requested == SDL_GPU_PRESENTMODE_IMMEDIATE) ? "IMMEDIATE"
+                                                       : "UNKNOWN";
+  wsl::log::gfx ()->info ("render_window::set_vsync: vsync {} (mode={})",
+                          enabled ? "ON" : "OFF", mode_name);
+  return true;
 }
 
 render_window::~render_window ()
@@ -290,6 +368,7 @@ render_window::create_depth_texture ()
 void
 render_window::begin_3d_pass (bool clear_color, bool clear_depth) const
 {
+  ZoneScoped;
   if ((msaa_hdr_scene == nullptr) || (msaa_hdr_bloom == nullptr)
       || (hdr_scene == nullptr) || (hdr_bloom_src == nullptr)
       || (depth_texture == nullptr)) {
@@ -352,6 +431,7 @@ render_window::begin_3d_pass (bool clear_color, bool clear_depth) const
 void
 render_window::end_3d_pass (bool run_postprocess)
 {
+  ZoneScoped;
   if (ctx->has_main_render_pass ()) {
     ctx->end_main_render_pass ();
   }
@@ -366,12 +446,14 @@ render_window::end_3d_pass (bool run_postprocess)
 void
 render_window::begin_ui_pass () const
 {
+  ZoneScoped;
   ctx->begin_ui_render_pass (swapchain.texture_data);
 }
 
 void
 render_window::end_ui_pass () const
 {
+  ZoneScoped;
   ctx->end_ui_render_pass ();
 }
 
@@ -445,15 +527,85 @@ render_window::apply_viewport (const gfx::viewport &vp) const
 void
 render_window::new_swapchain ()
 {
-  bool const ok = SDL_WaitAndAcquireGPUSwapchainTexture (
-      ctx->main_cmd, handler, &swapchain.texture_data, &swapchain.width,
-      &swapchain.height);
-  if (!ok) {
-    wsl::log::gfx ()->error ("Failed to acquire swapchain texture: {}",
-                             SDL_GetError ());
-    swapchain.texture_data = nullptr;
-    swapchain.width = 0;
-    swapchain.height = 0;
+  ZoneScoped;
+  // Try the non-blocking acquire first. With max-3 frames in flight and
+  // IMMEDIATE present mode this is essentially always successful, and
+  // when it is the CPU never blocks on the swapchain.
+  //
+  // The catch: per the SDL docs, when too many frames are in flight
+  // `SDL_AcquireGPUSwapchainTexture` returns `true` with
+  // `swapchain_texture = NULL` as an "indication to wait". Recording
+  // GPU work on a cmd buffer that holds a NULL swapchain acquire is
+  // legal but the AMDVK driver is observably fragile about it — the
+  // next `SDL_DispatchGPUCompute` (or even the copy pass) segfaults
+  // because the cmd buffer's submit-side present is in an
+  // inconsistent state. This was the source of the intermittent
+  // crashes after the IMMEDIATE change.
+  //
+  // Critical: we must NOT call the blocking fallback
+  // `SDL_WaitAndAcquireGPUSwapchainTexture` on the same `ctx->main_cmd`
+  // that already has the NULL acquire recorded — that would leave the
+  // command buffer with TWO swapchain acquires (one NULL, one valid)
+  // and AMDVK uses the NULL one. The fallback MUST use a fresh command
+  // buffer. As a bonus, this also gives us a clean command buffer
+  // with exactly one valid swapchain acquire for the rest of the frame.
+  constexpr int kSpinAttempts = 4;
+  {
+    ZoneScopedN ("new_swapchain::non_blocking_spin");
+    for (int attempt = 0; attempt < kSpinAttempts; ++attempt) {
+      bool const ok = SDL_AcquireGPUSwapchainTexture (
+          ctx->main_cmd, handler, &swapchain.texture_data, &swapchain.width,
+          &swapchain.height);
+      if (ok && swapchain.texture_data != nullptr) {
+        return;
+      }
+      if (ok) {
+        // Got `true` but the texture is NULL — too many frames in flight.
+        // The non-blocking acquire already left a NULL acquire on
+        // `ctx->main_cmd`, so we cannot reuse it for the blocking
+        // fallback. Submit the poisoned cmd buffer as a no-op (it has
+        // no recorded draws yet — `new_swapchain` is the first call
+        // before any pass) and get a fresh one for the blocking acquire.
+        {
+          ZoneScopedN ("new_swapchain::recover_poison");
+          SDL_GPUFence *poison_fence
+              = SDL_SubmitGPUCommandBufferAndAcquireFence (ctx->main_cmd);
+          if (poison_fence != nullptr) {
+            SDL_WaitForGPUFences (ctx->gpu_device, true, &poison_fence, 1);
+            SDL_ReleaseGPUFence (ctx->gpu_device, poison_fence);
+          }
+          ctx->main_cmd = SDL_AcquireGPUCommandBuffer (ctx->gpu_device);
+          if (ctx->main_cmd == nullptr) {
+            wsl::log::gfx ()->error (
+                "new_swapchain: failed to acquire fresh cmd buffer: {}",
+                SDL_GetError ());
+            return;
+          }
+        }
+        break;
+      }
+      // `false` is a hard error. Bail out and let the frame render to
+      // present_tex only.
+      wsl::log::gfx ()->debug (
+          "new_swapchain: non-blocking acquire returned false ({}), "
+          "falling back to blocking acquire",
+          SDL_GetError ());
+      break;
+    }
+  }
+
+  {
+    ZoneScopedN ("new_swapchain::blocking_acquire");
+    bool const ok = SDL_WaitAndAcquireGPUSwapchainTexture (
+        ctx->main_cmd, handler, &swapchain.texture_data, &swapchain.width,
+        &swapchain.height);
+    if (!ok) {
+      wsl::log::gfx ()->error (
+          "new_swapchain: blocking acquire also failed: {}", SDL_GetError ());
+      swapchain.texture_data = nullptr;
+      swapchain.width = 0;
+      swapchain.height = 0;
+    }
   }
 }
 
@@ -544,6 +696,7 @@ render_window::on_resize ()
 void
 render_window::postprocess_hdr_bloom ()
 {
+  ZoneScoped;
   if ((hdr_bloom_src == nullptr) || (hdr_scene == nullptr)
       || (bloom_a == nullptr) || (bloom_b == nullptr)
       || (present_tex.texture_data == nullptr)) {
@@ -565,6 +718,7 @@ render_window::postprocess_hdr_bloom ()
 
   // ---------- (1) Downsample bloom_src -> bloom_a ----------
   {
+    ZoneScopedN ("postprocess::downsample");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = bloom_a;
@@ -605,6 +759,7 @@ render_window::postprocess_hdr_bloom ()
 
   // ---------- (2) Blur H: bloom_a -> bloom_b ----------
   {
+    ZoneScopedN ("postprocess::blur_h");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = bloom_b;
@@ -642,6 +797,7 @@ render_window::postprocess_hdr_bloom ()
 
   // ---------- (3) Blur V: bloom_b -> bloom_a ----------
   {
+    ZoneScopedN ("postprocess::blur_v");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = bloom_a;
@@ -680,6 +836,7 @@ render_window::postprocess_hdr_bloom ()
   // ---------- (4) Composite + tonemap: hdr_scene + bloom_a -> swapchain
   // ----------
   if (swapchain.texture_data != nullptr) {
+    ZoneScopedN ("postprocess::composite_swapchain");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = swapchain.texture_data;
@@ -719,6 +876,7 @@ render_window::postprocess_hdr_bloom ()
   // ---------- (5) Composite + tonemap also into present_tex (sampleable)
   // ----------
   if (present_tex.texture_data != nullptr) {
+    ZoneScopedN ("postprocess::composite_present_tex");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = present_tex.texture_data;

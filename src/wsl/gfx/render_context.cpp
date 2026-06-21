@@ -4,6 +4,8 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include <tracy/Tracy.hpp>
+
 namespace wsl
 {
 
@@ -73,6 +75,12 @@ gfx::render_context::~render_context ()
 {
   if (gpu_device != nullptr) {
     SDL_WaitForGPUIdle (gpu_device);
+    for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
+      if (m_slots[i].fence != nullptr) {
+        SDL_ReleaseGPUFence (gpu_device, m_slots[i].fence);
+        m_slots[i].fence = nullptr;
+      }
+    }
     SDL_DestroyGPUDevice (gpu_device);
     gpu_device = nullptr;
     main_cmd = nullptr;
@@ -127,6 +135,7 @@ gfx::render_context::has_ui_render_pass () const
 void
 gfx::render_context::begin_frame ()
 {
+  ZoneScoped;
   // Reset pass handles BEFORE acquiring a new command buffer.
   // This ensures that if a previous frame's end_main_render_pass was skipped or
   // if begin_main_render_pass is not called this frame, we never hold a stale
@@ -134,7 +143,25 @@ gfx::render_context::begin_frame ()
   main_pass = nullptr;
   ui_pass = nullptr;
 
+  // Triple buffering: pick the slot for this frame and wait on the fence
+  // from the previous time this slot was used. This is what replaces the
+  // old vsync stall: instead of blocking the CPU on swapchain present
+  // completion every frame, we only block on the GPU's completion of
+  // work that consumed this slot's resources. The slot's resources are
+  // free to be overwritten as soon as the fence signals, and the CPU
+  // can run 1..kMaxFramesInFlight frames ahead of the GPU.
+  m_current_slot = static_cast<uint32_t> (m_frame_index % kMaxFramesInFlight);
+  FrameSlot &slot = m_slots[m_current_slot];
+
+  if (slot.fence != nullptr) {
+    ZoneScopedN ("render_context::wait_for_slot_fence");
+    SDL_WaitForGPUFences (gpu_device, false, &slot.fence, 1);
+    SDL_ReleaseGPUFence (gpu_device, slot.fence);
+    slot.fence = nullptr;
+  }
+
   main_cmd = SDL_AcquireGPUCommandBuffer (gpu_device);
+  ++m_frame_index;
 }
 
 void
@@ -152,7 +179,16 @@ gfx::render_context::submit_frame ()
     end_ui_render_pass ();
   }
 
-  SDL_SubmitGPUCommandBuffer (main_cmd);
+  // Acquire a fence at submit so the next time this slot is recycled
+  // (kMaxFramesInFlight frames from now) the CPU can wait for the GPU
+  // to finish consuming the resources this command buffer used.
+  FrameSlot &slot = m_slots[m_current_slot];
+  slot.fence = SDL_SubmitGPUCommandBufferAndAcquireFence (main_cmd);
+  if (slot.fence == nullptr) {
+    wsl::log::gfx ()->warn (
+        "render_context: SDL_SubmitGPUCommandBufferAndAcquireFence failed: {}",
+        SDL_GetError ());
+  }
   main_cmd = nullptr;
 }
 
