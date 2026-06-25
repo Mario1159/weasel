@@ -2,6 +2,7 @@
 
 #include "mesh.hpp"
 #include "render_context.hpp"
+#include "tracy_gpu_mem.hpp"
 
 #include <SDL3/SDL_gpu.h>
 #include <glm/ext/matrix_float4x4.hpp>
@@ -186,9 +187,11 @@ private:
   {
     if (m_device != nullptr) {
       if (m_vertex_buffer != nullptr) {
+        wsl::gfx::tracy_free_buffer (m_vertex_buffer);
         SDL_ReleaseGPUBuffer (m_device, m_vertex_buffer);
       }
       if (m_index_buffer != nullptr) {
+        wsl::gfx::tracy_free_buffer (m_index_buffer);
         SDL_ReleaseGPUBuffer (m_device, m_index_buffer);
       }
     }

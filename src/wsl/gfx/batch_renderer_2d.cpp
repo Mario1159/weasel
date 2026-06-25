@@ -2,6 +2,7 @@
 #include "render_context.hpp"
 #include "render_window.hpp"
 #include "shader.hpp"
+#include "tracy_gpu_mem.hpp"
 #include "wsl/rsc/resource_manager.hpp"
 #include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
@@ -80,7 +81,7 @@ batch_renderer_2d::build_and_upload ()
 
   for (const auto &cmd : m_queue) {
     auto img_handle = m_res_mgr->get (cmd.image);
-    SDL_GPUTexture *tex = img_handle ? img_handle->texture : nullptr;
+    SDL_GPUTexture *tex = img_handle ? img_handle->texture.get () : nullptr;
 
     if (tex != current_texture || m_vertices.size () + 6 > max_vertices) {
       if (current_texture != nullptr || !m_vertices.empty ()) {
@@ -272,6 +273,7 @@ batch_renderer_2d::create_pipeline ()
   pipe.vertex_input_state.vertex_attributes = va;
 
   m_pipeline = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+  wsl::gfx::tracy_alloc_pipeline (m_pipeline);
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -283,15 +285,20 @@ batch_renderer_2d::create_pipeline ()
   sinfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
   sinfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
   m_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &sinfo);
+  wsl::gfx::tracy_alloc_sampler (m_sampler);
 }
 
 void
 batch_renderer_2d::destroy_pipeline ()
 {
-  if (m_pipeline)
+  if (m_pipeline) {
+    wsl::gfx::tracy_free_pipeline (m_pipeline);
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline);
-  if (m_sampler)
+  }
+  if (m_sampler) {
+    wsl::gfx::tracy_free_sampler (m_sampler);
     SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_sampler);
+  }
 }
 
 void
@@ -301,20 +308,26 @@ batch_renderer_2d::create_buffers ()
   binfo.size = max_vertices * sizeof (vertex_2d);
   binfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
   m_vbo = SDL_CreateGPUBuffer (m_ctx->gpu_device, &binfo);
+  wsl::gfx::tracy_alloc_buffer (m_vbo, binfo.size);
 
   SDL_GPUTransferBufferCreateInfo tinfo{};
   tinfo.size = max_vertices * sizeof (vertex_2d);
   tinfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
   m_vbo_transfer = SDL_CreateGPUTransferBuffer (m_ctx->gpu_device, &tinfo);
+  wsl::gfx::tracy_alloc_transfer (m_vbo_transfer, tinfo.size);
 }
 
 void
 batch_renderer_2d::destroy_buffers ()
 {
-  if (m_vbo)
+  if (m_vbo) {
+    wsl::gfx::tracy_free_buffer (m_vbo);
     SDL_ReleaseGPUBuffer (m_ctx->gpu_device, m_vbo);
-  if (m_vbo_transfer)
+  }
+  if (m_vbo_transfer) {
+    wsl::gfx::tracy_free_transfer (m_vbo_transfer);
     SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_vbo_transfer);
+  }
 }
 
 } // namespace wsl::gfx

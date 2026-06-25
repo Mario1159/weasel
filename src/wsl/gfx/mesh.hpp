@@ -7,7 +7,6 @@
 
 #include "material.hpp"
 
-
 namespace wsl
 {
 

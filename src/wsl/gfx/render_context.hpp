@@ -57,6 +57,13 @@ public:
     return m_frame_index;
   }
 
+  // The fence for the most recently submitted command buffer, or
+  // nullptr if no frame is in flight. Owned by the per-slot
+  // FrameSlot and released after the slot is recycled (i.e. the
+  // caller must wait + release with SDL_ReleaseGPUFence before the
+  // next frame reuses the slot).
+  SDL_GPUFence *current_fence () const;
+
   SDL_GPURenderPass *
   begin_render_pass (const SDL_GPUColorTargetInfo *color_targets,
                      Uint32 num_color_targets,

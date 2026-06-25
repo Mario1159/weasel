@@ -1,6 +1,7 @@
 #include "physics_debug_renderer.hpp"
 #include "gfx/render_context.hpp"
 #include "gfx/render_window.hpp"
+#include "gfx/tracy_gpu_mem.hpp"
 #include "wsl/gfx/shader.hpp"
 #include "wsl/phys/jolt_runtime.hpp"
 #include "wsl/rsc/resource_manager.hpp"
@@ -140,12 +141,14 @@ physics_debug_renderer::physics_debug_renderer (wsl::gfx::render_window &w,
   // ------------------------------------------------------------
   pi.primitive_type = SDL_GPU_PRIMITIVETYPE_LINELIST;
   m_pipeline_lines = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pi);
+  wsl::gfx::tracy_alloc_pipeline (m_pipeline_lines);
 
   // ------------------------------------------------------------
   // Triangle pipeline
   // ------------------------------------------------------------
   pi.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
   m_pipeline_tris = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pi);
+  wsl::gfx::tracy_alloc_pipeline (m_pipeline_tris);
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -157,16 +160,18 @@ physics_debug_renderer::~physics_debug_renderer ()
 {
   destroy_default_resources ();
   if (m_pipeline_lines != nullptr) {
+    wsl::gfx::tracy_free_pipeline (m_pipeline_lines);
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_lines);
   }
   if (m_pipeline_tris != nullptr) {
+    wsl::gfx::tracy_free_pipeline (m_pipeline_tris);
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_tris);
   }
   if (m_vertex_buffer != nullptr) {
-    SDL_ReleaseGPUBuffer (m_ctx->gpu_device, m_vertex_buffer);
+    wsl::gfx::release_gpu_buffer (m_ctx->gpu_device, m_vertex_buffer);
   }
   if (m_upload_buffer != nullptr) {
-    SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_upload_buffer);
+    wsl::gfx::release_gpu_transfer_buffer (m_ctx->gpu_device, m_upload_buffer);
   }
   wsl::phys::release_jolt_runtime ();
 }
@@ -280,12 +285,13 @@ physics_debug_renderer::upload_buffers ()
     SDL_GPUBufferCreateInfo bi{};
     bi.size = total_bytes;
     bi.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-    m_vertex_buffer = SDL_CreateGPUBuffer (m_ctx->gpu_device, &bi);
+    m_vertex_buffer = wsl::gfx::create_gpu_buffer (m_ctx->gpu_device, &bi);
 
     SDL_GPUTransferBufferCreateInfo ti{};
     ti.size = total_bytes;
     ti.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    m_upload_buffer = SDL_CreateGPUTransferBuffer (m_ctx->gpu_device, &ti);
+    m_upload_buffer
+        = wsl::gfx::create_gpu_transfer_buffer (m_ctx->gpu_device, &ti);
   }
 
   // ------------------------------------------------------------
@@ -389,6 +395,7 @@ physics_debug_renderer::create_default_texture ()
   tex.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
   m_default_texture = SDL_CreateGPUTexture (m_ctx->gpu_device, &tex);
+  wsl::gfx::tracy_alloc_texture (m_default_texture, tex);
 
   // ---- sampler ----
   SDL_GPUSamplerCreateInfo sinfo{};
@@ -400,6 +407,7 @@ physics_debug_renderer::create_default_texture ()
   sinfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
 
   m_default_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &sinfo);
+  wsl::gfx::tracy_alloc_sampler (m_default_sampler);
 
   // ---- staging buffer ----
   uint32_t white = 0xFFFFFFFF;
@@ -410,6 +418,7 @@ physics_debug_renderer::create_default_texture ()
 
   SDL_GPUTransferBuffer *upload
       = SDL_CreateGPUTransferBuffer (m_ctx->gpu_device, &tinfo);
+  wsl::gfx::tracy_alloc_transfer (upload, tinfo.size);
 
   void *mapped = SDL_MapGPUTransferBuffer (m_ctx->gpu_device, upload, false);
   memcpy (mapped, &white, sizeof (uint32_t));
@@ -445,16 +454,19 @@ physics_debug_renderer::create_default_texture ()
   SDL_SubmitGPUCommandBuffer (cmd);
 
   SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, upload);
+  wsl::gfx::tracy_free_transfer (upload);
 }
 
 void
 physics_debug_renderer::destroy_default_resources ()
 {
   if (m_default_sampler != nullptr) {
+    wsl::gfx::tracy_free_sampler (m_default_sampler);
     SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_default_sampler);
   }
 
   if (m_default_texture != nullptr) {
+    wsl::gfx::tracy_free_texture (m_default_texture);
     SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_texture);
   }
 }

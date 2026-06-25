@@ -514,12 +514,48 @@ renderer_imgui::end_frame ()
 void
 renderer_imgui::prepare (ImDrawData *draw_data)
 {
+  if (draw_data == nullptr || m_ctx->main_cmd == nullptr) {
+    return;
+  }
+  wsl::log::editor ()->debug (
+      "ImGui prepare: draw_data={} cmd={} TotalVtxCount={} TotalIdxCount={} "
+      "DisplaySize=({}, {}) CmdLists={}",
+      (void *)draw_data, (void *)m_ctx->main_cmd, (int)draw_data->TotalVtxCount,
+      (int)draw_data->TotalIdxCount, draw_data->DisplaySize.x,
+      draw_data->DisplaySize.y, (int)draw_data->CmdLists.Size);
   ImGui_ImplSDLGPU3_PrepareDrawData (draw_data, m_ctx->main_cmd);
+  wsl::log::editor ()->debug ("ImGui prepare: returned");
 }
 
 void
 renderer_imgui::render (ImDrawData *draw_data)
 {
+  // The ImGui backend dereferences `render_pass` immediately, so a
+  // null ui_pass (e.g. the swapchain acquire failed and
+  // begin_ui_render_pass bailed out) is a segfault. Skip the draw
+  // — the next valid frame will catch up.
+  if (draw_data == nullptr) {
+    wsl::log::editor ()->warn ("ImGui render: draw_data is null, skipping");
+    return;
+  }
+  if (m_ctx == nullptr || m_ctx->main_cmd == nullptr) {
+    wsl::log::editor ()->warn ("ImGui render: ctx/main_cmd is null, skipping");
+    return;
+  }
+  if (m_ctx->ui_pass == nullptr) {
+    wsl::log::editor ()->warn (
+        "ImGui render: ui_pass is null (swapchain acquire failed?), skipping");
+    return;
+  }
+  if (draw_data->DisplaySize.x <= 0.0F || draw_data->DisplaySize.y <= 0.0F) {
+    wsl::log::editor ()->warn ("ImGui render: zero DisplaySize, skipping");
+    return;
+  }
+  wsl::log::editor ()->debug (
+      "ImGui render: draw_data={} cmd={} ui_pass={} CmdLists={} "
+      "TotalIdxCount={}",
+      (void *)draw_data, (void *)m_ctx->main_cmd, (void *)m_ctx->ui_pass,
+      (int)draw_data->CmdLists.Size, (int)draw_data->TotalIdxCount);
 
   ImGui_ImplSDLGPU3_RenderDrawData (draw_data, m_ctx->main_cmd, m_ctx->ui_pass);
 }

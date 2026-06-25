@@ -3,7 +3,8 @@
 #include <SDL3/SDL_filesystem.h>
 #include <filesystem>
 
-namespace {
+namespace
+{
 std::string
 default_engine_resource_path ()
 {
@@ -11,14 +12,22 @@ default_engine_resource_path ()
   // This allows the binary to work from any install prefix (e.g. /usr/local,
   // ~/.local, or an extracted archive) without recompilation.
   const char *base_path = SDL_GetBasePath ();
-  if (base_path != nullptr)
-    {
-      std::filesystem::path exe_dir (base_path);
+  if (base_path != nullptr) {
+    std::filesystem::path exe_dir (base_path);
 
-      std::filesystem::path share_dir = exe_dir / ".." / "share" / "weasel";
-      if (std::filesystem::exists (share_dir / "compiled_shaders"))
-        return share_dir.string ();
-    }
+    // On macOS the editor runs as a .app bundle and resources are
+    // installed under <bundle>/Contents/Resources/share/weasel/.
+    // Everywhere else they sit at <prefix>/share/weasel/ directly
+    // above the executable.
+#ifdef __APPLE__
+    std::filesystem::path share_dir
+        = exe_dir / ".." / "Resources" / "share" / "weasel";
+#else
+    std::filesystem::path share_dir = exe_dir / ".." / "share" / "weasel";
+#endif
+    if (std::filesystem::exists (share_dir / "compiled_shaders"))
+      return share_dir.string ();
+  }
 
   // Fallback to compile-time paths for development builds.
 #ifdef WEASEL_BUILD_DIR
@@ -35,7 +44,7 @@ int
 main (int argc, char **argv)
 {
   wsl::cli::cli_handler cli;
-  auto const result = cli.parse(argc, argv);
+  auto const result = cli.parse (argc, argv);
 
   if (result.should_exit) {
     return result.exit_code;
@@ -43,9 +52,9 @@ main (int argc, char **argv)
 
   editor::editor_app g ("Incantation", 1280, 720,
                         default_engine_resource_path ());
-  
+
   if (result.project_to_load) {
-      g.set_project_path(*result.project_to_load);
+    g.set_project_path (*result.project_to_load);
   }
 
   return g.run ();

@@ -3,6 +3,7 @@
 
 #include "gfx/mesh.hpp"
 #include "render_context.hpp"
+#include "tracy_gpu_mem.hpp"
 
 #include <SDL3/SDL_gpu.h>
 #include <algorithm>
@@ -347,12 +348,14 @@ gfx::model_3d::build_gpu_buffers (gfx::render_context *ctx)
   vb.size = m_vertex_count * sizeof (vertex);
 
   m_vertex_buffer = SDL_CreateGPUBuffer (ctx->gpu_device, &vb);
+  wsl::gfx::tracy_alloc_buffer (m_vertex_buffer, vb.size);
 
   SDL_GPUBufferCreateInfo ib{};
   ib.usage = SDL_GPU_BUFFERUSAGE_INDEX;
   ib.size = m_index_count * sizeof (uint32_t);
 
   m_index_buffer = SDL_CreateGPUBuffer (ctx->gpu_device, &ib);
+  wsl::gfx::tracy_alloc_buffer (m_index_buffer, ib.size);
 
   SDL_GPUTransferBufferCreateInfo tvb{};
   tvb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
@@ -364,8 +367,10 @@ gfx::model_3d::build_gpu_buffers (gfx::render_context *ctx)
 
   SDL_GPUTransferBuffer *v_upload
       = SDL_CreateGPUTransferBuffer (ctx->gpu_device, &tvb);
+  wsl::gfx::tracy_alloc_transfer (v_upload, tvb.size);
   SDL_GPUTransferBuffer *i_upload
       = SDL_CreateGPUTransferBuffer (ctx->gpu_device, &tib);
+  wsl::gfx::tracy_alloc_transfer (i_upload, tib.size);
 
   void *vmap = SDL_MapGPUTransferBuffer (ctx->gpu_device, v_upload, false);
   std::memcpy (vmap, vertices.data (), vb.size);
@@ -389,7 +394,9 @@ gfx::model_3d::build_gpu_buffers (gfx::render_context *ctx)
   SDL_EndGPUCopyPass (pass);
   SDL_SubmitGPUCommandBuffer (cmd);
 
+  wsl::gfx::tracy_free_transfer (v_upload);
   SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, v_upload);
+  wsl::gfx::tracy_free_transfer (i_upload);
   SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, i_upload);
 }
 
@@ -397,11 +404,13 @@ void
 gfx::model_3d::destroy_gpu_buffers (gfx::render_context *ctx)
 {
   if (m_vertex_buffer != nullptr) {
+    wsl::gfx::tracy_free_buffer (m_vertex_buffer);
     SDL_ReleaseGPUBuffer (ctx->gpu_device, m_vertex_buffer);
     m_vertex_buffer = nullptr;
   }
 
   if (m_index_buffer != nullptr) {
+    wsl::gfx::tracy_free_buffer (m_index_buffer);
     SDL_ReleaseGPUBuffer (ctx->gpu_device, m_index_buffer);
     m_index_buffer = nullptr;
   }

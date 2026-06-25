@@ -1,5 +1,7 @@
 #include "image_loader.hpp"
+#include "gfx/gpu_resources.hpp"
 #include "gfx/image.hpp"
+#include "gfx/tracy_gpu_mem.hpp"
 #include "stb_image.h"
 #include "wsl/log/log.hpp"
 
@@ -196,7 +198,7 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
   // Create a default sampler with linear filtering + linear mipmaps to ensure
   // smooth downsampling when rendering small icons. It is safe to create now
   // and attach it to returned images; if creation fails we continue without it.
-  SDL_GPUSampler *default_sampler = nullptr;
+  wsl::gfx::gpu_sampler default_sampler;
   {
     SDL_GPUSamplerCreateInfo sampler_info{};
     sampler_info.min_filter = SDL_GPU_FILTER_LINEAR;
@@ -205,11 +207,10 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    default_sampler = SDL_CreateGPUSampler (device, &sampler_info);
-    if (default_sampler == nullptr) {
-      wsl::log::rsc ()->warn ("Failed to create default sampler: {}",
+    default_sampler = wsl::gfx::gpu_sampler (device, sampler_info);
+    if (!default_sampler) {
+      wsl::log::rsc ()->warn ("Failed to create default image sampler: {}",
                               SDL_GetError ());
-      // continue without sampler
     }
   }
 
@@ -227,8 +228,8 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     info.sample_count = SDL_GPU_SAMPLECOUNT_1;
     info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-    SDL_GPUTexture *texture = SDL_CreateGPUTexture (device, &info);
-    if (texture == nullptr) {
+    wsl::gfx::gpu_texture texture (device, info);
+    if (!texture) {
       SDL_DestroySurface (rgba);
       return {};
     }
@@ -238,28 +239,28 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     tb_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
     tb_info.size = upload_size;
 
-    SDL_GPUTransferBuffer *tb = SDL_CreateGPUTransferBuffer (device, &tb_info);
-    if (tb == nullptr) {
+    wsl::gfx::gpu_transfer_buffer tb (device, tb_info);
+    if (!tb) {
       SDL_DestroySurface (rgba);
-      SDL_ReleaseGPUTexture (device, texture);
+      // texture destructor releases the GPU texture + Tracy.
       return {};
     }
 
-    void *mapped = SDL_MapGPUTransferBuffer (device, tb, true);
+    void *mapped = SDL_MapGPUTransferBuffer (device, tb.get (), true);
     std::memcpy (mapped, rgba->pixels, upload_size);
-    SDL_UnmapGPUTransferBuffer (device, tb);
+    SDL_UnmapGPUTransferBuffer (device, tb.get ());
 
     SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer (device);
     SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass (cmd);
 
     SDL_GPUTextureTransferInfo src{};
-    src.transfer_buffer = tb;
+    src.transfer_buffer = tb.get ();
     src.offset = 0;
     src.pixels_per_row = width;
     src.rows_per_layer = height;
 
     SDL_GPUTextureRegion dst{};
-    dst.texture = texture;
+    dst.texture = texture.get ();
     dst.mip_level = 0;
     dst.layer = 0;
     dst.x = 0;
@@ -274,15 +275,19 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     SDL_EndGPUCopyPass (copy);
     SDL_SubmitGPUCommandBuffer (cmd);
 
-    SDL_ReleaseGPUTransferBuffer (device, tb);
+    // tb destructor releases the transfer buffer + Tracy.
+
     SDL_DestroySurface (rgba);
 
     gfx::image result{};
-    result.texture = texture;
-    result.device = device;
-    // Attach default sampler if created.
-    if (default_sampler != nullptr) {
-      result.sampler = default_sampler;
+    // Move the gpu_texture and gpu_sampler into the result. The
+    // RAII destructors of the locals become no-ops (handles are
+    // null after the move). The result's gpu_texture / gpu_sampler
+    // members own the GPU resources + Tracy tracking for the
+    // lifetime of the image.
+    result.texture = std::move (texture);
+    if (default_sampler) {
+      result.sampler = std::move (default_sampler);
     }
     return result;
   }
@@ -299,8 +304,8 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
   info.sample_count = SDL_GPU_SAMPLECOUNT_1;
   info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  SDL_GPUTexture *texture = SDL_CreateGPUTexture (device, &info);
-  if (texture == nullptr) {
+  wsl::gfx::gpu_texture texture (device, info);
+  if (!texture) {
     SDL_DestroySurface (rgba);
     return {};
   }
@@ -326,7 +331,6 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
         // abort mip generation; cleanup and return
         SDL_EndGPUCopyPass (copy);
         SDL_SubmitGPUCommandBuffer (cmd);
-        SDL_ReleaseGPUTexture (device, texture);
         SDL_DestroySurface (rgba);
         return {};
       }
@@ -341,7 +345,6 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
         SDL_DestroySurface (level_surf);
         SDL_EndGPUCopyPass (copy);
         SDL_SubmitGPUCommandBuffer (cmd);
-        SDL_ReleaseGPUTexture (device, texture);
         SDL_DestroySurface (rgba);
         return {};
       }
@@ -356,20 +359,19 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     tb_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
     tb_info.size = level_size;
 
-    SDL_GPUTransferBuffer *tb = SDL_CreateGPUTransferBuffer (device, &tb_info);
-    if (tb == nullptr) {
+    wsl::gfx::gpu_transfer_buffer tb (device, tb_info);
+    if (!tb) {
       wsl::log::rsc ()->error ("Failed to create transfer buffer: {}",
                                SDL_GetError ());
       if (level != 0)
         SDL_DestroySurface (level_surf);
       SDL_EndGPUCopyPass (copy);
       SDL_SubmitGPUCommandBuffer (cmd);
-      SDL_ReleaseGPUTexture (device, texture);
       SDL_DestroySurface (rgba);
       return {};
     }
 
-    void *mapped = SDL_MapGPUTransferBuffer (device, tb, true);
+    void *mapped = SDL_MapGPUTransferBuffer (device, tb.get (), true);
     // Copy row-by-row to account for pitch
     uint8_t *mapped_ptr = static_cast<uint8_t *> (mapped);
     uint8_t *src = static_cast<uint8_t *> (level_surf->pixels);
@@ -377,16 +379,16 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
       std::memcpy (mapped_ptr + size_t (y) * lw * bytes_per_pixel,
                    src + size_t (y) * level_surf->pitch, lw * bytes_per_pixel);
     }
-    SDL_UnmapGPUTransferBuffer (device, tb);
+    SDL_UnmapGPUTransferBuffer (device, tb.get ());
 
     SDL_GPUTextureTransferInfo src_info{};
-    src_info.transfer_buffer = tb;
+    src_info.transfer_buffer = tb.get ();
     src_info.offset = 0;
     src_info.pixels_per_row = lw;
     src_info.rows_per_layer = lh;
 
     SDL_GPUTextureRegion dst{};
-    dst.texture = texture;
+    dst.texture = texture.get ();
     dst.mip_level = (Uint32)level;
     dst.layer = 0;
     dst.x = 0;
@@ -398,7 +400,8 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
 
     SDL_UploadToGPUTexture (copy, &src_info, &dst, false);
 
-    SDL_ReleaseGPUTransferBuffer (device, tb);
+    // tb destructor releases the transfer buffer + Tracy at end
+    // of this iteration's scope.
     if (level != 0)
       SDL_DestroySurface (level_surf);
   }
@@ -410,8 +413,15 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
   SDL_DestroySurface (rgba);
 
   gfx::image result{};
-  result.texture = texture;
-  result.device = device;
+  // Move the gpu_texture and gpu_sampler into the result. The
+  // RAII destructors of the locals become no-ops (handles are
+  // null after the move). The result's gpu_texture / gpu_sampler
+  // members own the GPU resources + Tracy tracking for the
+  // lifetime of the image.
+  result.texture = std::move (texture);
+  if (default_sampler) {
+    result.sampler = std::move (default_sampler);
+  }
   return result;
 }
 

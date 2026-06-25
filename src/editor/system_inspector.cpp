@@ -114,9 +114,9 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
       auto ed_handle = editor_ctx->editor_resources.get (ed_icon);
 
       ImGui::PushStyleColor (ImGuiCol_Button, ImVec4 (0, 0, 0, 0));
-      if (ed_handle && (*ed_handle).texture) {
+      if (ed_handle && (*ed_handle).texture.get ()) {
         if (ImGui::ImageButton ("##ed_active_btn",
-                                (ImTextureID)(*ed_handle).texture,
+                                (ImTextureID)(*ed_handle).texture.get (),
                                 ImVec2 (checkbox_w - 4, checkbox_w - 4))) {
           system->set_editor_active (!ed_active);
         }
@@ -151,9 +151,9 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
         if (rt_active) {
           auto rt_handle
               = editor_ctx->editor_resources.get (editor_ctx->icon_play);
-          if (rt_handle && (*rt_handle).texture) {
+          if (rt_handle && (*rt_handle).texture.get ()) {
             if (ImGui::ImageButton ("##rt_active_btn",
-                                    (ImTextureID)(*rt_handle).texture,
+                                    (ImTextureID)(*rt_handle).texture.get (),
                                     ImVec2 (checkbox_w - 4, checkbox_w - 4))) {
               system->set_init_on_startup (!rt_active, registry, is_playing);
             }

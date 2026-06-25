@@ -815,7 +815,7 @@ draw_icon_button (wsl::comp::singl::editor_context *editor_ctx,
   const ImVec2 image_size (size - (padding * 2.0F), size - (padding * 2.0F));
 
   auto handle = editor_ctx->editor_resources.get (icon_id);
-  if (!handle || ((*handle).texture == nullptr)) {
+  if (!handle || ((*handle).texture.get () == nullptr)) {
     editor_ctx->editor_resources.load (icon_id);
     if (ImGui::Button ("??", ImVec2 (size, size))) {
       if (clicked != nullptr) {
@@ -824,7 +824,7 @@ draw_icon_button (wsl::comp::singl::editor_context *editor_ctx,
     }
   } else {
     ImGui::PushStyleVar (ImGuiStyleVar_FramePadding, ImVec2 (padding, padding));
-    if (ImGui::ImageButton (tooltip, (ImTextureID)(*handle).texture,
+    if (ImGui::ImageButton (tooltip, (ImTextureID)(*handle).texture.get (),
                             image_size)) {
       if (clicked != nullptr) {
         *clicked = true;

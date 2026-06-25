@@ -1,9 +1,11 @@
 #include "log.hpp"
+#include "tracy_sink.hpp"
 #include <memory>
 #include <spdlog/common.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 namespace wsl::log
 {
@@ -21,11 +23,22 @@ static std::shared_ptr<spdlog::logger> s_cmake_logger;
 static std::shared_ptr<spdlog::logger>
 make_logger (const char *name, const char *info_color)
 {
-  auto sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt> ();
-  sink->set_pattern ("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
-  sink->set_color (spdlog::level::info, info_color);
+  auto stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt> ();
+  stdout_sink->set_pattern ("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
+  stdout_sink->set_color (spdlog::level::info, info_color);
 
-  auto logger = std::make_shared<spdlog::logger> (name, sink);
+  // Each logger also writes into Tracy (Tracy messages column).
+  // Tracy is enabled at compile time via the TRACY_ENABLE define
+  // pulled in by the existing wsl CMake link to TracyClient; when
+  // Tracy is disabled the macros compile to no-ops so this sink
+  // is harmless overhead.
+  auto tracy_sink_ptr = std::make_shared<wsl::log::tracy_sink> ();
+
+  // spdlog takes a vector of sinks; the first one is the "primary"
+  // for error-message formatting.
+  std::vector<spdlog::sink_ptr> sinks{ stdout_sink, tracy_sink_ptr };
+  auto logger
+      = std::make_shared<spdlog::logger> (name, sinks.begin (), sinks.end ());
   spdlog::register_logger (logger);
   return logger;
 }

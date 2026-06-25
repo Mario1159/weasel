@@ -23,6 +23,11 @@
 #include "wsl/rsc/scene.hpp"
 
 #include "wsl/log/log.hpp"
+#ifdef WEASEL_ENABLE_RENDERDOC
+#include "wsl/gfx/renderdoc.hpp"
+#endif
+#include "wsl/sys/tracy_telemetry.hpp"
+#include <tracy/Tracy.hpp>
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_hints.h>
@@ -40,13 +45,65 @@
 namespace wsl
 {
 
+namespace
+{
+
+// Snapshot hook installed into the Tracy telemetry thread. The
+// background thread reads these fields every 250 ms. `m_runtime_ctx`
+// itself is a unique_ptr that outlives the telemetry thread, so
+// reading the pointer is safe.
+wsl::comp::singl::runtime_context *s_tracy_rt = nullptr;
+double s_smoothed_fps = 0.0;
+
+void
+tracy_runtime_snapshot (uint64_t &frame_index, double &fps, bool &is_running,
+                        bool &in_play_session)
+{
+  if (s_tracy_rt == nullptr) {
+    frame_index = 0;
+    fps = 0.0;
+    is_running = false;
+    in_play_session = false;
+    return;
+  }
+  frame_index = s_tracy_rt->render_ctx.frame_index ();
+  fps = s_smoothed_fps;
+  is_running = s_tracy_rt->is_running;
+  in_play_session = s_tracy_rt->in_play_session;
+}
+
+} // namespace
+
 app::app (const std::string &name, int width, int height,
           const std::string &engine_res_path)
 {
   wsl::log::init ();
 
+  // Label the main thread for Tracy. The Tracy docs require a
+  // string literal here — the API stores the pointer and expects
+  // the bytes to live for the entire process. Without this, the
+  // thread shows up as "Main thread" (Tracy's default) which is
+  // ambiguous in a process that spawns multiple worker threads.
+  // (tracy::SetThreadName is a no-op when TRACY_ENABLE is not
+  // defined, so this is safe in release builds.)
+  tracy::SetThreadName ("Engine Main");
+
+#ifdef WEASEL_ENABLE_RENDERDOC
+  // RenderDoc must be initialised before the SDL_GPUDevice is created
+  // so that capture options (vsync, callstacks, ...) take effect. This
+  // is a safe no-op when the RenderDoc module is not loaded.
+  wsl::gfx::rdoc::init ();
+#endif
+
   m_runtime_context = std::make_unique<wsl::comp::singl::runtime_context> (
       name.c_str (), width, height, engine_res_path);
+
+  // Start the periodic memory / playback / frame telemetry tick
+  // AFTER the runtime context exists so the snapshot function can
+  // read it. The thread is joined in ~app before the unique_ptr is
+  // destroyed.
+  s_tracy_rt = m_runtime_context.get ();
+  wsl::sys::tracy_telemetry_init (tracy_runtime_snapshot);
 
   if (m_runtime_context->render_ctx.gpu_device == nullptr) {
     wsl::log::core ()->critical (
@@ -111,7 +168,17 @@ app::app (const std::string &name, int width, int height,
           : 0);
 }
 
-app::~app () = default;
+app::~app ()
+{
+  // Shut down the Tracy telemetry thread BEFORE the runtime context
+  // is destroyed so the background thread can't read freed memory.
+  s_tracy_rt = nullptr;
+  wsl::sys::tracy_telemetry_shutdown ();
+
+#ifdef WEASEL_ENABLE_RENDERDOC
+  wsl::gfx::rdoc::shutdown ();
+#endif
+}
 
 void
 app::set_project_path (const std::string &path)
@@ -156,6 +223,14 @@ app::run ()
     double const dt = (current_time - last_time) / 1000.0;
     last_time = current_time;
 
+    // Update the EWMA-smoothed FPS that the Tracy telemetry thread
+    // reads. First-frame dt can be 0 or enormous (just-initialised
+    // state); guard against both.
+    if (dt > 1e-6 && dt < 1.0) {
+      double const instant = 1.0 / dt;
+      s_smoothed_fps = (0.1 * instant) + (0.9 * s_smoothed_fps);
+    }
+
     on_update (dt);
 
     SDL_Event e;
@@ -172,9 +247,23 @@ app::run ()
       on_event (e);
     }
 
+    // "Update" sub-frame: physics, ECS systems, etc. Closes before
+    // "Render" starts. The two are side-by-side rows in Tracy's
+    // Frame view; their gap equals the main frame time.
+    wsl::sys::tracy_telemetry_secondary_frame_begin ("Update");
     m_runtime_context->core_systems->update (dt);
     on_update (dt);
+    wsl::sys::tracy_telemetry_secondary_frame_end ("Update");
+
+    wsl::sys::tracy_telemetry_secondary_frame_begin ("Render");
     on_render ();
+    wsl::sys::tracy_telemetry_secondary_frame_end ("Render");
+
+    // Main frame boundary. Tracy reads frame time from the gap
+    // between consecutive FrameMark calls. The label is shown in
+    // the Frame view alongside the per-frame zone stack.
+    wsl::sys::tracy_telemetry_frame_mark (
+        m_runtime_context->render_ctx.frame_index ());
   }
 
   wsl::log::core ()->debug ("Exiting main loop");

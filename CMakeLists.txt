@@ -28,6 +28,14 @@ option(WEASEL_LIMIT_NINJA_RESOURCES
 option(WEASEL_ENABLE_MULTIPLAYER
     "Enable multiplayer support via GameNetworkingSockets"
     ON)
+# RenderDoc in-application API. The module is loaded at runtime via
+# dlopen / GetModuleHandle, so there is no link-time dependency. Default
+# ON for Debug, OFF for Release so shipping builds do not pull the
+# header in. Capture options (vsync, callstacks, file template) and
+# RENDERDOC_OPTION_* environment variables are honoured when ON.
+option(WEASEL_ENABLE_RENDERDOC
+    "Enable RenderDoc in-application API (programmatic capture + annotation)"
+    $<IF:$<CONFIG:Debug>,ON,OFF>)
 
 # Temporarily disable GameNetworkingSockets on Windows until abseil-cpp is fixed.
 # See: https://github.com/abseil/abseil-cpp/pull/2054
@@ -89,12 +97,30 @@ if(WEASEL_USE_VENDORED_SDL3)
     # SDL3's CMakeLists.txt is at the repo root; it creates the
     # `SDL3::SDL3` target plus all the sub-targets the engine links
     # against (SDL3_image, SDL3_mixer use the same SDL3::SDL3).
+    #
+    # SDL_STATIC_PIC=ON forces the static archive to be compiled with
+    # -fPIC. Required because wsl/editor are .so targets that link
+    # SDL3 statically; without PIC, ld.lld refuses with
+    # "R_X86_64_PC32 cannot be used against symbol ..." when resolving
+    # SDL_waylanddyn.c and friends.
+    set(SDL_STATIC_PIC ON CACHE BOOL "Build SDL3 static lib with -fPIC" FORCE)
     add_subdirectory(vendor/sdl3 EXCLUDE_FROM_ALL)
     message(STATUS "Using vendored SDL3 from vendor/sdl3")
 else()
     find_package(SDL3 CONFIG REQUIRED)
     message(STATUS "Using system SDL3 from ${SDL3_DIR}")
 endif()
+
+# On Apple Silicon macOS, Homebrew installs libarchive headers under
+# /opt/homebrew/opt/libarchive/include (and the lib at
+# /opt/homebrew/opt/libarchive/lib). The find_path() inside CMake's
+# LibArchive config will not always look there, so set the variables
+# manually. On Intel macOS the prefix is /usr/local, which CMake
+# already searches.
+if(APPLE)
+    set(LibArchive_INCLUDE_DIR "/opt/homebrew/opt/libarchive/include")
+endif()
+
 find_package(LibArchive REQUIRED)
 find_package(PkgConfig REQUIRED)
 
@@ -344,7 +370,15 @@ CPMAddPackage(
     GITHUB_REPOSITORY jrouwe/JoltPhysics
     GIT_TAG v5.4.0
     SOURCE_SUBDIR Build
-    OPTIONS "CPP_RTTI_ENABLED"
+    OPTIONS
+        "CPP_RTTI_ENABLED"
+        # JoltPhysics defaults INTERPROCEDURAL_OPTIMIZATION to ON, which
+        # builds libJolt.a as LLVM bitcode. The system linker can only
+        # consume that when the consumer also enables LTO, which the
+        # engine does not. Without this override the build fails with:
+        #   /usr/bin/ld: libJolt.a: error adding symbols: file format
+        #   not recognized
+        "INTERPROCEDURAL_OPTIMIZATION OFF"
     SYSTEM ON
 )
 target_compile_definitions(Jolt PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED)
@@ -656,29 +690,67 @@ doctest_discover_tests(weasel_mcp_server_tests)
 # etc.) have their own install() rules that break in CI (wrong paths, man pages,
 # missing files).  Tagging installs with COMPONENT Engine/CLI/McpServer and
 # limiting CPACK_COMPONENTS_ALL prevents CPack from touching them.
-install(TARGETS wsl weasel
-    RUNTIME DESTINATION bin COMPONENT Engine
-    LIBRARY DESTINATION lib COMPONENT Engine
-    ARCHIVE DESTINATION lib COMPONENT Engine
-)
-install(TARGETS weasel-cli
-    RUNTIME DESTINATION bin COMPONENT CLI
-)
-install(TARGETS weasel-mcp-server
-    RUNTIME DESTINATION bin COMPONENT McpServer
-)
+#
+# On Apple the editor is packaged as a proper .app bundle under /Applications/.
+# The dylibs (libwsl, libTracyClient) and the runtime resources
+# (compiled_shaders, otf, icons) are nested inside the bundle. CLI tools
+# (weasel-cli, weasel-mcp-server) are still installed as plain binaries.
+if(APPLE)
+    # The .app bundle is the install destination. CMake's MACOSX_BUNDLE
+    # install places the whole bundle at <prefix>/Applications/Weasel.app/,
+    # so with the productbuild install prefix of `/` this resolves to
+    # /Applications/Weasel.app/. The dylibs and resources are installed
+    # at the matching bundle-relative paths so they end up inside the
+    # bundle.
+    install(TARGETS weasel MACOSX_BUNDLE
+        DESTINATION Applications
+        COMPONENT Engine
+    )
+    install(TARGETS wsl
+        LIBRARY DESTINATION Applications/Weasel.app/Contents/Frameworks
+        COMPONENT Engine
+    )
+    install(TARGETS weasel-cli
+        RUNTIME DESTINATION bin
+        COMPONENT CLI
+    )
+    install(TARGETS weasel-mcp-server
+        RUNTIME DESTINATION bin
+        COMPONENT McpServer
+    )
+else()
+    install(TARGETS wsl weasel
+        RUNTIME DESTINATION bin COMPONENT Engine
+        LIBRARY DESTINATION lib COMPONENT Engine
+        ARCHIVE DESTINATION lib COMPONENT Engine
+    )
+    install(TARGETS weasel-cli
+        RUNTIME DESTINATION bin COMPONENT CLI
+    )
+    install(TARGETS weasel-mcp-server
+        RUNTIME DESTINATION bin COMPONENT McpServer
+    )
+endif()
 
 # Tracy must ship with the engine: it's a SHARED library and weasel/wsl
 # dynamically link against libTracyClient.so. Without it, `weasel` and
 # `libwsl.so` would each carry their own Profiler globals and the
 # `s_instance` assertion would fire on the second construction.
 if(TARGET TracyClient)
-    install(TARGETS TracyClient
-        RUNTIME DESTINATION bin COMPONENT Engine
-        LIBRARY DESTINATION lib COMPONENT Engine
-        ARCHIVE DESTINATION lib COMPONENT Engine
-        COMPONENT Engine
-    )
+    if(APPLE)
+        install(TARGETS TracyClient
+            RUNTIME DESTINATION Applications/Weasel.app/Contents/Frameworks
+            LIBRARY DESTINATION Applications/Weasel.app/Contents/Frameworks
+            COMPONENT Engine
+        )
+    else()
+        install(TARGETS TracyClient
+            RUNTIME DESTINATION bin COMPONENT Engine
+            LIBRARY DESTINATION lib COMPONENT Engine
+            ARCHIVE DESTINATION lib COMPONENT Engine
+            COMPONENT Engine
+        )
+    endif()
 endif()
 
 # Generate a manual WeaselTargets.cmake with an imported target for wsl.
@@ -902,6 +974,24 @@ install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders DESTINATION share/weasel 
 install(DIRECTORY ${CMAKE_BINARY_DIR}/otf DESTINATION share/weasel COMPONENT Engine)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/icons DESTINATION share/weasel COMPONENT Engine)
 
+if(APPLE)
+    # Nest the runtime resource directories inside the .app bundle so
+    # the editor's main.cpp resource lookup (exe/../Resources/share/weasel)
+    # works after the .pkg installer places Weasel.app in /Applications/.
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/compiled_shaders
+        DESTINATION Applications/Weasel.app/Contents/Resources/share/weasel
+        COMPONENT Engine
+    )
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/otf
+        DESTINATION Applications/Weasel.app/Contents/Resources/share/weasel
+        COMPONENT Engine
+    )
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/icons
+        DESTINATION Applications/Weasel.app/Contents/Resources/share/weasel
+        COMPONENT Engine
+    )
+endif()
+
 if(UNIX AND NOT APPLE)
     install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/Makefile" DESTINATION . COMPONENT Engine)
 endif()
@@ -937,6 +1027,13 @@ if(WIN32)
 elseif(APPLE)
     set(CPACK_GENERATOR "productbuild;TGZ" CACHE STRING "CPack generator" FORCE)
     set(CPACK_PRODUCTBUILD_IDENTIFIER "com.weaselengine")
+    # The .pkg installs the .app bundle into /Applications/ and the CLI
+    # tools into /usr/local/bin/, both of which are inside the system
+    # root, so the product must be installable into "/". Without these
+    # productbuild either errors out or refuses to lay files into
+    # /Applications.
+    set(CPACK_PRODUCTBUILD_DEFAULT_INSTALL_PREFIX "/")
+    set(CPACK_PRODUCTBUILD_PACKAGE_LOCATION "/")
 else()
     # DEB/RPM omitted: they require distro-specific tooling (dpkg, rpmbuild) and
     # packaging metadata that is not available in CI containers.

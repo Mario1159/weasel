@@ -1,13 +1,59 @@
 #include "render_context.hpp"
+#ifdef WEASEL_ENABLE_RENDERDOC
+#include "renderdoc.hpp"
+#endif
 #include "wsl/log/log.hpp"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_properties.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include <tracy/Tracy.hpp>
 
 namespace wsl
 {
+
+namespace
+{
+
+// Try to create an SDL_GPUDevice for the named driver. For the Vulkan
+// driver we go through SDL_CreateGPUDeviceWithProperties so that we can
+// opt into VK_EXT_debug_utils (which gates the SDL_PushGPUDebugGroup /
+// SDL_SetGPUTextureName calls used to annotate RenderDoc captures). For
+// every other backend the simple SDL_CreateGPUDevice path is enough.
+SDL_GPUDevice *
+try_create_device (SDL_GPUShaderFormat shader_format, const char *driver_name)
+{
+  if (driver_name != nullptr && SDL_strcmp (driver_name, "vulkan") == 0) {
+    SDL_PropertiesID props = SDL_CreateProperties ();
+    if (props == 0) {
+      return nullptr;
+    }
+    SDL_SetBooleanProperty (props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN,
+                            true);
+    SDL_SetStringProperty (props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING,
+                           driver_name);
+
+    // Request VK_EXT_debug_utils so SDL3's debug-group / debug-name
+    // calls (which call vkCmdBeginDebugUtilsLabelEXT /
+    // vkSetDebugUtilsObjectNameEXT under the hood) are accepted by
+    // the Vulkan loader.
+    SDL_GPUVulkanOptions vk_opts{};
+    static const char *kInstanceExts[] = { "VK_EXT_debug_utils" };
+    vk_opts.instance_extension_count = 1;
+    vk_opts.instance_extension_names = kInstanceExts;
+    SDL_SetPointerProperty (
+        props, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &vk_opts);
+
+    SDL_GPUDevice *dev = SDL_CreateGPUDeviceWithProperties (props);
+    SDL_DestroyProperties (props);
+    return dev;
+  }
+  return SDL_CreateGPUDevice (shader_format, false, driver_name);
+}
+
+} // namespace
 
 gfx::render_context::render_context (bool headless)
 {
@@ -29,7 +75,7 @@ gfx::render_context::render_context (bool headless)
 
   for (int i = 0; i < driver_count; i++) {
     const char *driver_name = SDL_GetGPUDriver (i);
-    gpu_device = SDL_CreateGPUDevice (shader_format, false, driver_name);
+    gpu_device = try_create_device (shader_format, driver_name);
     if (gpu_device != nullptr) {
       wsl::log::gfx ()->info ("Created GPU device using driver: {}",
                               driver_name);
@@ -40,7 +86,7 @@ gfx::render_context::render_context (bool headless)
   }
 
   if (gpu_device == nullptr) {
-    gpu_device = SDL_CreateGPUDevice (shader_format, false, nullptr);
+    gpu_device = try_create_device (shader_format, nullptr);
     if (gpu_device != nullptr) {
       wsl::log::gfx ()->info ("Created GPU device using default driver");
     }
@@ -162,6 +208,18 @@ gfx::render_context::begin_frame ()
 
   main_cmd = SDL_AcquireGPUCommandBuffer (gpu_device);
   ++m_frame_index;
+
+  // Stamp the in-progress command buffer with the frame index + wall-clock
+  // timestamp. Visible in RenderDoc's Annotation Viewer as children of
+  // the `frame.*` namespace. No-op when RenderDoc is not loaded.
+#ifdef WEASEL_ENABLE_RENDERDOC
+  if (main_cmd != nullptr) {
+    wsl::gfx::rdoc::annotate_command<uint64_t> (main_cmd, "frame.index",
+                                                (uint64_t)m_frame_index);
+    wsl::gfx::rdoc::annotate_command<uint64_t> (main_cmd, "frame.ticks_ms",
+                                                (uint64_t)SDL_GetTicks ());
+  }
+#endif
 }
 
 void
@@ -190,6 +248,12 @@ gfx::render_context::submit_frame ()
         SDL_GetError ());
   }
   main_cmd = nullptr;
+}
+
+SDL_GPUFence *
+gfx::render_context::current_fence () const
+{
+  return m_slots[m_current_slot].fence;
 }
 
 SDL_GPURenderPass *

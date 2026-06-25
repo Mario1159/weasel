@@ -9,6 +9,10 @@
 // (SV_Target0 scene, SV_Target1 bloom).
 
 #include "render_window.hpp"
+#ifdef WEASEL_ENABLE_RENDERDOC
+#include "renderdoc.hpp"
+#endif
+#include "tracy_gpu_mem.hpp"
 #include "wsl/log/log.hpp"
 
 #include "wsl/gfx/shader.hpp" // Shader loader, also used in scene_renderer.cpp.
@@ -23,7 +27,10 @@
 #include <SDL3/SDL_video.h>
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <sys/types.h>
+#include <vector>
 
 namespace wsl
 {
@@ -45,6 +52,7 @@ render_window::ensure_linear_sampler ()
   si.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
   si.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
   linear_sampler = SDL_CreateGPUSampler (ctx->gpu_device, &si);
+  wsl::gfx::tracy_alloc_sampler (linear_sampler);
   return linear_sampler;
 }
 
@@ -52,6 +60,7 @@ void
 render_window::destroy_texture (SDL_GPUTexture *&texture) const
 {
   if (texture != nullptr) {
+    wsl::gfx::tracy_free_texture (texture);
     SDL_ReleaseGPUTexture (ctx->gpu_device, texture);
     texture = nullptr;
   }
@@ -122,6 +131,7 @@ render_window::create_fullscreen_pipe (const char *frag_shader_path,
 
   SDL_GPUGraphicsPipeline *out
       = SDL_CreateGPUGraphicsPipeline (ctx->gpu_device, &pipe);
+  wsl::gfx::tracy_alloc_pipeline (out);
 
   SDL_ReleaseGPUShader (ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (ctx->gpu_device, frag);
@@ -208,6 +218,11 @@ render_window::render_window (const char *name, int width, int height,
   pipe_downsample = create_downsample_pipe ();
   pipe_blur = create_blur_pipe ();
   pipe_composite = create_composite_pipe ();
+
+  // Tracy frame image capture. Target size must be divisible by 4
+  // (Tracy requirement). 320x180 is the recommended thumbnail size
+  // from the Tracy manual.
+  frame_image_init (320, 180);
 }
 
 bool
@@ -276,19 +291,25 @@ render_window::~render_window ()
     return;
   }
 
+  frame_image_shutdown ();
+
   SDL_WaitForGPUIdle (ctx->gpu_device);
 
   if (pipe_downsample != nullptr) {
+    wsl::gfx::tracy_free_pipeline (pipe_downsample);
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_downsample);
   }
   if (pipe_blur != nullptr) {
+    wsl::gfx::tracy_free_pipeline (pipe_blur);
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_blur);
   }
   if (pipe_composite != nullptr) {
+    wsl::gfx::tracy_free_pipeline (pipe_composite);
     SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_composite);
   }
 
   if (linear_sampler != nullptr) {
+    wsl::gfx::tracy_free_sampler (linear_sampler);
     SDL_ReleaseGPUSampler (ctx->gpu_device, linear_sampler);
   }
 
@@ -362,11 +383,17 @@ render_window::create_depth_texture ()
   if (depth_texture == nullptr) {
     wsl::log::gfx ()->error ("Failed to create depth texture: {}",
                              SDL_GetError ());
+  } else {
+    // Resource name (vkSetDebugUtilsObjectNameEXT under the hood);
+    // shows up in RenderDoc's Resource Inspector and Texture Viewer.
+    SDL_SetGPUTextureName (ctx->gpu_device, depth_texture, "Depth Buffer");
+    wsl::gfx::tracy_alloc_texture (depth_texture, info);
   }
 }
 
 void
-render_window::begin_3d_pass (bool clear_color, bool clear_depth) const
+render_window::begin_3d_pass (bool clear_color, bool clear_depth,
+                              const char *label) const
 {
   ZoneScoped;
   if ((msaa_hdr_scene == nullptr) || (msaa_hdr_bloom == nullptr)
@@ -376,6 +403,13 @@ render_window::begin_3d_pass (bool clear_color, bool clear_depth) const
         "begin_3d_pass: null render target texture(s), skipping");
     return;
   }
+
+#ifdef WEASEL_ENABLE_RENDERDOC
+  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.3d", "main");
+#endif
+  // Visible as a coloured region in RenderDoc's Event Browser (via
+  // VK_EXT_debug_utils / ID3DUserDefinedAnnotation under the hood).
+  SDL_PushGPUDebugGroup (ctx->main_cmd, label);
 
   SDL_GPUColorTargetInfo ct[2]{};
 
@@ -436,6 +470,12 @@ render_window::end_3d_pass (bool run_postprocess)
     ctx->end_main_render_pass ();
   }
 
+  // Close the "Main 3D Pass" debug group opened in begin_3d_pass
+  // (the postprocess pass opens its own group below).
+  if (ctx->main_cmd != nullptr) {
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
+  }
+
   if (run_postprocess) {
     // Always build present_tex (Game View samples this).
     // Only also write to swapchain if present_to_swapchain is true.
@@ -447,7 +487,20 @@ void
 render_window::begin_ui_pass () const
 {
   ZoneScoped;
+#ifdef WEASEL_ENABLE_RENDERDOC
+  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.ui", "ui");
+#endif
+  wsl::log::gfx ()->debug (
+      "begin_ui_pass: main_cmd={} swapchain={} sw_w={} sw_h={}",
+      (void *)ctx->main_cmd, (void *)swapchain.texture_data, swapchain.width,
+      swapchain.height);
+  if (ctx->main_cmd != nullptr) {
+    SDL_PushGPUDebugGroup (ctx->main_cmd, "UI Pass");
+  }
   ctx->begin_ui_render_pass (swapchain.texture_data);
+  wsl::log::gfx ()->debug (
+      "begin_ui_pass: after begin_ui_render_pass, ui_pass={}",
+      (void *)ctx->ui_pass);
 }
 
 void
@@ -455,6 +508,9 @@ render_window::end_ui_pass () const
 {
   ZoneScoped;
   ctx->end_ui_render_pass ();
+  if (ctx->main_cmd != nullptr) {
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
+  }
 }
 
 void
@@ -653,12 +709,20 @@ render_window::on_resize ()
     if (tex == nullptr) {
       wsl::log::gfx ()->error ("Failed to create HDR render target ({}x{}): {}",
                                ci.width, ci.height, SDL_GetError ());
+      return tex;
     }
+    wsl::gfx::tracy_alloc_texture (tex, ci);
     return tex;
   };
 
   msaa_hdr_scene = create_hdr_target (msaa);
   msaa_hdr_bloom = create_hdr_target (msaa);
+  if (msaa_hdr_scene != nullptr)
+    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_scene,
+                           "MSAA HDR Scene (4x)");
+  if (msaa_hdr_bloom != nullptr)
+    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_bloom,
+                           "MSAA HDR Bloom (4x)");
 
   // Resolved HDR targets must be sampler + color target
   SDL_GPUTextureCreateInfo res = msaa;
@@ -667,6 +731,10 @@ render_window::on_resize ()
 
   hdr_scene = create_hdr_target (res);
   hdr_bloom_src = create_hdr_target (res);
+  if (hdr_scene != nullptr)
+    SDL_SetGPUTextureName (ctx->gpu_device, hdr_scene, "HDR Scene");
+  if (hdr_bloom_src != nullptr)
+    SDL_SetGPUTextureName (ctx->gpu_device, hdr_bloom_src, "HDR Bloom Source");
 
   // Half-res bloom ping-pong
   SDL_GPUTextureCreateInfo half = res;
@@ -675,6 +743,10 @@ render_window::on_resize ()
 
   bloom_a = create_hdr_target (half);
   bloom_b = create_hdr_target (half);
+  if (bloom_a != nullptr)
+    SDL_SetGPUTextureName (ctx->gpu_device, bloom_a, "Bloom A (half-res)");
+  if (bloom_b != nullptr)
+    SDL_SetGPUTextureName (ctx->gpu_device, bloom_b, "Bloom B (half-res)");
 
   // Create LDR output texture (same format as swapchain) so UI can sample it
   SDL_GPUTextureCreateInfo out{};
@@ -689,8 +761,19 @@ render_window::on_resize ()
   out.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
   present_tex.texture_data = create_hdr_target (out);
+  if (present_tex.texture_data != nullptr)
+    SDL_SetGPUTextureName (ctx->gpu_device, present_tex.texture_data,
+                           "Present Tex (sampleable LDR)");
   present_tex.width = (uint32_t)w;
   present_tex.height = (uint32_t)h;
+
+  // Re-size the Tracy frame-image staging buffer to match the new
+  // present_tex. The GPU is already idle (SDL_WaitForGPUIdle at the
+  // top of on_resize), so the existing transfer buffer is safe to
+  // release. frame_image_resize() is a no-op if the dimensions
+  // haven't changed, so repeated calls during a drag-resize are
+  // cheap.
+  frame_image_resize (present_tex.width, present_tex.height);
 }
 
 void
@@ -703,12 +786,26 @@ render_window::postprocess_hdr_bloom ()
     return;
   }
 
+#ifdef WEASEL_ENABLE_RENDERDOC
+  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess",
+                                    "bloom_tonemap");
+#endif
+  // Marker region in the Event Browser; closes at the end of this
+  // function. The sub-passes below push their own nested groups so the
+  // timeline reads as Postprocess > Bloom Downsample / Blur H / Blur V /
+  // Tonemap Swapchain / Tonemap PresentTex.
+  SDL_PushGPUDebugGroup (ctx->main_cmd, "Postprocess");
+
   ensure_linear_sampler ();
 
   // Pipelines must exist (created in ctor). If shader compilation failed,
-  // skip post to avoid crashing.
+  // skip post to avoid crashing. The Postprocess debug group was pushed
+  // above, so pop it before returning to keep the GPU debug-group stack
+  // balanced for subsequent passes (begin_ui_pass would otherwise be
+  // nesting inside the unclosed Postprocess group).
   if ((pipe_downsample == nullptr) || (pipe_blur == nullptr)
       || (pipe_composite == nullptr)) {
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
     return;
   }
 
@@ -719,6 +816,11 @@ render_window::postprocess_hdr_bloom ()
   // ---------- (1) Downsample bloom_src -> bloom_a ----------
   {
     ZoneScopedN ("postprocess::downsample");
+#ifdef WEASEL_ENABLE_RENDERDOC
+    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.bloom",
+                                      "downsample");
+#endif
+    SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Downsample");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = bloom_a;
@@ -750,6 +852,7 @@ render_window::postprocess_hdr_bloom ()
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
   }
 
   // bloom texel size (half res)
@@ -760,6 +863,11 @@ render_window::postprocess_hdr_bloom ()
   // ---------- (2) Blur H: bloom_a -> bloom_b ----------
   {
     ZoneScopedN ("postprocess::blur_h");
+#ifdef WEASEL_ENABLE_RENDERDOC
+    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.bloom",
+                                      "blur_h");
+#endif
+    SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Blur H");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = bloom_b;
@@ -793,11 +901,17 @@ render_window::postprocess_hdr_bloom ()
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
   }
 
   // ---------- (3) Blur V: bloom_b -> bloom_a ----------
   {
     ZoneScopedN ("postprocess::blur_v");
+#ifdef WEASEL_ENABLE_RENDERDOC
+    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.bloom",
+                                      "blur_v");
+#endif
+    SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Blur V");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = bloom_a;
@@ -831,12 +945,18 @@ render_window::postprocess_hdr_bloom ()
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
   }
 
   // ---------- (4) Composite + tonemap: hdr_scene + bloom_a -> swapchain
   // ----------
   if (swapchain.texture_data != nullptr) {
     ZoneScopedN ("postprocess::composite_swapchain");
+#ifdef WEASEL_ENABLE_RENDERDOC
+    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.tonemap",
+                                      "swapchain");
+#endif
+    SDL_PushGPUDebugGroup (ctx->main_cmd, "Tonemap Swapchain");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = swapchain.texture_data;
@@ -872,11 +992,21 @@ render_window::postprocess_hdr_bloom ()
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
+    // Close the "Tonemap Swapchain" group before the next composite
+    // opens its own. Without this the Present Tex group is nested
+    // inside the Swapchain group.
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
   }
+
   // ---------- (5) Composite + tonemap also into present_tex (sampleable)
   // ----------
   if (present_tex.texture_data != nullptr) {
     ZoneScopedN ("postprocess::composite_present_tex");
+#ifdef WEASEL_ENABLE_RENDERDOC
+    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.tonemap",
+                                      "present_tex");
+#endif
+    SDL_PushGPUDebugGroup (ctx->main_cmd, "Tonemap Present Tex");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
     ct.texture = present_tex.texture_data;
@@ -912,7 +1042,303 @@ render_window::postprocess_hdr_bloom ()
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
   }
+
+  // Close the "Postprocess" debug group opened at the top of this
+  // function.
+  SDL_PopGPUDebugGroup (ctx->main_cmd);
+
+  // Tracy frame image: read back the final composited present_tex
+  // into a staging transfer buffer. Done as the very last GPU
+  // command of the frame so the pixels cover everything drawn this
+  // frame (postprocess + UI). The fence / wait / FrameImage call
+  // happens in frame_image_submit() after end_cmd.
+  frame_image_issue_copy ();
+}
+
+// ---------------------------------------------------------------------
+// Tracy frame image capture
+// ---------------------------------------------------------------------
+
+void
+render_window::frame_image_init (uint32_t target_w, uint32_t target_h)
+{
+  // The downsample target is fixed at construction; the staging
+  // transfer buffer is allocated separately by frame_image_resize()
+  // once the present_tex dimensions are known. The target size must
+  // be divisible by 4 (Tracy FrameImage requirement); 320x180 is the
+  // recommended thumbnail size from the Tracy manual.
+  m_fi_dst_w = target_w;
+  m_fi_dst_h = target_h;
+  m_fi_dst_pitch = target_w * 4;
+
+  // present_tex is in the platform's swapchain format. On every
+  // desktop backend SDL3 GPU exposes B8G8R8A8 (see
+  // SDL_GetGPUSwapchainTextureFormat). Mark the source as BGRA so
+  // the downsample step can swap channels on the way out; an
+  // R8G8B8A8 swapchain (rare on desktops) would set this false.
+  m_fi_src_is_bgra = true;
+
+  wsl::log::gfx ()->debug (
+      "render_window: Tracy frame-image capture initialised "
+      "({}x{} downsample target)",
+      m_fi_dst_w, m_fi_dst_h);
+}
+
+void
+render_window::frame_image_shutdown ()
+{
+  if (m_fi_transfer != nullptr && ctx->gpu_device != nullptr) {
+    wsl::gfx::tracy_free_transfer (m_fi_transfer);
+    SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, m_fi_transfer);
+    m_fi_transfer = nullptr;
+  }
+  m_fi_alloc_w = 0;
+  m_fi_alloc_h = 0;
+}
+
+void
+render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
+{
+  if (ctx->gpu_device == nullptr || src_w == 0 || src_h == 0) {
+    return;
+  }
+  // Skip the (re)allocation if the staging buffer already covers
+  // the requested source size. This keeps on_resize() cheap on
+  // repeated calls (e.g. drag-resize) and avoids GPU buffer churn.
+  if (m_fi_transfer != nullptr && m_fi_alloc_w == src_w
+      && m_fi_alloc_h == src_h) {
+    return;
+  }
+
+  // Must be GPU-idle before releasing a transfer buffer that may
+  // still be referenced by an in-flight command buffer. The caller
+  // (on_resize) already does SDL_WaitForGPUIdle() above, so this
+  // call is safe in that path. Standalone callers (tests) must do
+  // the same.
+  if (m_fi_transfer != nullptr) {
+    wsl::gfx::tracy_free_transfer (m_fi_transfer);
+    SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, m_fi_transfer);
+    m_fi_transfer = nullptr;
+  }
+
+  // The staging buffer must hold the *full* source texture, not
+  // the downscaled target. The downsample happens on the CPU after
+  // the GPU fence signals; doing it on the GPU would require a
+  // compute pipeline we don't need for anything else. Allocating
+  // for src_w*src_h*4 (BGRA8) gives us a buffer large enough for
+  // any swapchain size up to 4K (~33 MB).
+  size_t const size = static_cast<size_t> (src_w) * src_h * 4;
+
+  SDL_GPUTransferBufferCreateInfo info{};
+  info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+  info.size = static_cast<uint32_t> (size);
+  m_fi_transfer = SDL_CreateGPUTransferBuffer (ctx->gpu_device, &info);
+  if (m_fi_transfer == nullptr) {
+    wsl::log::rsc ()->warn (
+        "render_window: failed to allocate Tracy frame-image "
+        "staging buffer ({}x{} = {}B): {}",
+        src_w, src_h, size, SDL_GetError ());
+    m_fi_alloc_w = 0;
+    m_fi_alloc_h = 0;
+    return;
+  }
+  wsl::gfx::tracy_alloc_transfer (m_fi_transfer, info.size);
+  m_fi_alloc_w = src_w;
+  m_fi_alloc_h = src_h;
+
+  wsl::log::gfx ()->debug (
+      "render_window: Tracy frame-image staging buffer reallocated "
+      "({}x{} src, {}B)",
+      src_w, src_h, size);
+}
+
+void
+render_window::frame_image_issue_copy ()
+{
+  if (m_fi_transfer == nullptr || ctx->main_cmd == nullptr) {
+    return;
+  }
+  if (present_tex.texture_data == nullptr) {
+    return;
+  }
+  if (present_tex.width == 0 || present_tex.height == 0) {
+    return;
+  }
+  // Skip the GPU copy pass entirely when no profiler is attached.
+  // Without this guard we'd still pay the GPU bandwidth and CPU
+  // downsample cost on every frame.
+  if (!TracyIsConnected) {
+    return;
+  }
+
+  // Defensive resize: if the present_tex dimensions changed (e.g.
+  // an external resize path that didn't go through on_resize) but
+  // the staging buffer wasn't reallocated, do it now. This branch
+  // is unreachable in the normal flow because on_resize() calls
+  // frame_image_resize() — it exists to prevent a buffer overflow
+  // if that contract is ever broken.
+  if (m_fi_alloc_w != present_tex.width || m_fi_alloc_h != present_tex.height) {
+    SDL_WaitForGPUIdle (ctx->gpu_device);
+    frame_image_resize (present_tex.width, present_tex.height);
+    if (m_fi_transfer == nullptr) {
+      return;
+    }
+  }
+
+  m_fi_src_w = present_tex.width;
+  m_fi_src_h = present_tex.height;
+
+  // Note: the full present_tex is copied (not yet downscaled). The
+  // downscale to 320x180 happens on the CPU after the GPU fence
+  // signals; doing it on the GPU would require a compute pipeline
+  // we don't need for anything else.
+  SDL_GPUTextureRegion src_region{};
+  src_region.texture = present_tex.texture_data;
+  src_region.mip_level = 0;
+  src_region.layer = 0;
+  src_region.x = 0;
+  src_region.y = 0;
+  src_region.z = 0;
+  src_region.w = m_fi_src_w;
+  src_region.h = m_fi_src_h;
+  src_region.d = 1;
+
+  SDL_GPUTextureTransferInfo dst_info{};
+  dst_info.transfer_buffer = m_fi_transfer;
+  dst_info.offset = 0;
+  // Pitch must match the row width of the destination texture
+  // region; we use 4 bytes-per-pixel because the transfer buffer
+  // holds BGRA8 / RGBA8 (no compressed formats here).
+  dst_info.pixels_per_row = m_fi_src_w;
+  dst_info.rows_per_layer = m_fi_src_h;
+
+  SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass (ctx->main_cmd);
+  if (copy == nullptr) {
+    // Beginning a copy pass can fail if the command buffer is in a
+    // bad state (e.g. the swapchain acquire failed earlier). Skip
+    // silently — no Tracy image this frame.
+    return;
+  }
+  SDL_DownloadFromGPUTexture (copy, &src_region, &dst_info);
+  SDL_EndGPUCopyPass (copy);
+}
+
+void
+render_window::frame_image_submit (SDL_GPUFence *fence)
+{
+  if (m_fi_transfer == nullptr) {
+    return;
+  }
+  if (fence == nullptr) {
+    return;
+  }
+  if (m_fi_src_w == 0 || m_fi_src_h == 0) {
+    return;
+  }
+  // Sanity: if the staging buffer is smaller than the source we
+  // recorded in issue_copy, something resized the texture out from
+  // under us. Bail rather than overflow the buffer in the downsample
+  // loop below.
+  if (m_fi_alloc_w < m_fi_src_w || m_fi_alloc_h < m_fi_src_h) {
+    return;
+  }
+
+  // Skip the entire readback path when no profiler is attached.
+  // TracyIsConnected is a no-op returning `false` when TRACY_ENABLE
+  // is not defined, so this also short-circuits cleanly in builds
+  // that don't enable Tracy macros.
+  if (!TracyIsConnected) {
+    return;
+  }
+
+  // Block until the GPU has finished the download. Single-frame
+  // latency; Tracy runs the per-frame image compression on a
+  // background thread, so this doesn't stall the client.
+  //
+  // IMPORTANT: do NOT call SDL_ReleaseGPUFence here. The fence is
+  // owned by the render_context slot that submitted the command
+  // buffer; the slot recycles after kMaxFramesInFlight frames and
+  // begin_frame() will wait + release the same fence then.
+  // Releasing it here is a use-after-free / double-free crash.
+  if (!SDL_WaitForGPUFences (ctx->gpu_device, true, &fence, 1)) {
+    // Fence wait failed (driver error, device lost, etc.). Skip
+    // this frame's image — better to lose one frame than to
+    // unmap corrupt data and crash Tracy's background thread.
+    wsl::log::gfx ()->warn (
+        "render_window: SDL_WaitForGPUFences failed for Tracy "
+        "frame-image readback: {}",
+        SDL_GetError ());
+    return;
+  }
+
+  // Map the transfer buffer, downsample, hand to Tracy, unmap.
+  void *mapped
+      = SDL_MapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer, false);
+  if (mapped == nullptr) {
+    wsl::log::gfx ()->warn (
+        "render_window: SDL_MapGPUTransferBuffer failed for Tracy "
+        "frame-image readback: {}",
+        SDL_GetError ());
+    return;
+  }
+  const uint8_t *src = static_cast<const uint8_t *> (mapped);
+
+  // Box-filter downsample. Each dst pixel averages the src block
+  // it covers. For integer src_w/src_dst_w ratios the block is
+  // exact (every block has the same size); for arbitrary sizes
+  // some blocks are 1px wider on the right / bottom edge.
+  std::vector<uint8_t> downscaled (static_cast<size_t> (m_fi_dst_pitch)
+                                   * m_fi_dst_h);
+  const uint32_t src_w = m_fi_src_w;
+  const uint32_t src_h = m_fi_src_h;
+  const uint32_t dst_w = m_fi_dst_w;
+  const uint32_t dst_h = m_fi_dst_h;
+  for (uint32_t dy = 0; dy < dst_h; ++dy) {
+    uint32_t const sy0 = (uint64_t)dy * src_h / dst_h;
+    uint32_t const sy1
+        = std::max (sy0 + 1, (uint32_t)((uint64_t)(dy + 1) * src_h / dst_h));
+    for (uint32_t dx = 0; dx < dst_w; ++dx) {
+      uint32_t const sx0 = (uint64_t)dx * src_w / dst_w;
+      uint32_t const sx1
+          = std::max (sx0 + 1, (uint32_t)((uint64_t)(dx + 1) * src_w / dst_w));
+      uint64_t br = 0, bg = 0, bb = 0;
+      uint32_t count = 0;
+      for (uint32_t sy = sy0; sy < sy1; ++sy) {
+        const uint8_t *row = src + (size_t)sy * src_w * 4;
+        for (uint32_t sx = sx0; sx < sx1; ++sx) {
+          // SDL3 GPU swapchain format is B8G8R8A8 on desktop. Swap
+          // R/B when reading so the output is RGBA.
+          if (m_fi_src_is_bgra) {
+            bb += row[sx * 4 + 0];
+            bg += row[sx * 4 + 1];
+            br += row[sx * 4 + 2];
+          } else {
+            br += row[sx * 4 + 0];
+            bg += row[sx * 4 + 1];
+            bb += row[sx * 4 + 2];
+          }
+          ++count;
+        }
+      }
+      uint8_t *dst = downscaled.data () + (size_t)dy * m_fi_dst_pitch + dx * 4;
+      dst[0] = (uint8_t)(br / count);
+      dst[1] = (uint8_t)(bg / count);
+      dst[2] = (uint8_t)(bb / count);
+      dst[3] = 0xFF; // alpha: force opaque
+    }
+  }
+
+  // TracyFrameImage (via FrameImage) takes ownership of the pixel
+  // buffer; the data must outlive the call, which is why the
+  // downscaled vector lives in this scope and is not freed until
+  // after the call returns. Tracy copies internally.
+  FrameImage (downscaled.data (), static_cast<uint16_t> (dst_w),
+              static_cast<uint16_t> (dst_h), /*offset=*/0,
+              /*flip=*/false);
+
+  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer);
 }
 
 } // namespace gfx

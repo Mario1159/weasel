@@ -5,6 +5,7 @@
 #include "wsl/comp/singl/runtime_context.hpp"
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <tracy/Tracy.hpp>
 #include <unistd.h>
 #include <cstring>
 #include <sstream>
@@ -96,6 +97,13 @@ private:
   void
   handle_client (int client_fd, editor_app *editor_app)
   {
+    // Label this thread for Tracy. A new detached std::thread is
+    // spawned per accepted client connection, so without a name
+    // they all show up as bare thread IDs in the Tracy Threads
+    // pane. The docs require a string literal — the API stores
+    // the pointer and expects the bytes to outlive the process.
+    tracy::SetThreadName ("Editor Server Client");
+
     wsl::log::net ()->debug ("Handle client called, client_fd={}", client_fd);
     // Read project path from client (handshake)
     std::string client_project = read_line (client_fd);

@@ -1,0 +1,190 @@
+// Global operator new / operator delete overrides that report every
+// CPU-heap allocation to Tracy under the `wsl.cpu.heap` memory pool.
+//
+// IMPORTANT TRACY SEMANTICS (from the manual, section 2.5.1):
+//   "Each tracked memory-free event must also have a corresponding
+//    memory allocation event. Tracy will terminate the profiling
+//    session if this assumption is broken."
+//
+// This means every delete must match a tracked new. Concretely:
+//   * sized and unsized delete must both TracyFree
+//   * delete(nullptr) must be a no-op (matches new(0))
+//   * aligned new/delete must be paired the same way
+//   * destructor-throw paths are not an issue here (operator new
+//     returns nullptr on alloc failure and the matching delete is
+//     the only way the user's code can free it; the standard says
+//     the throw is a noexcept operator delete which doesn't
+//     allocate)
+//
+// TracyIsConnected is a no-op `false` when TRACY_ENABLE is not
+// defined, so the wrapping `if (!TracyIsConnected) return;`
+// short-circuits cleanly in release builds. We still pay the cost
+// of one atomic load per allocation, which is the same overhead
+// the existing FrameImage helpers have.
+
+#include "tracy_new_delete.hpp"
+
+#include <SDL3/SDL_stdinc.h>
+#include <new>
+#include <tracy/Tracy.hpp>
+
+namespace wsl::sys
+{
+
+namespace
+{
+
+// String-literal pool name. The Tracy API stores the pointer; the
+// docs require a string literal that lives for the entire process
+// lifetime. Marked inline so multiple translation units don't
+// collide.
+inline constexpr const char *kTracyPoolCpuHeap = "wsl.cpu.heap";
+
+// Per-allocation accounting. TracyAllocN / TracyFreeN are no-ops
+// when TRACY_ENABLE is not defined; TracyIsConnected wraps the
+// real-time check so release builds skip the per-frame work.
+inline void
+report_alloc (void *ptr, std::size_t size)
+{
+  if (ptr == nullptr || size == 0) {
+    return;
+  }
+  if (!TracyIsConnected) {
+    return;
+  }
+  TracyAllocN (ptr, size, kTracyPoolCpuHeap);
+}
+
+inline void
+report_free (void *ptr)
+{
+  if (ptr == nullptr) {
+    return;
+  }
+  if (!TracyIsConnected) {
+    return;
+  }
+  TracyFreeN (ptr, kTracyPoolCpuHeap);
+}
+
+} // namespace
+
+// Public hooks. These exist so a test or an external translation
+// unit can call into the same accounting. The actual operator
+// overloads below are what the compiler picks up.
+void *
+tracy_new (std::size_t size)
+{
+  void *ptr = std::malloc (size);
+  report_alloc (ptr, size);
+  return ptr;
+}
+
+void
+tracy_delete (void *ptr) noexcept
+{
+  report_free (ptr);
+  std::free (ptr);
+}
+
+} // namespace wsl::sys
+
+// --------------------------------------------------------------------
+// Global operator new / operator delete family.
+//
+// We override every variant the C++ standard requires an allocator
+// to provide. Missing one means some allocation paths silently
+// bypass Tracy and we'll see "alloc without free" errors at trace
+// close.
+//
+// All overrides funnel through std::malloc / std::free for the
+// actual memory work, then call report_alloc / report_free for
+// Tracy. We deliberately do NOT call the default ::operator new
+// from the override — that would double-count via the recursion.
+// --------------------------------------------------------------------
+
+// Single-object forms. C++14 deprecation removed the throw
+// specification; we accept (and ignore) the std::nothrow_t tag
+// the same way the standard library does.
+void *
+operator new (std::size_t size)
+{
+  void *ptr = std::malloc (size);
+  if (ptr == nullptr) {
+    throw std::bad_alloc ();
+  }
+  wsl::sys::report_alloc (ptr, size);
+  return ptr;
+}
+
+void *
+operator new (std::size_t size, const std::nothrow_t &) noexcept
+{
+  void *ptr = std::malloc (size);
+  wsl::sys::report_alloc (ptr, size);
+  return ptr;
+}
+
+void
+operator delete (void *ptr) noexcept
+{
+  wsl::sys::report_free (ptr);
+  std::free (ptr);
+}
+
+void
+operator delete (void *ptr, std::size_t) noexcept
+{
+  wsl::sys::report_free (ptr);
+  std::free (ptr);
+}
+
+void
+operator delete (void *ptr, const std::nothrow_t &) noexcept
+{
+  wsl::sys::report_free (ptr);
+  std::free (ptr);
+}
+
+// Array forms. Same logic, separate overloads so the linker can
+// distinguish new[] from new (libcxxabi and others key off the
+// mangled name).
+void *
+operator new[] (std::size_t size)
+{
+  void *ptr = std::malloc (size);
+  if (ptr == nullptr) {
+    throw std::bad_alloc ();
+  }
+  wsl::sys::report_alloc (ptr, size);
+  return ptr;
+}
+
+void *
+operator new[] (std::size_t size, const std::nothrow_t &) noexcept
+{
+  void *ptr = std::malloc (size);
+  wsl::sys::report_alloc (ptr, size);
+  return ptr;
+}
+
+void
+operator delete[] (void *ptr) noexcept
+{
+  wsl::sys::report_free (ptr);
+  std::free (ptr);
+}
+
+void
+operator delete[] (void *ptr, std::size_t) noexcept
+{
+  wsl::sys::report_free (ptr);
+  std::free (ptr);
+}
+
+void
+operator delete[] (void *ptr, const std::nothrow_t &) noexcept
+{
+  wsl::sys::report_free (ptr);
+  std::free (ptr);
+}

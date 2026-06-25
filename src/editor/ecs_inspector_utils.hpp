@@ -80,7 +80,7 @@ struct ecs_selection
 };
 
 static inline std::string
-meta_type_debug_name (const entt::meta_type& type)
+meta_type_debug_name (const entt::meta_type &type)
 {
   if (!type) {
     return "<invalid>";
@@ -95,7 +95,7 @@ meta_type_debug_name (const entt::meta_type& type)
 }
 
 static inline void
-draw_labeled_name (const entt::meta_type& type)
+draw_labeled_name (const entt::meta_type &type)
 {
   const std::optional<wsl::comp::meta_info> info
       = wsl::comp::get_meta_info (type);
@@ -111,7 +111,7 @@ draw_labeled_name (const entt::meta_type& type)
 }
 
 static inline void
-draw_labeled_name (const entt::meta_data& data)
+draw_labeled_name (const entt::meta_data &data)
 {
   const std::optional<wsl::comp::meta_info> info
       = wsl::comp::get_meta_info (data);
@@ -129,7 +129,7 @@ draw_labeled_name (const entt::meta_data& data)
 }
 
 static inline std::string
-get_description (const entt::meta_type& type)
+get_description (const entt::meta_type &type)
 {
   if (const std::optional<wsl::comp::meta_info> info
       = wsl::comp::get_meta_info (type);
@@ -140,7 +140,7 @@ get_description (const entt::meta_type& type)
 }
 
 static inline std::string
-get_description (const entt::meta_data& data)
+get_description (const entt::meta_data &data)
 {
   if (const std::optional<wsl::comp::meta_info> info
       = wsl::comp::get_meta_info (data);
@@ -153,9 +153,9 @@ get_description (const entt::meta_data& data)
 static inline void
 centered_text (const char *label, const ImVec2 &size_arg)
 {
-  ImGuiWindow  const*window = ImGui::GetCurrentWindow ();
+  ImGuiWindow const *window = ImGui::GetCurrentWindow ();
 
-  ImGuiContext  const&context = *GImGui;
+  ImGuiContext const &context = *GImGui;
   const ImGuiStyle &style = context.Style;
   const ImVec2 label_size = ImGui::CalcTextSize (label, nullptr, true);
 
@@ -189,7 +189,7 @@ draw_centered_icon (wsl::comp::singl::editor_context *editor_ctx,
   }
 
   auto handle = editor_ctx->editor_resources.get (icon_id);
-  if (!handle || ((*handle).texture == nullptr)) {
+  if (!handle || ((*handle).texture.get () == nullptr)) {
     editor_ctx->editor_resources.load (icon_id);
     return;
   }
@@ -225,7 +225,7 @@ draw_centered_icon (wsl::comp::singl::editor_context *editor_ctx,
   pos.y = std::max<float> (pos.y, 0);
 
   ImGui::SetCursorPos (pos);
-  ImGui::Image ((ImTextureID)(*handle).texture, size);
+  ImGui::Image ((ImTextureID)(*handle).texture.get (), size);
 
   if (text != nullptr) {
     ImGui::PushStyleColor (ImGuiCol_Text,

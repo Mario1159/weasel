@@ -1,5 +1,6 @@
 #include "model_loader.hpp"
 #include "fastgltf/types.hpp"
+#include "gfx/tracy_gpu_mem.hpp"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
@@ -1006,7 +1007,7 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
   tbi.size = tex.pixels.size ();
 
   SDL_GPUTransferBuffer *upload
-      = SDL_CreateGPUTransferBuffer (m_ctx->gpu_device, &tbi);
+      = wsl::gfx::create_gpu_transfer_buffer (m_ctx->gpu_device, &tbi);
 
   void *mapped = SDL_MapGPUTransferBuffer (m_ctx->gpu_device, upload, false);
   memcpy (mapped, tex.pixels.data (), tex.pixels.size ());
@@ -1037,7 +1038,7 @@ model_loader::create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const
 
   SDL_SubmitGPUCommandBuffer (cmd);
 
-  SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, upload);
+  wsl::gfx::release_gpu_transfer_buffer (m_ctx->gpu_device, upload);
 
   return gpu_tex;
 }

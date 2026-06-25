@@ -9,6 +9,7 @@
 #include <entt/entt.hpp>
 #include <functional>
 #include <string>
+#include <tracy/Tracy.hpp>
 #include <utility>
 #include <vector>
 
@@ -89,6 +90,9 @@ public:
   void
   init (entt::registry *registry)
   {
+    ZoneScopedN ("sys::init");
+    ZoneText (m_name.data (), m_name.size ());
+
     if (m_initialized) {
       return;
     }
@@ -101,6 +105,9 @@ public:
   void
   shutdown (entt::registry *registry)
   {
+    ZoneScopedN ("sys::shutdown");
+    ZoneText (m_name.data (), m_name.size ());
+
     if (m_active && (registry != nullptr)) {
       wsl::log::sys ()->trace ("Shutting down {}", get_name ());
       on_inactive (*registry);
@@ -182,6 +189,9 @@ public:
   void
   update (entt::registry *registry, double dt)
   {
+    ZoneScopedN ("sys::update");
+    ZoneText (m_name.data (), m_name.size ());
+
     if (m_active && (registry != nullptr)) {
       on_update (*registry, dt);
     }
@@ -190,6 +200,9 @@ public:
   void
   editor_update (entt::registry *registry, double dt)
   {
+    ZoneScopedN ("sys::editor_update");
+    ZoneText (m_name.data (), m_name.size ());
+
     if (m_editor_active && (registry != nullptr)) {
       on_editor_update (*registry, dt);
     }
@@ -198,6 +211,9 @@ public:
   void
   event_handler (entt::registry *registry, const SDL_Event &event)
   {
+    ZoneScopedN ("sys::event_handler");
+    ZoneText (m_name.data (), m_name.size ());
+
     if (m_active && (registry != nullptr)) {
       on_event (*registry, event);
     }
@@ -206,6 +222,9 @@ public:
   void
   render_build_draw_data (entt::registry *registry)
   {
+    ZoneScopedN ("sys::render_build_draw_data");
+    ZoneText (m_name.data (), m_name.size ());
+
     if ((m_active || m_editor_active) && (registry != nullptr)) {
       on_render_build_draw_data (*registry);
     }
@@ -214,6 +233,9 @@ public:
   void
   render_prepare_gpu_rsc (entt::registry *registry)
   {
+    ZoneScopedN ("sys::render_prepare_gpu_rsc");
+    ZoneText (m_name.data (), m_name.size ());
+
     if ((m_active || m_editor_active) && (registry != nullptr)) {
       on_render_prepare_gpu_rsc (*registry);
     }
@@ -222,6 +244,9 @@ public:
   void
   render_record_draw_cmd (entt::registry *registry)
   {
+    ZoneScopedN ("sys::render_record_draw_cmd");
+    ZoneText (m_name.data (), m_name.size ());
+
     if ((m_active || m_editor_active) && (registry != nullptr)) {
       on_render_record_draw_cmd (*registry);
     }

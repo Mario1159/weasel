@@ -15,6 +15,13 @@ list(APPEND WSL_SOURCES
     "${CMAKE_SOURCE_DIR}/src/editor/physics_debug_renderer.cpp"
 )
 
+# RenderDoc integration is opt-in. When OFF, drop the renderdoc_*.cpp
+# sources that the recursive GLOB picked up so the vendored header is
+# not pulled into the build at all.
+if(NOT WEASEL_ENABLE_RENDERDOC)
+    list(FILTER WSL_SOURCES EXCLUDE REGEX "renderdoc")
+endif()
+
 add_library(wsl SHARED ${WSL_SOURCES})
 add_library(Weasel::wsl ALIAS wsl)
 
@@ -22,6 +29,21 @@ set_target_properties(wsl PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+
+if(APPLE)
+    # On macOS the editor executable lives in
+    # Weasel.app/Contents/MacOS/ and loads this dylib from
+    # Weasel.app/Contents/Frameworks/. Use @rpath so the editor's
+    # rpath (@executable_path/../Frameworks) resolves to this dylib,
+    # and give the dylib itself a loader_path rpath so any chained
+    # load (e.g. libTracyClient.dylib, which is colocated with it)
+    # is also found.
+    set_target_properties(wsl PROPERTIES
+        INSTALL_NAME_DIR "@rpath"
+        INSTALL_RPATH "@loader_path"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+endif()
 
 target_include_directories(wsl PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(wsl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -53,10 +75,14 @@ endif()
 
 target_link_libraries(wsl PRIVATE
     $<$<BOOL:${WEASEL_ENABLE_MULTIPLAYER}>:GameNetworkingSockets_s>
-    TracyClient
     LibArchive::LibArchive
     ${CMAKE_DL_LIBS}
 )
+
+# Tracy is PUBLIC because wsl's public headers (system.hpp in
+# particular) now use ZoneScopedN / ZoneText / FrameMark — anything
+# that includes wsl public headers needs the Tracy include path.
+target_link_libraries(wsl PUBLIC TracyClient)
 
 if(TARGET imgui)
     target_link_libraries(wsl PUBLIC imgui)
@@ -71,6 +97,29 @@ target_compile_definitions(wsl PRIVATE
     WEASEL_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\"
     WEASEL_BUILD_DIR=\"${CMAKE_BINARY_DIR}\"
 )
+
+if(WEASEL_ENABLE_RENDERDOC)
+    # Header-only dependency: the .so/.dll is loaded at runtime.
+    target_include_directories(wsl PRIVATE
+        "${CMAKE_SOURCE_DIR}/cmake/renderdoc")
+    target_compile_definitions(wsl PRIVATE WEASEL_ENABLE_RENDERDOC)
+endif()
+
+# Tracy instrumentation. The TracyClient library is already linked
+# unconditionally (see PRIVATE link block above). The TRACY_ENABLE
+# define activates the client macros (FrameMark, FrameImage,
+# TracyAllocN/FreeN, TracyPlot, TracyParameterSetup, TracyAppInfo,
+# TracyMessageLC, ...) so they actually call into the library.
+# Without this define, every Tracy macro compiles to a no-op and
+# the entire integration is silent.
+#
+# Always on by default — when no profiler is attached, the
+# per-frame work is gated on TracyIsConnected (see the frame_image
+# helpers in render_window.cpp) so the overhead is only a single
+# atomic load per frame. The Tracy client is also built with
+# TRACY_ON_DEMAND, so the network thread stays quiescent until a
+# profiler connects.
+target_compile_definitions(wsl PRIVATE TRACY_ENABLE TRACY_HAS_CALLGRIND=0)
 
 if(MSVC)
     target_compile_options(wsl PRIVATE /W4 /permissive-)

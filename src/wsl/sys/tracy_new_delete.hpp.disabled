@@ -1,0 +1,27 @@
+#pragma once
+
+#include <cstddef>
+
+namespace wsl::sys
+{
+
+// Tagged allocator hooks. The implementations in tracy_new_delete.cpp
+// override the global ::operator new / ::operator delete family and
+// forward every CPU-heap allocation through TracyAllocN /
+// TracyFreeN into the `wsl.cpu.heap` pool, so the engine's process
+// memory shows up in the Tracy Memory tab alongside the explicit
+// GPU-resource pools (wsl.gfx.*).
+//
+// IMPORTANT: the override covers the global C++ allocation
+// primitives. Anything that bypasses them (raw malloc/free, mmap,
+// ffmpeg, OS-level allocations) won't appear here. SDL_malloc /
+// SDL_free are routed separately through the wsl.sdl.heap pool.
+//
+// No code calls these directly — they are pulled in by the
+// override file being linked into libwsl.
+
+void *tracy_new (std::size_t size);
+
+void tracy_delete (void *ptr) noexcept;
+
+} // namespace wsl::sys

@@ -652,11 +652,11 @@ file_list::draw (const char *title, bool *p_open,
         const float icon_padding = 4.0F;
         const float icon_size = btn_size - (icon_padding * 2.0F);
 
-        if (handle && (handle->texture != nullptr)) {
+        if (handle && (handle->texture.get () != nullptr)) {
           ImGui::PushStyleVar (ImGuiStyleVar_FramePadding,
                                ImVec2 (icon_padding, icon_padding));
           if (ImGui::ImageButton ("##reload_scripts",
-                                  (ImTextureID)handle->texture,
+                                  (ImTextureID)handle->texture.get (),
                                   ImVec2 (icon_size, icon_size))) {
             if (proj) {
               runtime_ctx->runtime_project_module.compile_and_load_async (

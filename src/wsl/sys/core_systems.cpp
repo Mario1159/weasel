@@ -130,6 +130,8 @@ void
 core_systems::init (comp::singl::runtime_context *runtime_ctx,
                     comp::singl::editor_context *editor_ctx)
 {
+  ZoneScopedN ("core_systems::init");
+
   (void)editor_ctx;
   this->m_runtime_ctx = runtime_ctx;
   this->m_editor_ctx = editor_ctx;
@@ -229,6 +231,8 @@ core_systems::sync_activation ()
 void
 core_systems::update (double dt)
 {
+  ZoneScopedN ("core_systems::update");
+
   sync_activation ();
   m_runtime_ctx->sync ();
   m_runtime_ctx->resource_manager.update_async_uploads ();
@@ -282,6 +286,8 @@ core_systems::update (double dt)
 void
 core_systems::event_handler (const SDL_Event &e)
 {
+  ZoneScopedN ("core_systems::event_handler");
+
   sync_activation ();
 
   rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
@@ -307,6 +313,8 @@ void
 core_systems::render (wsl::gfx::render_window &window,
                       const render_callbacks &callbacks)
 {
+  ZoneScopedN ("core_systems::render");
+
   render_impl (window, callbacks);
 }
 
@@ -435,6 +443,18 @@ core_systems::render_impl (wsl::gfx::render_window &window,
     return;
   }
 
+  // Wrap the entire frame's GPU work in a "Frame N" debug group so the
+  // Event Browser shows the per-frame commands as one nested subtree.
+  // Push the group AFTER begin_cmd but before any work so the group
+  // is balanced when end_cmd submits.
+  if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
+    char label[32];
+    std::snprintf (
+        label, sizeof (label), "Frame %llu",
+        (unsigned long long)m_runtime_ctx->render_ctx.frame_index ());
+    SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer (), label);
+  }
+
   {
     ZoneScopedN ("render_impl::acquire_swapchain");
     window.new_swapchain ();
@@ -449,6 +469,14 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   {
     ZoneScopedN ("render_impl::prepare_gpu_rsc");
+    // The ImGui vertex / index buffer uploads (and any future system
+    // upload) happen here. Wrap them in a debug group so they show
+    // up as a labelled region in the Event Browser rather than as
+    // bare copy commands.
+    if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
+      SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer (),
+                             "Prepare GPU Resources");
+    }
     for (sys::ecs_system *sys : to_vec ()) {
       if (sys == nullptr) {
         continue;
@@ -472,6 +500,9 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         }
         sys->render_prepare_gpu_rsc (&registry);
       }
+    }
+    if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
+      SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer ());
     }
   }
 
@@ -523,12 +554,24 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         // Shadow and lighting passes (global)
         {
           ZoneScopedN ("render_impl::global_shadow_and_light");
+          // Wrap in a debug group so the shadow / cluster-build /
+          // cull dispatches show up as a labelled region in the
+          // Event Browser. Actions 1-7 in the capture (copy
+          // buffers, shadow draws, cluster build + cull) are
+          // recorded here.
+          if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
+            SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer (),
+                                   "Shadows & Lighting");
+          }
           renderer->begin_frame (submission.view);
           if (shadow_sys) {
             shadow_sys->render_record_draw_cmd (&registry);
           }
           if (lighting_sys) {
             lighting_sys->render_record_draw_cmd (&registry);
+          }
+          if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
+            SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer ());
           }
         }
 
@@ -629,7 +672,12 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
             {
               ZoneScopedN ("render_viewport_full::2d_begin_pass");
-              window.begin_3d_pass (false, false);
+              // The 2D sprite pass uses the same render-window helper
+              // but with a distinct debug-group label and `end_3d_pass`
+              // called with `run_postprocess = false` so the bloom /
+              // tonemap chain runs only once per frame (from the 3D
+              // pass above), not once per 2D render.
+              window.begin_3d_pass (false, false, "2D Sprite Pass");
             }
 
             {
@@ -657,7 +705,11 @@ core_systems::render_impl (wsl::gfx::render_window &window,
             }
             {
               ZoneScopedN ("render_viewport_full::2d_end_pass");
-              window.end_3d_pass ();
+              // Skip the bloom/tonemap chain for the 2D sprite pass;
+              // the 3D viewport end already ran postprocess_hdr_bloom
+              // (and if we let it run again the swapchain composite
+              // would write 2D content into HDR and re-tonemap it).
+              window.end_3d_pass (false);
             }
           }
         };
@@ -701,17 +753,51 @@ core_systems::render_impl (wsl::gfx::render_window &window,
       render_ui_sys->render_record_draw_cmd (&registry);
     }
 
+    wsl::log::core ()->debug (
+        "render_impl: about to begin_ui_pass, swapchain={} sw_w={} sw_h={}",
+        (void *)window.swapchain.texture_data, window.swapchain.width,
+        window.swapchain.height);
     window.begin_ui_pass ();
+    wsl::log::core ()->debug ("render_impl: begin_ui_pass returned, ui_pass={}",
+                              (void *)m_runtime_ctx->render_ctx.ui_pass);
     if (callbacks.record_ui_draw_cmd) {
+      wsl::log::core ()->debug ("render_impl: calling record_ui_draw_cmd");
       callbacks.record_ui_draw_cmd (registry);
+      wsl::log::core ()->debug ("render_impl: record_ui_draw_cmd returned");
     }
     window.end_ui_pass ();
   }
 
   {
     ZoneScopedN ("render_impl::end_cmd");
+    // Tracy frame image: record a copy pass from the present_tex
+    // into a staging transfer buffer. Must happen before end_cmd
+    // because the copy is part of this command buffer's command
+    // stream. The fence / wait / FrameImage call happens after
+    // end_cmd below.
+    // TEMP: disabled while diagnosing a crash in the second frame's
+    // ImGui render — the copy pass may be leaving GPU state in a
+    // bad shape for the next frame.
+    // m_runtime_ctx->window.frame_image_issue_copy ();
+
+    // Close the "Frame N" debug group pushed at the top of this
+    // function. Must happen before end_cmd (which submits) so the
+    // push/pop are recorded into the same command buffer.
+    if (m_runtime_ctx->render_ctx.has_active_frame ()
+        && m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
+      SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer ());
+    }
     m_runtime_ctx->render_ctx.end_cmd ();
   }
+
+  // Submit the frame image to Tracy now that the submission fence
+  // is available. The frame_image_submit() call blocks on the GPU
+  // (single-frame latency) and then downsamples + sends via
+  // FrameImage. The fence is released by frame_image_submit().
+  // TEMP: disabled (see above).
+  // if (SDL_GPUFence *fence = m_runtime_ctx->render_ctx.current_fence ()) {
+  //   m_runtime_ctx->window.frame_image_submit (fence);
+  // }
 }
 
 } // namespace sys

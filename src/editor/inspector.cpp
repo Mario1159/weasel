@@ -407,8 +407,8 @@ inspector::draw_entity_inspector (entt::entity entity)
       if (handle
           && editor_res->state (img_id) == wsl::rsc::image_state::loaded) {
         wsl::gfx::image const *img = handle.handle ().get ();
-        if ((img != nullptr) && (img->texture != nullptr)) {
-          ImGui::Image ((ImTextureID)img->texture, ImVec2 (16, 16));
+        if ((img != nullptr) && (img->texture.get () != nullptr)) {
+          ImGui::Image ((ImTextureID)img->texture.get (), ImVec2 (16, 16));
           ImGui::SameLine (0.0F, 6.0F);
         }
       }
@@ -767,8 +767,8 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
       if (handle
           && editor_res->state (img_id) == wsl::rsc::image_state::loaded) {
         wsl::gfx::image const *img = handle.handle ().get ();
-        if (img != nullptr && img->texture != nullptr) {
-          if (ImGui::ImageButton ("##refresh", (ImTextureID)img->texture,
+        if (img != nullptr && img->texture.get () != nullptr) {
+          if (ImGui::ImageButton ("##refresh", (ImTextureID)img->texture.get (),
                                   ImVec2 (btn_size, btn_size))) {
             data.set (object, *default_value);
             changed = true;
@@ -865,7 +865,6 @@ inspector::draw_render_viewport_field (entt::meta_any &object)
 
   return changed;
 }
-
 
 bool
 inspector::draw_meta_object (const char *label, entt::meta_any &object,

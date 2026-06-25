@@ -928,7 +928,7 @@ editor::root::draw_welcome_tab ()
           ImVec2 const p_max = ImVec2 (window_pos.x + window_size.x,
                                        window_pos.y + window_size.y);
           ImGui::GetWindowDrawList ()->AddImage (
-              (ImTextureID)handle->texture, p_min, p_max, ImVec2 (0, 0),
+              (ImTextureID)handle->texture.get (), p_min, p_max, ImVec2 (0, 0),
               ImVec2 (1, 1), ImColor (255, 255, 255, 255));
         }
       }

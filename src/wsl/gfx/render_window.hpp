@@ -103,12 +103,42 @@ public:
   float bloom_intensity = 1.0F;
 
   void create_depth_texture ();
-  void begin_3d_pass (bool clear_color = true, bool clear_depth = true) const;
+  void begin_3d_pass (bool clear_color = true, bool clear_depth = true,
+                      const char *label = "Main 3D Pass") const;
   void end_3d_pass (bool run_postprocess = true);
   void begin_ui_pass () const;
   void end_ui_pass () const;
   void new_swapchain ();
   void on_resize ();
+
+  // -----------------------------------------------------------------
+  // Tracy frame image capture
+  // -----------------------------------------------------------------
+  // The engine's present_tex (the tonemapped, bloom-augmented LDR
+  // output) is the natural source for Tracy's per-frame screenshot
+  // in the Frame view. The flow is:
+  //
+  //   1. frame_image_init() sets the downsample target size
+  //      (e.g. 320x180, must be divisible by 4 for Tracy).
+  //   2. frame_image_resize(src_w, src_h) (re)allocates the staging
+  //      transfer buffer to be large enough to hold the *full*
+  //      present_tex download. Called from on_resize().
+  //   3. frame_image_issue_copy() records a copy pass from
+  //      present_tex into that staging buffer.
+  //   4. The main command buffer is submitted (existing path).
+  //   5. frame_image_submit(fence) blocks on the submission fence,
+  //      maps the staging buffer, downscales BGRA -> RGBA on the
+  //      CPU and forwards the result to FrameImage().
+  //
+  // The downscaled image lives only for the duration of the
+  // FrameImage() call; Tracy copies the pixels internally so the
+  // staging buffer can be reused the next frame.
+  void frame_image_init (uint32_t target_w, uint32_t target_h);
+  void frame_image_shutdown ();
+  void frame_image_resize (uint32_t src_w, uint32_t src_h);
+  void frame_image_issue_copy ();
+  void frame_image_submit (SDL_GPUFence *fence);
+
   void postprocess_hdr_bloom ();
 
   //! Push a viewport onto the stack. The active viewport is applied to the
@@ -160,6 +190,24 @@ private:
 private:
   wsl::rsc::resource_manager *m_res_mgr = nullptr;
   std::vector<gfx::viewport> m_viewport_stack;
+
+  // Tracy frame image capture state. Owned by the render window;
+  // the staging transfer buffer is (re)allocated in
+  // frame_image_resize() and torn down in frame_image_shutdown().
+  SDL_GPUTransferBuffer *m_fi_transfer = nullptr;
+  // Size the staging buffer was last allocated for. Tracked so a
+  // window resize that changes the present_tex dimensions re-allocates
+  // exactly once instead of thrashing per-frame.
+  uint32_t m_fi_alloc_w = 0;
+  uint32_t m_fi_alloc_h = 0;
+  // Source dimensions from the last frame_image_issue_copy().
+  uint32_t m_fi_src_w = 0;
+  uint32_t m_fi_src_h = 0;
+  // Downsample target (set once in frame_image_init, immutable).
+  uint32_t m_fi_dst_w = 0;
+  uint32_t m_fi_dst_h = 0;
+  uint32_t m_fi_dst_pitch = 0;
+  bool m_fi_src_is_bgra = true;
 };
 
 } // namespace gfx
