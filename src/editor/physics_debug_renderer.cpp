@@ -140,15 +140,13 @@ physics_debug_renderer::physics_debug_renderer (wsl::gfx::render_window &w,
   // Line pipeline
   // ------------------------------------------------------------
   pi.primitive_type = SDL_GPU_PRIMITIVETYPE_LINELIST;
-  m_pipeline_lines = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pi);
-  wsl::gfx::tracy_alloc_pipeline (m_pipeline_lines);
+  m_pipeline_lines = wsl::gfx::gpu_graphics_pipeline (m_ctx->gpu_device, pi);
 
   // ------------------------------------------------------------
   // Triangle pipeline
   // ------------------------------------------------------------
   pi.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-  m_pipeline_tris = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pi);
-  wsl::gfx::tracy_alloc_pipeline (m_pipeline_tris);
+  m_pipeline_tris = wsl::gfx::gpu_graphics_pipeline (m_ctx->gpu_device, pi);
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -159,20 +157,10 @@ physics_debug_renderer::physics_debug_renderer (wsl::gfx::render_window &w,
 physics_debug_renderer::~physics_debug_renderer ()
 {
   destroy_default_resources ();
-  if (m_pipeline_lines != nullptr) {
-    wsl::gfx::tracy_free_pipeline (m_pipeline_lines);
-    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_lines);
-  }
-  if (m_pipeline_tris != nullptr) {
-    wsl::gfx::tracy_free_pipeline (m_pipeline_tris);
-    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_tris);
-  }
-  if (m_vertex_buffer != nullptr) {
-    wsl::gfx::release_gpu_buffer (m_ctx->gpu_device, m_vertex_buffer);
-  }
-  if (m_upload_buffer != nullptr) {
-    wsl::gfx::release_gpu_transfer_buffer (m_ctx->gpu_device, m_upload_buffer);
-  }
+  m_pipeline_lines.reset ();
+  m_pipeline_tris.reset ();
+  m_vertex_buffer.reset ();
+  m_upload_buffer.reset ();
   wsl::phys::release_jolt_runtime ();
 }
 
@@ -272,33 +260,28 @@ physics_debug_renderer::upload_buffers ()
   // ------------------------------------------------------------
   // Ensure buffers are large enough
   // ------------------------------------------------------------
-  if ((m_vertex_buffer == nullptr) || total_bytes > m_vertex_buffer_size) {
-    if (m_vertex_buffer != nullptr) {
-      SDL_ReleaseGPUBuffer (m_ctx->gpu_device, m_vertex_buffer);
-    }
-    if (m_upload_buffer != nullptr) {
-      SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_upload_buffer);
-    }
+  if (!m_vertex_buffer || total_bytes > m_vertex_buffer_size) {
+    m_vertex_buffer.reset ();
+    m_upload_buffer.reset ();
 
     m_vertex_buffer_size = total_bytes;
 
     SDL_GPUBufferCreateInfo bi{};
     bi.size = total_bytes;
     bi.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-    m_vertex_buffer = wsl::gfx::create_gpu_buffer (m_ctx->gpu_device, &bi);
+    m_vertex_buffer = wsl::gfx::gpu_buffer (m_ctx->gpu_device, bi);
 
     SDL_GPUTransferBufferCreateInfo ti{};
     ti.size = total_bytes;
     ti.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    m_upload_buffer
-        = wsl::gfx::create_gpu_transfer_buffer (m_ctx->gpu_device, &ti);
+    m_upload_buffer = wsl::gfx::gpu_transfer_buffer (m_ctx->gpu_device, ti);
   }
 
   // ------------------------------------------------------------
   // Upload data (lines first, triangles second)
   // ------------------------------------------------------------
-  uint8_t *dst = (uint8_t *)SDL_MapGPUTransferBuffer (m_ctx->gpu_device,
-                                                      m_upload_buffer, false);
+  uint8_t *dst = (uint8_t *)SDL_MapGPUTransferBuffer (
+      m_ctx->gpu_device, m_upload_buffer.get (), false);
 
   if (line_count != 0u) {
     memcpy (dst, m_line_vertices.data (), line_bytes);
@@ -308,13 +291,13 @@ physics_debug_renderer::upload_buffers ()
     memcpy (dst + line_bytes, m_tri_vertices.data (), tri_bytes);
   }
 
-  SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, m_upload_buffer);
+  SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, m_upload_buffer.get ());
 
   SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer (m_ctx->gpu_device);
   SDL_GPUCopyPass *cp = SDL_BeginGPUCopyPass (cmd);
 
-  SDL_GPUTransferBufferLocation const src{ m_upload_buffer, 0 };
-  SDL_GPUBufferRegion const dstreg{ m_vertex_buffer, 0, total_bytes };
+  SDL_GPUTransferBufferLocation const src{ m_upload_buffer.get (), 0 };
+  SDL_GPUBufferRegion const dstreg{ m_vertex_buffer.get (), 0, total_bytes };
 
   SDL_UploadToGPUBuffer (cp, &src, &dstreg, true);
   SDL_EndGPUCopyPass (cp);
@@ -344,8 +327,8 @@ physics_debug_renderer::flush (const glm::mat4 &vp)
   SDL_GPUTextureSamplerBinding dummy[5]{};
 
   for (int i = 0; i < 5; ++i) {
-    dummy[i].texture = m_default_texture;
-    dummy[i].sampler = m_default_sampler;
+    dummy[i].texture = m_default_texture.get ();
+    dummy[i].sampler = m_default_sampler.get ();
   }
 
   SDL_BindGPUFragmentSamplers (m_ctx->main_pass, 0, dummy, 5);
@@ -357,25 +340,25 @@ physics_debug_renderer::flush (const glm::mat4 &vp)
   // Draw lines
   // ------------------------------------------------------------
   SDL_GPUBufferBinding vb{};
-  vb.buffer = m_vertex_buffer;
+  vb.buffer = m_vertex_buffer.get ();
   vb.offset = 0;
 
   if (m_ctx->main_pass != nullptr) {
     SDL_BindGPUVertexBuffers (m_ctx->main_pass, 0, &vb, 1);
 
-    if ((line_count != 0u) && (m_pipeline_lines != nullptr)) {
-      SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_lines);
+    if ((line_count != 0u) && m_pipeline_lines) {
+      SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_lines.get ());
       SDL_DrawGPUPrimitives (m_ctx->main_pass, line_count, 1, 0, 0);
     }
 
     // ------------------------------------------------------------
     // Draw triangles
     // ------------------------------------------------------------
-    if ((tri_count != 0u) && (m_pipeline_tris != nullptr)) {
+    if ((tri_count != 0u) && (m_pipeline_tris)) {
       vb.offset = line_bytes;
       SDL_BindGPUVertexBuffers (m_ctx->main_pass, 0, &vb, 1);
 
-      SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_tris);
+      SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_tris.get ());
       SDL_DrawGPUPrimitives (m_ctx->main_pass, tri_count, 1, 0, 0);
     }
   }
@@ -394,8 +377,7 @@ physics_debug_renderer::create_default_texture ()
   tex.num_levels = 1;
   tex.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  m_default_texture = SDL_CreateGPUTexture (m_ctx->gpu_device, &tex);
-  wsl::gfx::tracy_alloc_texture (m_default_texture, tex);
+  m_default_texture = wsl::gfx::gpu_texture (m_ctx->gpu_device, tex);
 
   // ---- sampler ----
   SDL_GPUSamplerCreateInfo sinfo{};
@@ -406,8 +388,7 @@ physics_debug_renderer::create_default_texture ()
   sinfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   sinfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
 
-  m_default_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &sinfo);
-  wsl::gfx::tracy_alloc_sampler (m_default_sampler);
+  m_default_sampler = wsl::gfx::gpu_sampler (m_ctx->gpu_device, sinfo);
 
   // ---- staging buffer ----
   uint32_t white = 0xFFFFFFFF;
@@ -437,7 +418,7 @@ physics_debug_renderer::create_default_texture ()
   src.rows_per_layer = 1;
 
   SDL_GPUTextureRegion dst{};
-  dst.texture = m_default_texture;
+  dst.texture = m_default_texture.get ();
   dst.mip_level = 0;
   dst.layer = 0;
   dst.x = 0;
@@ -460,15 +441,8 @@ physics_debug_renderer::create_default_texture ()
 void
 physics_debug_renderer::destroy_default_resources ()
 {
-  if (m_default_sampler != nullptr) {
-    wsl::gfx::tracy_free_sampler (m_default_sampler);
-    SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_default_sampler);
-  }
-
-  if (m_default_texture != nullptr) {
-    wsl::gfx::tracy_free_texture (m_default_texture);
-    SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_texture);
-  }
+  m_default_sampler.reset ();
+  m_default_texture.reset ();
 }
 
 void

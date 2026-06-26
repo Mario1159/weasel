@@ -118,20 +118,6 @@ engine_ui::build_draw_data (entt::registry &registry)
   m_editor_ctx->get_imgui_renderer ()->end_frame ();
 
   m_draw_data = ImGui::GetDrawData ();
-
-  // TEMP DEBUG: dump the texture list so we can see if the second
-  // frame adds a new texture (and what its dimensions are) before
-  // PrepareDrawData creates it.
-  if (m_draw_data != nullptr && m_draw_data->Textures != nullptr) {
-    for (int ti = 0; ti < m_draw_data->Textures->Size; ++ti) {
-      ImTextureData *tex = (*m_draw_data->Textures)[ti];
-      wsl::log::editor ()->debug (
-          "build_draw_data: texture[{}] id={} status={} size={}x{} "
-          "format={} TexID={}",
-          ti, (int)tex->UniqueID, (int)tex->Status, tex->Width, tex->Height,
-          (int)tex->Format, (void *)(intptr_t)tex->GetTexID ());
-    }
-  }
 }
 
 void

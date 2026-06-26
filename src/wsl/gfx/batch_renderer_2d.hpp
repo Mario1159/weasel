@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gpu_resources.hpp"
 #include "renderer.hpp"
 #include "wsl/rsc/resource_ids.hpp"
 #include <glm/glm.hpp>
@@ -88,10 +89,10 @@ private:
   glm::mat4 m_projection{ 1.0F };
   std::optional<glm::mat4> m_override_projection;
 
-  SDL_GPUGraphicsPipeline *m_pipeline = nullptr;
-  SDL_GPUSampler *m_sampler = nullptr;
-  SDL_GPUBuffer *m_vbo = nullptr;
-  SDL_GPUTransferBuffer *m_vbo_transfer = nullptr;
+  gpu_graphics_pipeline m_pipeline;
+  gpu_sampler m_sampler;
+  gpu_buffer m_vbo;
+  gpu_transfer_buffer m_vbo_transfer;
 
   static constexpr uint32_t max_sprites_per_flush = 4096;
   static constexpr uint32_t max_vertices = max_sprites_per_flush * 6;

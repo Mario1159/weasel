@@ -2,8 +2,8 @@
 #include "wsl/log/log.hpp"
 
 #include "gfx/mesh.hpp"
+#include "gpu_resources.hpp"
 #include "render_context.hpp"
-#include "tracy_gpu_mem.hpp"
 
 #include <SDL3/SDL_gpu.h>
 #include <algorithm>
@@ -347,15 +347,13 @@ gfx::model_3d::build_gpu_buffers (gfx::render_context *ctx)
   vb.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
   vb.size = m_vertex_count * sizeof (vertex);
 
-  m_vertex_buffer = SDL_CreateGPUBuffer (ctx->gpu_device, &vb);
-  wsl::gfx::tracy_alloc_buffer (m_vertex_buffer, vb.size);
+  m_vertex_buffer = wsl::gfx::gpu_buffer (ctx->gpu_device, vb);
 
   SDL_GPUBufferCreateInfo ib{};
   ib.usage = SDL_GPU_BUFFERUSAGE_INDEX;
   ib.size = m_index_count * sizeof (uint32_t);
 
-  m_index_buffer = SDL_CreateGPUBuffer (ctx->gpu_device, &ib);
-  wsl::gfx::tracy_alloc_buffer (m_index_buffer, ib.size);
+  m_index_buffer = wsl::gfx::gpu_buffer (ctx->gpu_device, ib);
 
   SDL_GPUTransferBufferCreateInfo tvb{};
   tvb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
@@ -365,55 +363,42 @@ gfx::model_3d::build_gpu_buffers (gfx::render_context *ctx)
   tib.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
   tib.size = ib.size;
 
-  SDL_GPUTransferBuffer *v_upload
-      = SDL_CreateGPUTransferBuffer (ctx->gpu_device, &tvb);
-  wsl::gfx::tracy_alloc_transfer (v_upload, tvb.size);
-  SDL_GPUTransferBuffer *i_upload
-      = SDL_CreateGPUTransferBuffer (ctx->gpu_device, &tib);
-  wsl::gfx::tracy_alloc_transfer (i_upload, tib.size);
+  wsl::gfx::gpu_transfer_buffer v_upload (ctx->gpu_device, tvb);
+  wsl::gfx::gpu_transfer_buffer i_upload (ctx->gpu_device, tib);
 
-  void *vmap = SDL_MapGPUTransferBuffer (ctx->gpu_device, v_upload, false);
+  void *vmap
+      = SDL_MapGPUTransferBuffer (ctx->gpu_device, v_upload.get (), false);
   std::memcpy (vmap, vertices.data (), vb.size);
-  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, v_upload);
+  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, v_upload.get ());
 
-  void *imap = SDL_MapGPUTransferBuffer (ctx->gpu_device, i_upload, false);
+  void *imap
+      = SDL_MapGPUTransferBuffer (ctx->gpu_device, i_upload.get (), false);
   std::memcpy (imap, indices.data (), ib.size);
-  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, i_upload);
+  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, i_upload.get ());
 
   SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer (ctx->gpu_device);
   SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass (cmd);
 
-  SDL_GPUTransferBufferLocation const vloc{ v_upload, 0 };
-  SDL_GPUBufferRegion const vreg{ m_vertex_buffer, 0, vb.size };
+  SDL_GPUTransferBufferLocation const vloc{ v_upload.get (), 0 };
+  SDL_GPUBufferRegion const vreg{ m_vertex_buffer.get (), 0, vb.size };
   SDL_UploadToGPUBuffer (pass, &vloc, &vreg, true);
 
-  SDL_GPUTransferBufferLocation const iloc{ i_upload, 0 };
-  SDL_GPUBufferRegion const ireg{ m_index_buffer, 0, ib.size };
+  SDL_GPUTransferBufferLocation const iloc{ i_upload.get (), 0 };
+  SDL_GPUBufferRegion const ireg{ m_index_buffer.get (), 0, ib.size };
   SDL_UploadToGPUBuffer (pass, &iloc, &ireg, true);
 
   SDL_EndGPUCopyPass (pass);
   SDL_SubmitGPUCommandBuffer (cmd);
 
-  wsl::gfx::tracy_free_transfer (v_upload);
-  SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, v_upload);
-  wsl::gfx::tracy_free_transfer (i_upload);
-  SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, i_upload);
+  // v_upload and i_upload destructors release the transfer buffers
+  // + Tracy when this function returns.
 }
 
 void
 gfx::model_3d::destroy_gpu_buffers (gfx::render_context *ctx)
 {
-  if (m_vertex_buffer != nullptr) {
-    wsl::gfx::tracy_free_buffer (m_vertex_buffer);
-    SDL_ReleaseGPUBuffer (ctx->gpu_device, m_vertex_buffer);
-    m_vertex_buffer = nullptr;
-  }
-
-  if (m_index_buffer != nullptr) {
-    wsl::gfx::tracy_free_buffer (m_index_buffer);
-    SDL_ReleaseGPUBuffer (ctx->gpu_device, m_index_buffer);
-    m_index_buffer = nullptr;
-  }
+  m_vertex_buffer.reset ();
+  m_index_buffer.reset ();
 }
 
 std::shared_ptr<gfx::model_3d>

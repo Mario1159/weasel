@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wsl/comp/camera.hpp"
+#include "wsl/gfx/gpu_resources.hpp"
 #include "wsl/gfx/mesh.hpp"
 #include "wsl/gfx/render_context.hpp"
 #include "wsl/gfx/viewport.hpp"
@@ -71,30 +72,29 @@ public:
   // entt::registry *registry;
   wsl::gfx::render_context *ctx;
 
-  SDL_GPUTexture *depth_texture = nullptr;
+  gpu_texture depth_texture;
   SDL_GPUTextureFormat depth_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
 
-  SDL_GPUTexture *msaa_hdr_scene = nullptr;
-  SDL_GPUTexture *msaa_hdr_bloom = nullptr;
+  gpu_texture msaa_hdr_scene;
+  gpu_texture msaa_hdr_bloom;
 
-  SDL_GPUTexture *hdr_scene = nullptr; // resolved HDR scene (sampler)
-  SDL_GPUTexture *hdr_bloom_src
-      = nullptr; // resolved HDR bloom source (sampler)
+  gpu_texture hdr_scene;     // resolved HDR scene (sampler)
+  gpu_texture hdr_bloom_src; // resolved HDR bloom source (sampler)
 
   // half-res bloom ping-pong
-  SDL_GPUTexture *bloom_a = nullptr;
-  SDL_GPUTexture *bloom_b = nullptr;
+  gpu_texture bloom_a;
+  gpu_texture bloom_b;
 
   // final LDR (tonemapped + bloom) output that can be sampled by ImGui /
   // GameView
   wsl::gfx::texture present_tex;
   SDL_GPUTextureFormat swapchain_format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
 
-  SDL_GPUGraphicsPipeline *pipe_downsample = nullptr;
-  SDL_GPUGraphicsPipeline *pipe_blur = nullptr;
-  SDL_GPUGraphicsPipeline *pipe_composite = nullptr;
+  gpu_graphics_pipeline pipe_downsample;
+  gpu_graphics_pipeline pipe_blur;
+  gpu_graphics_pipeline pipe_composite;
 
-  SDL_GPUSampler *linear_sampler = nullptr;
+  gpu_sampler linear_sampler;
 
   int current_sample_count = SDL_GPU_SAMPLECOUNT_4;
   bool present_to_swapchain = true;
@@ -169,7 +169,7 @@ public:
 
 private:
   SDL_GPUSampler *ensure_linear_sampler ();
-  void destroy_texture (SDL_GPUTexture *&texture) const;
+  void destroy_texture (gpu_texture &texture) const;
 
   //! Tracked vsync state. Defaults to true (VSYNC) so the engine is
   //! safe to use on any driver before the first `set_vsync` call.
@@ -183,9 +183,9 @@ private:
   create_fullscreen_pipe (const char *frag_shader_path,
                           SDL_GPUTextureFormat out_format,
                           int num_uniform_buffers, int num_samplers);
-  SDL_GPUGraphicsPipeline *create_composite_pipe ();
-  SDL_GPUGraphicsPipeline *create_downsample_pipe ();
-  SDL_GPUGraphicsPipeline *create_blur_pipe ();
+  gpu_graphics_pipeline create_composite_pipe ();
+  gpu_graphics_pipeline create_downsample_pipe ();
+  gpu_graphics_pipeline create_blur_pipe ();
 
 private:
   wsl::rsc::resource_manager *m_res_mgr = nullptr;
@@ -194,7 +194,7 @@ private:
   // Tracy frame image capture state. Owned by the render window;
   // the staging transfer buffer is (re)allocated in
   // frame_image_resize() and torn down in frame_image_shutdown().
-  SDL_GPUTransferBuffer *m_fi_transfer = nullptr;
+  gpu_transfer_buffer m_fi_transfer;
   // Size the staging buffer was last allocated for. Tracked so a
   // window resize that changes the present_tex dimensions re-allocates
   // exactly once instead of thrashing per-frame.

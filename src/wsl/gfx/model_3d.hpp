@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gpu_resources.hpp"
 #include "mesh.hpp"
 #include "render_context.hpp"
 #include "tracy_gpu_mem.hpp"
@@ -117,16 +118,14 @@ struct model_3d
       lod_groups = std::move (other.lod_groups);
       default_scene = other.default_scene;
 
-      m_vertex_buffer = other.m_vertex_buffer;
-      m_index_buffer = other.m_index_buffer;
+      m_vertex_buffer = std::move (other.m_vertex_buffer);
+      m_index_buffer = std::move (other.m_index_buffer);
       m_gpu_ready = other.m_gpu_ready;
       m_vertex_count = other.m_vertex_count;
       m_index_count = other.m_index_count;
       m_scene_bounds = std::move (other.m_scene_bounds);
       m_device = other.m_device;
 
-      other.m_vertex_buffer = nullptr;
-      other.m_index_buffer = nullptr;
       other.m_gpu_ready = false;
       other.m_vertex_count = 0;
       other.m_index_count = 0;
@@ -156,8 +155,8 @@ struct model_3d
   void
   bind (SDL_GPURenderPass *pass) const
   {
-    SDL_GPUBufferBinding const vb{ m_vertex_buffer, 0 };
-    SDL_GPUBufferBinding const ib{ m_index_buffer, 0 };
+    SDL_GPUBufferBinding const vb{ m_vertex_buffer.get (), 0 };
+    SDL_GPUBufferBinding const ib{ m_index_buffer.get (), 0 };
 
     SDL_BindGPUVertexBuffers (pass, 0, &vb, 1);
     SDL_BindGPUIndexBuffer (pass, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
@@ -185,24 +184,14 @@ private:
   void
   release ()
   {
-    if (m_device != nullptr) {
-      if (m_vertex_buffer != nullptr) {
-        wsl::gfx::tracy_free_buffer (m_vertex_buffer);
-        SDL_ReleaseGPUBuffer (m_device, m_vertex_buffer);
-      }
-      if (m_index_buffer != nullptr) {
-        wsl::gfx::tracy_free_buffer (m_index_buffer);
-        SDL_ReleaseGPUBuffer (m_device, m_index_buffer);
-      }
-    }
-    m_vertex_buffer = nullptr;
-    m_index_buffer = nullptr;
+    m_vertex_buffer.reset ();
+    m_index_buffer.reset ();
     m_gpu_ready = false;
     m_device = nullptr;
   }
 
-  SDL_GPUBuffer *m_vertex_buffer = nullptr;
-  SDL_GPUBuffer *m_index_buffer = nullptr;
+  wsl::gfx::gpu_buffer m_vertex_buffer;
+  wsl::gfx::gpu_buffer m_index_buffer;
 
   bool m_gpu_ready = false;
   size_t m_vertex_count = 0;

@@ -145,17 +145,17 @@ batch_renderer_2d::build_and_upload ()
 
   // Upload vertices
   if (!m_vertices.empty ()) {
-    void *mapped
-        = SDL_MapGPUTransferBuffer (m_ctx->gpu_device, m_vbo_transfer, true);
+    void *mapped = SDL_MapGPUTransferBuffer (m_ctx->gpu_device,
+                                             m_vbo_transfer.get (), true);
     std::memcpy (mapped, m_vertices.data (),
                  m_vertices.size () * sizeof (vertex_2d));
-    SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, m_vbo_transfer);
+    SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, m_vbo_transfer.get ());
 
     SDL_GPUCommandBuffer *cmd_buf = m_ctx->command_buffer ();
     SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass (cmd_buf);
-    SDL_GPUTransferBufferLocation src{ m_vbo_transfer, 0 };
+    SDL_GPUTransferBufferLocation src{ m_vbo_transfer.get (), 0 };
     SDL_GPUBufferRegion dst{
-      m_vbo, 0, (uint32_t)(m_vertices.size () * sizeof (vertex_2d))
+      m_vbo.get (), 0, (uint32_t)(m_vertices.size () * sizeof (vertex_2d))
     };
     SDL_UploadToGPUBuffer (copy, &src, &dst, false);
     SDL_EndGPUCopyPass (copy);
@@ -175,8 +175,8 @@ batch_renderer_2d::draw ()
     return;
   }
 
-  SDL_BindGPUGraphicsPipeline (pass, m_pipeline);
-  SDL_GPUBufferBinding vbo_binding{ m_vbo, 0 };
+  SDL_BindGPUGraphicsPipeline (pass, m_pipeline.get ());
+  SDL_GPUBufferBinding vbo_binding{ m_vbo.get (), 0 };
   SDL_BindGPUVertexBuffers (pass, 0, &vbo_binding, 1);
 
   // Push projection matrix
@@ -184,9 +184,9 @@ batch_renderer_2d::draw ()
                                 sizeof (m_projection));
 
   for (const auto &b : m_batches) {
-    SDL_GPUTexture *t = b.texture ? b.texture : m_window->hdr_scene;
+    SDL_GPUTexture *t = b.texture ? b.texture : m_window->hdr_scene.get ();
     if (t) {
-      SDL_GPUTextureSamplerBinding tex_binding{ t, m_sampler };
+      SDL_GPUTextureSamplerBinding tex_binding{ t, m_sampler.get () };
       SDL_BindGPUFragmentSamplers (pass, 0, &tex_binding, 1);
     }
     SDL_DrawGPUPrimitives (pass, b.vertex_count, 1, b.first_vertex, 0);
@@ -272,8 +272,7 @@ batch_renderer_2d::create_pipeline ()
   pipe.vertex_input_state.num_vertex_attributes = 3;
   pipe.vertex_input_state.vertex_attributes = va;
 
-  m_pipeline = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
-  wsl::gfx::tracy_alloc_pipeline (m_pipeline);
+  m_pipeline = gpu_graphics_pipeline (m_ctx->gpu_device, pipe);
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -284,21 +283,14 @@ batch_renderer_2d::create_pipeline ()
   sinfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
   sinfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
   sinfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  m_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &sinfo);
-  wsl::gfx::tracy_alloc_sampler (m_sampler);
+  m_sampler = gpu_sampler (m_ctx->gpu_device, sinfo);
 }
 
 void
 batch_renderer_2d::destroy_pipeline ()
 {
-  if (m_pipeline) {
-    wsl::gfx::tracy_free_pipeline (m_pipeline);
-    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline);
-  }
-  if (m_sampler) {
-    wsl::gfx::tracy_free_sampler (m_sampler);
-    SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_sampler);
-  }
+  m_pipeline.reset ();
+  m_sampler.reset ();
 }
 
 void
@@ -307,27 +299,19 @@ batch_renderer_2d::create_buffers ()
   SDL_GPUBufferCreateInfo binfo{};
   binfo.size = max_vertices * sizeof (vertex_2d);
   binfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
-  m_vbo = SDL_CreateGPUBuffer (m_ctx->gpu_device, &binfo);
-  wsl::gfx::tracy_alloc_buffer (m_vbo, binfo.size);
+  m_vbo = gpu_buffer (m_ctx->gpu_device, binfo);
 
   SDL_GPUTransferBufferCreateInfo tinfo{};
   tinfo.size = max_vertices * sizeof (vertex_2d);
   tinfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-  m_vbo_transfer = SDL_CreateGPUTransferBuffer (m_ctx->gpu_device, &tinfo);
-  wsl::gfx::tracy_alloc_transfer (m_vbo_transfer, tinfo.size);
+  m_vbo_transfer = gpu_transfer_buffer (m_ctx->gpu_device, tinfo);
 }
 
 void
 batch_renderer_2d::destroy_buffers ()
 {
-  if (m_vbo) {
-    wsl::gfx::tracy_free_buffer (m_vbo);
-    SDL_ReleaseGPUBuffer (m_ctx->gpu_device, m_vbo);
-  }
-  if (m_vbo_transfer) {
-    wsl::gfx::tracy_free_transfer (m_vbo_transfer);
-    SDL_ReleaseGPUTransferBuffer (m_ctx->gpu_device, m_vbo_transfer);
-  }
+  m_vbo.reset ();
+  m_vbo_transfer.reset ();
 }
 
 } // namespace wsl::gfx

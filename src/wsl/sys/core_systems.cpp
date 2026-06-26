@@ -753,17 +753,9 @@ core_systems::render_impl (wsl::gfx::render_window &window,
       render_ui_sys->render_record_draw_cmd (&registry);
     }
 
-    wsl::log::core ()->debug (
-        "render_impl: about to begin_ui_pass, swapchain={} sw_w={} sw_h={}",
-        (void *)window.swapchain.texture_data, window.swapchain.width,
-        window.swapchain.height);
     window.begin_ui_pass ();
-    wsl::log::core ()->debug ("render_impl: begin_ui_pass returned, ui_pass={}",
-                              (void *)m_runtime_ctx->render_ctx.ui_pass);
     if (callbacks.record_ui_draw_cmd) {
-      wsl::log::core ()->debug ("render_impl: calling record_ui_draw_cmd");
       callbacks.record_ui_draw_cmd (registry);
-      wsl::log::core ()->debug ("render_impl: record_ui_draw_cmd returned");
     }
     window.end_ui_pass ();
   }

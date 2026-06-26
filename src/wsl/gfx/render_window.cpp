@@ -41,29 +41,23 @@ namespace gfx
 SDL_GPUSampler *
 render_window::ensure_linear_sampler ()
 {
-  if (linear_sampler != nullptr) {
-    return linear_sampler;
+  if (!linear_sampler) {
+    SDL_GPUSamplerCreateInfo si{};
+    si.min_filter = SDL_GPU_FILTER_LINEAR;
+    si.mag_filter = SDL_GPU_FILTER_LINEAR;
+    si.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
+    si.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    si.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    si.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    linear_sampler = gpu_sampler (ctx->gpu_device, si);
   }
-  SDL_GPUSamplerCreateInfo si{};
-  si.min_filter = SDL_GPU_FILTER_LINEAR;
-  si.mag_filter = SDL_GPU_FILTER_LINEAR;
-  si.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
-  si.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  si.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  si.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  linear_sampler = SDL_CreateGPUSampler (ctx->gpu_device, &si);
-  wsl::gfx::tracy_alloc_sampler (linear_sampler);
-  return linear_sampler;
+  return linear_sampler.get ();
 }
 
 void
-render_window::destroy_texture (SDL_GPUTexture *&texture) const
+render_window::destroy_texture (gpu_texture &texture) const
 {
-  if (texture != nullptr) {
-    wsl::gfx::tracy_free_texture (texture);
-    SDL_ReleaseGPUTexture (ctx->gpu_device, texture);
-    texture = nullptr;
-  }
+  texture.reset ();
 }
 
 SDL_GPUGraphicsPipeline *
@@ -139,37 +133,43 @@ render_window::create_fullscreen_pipe (const char *frag_shader_path,
   return out;
 }
 
-SDL_GPUGraphicsPipeline *
+gpu_graphics_pipeline
 render_window::create_composite_pipe ()
 {
   // composite outputs to swapchain format (LDR)
   SDL_GPUTextureFormat const sc_fmt
       = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, handler);
 
-  return create_fullscreen_pipe (
-      "engine://compiled_shaders/composite_tonemap.frag.slang.spv", sc_fmt,
-      /*num_uniform_buffers=*/1, /*Composite cbuffer*/
-      /*num_samplers=*/2 /*scene + bloom*/);
+  return gpu_graphics_pipeline::adopt (
+      ctx->gpu_device,
+      create_fullscreen_pipe (
+          "engine://compiled_shaders/composite_tonemap.frag.slang.spv", sc_fmt,
+          /*num_uniform_buffers=*/1, /*Composite cbuffer*/
+          /*num_samplers=*/2 /*scene + bloom*/));
 }
 
-SDL_GPUGraphicsPipeline *
+gpu_graphics_pipeline
 render_window::create_downsample_pipe ()
 {
-  return create_fullscreen_pipe (
-      "engine://compiled_shaders/bloom_downsample.frag.slang.spv",
-      SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
-      /*num_uniform_buffers=*/1, /*Downsample cbuffer*/
-      /*num_samplers=*/1);
+  return gpu_graphics_pipeline::adopt (
+      ctx->gpu_device,
+      create_fullscreen_pipe (
+          "engine://compiled_shaders/bloom_downsample.frag.slang.spv",
+          SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
+          /*num_uniform_buffers=*/1, /*Downsample cbuffer*/
+          /*num_samplers=*/1));
 }
 
-SDL_GPUGraphicsPipeline *
+gpu_graphics_pipeline
 render_window::create_blur_pipe ()
 {
-  return create_fullscreen_pipe (
-      "engine://compiled_shaders/bloom_blur.frag.slang.spv",
-      SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
-      /*num_uniform_buffers=*/1, /*Blur cbuffer*/
-      /*num_samplers=*/1);
+  return gpu_graphics_pipeline::adopt (
+      ctx->gpu_device,
+      create_fullscreen_pipe (
+          "engine://compiled_shaders/bloom_blur.frag.slang.spv",
+          SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
+          /*num_uniform_buffers=*/1, /*Blur cbuffer*/
+          /*num_samplers=*/1));
 }
 
 render_window::render_window (const char *name, int width, int height,
@@ -295,33 +295,28 @@ render_window::~render_window ()
 
   SDL_WaitForGPUIdle (ctx->gpu_device);
 
-  if (pipe_downsample != nullptr) {
-    wsl::gfx::tracy_free_pipeline (pipe_downsample);
-    SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_downsample);
-  }
-  if (pipe_blur != nullptr) {
-    wsl::gfx::tracy_free_pipeline (pipe_blur);
-    SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_blur);
-  }
-  if (pipe_composite != nullptr) {
-    wsl::gfx::tracy_free_pipeline (pipe_composite);
-    SDL_ReleaseGPUGraphicsPipeline (ctx->gpu_device, pipe_composite);
-  }
+  pipe_downsample.reset ();
+  pipe_blur.reset ();
+  pipe_composite.reset ();
 
-  if (linear_sampler != nullptr) {
-    wsl::gfx::tracy_free_sampler (linear_sampler);
-    SDL_ReleaseGPUSampler (ctx->gpu_device, linear_sampler);
+  linear_sampler.reset ();
+
+  bloom_a.reset ();
+  bloom_b.reset ();
+  hdr_scene.reset ();
+  hdr_bloom_src.reset ();
+  msaa_hdr_scene.reset ();
+  msaa_hdr_bloom.reset ();
+
+  depth_texture.reset ();
+  // present_tex.texture_data is a raw pointer (from
+  // wsl::gfx::texture). Free it manually with Tracy bookkeeping
+  // to match the tracy_alloc_texture call in create_hdr_target().
+  if (present_tex.texture_data != nullptr) {
+    wsl::gfx::tracy_free_texture (present_tex.texture_data);
+    SDL_ReleaseGPUTexture (ctx->gpu_device, present_tex.texture_data);
+    present_tex.texture_data = nullptr;
   }
-
-  destroy_texture (bloom_a);
-  destroy_texture (bloom_b);
-  destroy_texture (hdr_scene);
-  destroy_texture (hdr_bloom_src);
-  destroy_texture (msaa_hdr_scene);
-  destroy_texture (msaa_hdr_bloom);
-
-  destroy_texture (depth_texture);
-  destroy_texture (present_tex.texture_data);
 
   SDL_WaitForGPUIdle (ctx->gpu_device);
 
@@ -379,15 +374,15 @@ render_window::create_depth_texture ()
   info.num_levels = 1;
   info.sample_count = SDL_GPU_SAMPLECOUNT_4; // MSAA matches MRT pass
 
-  depth_texture = SDL_CreateGPUTexture (ctx->gpu_device, &info);
-  if (depth_texture == nullptr) {
+  depth_texture = gpu_texture (ctx->gpu_device, info);
+  if (!depth_texture) {
     wsl::log::gfx ()->error ("Failed to create depth texture: {}",
                              SDL_GetError ());
   } else {
     // Resource name (vkSetDebugUtilsObjectNameEXT under the hood);
     // shows up in RenderDoc's Resource Inspector and Texture Viewer.
-    SDL_SetGPUTextureName (ctx->gpu_device, depth_texture, "Depth Buffer");
-    wsl::gfx::tracy_alloc_texture (depth_texture, info);
+    SDL_SetGPUTextureName (ctx->gpu_device, depth_texture.get (),
+                           "Depth Buffer");
   }
 }
 
@@ -396,9 +391,8 @@ render_window::begin_3d_pass (bool clear_color, bool clear_depth,
                               const char *label) const
 {
   ZoneScoped;
-  if ((msaa_hdr_scene == nullptr) || (msaa_hdr_bloom == nullptr)
-      || (hdr_scene == nullptr) || (hdr_bloom_src == nullptr)
-      || (depth_texture == nullptr)) {
+  if ((!msaa_hdr_scene) || (!msaa_hdr_bloom) || (!hdr_scene) || (!hdr_bloom_src)
+      || (!depth_texture)) {
     wsl::log::gfx ()->warn (
         "begin_3d_pass: null render target texture(s), skipping");
     return;
@@ -414,22 +408,22 @@ render_window::begin_3d_pass (bool clear_color, bool clear_depth,
   SDL_GPUColorTargetInfo ct[2]{};
 
   // Scene HDR
-  ct[0].texture = msaa_hdr_scene;
+  ct[0].texture = msaa_hdr_scene.get ();
   ct[0].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ct[0].store_op = SDL_GPU_STOREOP_RESOLVE;
   ct[0].clear_color = scene_clear_color;
-  ct[0].resolve_texture = hdr_scene;
+  ct[0].resolve_texture = hdr_scene.get ();
 
   // Bloom source HDR
-  ct[1].texture = msaa_hdr_bloom;
+  ct[1].texture = msaa_hdr_bloom.get ();
   ct[1].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ct[1].store_op = SDL_GPU_STOREOP_RESOLVE;
   ct[1].clear_color = { 0.0F, 0.0F, 0.0F, 1.0F };
-  ct[1].resolve_texture = hdr_bloom_src;
+  ct[1].resolve_texture = hdr_bloom_src.get ();
 
   SDL_GPUDepthStencilTargetInfo ds{};
   SDL_zero (ds);
-  ds.texture = depth_texture;
+  ds.texture = depth_texture.get ();
   ds.clear_depth = 1.0F;
   ds.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ds.store_op = SDL_GPU_STOREOP_STORE;
@@ -490,17 +484,10 @@ render_window::begin_ui_pass () const
 #ifdef WEASEL_ENABLE_RENDERDOC
   wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.ui", "ui");
 #endif
-  wsl::log::gfx ()->debug (
-      "begin_ui_pass: main_cmd={} swapchain={} sw_w={} sw_h={}",
-      (void *)ctx->main_cmd, (void *)swapchain.texture_data, swapchain.width,
-      swapchain.height);
   if (ctx->main_cmd != nullptr) {
     SDL_PushGPUDebugGroup (ctx->main_cmd, "UI Pass");
   }
   ctx->begin_ui_render_pass (swapchain.texture_data);
-  wsl::log::gfx ()->debug (
-      "begin_ui_pass: after begin_ui_render_pass, ui_pass={}",
-      (void *)ctx->ui_pass);
 }
 
 void
@@ -690,7 +677,13 @@ render_window::on_resize ()
   destroy_texture (hdr_bloom_src);
   destroy_texture (bloom_a);
   destroy_texture (bloom_b);
-  destroy_texture (present_tex.texture_data);
+  // present_tex.texture_data is a raw pointer; free manually with
+  // Tracy bookkeeping so the wsl.gfx.textures pool stays consistent.
+  if (present_tex.texture_data != nullptr) {
+    wsl::gfx::tracy_free_texture (present_tex.texture_data);
+    SDL_ReleaseGPUTexture (ctx->gpu_device, present_tex.texture_data);
+    present_tex.texture_data = nullptr;
+  }
 
   // MSAA HDR targets (two MRT textures)
   SDL_GPUTextureCreateInfo msaa{};
@@ -715,13 +708,15 @@ render_window::on_resize ()
     return tex;
   };
 
-  msaa_hdr_scene = create_hdr_target (msaa);
-  msaa_hdr_bloom = create_hdr_target (msaa);
-  if (msaa_hdr_scene != nullptr)
-    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_scene,
+  msaa_hdr_scene
+      = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (msaa));
+  msaa_hdr_bloom
+      = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (msaa));
+  if (msaa_hdr_scene)
+    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_scene.get (),
                            "MSAA HDR Scene (4x)");
-  if (msaa_hdr_bloom != nullptr)
-    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_bloom,
+  if (msaa_hdr_bloom)
+    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_bloom.get (),
                            "MSAA HDR Bloom (4x)");
 
   // Resolved HDR targets must be sampler + color target
@@ -729,24 +724,27 @@ render_window::on_resize ()
   res.sample_count = SDL_GPU_SAMPLECOUNT_1;
   res.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  hdr_scene = create_hdr_target (res);
-  hdr_bloom_src = create_hdr_target (res);
-  if (hdr_scene != nullptr)
-    SDL_SetGPUTextureName (ctx->gpu_device, hdr_scene, "HDR Scene");
-  if (hdr_bloom_src != nullptr)
-    SDL_SetGPUTextureName (ctx->gpu_device, hdr_bloom_src, "HDR Bloom Source");
+  hdr_scene = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (res));
+  hdr_bloom_src = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (res));
+  if (hdr_scene)
+    SDL_SetGPUTextureName (ctx->gpu_device, hdr_scene.get (), "HDR Scene");
+  if (hdr_bloom_src)
+    SDL_SetGPUTextureName (ctx->gpu_device, hdr_bloom_src.get (),
+                           "HDR Bloom Source");
 
   // Half-res bloom ping-pong
   SDL_GPUTextureCreateInfo half = res;
   half.width = (uint32_t)std::max (1, w / 2);
   half.height = (uint32_t)std::max (1, h / 2);
 
-  bloom_a = create_hdr_target (half);
-  bloom_b = create_hdr_target (half);
-  if (bloom_a != nullptr)
-    SDL_SetGPUTextureName (ctx->gpu_device, bloom_a, "Bloom A (half-res)");
-  if (bloom_b != nullptr)
-    SDL_SetGPUTextureName (ctx->gpu_device, bloom_b, "Bloom B (half-res)");
+  bloom_a = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (half));
+  bloom_b = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (half));
+  if (bloom_a)
+    SDL_SetGPUTextureName (ctx->gpu_device, bloom_a.get (),
+                           "Bloom A (half-res)");
+  if (bloom_b)
+    SDL_SetGPUTextureName (ctx->gpu_device, bloom_b.get (),
+                           "Bloom B (half-res)");
 
   // Create LDR output texture (same format as swapchain) so UI can sample it
   SDL_GPUTextureCreateInfo out{};
@@ -780,8 +778,7 @@ void
 render_window::postprocess_hdr_bloom ()
 {
   ZoneScoped;
-  if ((hdr_bloom_src == nullptr) || (hdr_scene == nullptr)
-      || (bloom_a == nullptr) || (bloom_b == nullptr)
+  if ((!hdr_bloom_src) || (!hdr_scene) || (!bloom_a) || (!bloom_b)
       || (present_tex.texture_data == nullptr)) {
     return;
   }
@@ -803,8 +800,7 @@ render_window::postprocess_hdr_bloom ()
   // above, so pop it before returning to keep the GPU debug-group stack
   // balanced for subsequent passes (begin_ui_pass would otherwise be
   // nesting inside the unclosed Postprocess group).
-  if ((pipe_downsample == nullptr) || (pipe_blur == nullptr)
-      || (pipe_composite == nullptr)) {
+  if ((!pipe_downsample) || (!pipe_blur) || (!pipe_composite)) {
     SDL_PopGPUDebugGroup (ctx->main_cmd);
     return;
   }
@@ -823,7 +819,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Downsample");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = bloom_a;
+    ct.texture = bloom_a.get ();
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
@@ -831,7 +827,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_GPURenderPass *pass
         = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_downsample);
+      SDL_BindGPUGraphicsPipeline (pass, pipe_downsample.get ());
 
       struct alignas (16) down
       {
@@ -845,8 +841,8 @@ render_window::postprocess_hdr_bloom ()
 
       SDL_GPUTextureSamplerBinding b{};
       SDL_zero (b);
-      b.texture = hdr_bloom_src;
-      b.sampler = linear_sampler;
+      b.texture = hdr_bloom_src.get ();
+      b.sampler = linear_sampler.get ();
       SDL_BindGPUFragmentSamplers (pass, 0, &b, 1);
 
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
@@ -870,7 +866,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Blur H");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = bloom_b;
+    ct.texture = bloom_b.get ();
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
@@ -878,7 +874,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_GPURenderPass *pass
         = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_blur);
+      SDL_BindGPUGraphicsPipeline (pass, pipe_blur.get ());
 
       struct alignas (16) blur
       {
@@ -894,8 +890,8 @@ render_window::postprocess_hdr_bloom ()
 
       SDL_GPUTextureSamplerBinding b{};
       SDL_zero (b);
-      b.texture = bloom_a;
-      b.sampler = linear_sampler;
+      b.texture = bloom_a.get ();
+      b.sampler = linear_sampler.get ();
       SDL_BindGPUFragmentSamplers (pass, 0, &b, 1);
 
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
@@ -914,7 +910,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Blur V");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = bloom_a;
+    ct.texture = bloom_a.get ();
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
@@ -922,7 +918,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_GPURenderPass *pass
         = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_blur);
+      SDL_BindGPUGraphicsPipeline (pass, pipe_blur.get ());
 
       struct alignas (16) blur
       {
@@ -938,8 +934,8 @@ render_window::postprocess_hdr_bloom ()
 
       SDL_GPUTextureSamplerBinding b{};
       SDL_zero (b);
-      b.texture = bloom_b;
-      b.sampler = linear_sampler;
+      b.texture = bloom_b.get ();
+      b.sampler = linear_sampler.get ();
       SDL_BindGPUFragmentSamplers (pass, 0, &b, 1);
 
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
@@ -967,7 +963,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_GPURenderPass *pass
         = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_composite);
+      SDL_BindGPUGraphicsPipeline (pass, pipe_composite.get ());
 
       struct alignas (16) comp
       {
@@ -982,10 +978,10 @@ render_window::postprocess_hdr_bloom ()
 
       SDL_GPUTextureSamplerBinding b[2]{};
       SDL_zero (b);
-      b[0].texture = hdr_scene;
-      b[0].sampler = linear_sampler;
-      b[1].texture = bloom_a;
-      b[1].sampler = linear_sampler;
+      b[0].texture = hdr_scene.get ();
+      b[0].sampler = linear_sampler.get ();
+      b[1].texture = bloom_a.get ();
+      b[1].sampler = linear_sampler.get ();
 
       SDL_BindGPUFragmentSamplers (pass, 0, b, 2);
 
@@ -1017,7 +1013,7 @@ render_window::postprocess_hdr_bloom ()
     SDL_GPURenderPass *pass
         = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_composite);
+      SDL_BindGPUGraphicsPipeline (pass, pipe_composite.get ());
 
       struct alignas (16) comp
       {
@@ -1032,10 +1028,10 @@ render_window::postprocess_hdr_bloom ()
 
       SDL_GPUTextureSamplerBinding b[2]{};
       SDL_zero (b);
-      b[0].texture = hdr_scene;
-      b[0].sampler = linear_sampler;
-      b[1].texture = bloom_a;
-      b[1].sampler = linear_sampler;
+      b[0].texture = hdr_scene.get ();
+      b[0].sampler = linear_sampler.get ();
+      b[1].texture = bloom_a.get ();
+      b[1].sampler = linear_sampler.get ();
 
       SDL_BindGPUFragmentSamplers (pass, 0, b, 2);
 
@@ -1085,15 +1081,10 @@ render_window::frame_image_init (uint32_t target_w, uint32_t target_h)
       "({}x{} downsample target)",
       m_fi_dst_w, m_fi_dst_h);
 }
-
 void
 render_window::frame_image_shutdown ()
 {
-  if (m_fi_transfer != nullptr && ctx->gpu_device != nullptr) {
-    wsl::gfx::tracy_free_transfer (m_fi_transfer);
-    SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, m_fi_transfer);
-    m_fi_transfer = nullptr;
-  }
+  m_fi_transfer.reset ();
   m_fi_alloc_w = 0;
   m_fi_alloc_h = 0;
 }
@@ -1107,8 +1098,7 @@ render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
   // Skip the (re)allocation if the staging buffer already covers
   // the requested source size. This keeps on_resize() cheap on
   // repeated calls (e.g. drag-resize) and avoids GPU buffer churn.
-  if (m_fi_transfer != nullptr && m_fi_alloc_w == src_w
-      && m_fi_alloc_h == src_h) {
+  if (m_fi_transfer && m_fi_alloc_w == src_w && m_fi_alloc_h == src_h) {
     return;
   }
 
@@ -1117,11 +1107,7 @@ render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
   // (on_resize) already does SDL_WaitForGPUIdle() above, so this
   // call is safe in that path. Standalone callers (tests) must do
   // the same.
-  if (m_fi_transfer != nullptr) {
-    wsl::gfx::tracy_free_transfer (m_fi_transfer);
-    SDL_ReleaseGPUTransferBuffer (ctx->gpu_device, m_fi_transfer);
-    m_fi_transfer = nullptr;
-  }
+  m_fi_transfer.reset ();
 
   // The staging buffer must hold the *full* source texture, not
   // the downscaled target. The downsample happens on the CPU after
@@ -1134,8 +1120,9 @@ render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
   SDL_GPUTransferBufferCreateInfo info{};
   info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
   info.size = static_cast<uint32_t> (size);
-  m_fi_transfer = SDL_CreateGPUTransferBuffer (ctx->gpu_device, &info);
-  if (m_fi_transfer == nullptr) {
+
+  m_fi_transfer = gpu_transfer_buffer (ctx->gpu_device, info);
+  if (!m_fi_transfer) {
     wsl::log::rsc ()->warn (
         "render_window: failed to allocate Tracy frame-image "
         "staging buffer ({}x{} = {}B): {}",
@@ -1144,7 +1131,6 @@ render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
     m_fi_alloc_h = 0;
     return;
   }
-  wsl::gfx::tracy_alloc_transfer (m_fi_transfer, info.size);
   m_fi_alloc_w = src_w;
   m_fi_alloc_h = src_h;
 
@@ -1157,7 +1143,7 @@ render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
 void
 render_window::frame_image_issue_copy ()
 {
-  if (m_fi_transfer == nullptr || ctx->main_cmd == nullptr) {
+  if (!m_fi_transfer || ctx->main_cmd == nullptr) {
     return;
   }
   if (present_tex.texture_data == nullptr) {
@@ -1182,7 +1168,7 @@ render_window::frame_image_issue_copy ()
   if (m_fi_alloc_w != present_tex.width || m_fi_alloc_h != present_tex.height) {
     SDL_WaitForGPUIdle (ctx->gpu_device);
     frame_image_resize (present_tex.width, present_tex.height);
-    if (m_fi_transfer == nullptr) {
+    if (!m_fi_transfer) {
       return;
     }
   }
@@ -1206,7 +1192,7 @@ render_window::frame_image_issue_copy ()
   src_region.d = 1;
 
   SDL_GPUTextureTransferInfo dst_info{};
-  dst_info.transfer_buffer = m_fi_transfer;
+  dst_info.transfer_buffer = m_fi_transfer.get ();
   dst_info.offset = 0;
   // Pitch must match the row width of the destination texture
   // region; we use 4 bytes-per-pixel because the transfer buffer
@@ -1228,7 +1214,7 @@ render_window::frame_image_issue_copy ()
 void
 render_window::frame_image_submit (SDL_GPUFence *fence)
 {
-  if (m_fi_transfer == nullptr) {
+  if (!m_fi_transfer) {
     return;
   }
   if (fence == nullptr) {
@@ -1275,7 +1261,7 @@ render_window::frame_image_submit (SDL_GPUFence *fence)
 
   // Map the transfer buffer, downsample, hand to Tracy, unmap.
   void *mapped
-      = SDL_MapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer, false);
+      = SDL_MapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer.get (), false);
   if (mapped == nullptr) {
     wsl::log::gfx ()->warn (
         "render_window: SDL_MapGPUTransferBuffer failed for Tracy "
@@ -1338,7 +1324,7 @@ render_window::frame_image_submit (SDL_GPUFence *fence)
               static_cast<uint16_t> (dst_h), /*offset=*/0,
               /*flip=*/false);
 
-  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer);
+  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer.get ());
 }
 
 } // namespace gfx

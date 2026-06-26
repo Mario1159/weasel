@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wsl/input.hpp"
+#include "wsl/gfx/gpu_resources.hpp"
 #include "wsl/gfx/render_window.hpp"
 #include "wsl/gfx/render_context.hpp"
 #include "wsl/debug/debug_renderer.hpp"
@@ -19,10 +20,12 @@ struct debug_vertex
   glm::vec4 color;
 };
 
-class physics_debug_renderer : public JPH::DebugRenderer, public wsl::debug::debug_renderer_interface
+class physics_debug_renderer : public JPH::DebugRenderer,
+                               public wsl::debug::debug_renderer_interface
 {
 public:
-  physics_debug_renderer (wsl::gfx::render_window &window, wsl::gfx::render_context *ctx);
+  physics_debug_renderer (wsl::gfx::render_window &window,
+                          wsl::gfx::render_context *ctx);
   ~physics_debug_renderer () override;
 
   // debug_renderer_interface
@@ -60,19 +63,19 @@ private:
 
   size_t m_vertex_buffer_size = 0;
 
-  SDL_GPUGraphicsPipeline *m_pipeline_lines = nullptr;
-  SDL_GPUGraphicsPipeline *m_pipeline_tris = nullptr;
+  wsl::gfx::gpu_graphics_pipeline m_pipeline_lines;
+  wsl::gfx::gpu_graphics_pipeline m_pipeline_tris;
 
-  SDL_GPUBuffer *m_vertex_buffer = nullptr;
-  SDL_GPUTransferBuffer *m_upload_buffer = nullptr;
+  wsl::gfx::gpu_buffer m_vertex_buffer;
+  wsl::gfx::gpu_transfer_buffer m_upload_buffer;
 
   std::vector<debug_vertex> m_line_vertices;
   std::vector<debug_vertex> m_tri_vertices;
 
   wsl::gfx::render_context *m_ctx = nullptr;
 
-  SDL_GPUTexture *m_default_texture = nullptr;
-  SDL_GPUSampler *m_default_sampler = nullptr;
+  wsl::gfx::gpu_texture m_default_texture;
+  wsl::gfx::gpu_sampler m_default_sampler;
 
   void create_default_texture ();
   void destroy_default_resources ();
@@ -80,8 +83,9 @@ private:
   void flush (const glm::mat4 &vp);
 };
 
-std::unique_ptr<physics_debug_renderer> make_physics_debug_renderer (wsl::gfx::render_window &window,
-                                                                    wsl::gfx::render_context *ctx);
+std::unique_ptr<physics_debug_renderer>
+make_physics_debug_renderer (wsl::gfx::render_window &window,
+                             wsl::gfx::render_context *ctx);
 
 class debug_triangle_batch final : public JPH::RefTargetVirtual
 {
@@ -106,7 +110,7 @@ public:
   {
     if (--m_m_ref_count == 0) {
       delete this;
-}
+    }
   }
 
 private:

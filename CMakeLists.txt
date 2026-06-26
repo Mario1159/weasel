@@ -79,37 +79,6 @@ endif()
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
 
 # --- Dependencies ---
-# Use the vendored SDL3 main branch by default. The system's SDL3 (3.4.x
-# on most distros) has a Vulkan-backend bug on AMDVK/Mesa where storage
-# buffer descriptors come back as `VkBuffer 0x0` because the underlying
-# allocation isn't completed before the first descriptor update, which
-# segfaults the next compute dispatch. The SDL3 main branch (3.5+) has
-# the fix. Toggle off to fall back to the system SDL3 (e.g. for a
-# release build once 3.5+ is widely packaged).
-option(WEASEL_USE_VENDORED_SDL3 "Build against the vendored SDL3 in vendor/sdl3" ON)
-if(WEASEL_USE_VENDORED_SDL3)
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/sdl3/CMakeLists.txt")
-        message(FATAL_ERROR
-            "WEASEL_USE_VENDORED_SDL3=ON but vendor/sdl3 is missing. "
-            "Run: git clone --depth 1 --branch main "
-            "https://github.com/libsdl-org/SDL.git vendor/sdl3")
-    endif()
-    # SDL3's CMakeLists.txt is at the repo root; it creates the
-    # `SDL3::SDL3` target plus all the sub-targets the engine links
-    # against (SDL3_image, SDL3_mixer use the same SDL3::SDL3).
-    #
-    # SDL_STATIC_PIC=ON forces the static archive to be compiled with
-    # -fPIC. Required because wsl/editor are .so targets that link
-    # SDL3 statically; without PIC, ld.lld refuses with
-    # "R_X86_64_PC32 cannot be used against symbol ..." when resolving
-    # SDL_waylanddyn.c and friends.
-    set(SDL_STATIC_PIC ON CACHE BOOL "Build SDL3 static lib with -fPIC" FORCE)
-    add_subdirectory(vendor/sdl3 EXCLUDE_FROM_ALL)
-    message(STATUS "Using vendored SDL3 from vendor/sdl3")
-else()
-    find_package(SDL3 CONFIG REQUIRED)
-    message(STATUS "Using system SDL3 from ${SDL3_DIR}")
-endif()
 
 # On Apple Silicon macOS, Homebrew installs libarchive headers under
 # /opt/homebrew/opt/libarchive/include (and the lib at
@@ -141,6 +110,19 @@ endif()
 
 include(cmake/CPM.cmake)
 include(cmake/ClangRepl.cmake)
+
+# SDL_STATIC_PIC=ON forces the static archive to be compiled with
+# -fPIC. Required because wsl/editor are .so targets that link
+# SDL3 statically; without PIC, ld.lld refuses with
+# "R_X86_64_PC32 cannot be used against symbol ..." when resolving
+# SDL_waylanddyn.c and friends.
+set(SDL_STATIC_PIC ON CACHE BOOL "Build SDL3 static lib with -fPIC" FORCE)
+CPMAddPackage(
+    NAME SDL3
+    GITHUB_REPOSITORY libsdl-org/SDL
+    GIT_TAG release-3.4.10
+    SYSTEM ON
+)
 
 CPMAddPackage(
     NAME stb
