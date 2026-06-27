@@ -171,12 +171,19 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
     register_factory_types (*m_runtime_ctx);
   }
 
-  register_debug_metadata ();
-
   // Build the cached system list + sorted id set now that all unique_ptr
   // members have been constructed. This is the only place the cache needs
   // to be built at runtime — the system membership is fixed after init.
   rebuild_system_cache ();
+
+  // MUST be called AFTER rebuild_system_cache(): register_debug_metadata
+  // iterates `to_vec()` to register each system's iterations. If the
+  // cached system list is still empty here, every core system's
+  // `m_iterations` is left empty and per-frame iterations such as the
+  // transform system's `update_world_transforms` never run — which
+  // manifests as the world_transform never refreshing and any entity
+  // driven by mouse input appearing "frozen".
+  register_debug_metadata ();
 
   sync_activation ();
 

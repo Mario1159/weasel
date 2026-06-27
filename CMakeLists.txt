@@ -856,6 +856,32 @@ if(DEFINED slang_SOURCE_DIR)
     )
 endif()
 
+# Tracy: the engine's public headers (wsl/sys/system.hpp) use
+# ZoneScopedN / ZoneText / FrameMark, so consumers must be able to
+# #include <tracy/Tracy.hpp>. Tracy.hpp itself pulls in siblings from
+# the sibling `common/` and `client/` directories via `#include
+# "../common/..."` / `#include "../client/..."`, so those have to be
+# installed at matching relative paths under <prefix>/include/ as well.
+# Without these, any project that links wsl fails to find
+# <tracy/Tracy.hpp> at compile time.
+if(DEFINED Tracy_SOURCE_DIR)
+    install(DIRECTORY ${Tracy_SOURCE_DIR}/public/tracy/
+        DESTINATION include/tracy
+        COMPONENT Engine
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+    install(DIRECTORY ${Tracy_SOURCE_DIR}/public/common/
+        DESTINATION include/common
+        COMPONENT Engine
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+    install(DIRECTORY ${Tracy_SOURCE_DIR}/public/client/
+        DESTINATION include/client
+        COMPONENT Engine
+        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
+    )
+endif()
+
 if(DEFINED SDL3_image_SOURCE_DIR)
     install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
         DESTINATION include
