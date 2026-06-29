@@ -448,15 +448,29 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
     case game_view_mode::mode_2d_edit:
       out.using_engine_default = true;
       {
-        float const half_w = (float)w * 0.5F / editor_camera_2d.zoom;
-        float const half_h = (float)h * 0.5F / editor_camera_2d.zoom;
         out.world_pos
             = glm::vec3 (editor_cam_2d_pos.x, editor_cam_2d_pos.y, 0.0F);
-        out.view = glm::mat4 (1.0F);
-        out.proj = glm::ortho (editor_cam_2d_pos.x - half_w,
-                               editor_cam_2d_pos.x + half_w,
-                               editor_cam_2d_pos.y + half_h,
-                               editor_cam_2d_pos.y - half_h, -1.0F, 1.0F);
+        // World (0, 0) lands at the top-left of the game view in
+        // both the 2D and 3D paths. The projection is
+        // `ortho(0, w, h, 0, -1, 1)` — Y=0 is the top in
+        // projection space, which becomes the top of the framebuffer
+        // after the SDL GPU viewport Y-flip. The camera's
+        // `position` is the *top-left* of the visible area (matching
+        // the 3D-view top-left convention), and the zoom scales
+        // world units. Sprite `transform_2d.position` is therefore
+        // in screen-pixel coordinates with (0, 0) at the top-left,
+        // just like the 3D view.
+        out.proj = glm::ortho (0.0F, (float)w, (float)h, 0.0F, -1.0F, 1.0F);
+
+        glm::mat4 view_mat = glm::mat4 (1.0F);
+        view_mat
+            = glm::scale (view_mat, glm::vec3 (editor_camera_2d.zoom,
+                                               editor_camera_2d.zoom, 1.0F));
+        view_mat = glm::translate (
+            view_mat,
+            glm::vec3 (-editor_cam_2d_pos.x * editor_camera_2d.zoom,
+                       -editor_cam_2d_pos.y * editor_camera_2d.zoom, 0.0F));
+        out.view = view_mat;
         out.valid = true;
       }
       break;
@@ -511,13 +525,20 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
           float const vp_h = cam2d.use_window_as_viewport
                                  ? static_cast<float> (h)
                                  : cam2d.viewport_size.y;
-          float const half_w = vp_w * 0.5F / cam2d.zoom;
-          float const half_h = vp_h * 0.5F / cam2d.zoom;
           out.world_pos = glm::vec3 (t2d.position.x, t2d.position.y, 0.0F);
-          out.view = glm::mat4 (1.0F);
-          out.proj = glm::ortho (
-              t2d.position.x - half_w, t2d.position.x + half_w,
-              t2d.position.y + half_h, t2d.position.y - half_h, -1.0F, 1.0F);
+          // Same screen-space convention as the 3D view: world
+          // (0, 0) lands at the top-left of the game view. The
+          // camera's `position` is the *top-left* of the visible
+          // area, and the zoom scales world units.
+          out.proj = glm::ortho (0.0F, vp_w, (float)vp_h, 0.0F, -1.0F, 1.0F);
+
+          glm::mat4 view_mat = glm::mat4 (1.0F);
+          view_mat
+              = glm::scale (view_mat, glm::vec3 (cam2d.zoom, cam2d.zoom, 1.0F));
+          view_mat = glm::translate (
+              view_mat, glm::vec3 (-t2d.position.x * cam2d.zoom,
+                                   -t2d.position.y * cam2d.zoom, 0.0F));
+          out.view = view_mat;
           out.valid = true;
           out.entity = cam_entity;
           out.using_engine_default = false;
@@ -547,13 +568,18 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
                                                       : cam2d.viewport_size.x;
       float const vp_h = cam2d.use_window_as_viewport ? static_cast<float> (h)
                                                       : cam2d.viewport_size.y;
-      float const half_w = vp_w * 0.5F / cam2d.zoom;
-      float const half_h = vp_h * 0.5F / cam2d.zoom;
       out.world_pos = glm::vec3 (t2d.position.x, t2d.position.y, 0.0F);
-      out.view = glm::mat4 (1.0F);
-      out.proj = glm::ortho (t2d.position.x - half_w, t2d.position.x + half_w,
-                             t2d.position.y + half_h, t2d.position.y - half_h,
-                             -1.0F, 1.0F);
+      // Top-left convention: the camera's `position` is the top-left
+      // of the visible area, matching the 3D-view top-left
+      // convention. The zoom scales world units.
+      glm::mat4 view_mat = glm::mat4 (1.0F);
+      view_mat
+          = glm::scale (view_mat, glm::vec3 (cam2d.zoom, cam2d.zoom, 1.0F));
+      view_mat = glm::translate (
+          view_mat, glm::vec3 (-t2d.position.x * cam2d.zoom,
+                               -t2d.position.y * cam2d.zoom, 0.0F));
+      out.view = view_mat;
+      out.proj = glm::ortho (0.0F, vp_w, (float)vp_h, 0.0F, -1.0F, 1.0F);
       out.valid = true;
     }
   } else if (running && out.using_engine_default) {

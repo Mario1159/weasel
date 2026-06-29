@@ -112,16 +112,28 @@ sys::build_render_frame (entt::registry &registry,
       } else {
         const auto &cam2d = registry.get<comp::camera_2d> (effective_camera);
         const auto &t2d = registry.get<comp::transform_2d> (effective_camera);
-        float const half_w = (float)w * 0.5F / cam2d.zoom;
-        float const half_h = (float)h * 0.5F / cam2d.zoom;
 
         out.view.valid = true;
         out.view.aspect_ratio = aspect;
         out.view.world_position = glm::vec3 (t2d.position.x, t2d.position.y, 0);
-        out.view.view = glm::mat4 (1.0F);
-        out.view.proj = glm::ortho (
-            t2d.position.x - half_w, t2d.position.x + half_w,
-            t2d.position.y + half_h, t2d.position.y - half_h, -1.0F, 1.0F);
+        // World (0, 0) lands at the top-left of the game view in
+        // both the 2D and 3D paths. The projection is
+        // `ortho(0, w, h, 0, -1, 1)` — Y=0 is the top in
+        // projection space, which becomes the top of the framebuffer
+        // after the SDL GPU viewport Y-flip. The camera's
+        // `position` is the *top-left* of the visible area, and
+        // `zoom` scales world units. Sprite `transform_2d.position`
+        // is therefore in screen-pixel coordinates with (0, 0) at
+        // the top-left, just like the 3D view.
+        glm::mat4 view_mat = glm::mat4 (1.0F);
+        view_mat
+            = glm::scale (view_mat, glm::vec3 (cam2d.zoom, cam2d.zoom, 1.0F));
+        view_mat = glm::translate (
+            view_mat, glm::vec3 (-t2d.position.x * cam2d.zoom,
+                                 -t2d.position.y * cam2d.zoom, 0.0F));
+        out.view.view = view_mat;
+        out.view.proj
+            = glm::ortho (0.0F, (float)w, (float)h, 0.0F, -1.0F, 1.0F);
         out.is_2d_view = true;
       }
       out.view.view_proj = out.view.proj * out.view.view;
@@ -231,15 +243,19 @@ sys::build_camera_view_state (entt::registry &registry,
 
     float const vp_w = static_cast<float> (window_width);
     float const vp_h = static_cast<float> (window_height);
-    float const half_w = vp_w * 0.5F / cam2d.zoom;
-    float const half_h = vp_h * 0.5F / cam2d.zoom;
 
     out.valid = true;
     out.world_position = glm::vec3 (t2d.position.x, t2d.position.y, 0.0F);
-    out.view = glm::mat4 (1.0F);
-    out.proj = glm::ortho (t2d.position.x - half_w, t2d.position.x + half_w,
-                           t2d.position.y + half_h, t2d.position.y - half_h,
-                           -1.0F, 1.0F);
+    // Top-left convention: the camera's `position` is the top-left
+    // of the visible area, matching the 3D-view top-left
+    // convention. The zoom scales world units.
+    glm::mat4 view_mat = glm::mat4 (1.0F);
+    view_mat = glm::scale (view_mat, glm::vec3 (cam2d.zoom, cam2d.zoom, 1.0F));
+    view_mat = glm::translate (view_mat,
+                               glm::vec3 (-t2d.position.x * cam2d.zoom,
+                                          -t2d.position.y * cam2d.zoom, 0.0F));
+    out.view = view_mat;
+    out.proj = glm::ortho (0.0F, vp_w, vp_h, 0.0F, -1.0F, 1.0F);
     out.view_proj = out.proj * out.view;
   } else {
     // Fallback camera

@@ -666,8 +666,29 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
             {
               ZoneScopedN ("render_viewport_full::2d_setup");
-              // Set 2D projection from the already-resolved camera matrix
-              r2d->set_projection (sub.view.proj);
+              // Only feed the camera's projection into the 2D pass
+              // when we are actually using a 2D camera. When the
+              // active camera is a 3D camera, `sub.view.proj` is a
+              // perspective matrix that would distort/warp the 2D
+              // sprites and push them outside the visible
+              // framebuffer. Leaving the projection unset here lets
+              // the batch renderer fall back to its default screen-
+              // space orthographic projection (see
+              // batch_renderer_2d::build_and_upload), which
+              // correctly places the sprites in pixel coordinates
+              // on top of the 3D content already in the HDR scene
+              // target.
+              //
+              // For the 2D case the camera's `position` and `zoom`
+              // now live in `sub.view.view` (the view transform).
+              // The batch renderer only honours an override
+              // projection, so we must pre-multiply the view into
+              // the projection here — otherwise panning / zooming
+              // the editor 2D camera has no effect on the rendered
+              // 2D sprites and they stay anchored at (0, 0).
+              if (sub.is_2d_view) {
+                r2d->set_projection (sub.view.proj * sub.view.view);
+              }
 
               // Build sprite queue (no GPU work yet)
               render_2d_sys->render_record_draw_cmd (&registry);
@@ -712,11 +733,23 @@ core_systems::render_impl (wsl::gfx::render_window &window,
             }
             {
               ZoneScopedN ("render_viewport_full::2d_end_pass");
-              // Skip the bloom/tonemap chain for the 2D sprite pass;
-              // the 3D viewport end already ran postprocess_hdr_bloom
-              // (and if we let it run again the swapchain composite
-              // would write 2D content into HDR and re-tonemap it).
-              window.end_3d_pass (false);
+              // The 2D sprite pass rendered into the same HDR scene
+              // target that the 3D pass uses. The 3D pass's
+              // `end_3d_pass(true)` already ran postprocess_hdr_bloom
+              // once (writing the 3D-only result to the swapchain and
+              // present_tex). We MUST run the composite+tonemap again
+              // here so the sprite content — which is now blended on
+              // top of hdr_scene — reaches the swapchain and the
+              // present_tex that the game view samples. Skipping this
+              // leaves the sprite visible only inside hdr_scene (which
+              // is what shows up in RenderDoc but never on screen).
+              //
+              // The bloom source is unchanged by the 2D pass (the
+              // sprite shader does not write to SV_Target1), so the
+              // bloom extraction here is a no-op against the bloom
+              // target; the only effective change is the final
+              // composite reading the now-updated hdr_scene.
+              window.end_3d_pass (true);
             }
           }
         };

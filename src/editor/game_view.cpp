@@ -634,18 +634,45 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
       // 2D camera controls (pan / zoom)
       if (img_hovered) {
+        // Mouse position in the image's local pixel coordinates
+        // (origin at the image's top-left).
+        ImVec2 const mouse_global = ImGui::GetMousePos ();
+        float const mouse_x = mouse_global.x - img_min.x;
+        float const mouse_y = mouse_global.y - img_min.y;
+
         float const wheel = ImGui::GetIO ().MouseWheel;
         if (wheel != 0.0F) {
           float &zoom = m_editor_ctx->editor_camera_2d.zoom;
+          float const old_zoom = zoom;
           zoom = std::clamp (zoom + wheel * 0.1F, 0.01F, 100.0F);
+
+          // Zoom centered on the mouse: keep the world point that
+          // was under the cursor still under it after the zoom
+          // change. Derived from
+          //   new_pos = world - mouse/new_zoom,
+          //   world  = pos      + mouse/old_zoom,
+          // so dpos = mouse * (1/old_zoom - 1/new_zoom).
+          if (zoom != old_zoom) {
+            float const dpos = (1.0F / old_zoom) - (1.0F / zoom);
+            m_editor_ctx->editor_cam_2d_pos.x += mouse_x * dpos;
+            m_editor_ctx->editor_cam_2d_pos.y += mouse_y * dpos;
+          }
         }
 
         if (ImGui::IsMouseDown (ImGuiMouseButton_Middle)) {
           ImVec2 const delta = ImGui::GetIO ().MouseDelta;
           if (delta.x != 0.0F || delta.y != 0.0F) {
             float const inv_zoom = 1.0F / m_editor_ctx->editor_camera_2d.zoom;
+            // "Grab and drag": dragging the world toward the mouse
+            // moves the camera in the opposite direction. Both X
+            // and Y are subtractions because the view transform
+            // applies `(world - pos) * zoom` to map world → screen,
+            // and the screen Y axis points down (projection is
+            // `ortho(0, w, h, 0, ...)`), so a positive screen-Y
+            // delta requires a positive world-Y delta at the same
+            // world point, which means pos.y must decrease.
             m_editor_ctx->editor_cam_2d_pos.x -= delta.x * inv_zoom;
-            m_editor_ctx->editor_cam_2d_pos.y += delta.y * inv_zoom;
+            m_editor_ctx->editor_cam_2d_pos.y -= delta.y * inv_zoom;
           }
         }
       }
@@ -667,13 +694,27 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         // Compute the effective zoom so that world-to-screen mapping matches
         // the rendered image exactly.
         float const half_w = 1.0F / rc.proj[0][0];
-        float const effective_zoom = img_size.x / (2.0F * half_w);
+        float const half_h = 1.0F / rc.proj[1][1];
+        float const world_w = 2.0F * half_w;
+        float const world_h = 2.0F * half_h;
+        float const effective_zoom = img_size.x / world_w;
+
+        // ImGizmo2D uses a centred convention: it treats the camera
+        // position as the *centre* of the visible area. Our editor
+        // 2D camera uses a top-left convention (matching the 3D
+        // view), so we pass the centre of the visible area (in
+        // world units) and include the camera zoom in the ImGizmo2D
+        // scale factor.
+        float const cam_zoom = m_editor_ctx->editor_camera_2d.zoom;
+        float const center_x
+            = m_editor_ctx->editor_cam_2d_pos.x + world_w / (2.0F * cam_zoom);
+        float const center_y
+            = m_editor_ctx->editor_cam_2d_pos.y + world_h / (2.0F * cam_zoom);
+        float const imguizmo_zoom = effective_zoom * cam_zoom;
 
         ImGizmo2D::SetDrawList (dl);
         ImGizmo2D::SetViewRect (img_min, img_size);
-        ImGizmo2D::SetViewTransform (m_editor_ctx->editor_cam_2d_pos.x,
-                                     m_editor_ctx->editor_cam_2d_pos.y,
-                                     effective_zoom);
+        ImGizmo2D::SetViewTransform (center_x, center_y, imguizmo_zoom);
         ImGizmo2D::BeginFrame ();
 
         wsl::comp::transform_2d &t2d = registry.get<wsl::comp::transform_2d> (
@@ -725,11 +766,14 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         float const vw = rendering.root_viewport_virtual_size.x;
         float const vh = rendering.root_viewport_virtual_size.y;
 
+        // Top-left origin convention: the virtual viewport spans
+        // (0, 0) → (vw, vh) in world space, matching the 3D view's
+        // top-left origin.
         glm::vec3 const corners[4] = {
-          glm::vec3 (-vw * 0.5F, -vh * 0.5F, 0.0F),
-          glm::vec3 (vw * 0.5F, -vh * 0.5F, 0.0F),
-          glm::vec3 (vw * 0.5F, vh * 0.5F, 0.0F),
-          glm::vec3 (-vw * 0.5F, vh * 0.5F, 0.0F),
+          glm::vec3 (0.0F, 0.0F, 0.0F),
+          glm::vec3 (vw, 0.0F, 0.0F),
+          glm::vec3 (vw, vh, 0.0F),
+          glm::vec3 (0.0F, vh, 0.0F),
         };
 
         ImVec2 screen[4];
