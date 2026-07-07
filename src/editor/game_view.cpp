@@ -1130,7 +1130,7 @@ game_view::draw_camera_header (entt::registry &registry,
 
       auto add_camera_opts = [&] (auto cam_view) {
         for (entt::entity const e : cam_view) {
-          if (wsl::comp::find_nearest_viewport (reg, e) != target_vp) {
+          if (!wsl::comp::entity_in_viewport_scope (reg, e, target_vp)) {
             continue;
           }
           const std::string &name = scene->get_entity_name (e);

@@ -19,7 +19,7 @@ PSOut fsMain(PSInput input)
     float4 c = u_Skybox.Sample(u_Sampler, dir);
 
     PSOut o;
-    o.color = c;
-    o.bloom = float4(0,0,0,0); // keep bloom empty
+    o.color = float4(c.rgb, 1.0); // skybox is always opaque
+    o.bloom = float4(0,0,0,0);     // keep bloom empty
     return o;
 }

@@ -80,8 +80,13 @@ batch_renderer_2d::build_and_upload ()
   uint32_t batch_start = 0;
 
   for (const auto &cmd : m_queue) {
-    auto img_handle = m_res_mgr->get (cmd.image);
-    SDL_GPUTexture *tex = img_handle ? img_handle->texture.get () : nullptr;
+    SDL_GPUTexture *tex = nullptr;
+    if (cmd.texture_override != nullptr) {
+      tex = cmd.texture_override;
+    } else {
+      auto img_handle = m_res_mgr->get (cmd.image);
+      tex = img_handle ? img_handle->texture.get () : nullptr;
+    }
 
     if (tex != current_texture || m_vertices.size () + 6 > max_vertices) {
       if (current_texture != nullptr || !m_vertices.empty ()) {

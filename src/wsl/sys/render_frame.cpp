@@ -2,6 +2,7 @@
 
 #include "../comp/hierarchy.hpp"
 #include "../comp/model_instance_3d.hpp"
+#include "../comp/transform.hpp"
 #include "../comp/singl/editor_context.hpp"
 #include "../comp/singl/rendering_manager.hpp"
 #include "../comp/singl/runtime_context.hpp"
@@ -16,8 +17,10 @@
 #include <cstdint>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
@@ -49,7 +52,10 @@ sys::build_render_frame (entt::registry &registry,
 
   entt::entity effective_camera = entt::null;
 
-  if (runtime_ctx.editor_ctx != nullptr) {
+  // Main viewport (target_viewport == entt::null) in editor mode uses the
+  // editor's camera selection. Subviewports always use their own camera
+  // fields so that offscreen rendering is independent of the toolbar.
+  if (runtime_ctx.editor_ctx != nullptr && target_viewport == entt::null) {
     auto &editor_ctx = *runtime_ctx.editor_ctx;
     wsl::comp::singl::editor_context::resolved_camera resolved_camera;
     if (!editor_ctx.resolve_game_view_camera (registry, scene,
@@ -78,20 +84,84 @@ sys::build_render_frame (entt::registry &registry,
     }
   } else {
     // Determine the camera to use for this viewport
-    if (target_viewport != entt::null) {
-      if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
-        effective_camera = sv->camera.value;
-      }
-    } else {
-      effective_camera = scene->camera;
-    }
-
     uint32_t w;
     uint32_t h;
     runtime_ctx.window.get_size (w, h);
-    float const aspect = (w > 0 && h > 0) ? (float)w / (float)h : 1.0F;
+    float aspect = (w > 0 && h > 0) ? (float)w / (float)h : 1.0F;
 
-    if (effective_camera != entt::null
+    if (target_viewport != entt::null) {
+      if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
+        w = static_cast<uint32_t> (sv->virtual_size.x);
+        h = static_cast<uint32_t> (sv->virtual_size.y);
+
+        // For 3D subviewport quads, the camera aspect ratio must match
+        // world_quad_size so the offscreen texture fills the quad without
+        // distortion.  virtual_size is only the 2D coordinate space inside
+        // the subviewport and must not affect 3D scaling.
+        bool const is_3d_quad
+            = registry.all_of<comp::transform, comp::world_transform> (
+                target_viewport);
+        if (is_3d_quad && sv->world_quad_size.y > 0.0F) {
+          aspect = sv->world_quad_size.x / sv->world_quad_size.y;
+        } else {
+          aspect = (h > 0) ? (float)w / (float)h : 1.0F;
+        }
+      }
+    }
+
+    // In editor mode, when the user has selected a specific camera (editor
+    // camera or a camera entity) for the preview, respect that choice even
+    // for subviewports.  Only fall back to the subviewport's internal camera
+    // when the editor is using "Default Runtime Camera" or when there is no
+    // editor context.
+    bool use_editor_camera = false;
+    if (runtime_ctx.editor_ctx != nullptr && !runtime_ctx.is_running
+        && target_viewport != entt::null
+        && runtime_ctx.editor_ctx->game_view_selected_viewport
+               == target_viewport) {
+      auto &editor_ctx = *runtime_ctx.editor_ctx;
+      wsl::comp::singl::editor_context::resolved_camera resolved_camera;
+      if (editor_ctx.resolve_game_view_camera (registry, scene,
+                                               resolved_camera)) {
+        if (resolved_camera.valid) {
+          use_editor_camera = true;
+          out.view.valid = true;
+          out.view.aspect_ratio = aspect;
+          out.view.world_position = resolved_camera.world_pos;
+          out.view.view = resolved_camera.view;
+          out.view.proj = resolved_camera.proj;
+          out.view.view_proj = resolved_camera.vp;
+          effective_camera = resolved_camera.entity;
+
+          // Determine 2D mode from editor camera selection
+          auto mode = editor_ctx.resolve_game_view_mode (registry, scene);
+          out.is_2d_view = (mode
+                                == wsl::comp::singl::editor_context::
+                                    game_view_mode::mode_2d_edit
+                            || mode
+                                   == wsl::comp::singl::editor_context::
+                                       game_view_mode::mode_2d_view);
+        }
+      }
+    }
+
+    if (!use_editor_camera) {
+      if (target_viewport != entt::null) {
+        if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
+          if (sv->camera_3d.value != entt::null
+              && registry.valid (sv->camera_3d.value)) {
+            effective_camera = sv->camera_3d.value;
+          } else if (sv->camera_2d.value != entt::null
+                     && registry.valid (sv->camera_2d.value)) {
+            effective_camera = sv->camera_2d.value;
+          }
+        }
+      } else {
+        effective_camera = scene->camera;
+      }
+    }
+
+    if (!use_editor_camera && effective_camera != entt::null
         && (registry.all_of<comp::camera, comp::world_transform> (
                 effective_camera)
             || registry.all_of<comp::camera_2d, comp::transform_2d> (
@@ -103,10 +173,34 @@ sys::build_render_frame (entt::registry &registry,
             = registry.get<comp::world_transform> (effective_camera);
         glm::mat4 const wtm = wt.value;
 
+        // When the camera lives inside a subviewport its world_transform
+        // inherits the parent subviewport's scale (world_quad_size).  Scale
+        // in the view matrix distorts the projection frustum and causes both
+        // the skybox and 3D models to be clipped.  We remove the scale by
+        // orthonormalising the 3x3 part while keeping the world position.
+        bool const cam_is_inside_viewport
+            = (target_viewport != entt::null
+               && comp::find_nearest_viewport (registry, effective_camera)
+                      == target_viewport);
+
+        glm::mat4 cam_transform = wtm;
+        if (cam_is_inside_viewport) {
+          // The camera's world_transform contains parent scale, which
+          // distorts the skybox and frustum.  glm::decompose extracts the
+          // pure rotation (quaternion) and translation without scale,
+          // skew or perspective — numerically stable and exact.
+          glm::vec3 scale, skew, translation;
+          glm::vec4 perspective;
+          glm::quat rotation;
+          glm::decompose (wtm, scale, rotation, translation, skew, perspective);
+          cam_transform = glm::translate (glm::mat4 (1.0F), translation)
+                          * glm::mat4_cast (rotation);
+        }
+
         out.view.valid = true;
         out.view.aspect_ratio = aspect;
-        out.view.world_position = glm::vec3 (wtm[3]);
-        out.view.view = glm::inverse (wtm);
+        out.view.world_position = glm::vec3 (cam_transform[3]);
+        out.view.view = glm::inverse (cam_transform);
         out.view.proj = glm::perspective (glm::radians (cam.fov), aspect,
                                           cam.near, cam.far);
       } else {
@@ -137,7 +231,7 @@ sys::build_render_frame (entt::registry &registry,
         out.is_2d_view = true;
       }
       out.view.view_proj = out.view.proj * out.view.view;
-    } else {
+    } else if (!use_editor_camera) {
       // Standalone Fallback: Look at origin from (0,0,5)
       out.view.valid = true;
       out.view.aspect_ratio = aspect;
@@ -171,7 +265,7 @@ sys::build_render_frame (entt::registry &registry,
     for (entt::entity const entity : draw_view) {
       // Hierarchical filtering: only collect entities belonging to this
       // viewport
-      if (comp::find_nearest_viewport (registry, entity) != target_viewport) {
+      if (!comp::entity_in_viewport_scope (registry, entity, target_viewport)) {
         continue;
       }
 

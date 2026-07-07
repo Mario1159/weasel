@@ -1163,10 +1163,10 @@ gfx::scene_renderer::create_skybox_pipeline ()
   pipe.fragment_shader = frag;
   pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 
-  // depth: draw at far plane but don't write depth
+  // depth: always pass so nothing can clip the skybox, don't write depth
   pipe.depth_stencil_state.enable_depth_test = true;
   pipe.depth_stencil_state.enable_depth_write = false;
-  pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+  pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
 
   // no culling needed for fullscreen triangle
   pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
@@ -1218,8 +1218,9 @@ gfx::scene_renderer::draw_skybox (const gfx::cubemap &cubemap,
   }
 
   // Reconstruct the camera's world orientation from the view matrix.
-  // The view matrix is inverse(camera_transform). For a rotation-only
-  // matrix, the inverse is the transpose.
+  // The view matrix is inverse(camera_transform).  Since build_render_frame
+  // now guarantees the camera matrix is orthonormal (no parent scale),
+  // the inverse of the 3x3 part is simply its transpose.
   glm::mat3 const rot = glm::transpose (glm::mat3 (view));
   glm::mat4 const camera_rot = glm::mat4 (rot);
 

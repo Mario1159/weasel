@@ -183,6 +183,9 @@ comp::singl::runtime_context::set_editor_ctx (
   }
   world.set_editor_context (editor_ctx);
   resource_manager.set_editor_context (editor_ctx);
+  if (core_systems != nullptr) {
+    core_systems->set_editor_ctx (editor_ctx);
+  }
 }
 
 void

@@ -68,7 +68,7 @@ public:
   entt::entity game_view_camera_entity = entt::null;
 
   // Viewport combobox selection in the game view toolbar.
-  // entt::null = root viewport (use rendering_manager::render_viewport).
+  // entt::null = root viewport.
   entt::entity game_view_selected_viewport = entt::null;
 
   // Game view mode determines editor interactions and camera.

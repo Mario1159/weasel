@@ -2,6 +2,8 @@
 
 #include "../../gfx/scene_renderer.hpp"
 #include "../../gfx/batch_renderer_2d.hpp"
+#include "../../gfx/model_3d.hpp"
+#include "../../gfx/subviewport_target.hpp"
 #include "../../gfx/viewport.hpp"
 #include "../../rsc/resource_manager.hpp"
 #include "../component_meta.hpp"
@@ -10,6 +12,7 @@
 #include <cereal/cereal.hpp>
 #include <entt/entt.hpp>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace wsl
@@ -63,6 +66,12 @@ struct rendering_manager : singleton_component
   //! Design/virtual size for the root viewport, used by the editor 2D game view
   //! as a guizmo reference.
   math::vec2f root_viewport_virtual_size{ 1920.0F, 1080.0F };
+
+  //! Offscreen GPU targets for subviewport entities.
+  std::unordered_map<entt::entity, gfx::subviewport_target> subviewport_targets;
+
+  //! Shared unit-quad model used to draw subviewport contents in 3D space.
+  std::shared_ptr<gfx::model_3d> subviewport_quad_model;
 
   gfx::scene_renderer &
   ensure_renderer (wsl::gfx::render_window &window,

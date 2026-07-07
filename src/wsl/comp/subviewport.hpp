@@ -22,6 +22,9 @@ class runtime_context;
 struct subviewport_camera_ui
 {
   entt::entity value = entt::null;
+  //! If true, the inspector only shows descendants with camera_2d.
+  //! If false, it only shows descendants with camera (3D).
+  bool filter_2d = false;
 
   bool custom_inspect (const char *label,
                        comp::singl::runtime_context *runtime_ctx);
@@ -58,8 +61,10 @@ struct subviewport : world_component
   float clear_b = 0.0F;
   float clear_a = 1.0F;
 
-  //! Camera entity for this viewport.
-  subviewport_camera_ui camera{};
+  //! 2D camera entity for this viewport.
+  subviewport_camera_ui camera_2d{ .filter_2d = true };
+  //! 3D camera entity for this viewport.
+  subviewport_camera_ui camera_3d{ .filter_2d = false };
 
   //! Size of the quad when rendered in 3D space.
   math::vec2f world_quad_size{ 1.0F, 1.0F };
@@ -95,7 +100,20 @@ struct subviewport : world_component
     serialize_field_if_diff (archive, "clear_g", clear_g, def.clear_g);
     serialize_field_if_diff (archive, "clear_b", clear_b, def.clear_b);
     serialize_field_if_diff (archive, "clear_a", clear_a, def.clear_a);
-    serialize_field_if_diff (archive, "camera", camera.value, def.camera.value);
+    serialize_field_if_diff (archive, "camera_2d", camera_2d.value,
+                             def.camera_2d.value);
+    serialize_field_if_diff (archive, "camera_3d", camera_3d.value,
+                             def.camera_3d.value);
+    // Backward compatibility: old single "camera" field maps to camera_3d
+    if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+      if (camera_3d.value == entt::null) {
+        try {
+          archive (cereal::make_nvp ("camera", camera_3d.value));
+        } catch (const std::exception &) {
+          /* old field not present */
+        }
+      }
+    }
     serialize_field_if_diff (archive, "world_quad_size", world_quad_size,
                              def.world_quad_size);
     serialize_field_if_diff (archive, "container_size", container_size,
@@ -117,5 +135,24 @@ struct subviewport : world_component
  */
 entt::entity find_nearest_viewport (entt::registry &registry,
                                     entt::entity entity);
+
+/**
+ * @brief Finds the viewport that owns an entity through its parent chain.
+ *
+ * For subviewport entities this returns the containing parent viewport, not the
+ * entity itself. This is useful when traversing/rendering viewport nodes.
+ */
+entt::entity find_parent_viewport (entt::registry &registry,
+                                   entt::entity entity);
+
+/**
+ * @brief Returns true when an entity belongs to the render scope of a viewport.
+ *
+ * Root viewport membership is represented by target_viewport == entt::null.
+ * Subviewport membership requires a descendant entity; the subviewport entity
+ * itself is not part of its own render contents.
+ */
+bool entity_in_viewport_scope (entt::registry &registry, entt::entity entity,
+                               entt::entity target_viewport);
 
 } // namespace wsl::comp

@@ -278,17 +278,9 @@ editor_context::resolve_game_view_mode (entt::registry &registry,
     return game_view_mode::mode_3d_edit;
   }
 
-  // Determine target viewport
-  entt::entity target_viewport = entt::null;
-  if (game_view_selected_viewport != entt::null) {
-    target_viewport = game_view_selected_viewport;
-  } else {
-    auto &ctx = scene->get_registry ().ctx ();
-    if (ctx.contains<comp::singl::rendering_manager> ()) {
-      target_viewport
-          = ctx.get<comp::singl::rendering_manager> ().render_viewport;
-    }
-  }
+  // In edit mode, the toolbar selection is authoritative.
+  // entt::null explicitly means the root viewport.
+  entt::entity target_viewport = game_view_selected_viewport;
 
   switch (game_view_camera_selection) {
   case game_view_camera_sel::editor_3d:
@@ -303,7 +295,13 @@ editor_context::resolve_game_view_mode (entt::registry &registry,
     if (game_view_camera_selection == game_view_camera_sel::default_runtime) {
       if (target_viewport != entt::null) {
         if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
-          cam_entity = sv->camera.value;
+          if (sv->camera_3d.value != entt::null
+              && registry.valid (sv->camera_3d.value)) {
+            cam_entity = sv->camera_3d.value;
+          } else if (sv->camera_2d.value != entt::null
+                     && registry.valid (sv->camera_2d.value)) {
+            cam_entity = sv->camera_2d.value;
+          }
         }
       } else {
         cam_entity = scene->camera;
@@ -391,23 +389,24 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
       target_viewport = rendering.render_viewport;
     }
   } else {
-    // In edit mode, use the toolbar selection.
-    if (game_view_selected_viewport != entt::null) {
-      target_viewport = game_view_selected_viewport;
-    } else {
-      auto &scene_reg = scene->get_registry ();
-      auto &ctx = scene_reg.ctx ();
-      if (ctx.contains<comp::singl::rendering_manager> ()) {
-        auto &rendering = ctx.get<comp::singl::rendering_manager> ();
-        target_viewport = rendering.render_viewport;
-      }
-    }
+    // In edit mode, the toolbar selection is authoritative.
+    // entt::null explicitly means the root viewport.
+    target_viewport = game_view_selected_viewport;
   }
 
   uint32_t w;
   uint32_t h;
   runtime_ctx.window.get_size (w, h);
-  out.aspect_ratio = (float)w / (float)h;
+  float aspect = (float)w / (float)h;
+
+  if (target_viewport != entt::null) {
+    if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
+      w = static_cast<uint32_t> (sv->virtual_size.x);
+      h = static_cast<uint32_t> (sv->virtual_size.y);
+      aspect = (w > 0 && h > 0) ? (float)w / (float)h : 1.0F;
+    }
+  }
+  out.aspect_ratio = aspect;
 
   // During play mode, preserve previous behavior
   if (running) {
@@ -415,9 +414,13 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
     if (target_viewport != entt::null && registry.valid (target_viewport)) {
       if (auto *sv
           = registry.try_get<wsl::comp::subviewport> (target_viewport)) {
-        if (sv->camera.value != entt::null
-            && registry.valid (sv->camera.value)) {
-          out.entity = sv->camera.value;
+        if (sv->camera_3d.value != entt::null
+            && registry.valid (sv->camera_3d.value)) {
+          out.entity = sv->camera_3d.value;
+          out.using_engine_default = false;
+        } else if (sv->camera_2d.value != entt::null
+                   && registry.valid (sv->camera_2d.value)) {
+          out.entity = sv->camera_2d.value;
           out.using_engine_default = false;
         } else {
           out.using_engine_default = true;
@@ -494,7 +497,13 @@ editor_context::resolve_game_view_camera (entt::registry &registry,
         if (target_viewport != entt::null) {
           if (auto *sv
               = registry.try_get<comp::subviewport> (target_viewport)) {
-            cam_entity = sv->camera.value;
+            if (sv->camera_3d.value != entt::null
+                && registry.valid (sv->camera_3d.value)) {
+              cam_entity = sv->camera_3d.value;
+            } else if (sv->camera_2d.value != entt::null
+                       && registry.valid (sv->camera_2d.value)) {
+              cam_entity = sv->camera_2d.value;
+            }
           }
         } else {
           cam_entity = scene->camera;

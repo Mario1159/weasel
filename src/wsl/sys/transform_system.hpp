@@ -4,6 +4,7 @@
 
 #include <entt/entt.hpp>
 #include <glm/mat4x4.hpp>
+#include <unordered_set>
 
 namespace wsl
 {
@@ -28,7 +29,9 @@ public:
 
 private:
   void update_world_recursive (entt::registry &reg, entt::entity entity,
-                               const glm::mat4 &parent_world) const;
+                               const glm::mat4 &parent_world,
+                               std::unordered_set<entt::entity> &path,
+                               int depth) const;
   void update_world_transforms (entt::registry &registry, double dt);
 };
 

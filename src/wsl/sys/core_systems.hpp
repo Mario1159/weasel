@@ -51,6 +51,7 @@ public:
 
   void init (comp::singl::runtime_context *runtime_ctx,
              comp::singl::editor_context *editor_ctx);
+  void set_editor_ctx (comp::singl::editor_context *editor_ctx);
   void sync_activation ();
   void update (double dt);
   void event_handler (const SDL_Event &e);

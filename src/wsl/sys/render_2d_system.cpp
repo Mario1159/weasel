@@ -81,9 +81,8 @@ render_2d_system::on_render_record_draw_cmd (entt::registry &registry)
       if (registry.all_of<comp::transform_2d> (entity)) {
         continue;
       }
-      entt::entity nearest_vp
-          = wsl::comp::find_nearest_viewport (registry, entity);
-      if (nearest_vp != target_viewport) {
+      if (!wsl::comp::entity_in_viewport_scope (registry, entity,
+                                                target_viewport)) {
         continue;
       }
       const auto &sprite = view.get<comp::sprite_2d> (entity);
@@ -107,9 +106,8 @@ render_2d_system::on_render_record_draw_cmd (entt::registry &registry)
   {
     auto view = registry.view<comp::sprite_2d, comp::transform_2d> ();
     for (auto entity : view) {
-      entt::entity nearest_vp
-          = wsl::comp::find_nearest_viewport (registry, entity);
-      if (nearest_vp != target_viewport) {
+      if (!wsl::comp::entity_in_viewport_scope (registry, entity,
+                                                target_viewport)) {
         continue;
       }
       const auto &sprite = view.get<comp::sprite_2d> (entity);

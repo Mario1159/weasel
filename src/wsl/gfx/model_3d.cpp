@@ -89,8 +89,9 @@ gfx::primitive
 build_quad_primitive ()
 {
   gfx::primitive prim{};
-  append_quad (prim, glm::vec3 (0.0F), glm::vec3 (0.0F, 0.0F, k_half_extent),
-               glm::vec3 (k_half_extent, 0.0F, 0.0F));
+  // XY-plane quad facing +Z so that scaling X and Y affects width and height.
+  append_quad (prim, glm::vec3 (0.0F), glm::vec3 (k_half_extent, 0.0F, 0.0F),
+               glm::vec3 (0.0F, k_half_extent, 0.0F));
   return prim;
 }
 

@@ -30,6 +30,10 @@ public:
   struct draw_command
   {
     wsl::rsc::image_id image;
+    //! If non-null, bypasses the resource manager and uses this texture
+    //! directly.  Used for subviewport offscreen targets.
+    SDL_GPUTexture *texture_override = nullptr;
+
     glm::vec2 position;
     glm::vec2 size;
     float rotation = 0.0F;

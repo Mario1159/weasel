@@ -478,6 +478,63 @@ render_window::end_3d_pass (bool run_postprocess)
 }
 
 void
+render_window::begin_subviewport_pass (const subviewport_target &target,
+                                       bool clear_color, bool clear_depth,
+                                       const char *label) const
+{
+  ZoneScoped;
+  if ((!target.color_msaa) || (!target.color_resolve) || (!target.depth)) {
+    wsl::log::gfx ()->warn (
+        "begin_subviewport_pass: null render target texture(s), skipping");
+    return;
+  }
+
+#ifdef WEASEL_ENABLE_RENDERDOC
+  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.3d", "subviewport");
+#endif
+  SDL_PushGPUDebugGroup (ctx->main_cmd, label);
+
+  SDL_GPUColorTargetInfo ct[2]{};
+
+  ct[0].texture = target.color_msaa.get ();
+  ct[0].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+  ct[0].store_op = SDL_GPU_STOREOP_RESOLVE;
+  ct[0].clear_color = scene_clear_color;
+  ct[0].resolve_texture = target.color_resolve.get ();
+
+  ct[1].texture = target.bloom_msaa.get ();
+  ct[1].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+  ct[1].store_op = SDL_GPU_STOREOP_RESOLVE;
+  ct[1].clear_color = { 0.0F, 0.0F, 0.0F, 1.0F };
+  ct[1].resolve_texture = target.bloom_resolve.get ();
+
+  SDL_GPUDepthStencilTargetInfo ds{};
+  SDL_zero (ds);
+  ds.texture = target.depth.get ();
+  ds.clear_depth = 1.0F;
+  ds.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+  ds.store_op = SDL_GPU_STOREOP_STORE;
+
+  ctx->begin_main_render_pass (ct, 2, &ds);
+
+  // Full target size viewport
+  ctx->reset_viewport (target.width, target.height);
+  ctx->reset_scissor_rect (target.width, target.height);
+}
+
+void
+render_window::end_subviewport_pass ()
+{
+  ZoneScoped;
+  if (ctx->has_main_render_pass ()) {
+    ctx->end_main_render_pass ();
+  }
+  if (ctx->main_cmd != nullptr) {
+    SDL_PopGPUDebugGroup (ctx->main_cmd);
+  }
+}
+
+void
 render_window::begin_ui_pass () const
 {
   ZoneScoped;

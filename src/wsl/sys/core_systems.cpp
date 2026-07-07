@@ -16,6 +16,7 @@
 
 #include <tracy/Tracy.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/vector_float3.hpp>
 #include <memory>
 #include <unordered_map>
@@ -30,8 +31,11 @@
 #include "../comp/camera_2d.hpp"
 #include "../comp/hierarchy.hpp"
 #include "../comp/subviewport.hpp"
+#include "../comp/transform.hpp"
 #include "../comp/transform_2d.hpp"
+#include "../comp/world_transform.hpp"
 #include "render_frame.hpp"
+#include "wsl/gfx/model_3d.hpp"
 
 #include <utility>
 
@@ -132,7 +136,6 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
 {
   ZoneScopedN ("core_systems::init");
 
-  (void)editor_ctx;
   this->m_runtime_ctx = runtime_ctx;
   this->m_editor_ctx = editor_ctx;
 
@@ -189,6 +192,13 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
 
   wsl::log::sys ()->debug ("Initialized {} built-in systems",
                            to_vec ().size ());
+}
+
+void
+core_systems::set_editor_ctx (comp::singl::editor_context *editor_ctx)
+{
+  this->m_editor_ctx = editor_ctx;
+  ensure_dummy_context_bindings ();
 }
 
 void
@@ -516,6 +526,7 @@ core_systems::render_impl (wsl::gfx::render_window &window,
   gfx::scene_renderer *renderer = nullptr;
   sys::render_submission submission{};
   entt::entity main_viewport = entt::null;
+  comp::singl::rendering_manager *rendering_mgr = nullptr;
 
   if (scene != nullptr) {
     {
@@ -525,10 +536,10 @@ core_systems::render_impl (wsl::gfx::render_window &window,
     {
       ZoneScopedN ("render_impl::resolve_scene");
       renderer = &m_runtime_ctx->get_active_scene_renderer ();
-
-      auto *rendering = m_runtime_ctx->get_active_rendering_manager ();
-      main_viewport
-          = (rendering != nullptr) ? rendering->render_viewport : entt::null;
+      rendering_mgr = m_runtime_ctx->get_active_rendering_manager ();
+      main_viewport = (rendering_mgr != nullptr)
+                          ? rendering_mgr->render_viewport
+                          : entt::null;
 
       // Defensive: if render_viewport points to a non-subviewport entity
       // (e.g. stale code writing to the old main_camera field), treat as
@@ -540,8 +551,7 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
 #ifdef WEASEL_BUILD_EDITOR
       if (m_editor_ctx != nullptr) {
-        if (m_editor_ctx->game_view_selected_viewport != entt::null
-            && !m_runtime_ctx->is_running) {
+        if (!m_runtime_ctx->is_running) {
           main_viewport = m_editor_ctx->game_view_selected_viewport;
         }
       }
@@ -561,11 +571,6 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         // Shadow and lighting passes (global)
         {
           ZoneScopedN ("render_impl::global_shadow_and_light");
-          // Wrap in a debug group so the shadow / cluster-build /
-          // cull dispatches show up as a labelled region in the
-          // Event Browser. Actions 1-7 in the capture (copy
-          // buffers, shadow draws, cluster build + cull) are
-          // recorded here.
           if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
             SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer (),
                                    "Shadows & Lighting");
@@ -582,24 +587,103 @@ core_systems::render_impl (wsl::gfx::render_window &window,
           }
         }
 
+        // Collect child viewports that belong to the main viewport
+        std::vector<entt::entity> child_vps;
+        {
+          auto sv_view = registry.view<comp::subviewport> ();
+          for (auto const e : sv_view) {
+            if (e == main_viewport) {
+              continue;
+            }
+            if (comp::find_parent_viewport (registry, e) == main_viewport) {
+              child_vps.push_back (e);
+            }
+          }
+        }
+
+        // Ensure offscreen targets exist and are up-to-date for child viewports
+        if (rendering_mgr != nullptr) {
+          for (auto const e : child_vps) {
+            auto *sv = registry.try_get<comp::subviewport> (e);
+            if (sv == nullptr) {
+              continue;
+            }
+
+            uint32_t vw, vh;
+            bool const is_3d_quad
+                = registry.all_of<comp::transform, comp::world_transform> (e);
+            if (is_3d_quad && sv->world_quad_size.y > 0.0F) {
+              // 3D quad: render-target aspect ratio must match world_quad_size
+              // so the offscreen texture is not stretched when mapped onto
+              // the quad.  Resolution magnitude is taken from virtual_size.
+              float const world_aspect
+                  = sv->world_quad_size.x / sv->world_quad_size.y;
+              float const max_virtual
+                  = std::max (sv->virtual_size.x, sv->virtual_size.y);
+              if (world_aspect >= 1.0F) {
+                vw = static_cast<uint32_t> (max_virtual);
+                vh = static_cast<uint32_t> (max_virtual / world_aspect);
+              } else {
+                vh = static_cast<uint32_t> (max_virtual);
+                vw = static_cast<uint32_t> (max_virtual * world_aspect);
+              }
+            } else {
+              // 2D overlay or render_2d_only: use virtual_size directly.
+              vw = static_cast<uint32_t> (sv->virtual_size.x);
+              vh = static_cast<uint32_t> (sv->virtual_size.y);
+            }
+
+            auto it = rendering_mgr->subviewport_targets.find (e);
+            if (it == rendering_mgr->subviewport_targets.end ()
+                || it->second.width != vw || it->second.height != vh) {
+              if (it != rendering_mgr->subviewport_targets.end ()) {
+                gfx::subviewport_target::destroy (it->second);
+              }
+              rendering_mgr->subviewport_targets[e]
+                  = gfx::subviewport_target::create (
+                      &window, &m_runtime_ctx->render_ctx, vw, vh);
+            }
+          }
+          // Clean up targets for destroyed subviewports
+          for (auto it = rendering_mgr->subviewport_targets.begin ();
+               it != rendering_mgr->subviewport_targets.end ();) {
+            if (!registry.valid (it->first)
+                || !registry.all_of<comp::subviewport> (it->first)) {
+              gfx::subviewport_target::destroy (it->second);
+              it = rendering_mgr->subviewport_targets.erase (it);
+            } else {
+              ++it;
+            }
+          }
+        }
+
         // Helper to render a viewport (3D + 2D)
         auto render_viewport_full = [&] (entt::entity vp_entity,
-                                         const sys::render_submission &sub) {
+                                         const sys::render_submission &sub,
+                                         bool apply_vp_rect = true,
+                                         gfx::subviewport_target *offscreen
+                                         = nullptr) {
           ZoneScopedN ("render_viewport_full");
 
-          // Set context for systems that need to know which viewport they
-          // are in (e.g. render_2d)
           registry.ctx ().insert_or_assign (vp_entity);
 
-          {
-            ZoneScopedN ("render_viewport_full::begin_3d_pass");
-            window.begin_3d_pass (true,
-                                  true); // Use clearing from viewport settings?
+          bool render_2d_only = false;
+          if (vp_entity != entt::null) {
+            if (auto *sv = registry.try_get<comp::subviewport> (vp_entity)) {
+              render_2d_only = sv->render_2d_only;
+            }
+          }
+
+          if (offscreen != nullptr) {
+            window.begin_subviewport_pass (*offscreen, true, true);
+          } else {
+            window.begin_3d_pass (true, true);
           }
 
           {
             ZoneScopedN ("render_viewport_full::apply_viewport");
-            if (vp_entity != entt::null) {
+            if (apply_vp_rect && vp_entity != entt::null
+                && offscreen == nullptr) {
               if (auto *sv = registry.try_get<comp::subviewport> (vp_entity)) {
                 gfx::viewport vp{};
                 vp.x = sv->x;
@@ -614,17 +698,18 @@ core_systems::render_impl (wsl::gfx::render_window &window,
                 vp.clear_color_value.a = sv->clear_a;
                 window.apply_viewport (vp);
               }
+            } else if (!apply_vp_rect && offscreen == nullptr) {
+              window.apply_viewport ({});
             }
           }
 
           {
             ZoneScopedN ("render_viewport_full::begin_frame");
-            // Re-bind draws for this viewport
             renderer->set_visible_draws (sub.draw_commands);
             renderer->begin_frame (sub.view);
           }
 
-          if (!sub.is_2d_view) {
+          if (!sub.is_2d_view && !render_2d_only) {
             if (skybox_sys) {
               ZoneScopedN ("render_viewport_full::skybox");
               skybox_sys->render_record_draw_cmd (&registry);
@@ -639,7 +724,7 @@ core_systems::render_impl (wsl::gfx::render_window &window,
             }
           }
 
-          if (scene != nullptr) {
+          if (scene != nullptr && !render_2d_only) {
             ZoneScopedN ("render_viewport_full::scene_systems");
             for (auto &sys : scene->systems) {
               if (sys == nullptr)
@@ -650,8 +735,58 @@ core_systems::render_impl (wsl::gfx::render_window &window,
               sys->render_record_draw_cmd (&registry);
             }
           }
-          {
-            ZoneScopedN ("render_viewport_full::end_3d_pass");
+
+          // Draw subviewport 3D quads inside the main 3D pass before
+          // ending it, so they participate in depth testing.
+          if (offscreen == nullptr && !child_vps.empty ()
+              && rendering_mgr != nullptr) {
+            for (auto const e : child_vps) {
+              if (!registry.all_of<comp::transform, comp::world_transform> (
+                      e)) {
+                continue;
+              }
+              auto it = rendering_mgr->subviewport_targets.find (e);
+              if (it == rendering_mgr->subviewport_targets.end ()) {
+                continue;
+              }
+              auto *sv = registry.try_get<comp::subviewport> (e);
+              if (sv == nullptr) {
+                continue;
+              }
+
+              if (!rendering_mgr->subviewport_quad_model) {
+                rendering_mgr->subviewport_quad_model
+                    = gfx::model_3d::make_unit_quad ();
+              }
+              auto model = rendering_mgr->subviewport_quad_model;
+              if (!model || model->meshes.empty ()
+                  || model->meshes[0].primitives.empty ()) {
+                continue;
+              }
+
+              const auto &wt = registry.get<comp::world_transform> (e);
+              glm::mat4 m = wt.value;
+              m = glm::scale (m, glm::vec3 (sv->world_quad_size.x,
+                                            sv->world_quad_size.y, 1.0F));
+
+              auto &prim = model->meshes[0].primitives[0];
+              SDL_GPUTexture *prev_tex = prim.mat.base_color_tex;
+              SDL_GPUSampler *prev_samp = prim.mat.sampler;
+              prim.mat.base_color_tex = it->second.color_resolve.get ();
+              prim.mat.sampler = window.linear_sampler.get ();
+              prim.mat.device = nullptr;
+
+              renderer->draw_model (*model, 0, m, sub.view.view_proj);
+
+              prim.mat.base_color_tex = prev_tex;
+              prim.mat.sampler = prev_samp;
+              prim.mat.device = window.ctx->gpu_device;
+            }
+          }
+
+          if (offscreen != nullptr) {
+            window.end_subviewport_pass ();
+          } else {
             window.end_3d_pass ();
           }
 
@@ -666,52 +801,28 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
             {
               ZoneScopedN ("render_viewport_full::2d_setup");
-              // Only feed the camera's projection into the 2D pass
-              // when we are actually using a 2D camera. When the
-              // active camera is a 3D camera, `sub.view.proj` is a
-              // perspective matrix that would distort/warp the 2D
-              // sprites and push them outside the visible
-              // framebuffer. Leaving the projection unset here lets
-              // the batch renderer fall back to its default screen-
-              // space orthographic projection (see
-              // batch_renderer_2d::build_and_upload), which
-              // correctly places the sprites in pixel coordinates
-              // on top of the 3D content already in the HDR scene
-              // target.
-              //
-              // For the 2D case the camera's `position` and `zoom`
-              // now live in `sub.view.view` (the view transform).
-              // The batch renderer only honours an override
-              // projection, so we must pre-multiply the view into
-              // the projection here — otherwise panning / zooming
-              // the editor 2D camera has no effect on the rendered
-              // 2D sprites and they stay anchored at (0, 0).
               if (sub.is_2d_view) {
                 r2d->set_projection (sub.view.proj * sub.view.view);
               }
 
-              // Build sprite queue (no GPU work yet)
               render_2d_sys->render_record_draw_cmd (&registry);
-
-              // Upload vertices OUTSIDE the render pass (copy pass is
-              // illegal inside a render pass)
               r2d->build_and_upload ();
             }
 
             {
               ZoneScopedN ("render_viewport_full::2d_begin_pass");
-              // The 2D sprite pass uses the same render-window helper
-              // but with a distinct debug-group label and `end_3d_pass`
-              // called with `run_postprocess = false` so the bloom /
-              // tonemap chain runs only once per frame (from the 3D
-              // pass above), not once per 2D render.
-              window.begin_3d_pass (false, false, "2D Sprite Pass");
+              if (offscreen != nullptr) {
+                window.begin_subviewport_pass (*offscreen, false, false,
+                                               "2D Sprite Pass");
+              } else {
+                window.begin_3d_pass (false, false, "2D Sprite Pass");
+              }
             }
 
             {
               ZoneScopedN ("render_viewport_full::2d_apply_viewport");
-              // Apply viewport
-              if (vp_entity != entt::null) {
+              if (apply_vp_rect && vp_entity != entt::null
+                  && offscreen == nullptr) {
                 if (auto *sv
                     = registry.try_get<comp::subviewport> (vp_entity)) {
                   gfx::viewport vp{};
@@ -721,60 +832,101 @@ core_systems::render_impl (wsl::gfx::render_window &window,
                   vp.height = sv->height;
                   window.apply_viewport (vp);
                 }
-              } else {
+              } else if (offscreen == nullptr) {
                 window.apply_viewport ({}); // Fullscreen
               }
             }
 
             {
               ZoneScopedN ("render_viewport_full::2d_draw");
-              // Draw already-uploaded batches INSIDE the render pass
               r2d->draw ();
             }
             {
               ZoneScopedN ("render_viewport_full::2d_end_pass");
-              // The 2D sprite pass rendered into the same HDR scene
-              // target that the 3D pass uses. The 3D pass's
-              // `end_3d_pass(true)` already ran postprocess_hdr_bloom
-              // once (writing the 3D-only result to the swapchain and
-              // present_tex). We MUST run the composite+tonemap again
-              // here so the sprite content — which is now blended on
-              // top of hdr_scene — reaches the swapchain and the
-              // present_tex that the game view samples. Skipping this
-              // leaves the sprite visible only inside hdr_scene (which
-              // is what shows up in RenderDoc but never on screen).
-              //
-              // The bloom source is unchanged by the 2D pass (the
-              // sprite shader does not write to SV_Target1), so the
-              // bloom extraction here is a no-op against the bloom
-              // target; the only effective change is the final
-              // composite reading the now-updated hdr_scene.
-              window.end_3d_pass (true);
+              if (offscreen != nullptr) {
+                window.end_subviewport_pass ();
+              } else {
+                window.end_3d_pass (true);
+              }
             }
           }
         };
 
-        // 1. Render main viewport
-        {
-          ZoneScopedN ("render_impl::main_viewport");
-          render_viewport_full (main_viewport, submission);
-        }
-
-        // 2. Render child viewports
-        {
-          ZoneScopedN ("render_impl::child_viewports");
-          auto sv_view = registry.view<comp::subviewport> ();
-          for (auto const e : sv_view) {
-            if (comp::find_nearest_viewport (registry, e) == main_viewport) {
-              sys::render_submission child_sub{};
-              {
-                ZoneScopedN ("render_impl::child_viewport_build");
-                if (sys::build_render_frame (registry, *m_runtime_ctx,
-                                             child_sub, e)) {
-                  render_viewport_full (e, child_sub);
-                }
+        // 1. Render child viewports offscreen first so the main viewport
+        //    can sample them as quads / overlays.
+        for (auto const e : child_vps) {
+          sys::render_submission child_sub{};
+          if (sys::build_render_frame (registry, *m_runtime_ctx, child_sub,
+                                       e)) {
+            gfx::subviewport_target *target = nullptr;
+            if (rendering_mgr != nullptr) {
+              auto it = rendering_mgr->subviewport_targets.find (e);
+              if (it != rendering_mgr->subviewport_targets.end ()) {
+                target = &it->second;
               }
             }
+            render_viewport_full (e, child_sub, true, target);
+          }
+        }
+
+        // 2. Render main viewport
+        {
+          ZoneScopedN ("render_impl::main_viewport");
+          bool const preview_selected_viewport
+              = (m_editor_ctx != nullptr) && !m_runtime_ctx->is_running
+                && m_editor_ctx->game_view_selected_viewport != entt::null;
+
+          render_viewport_full (main_viewport, submission,
+                                !preview_selected_viewport, nullptr);
+        }
+
+        // 3. Draw subviewport 2D overlays inside the main viewport
+        if (!child_vps.empty () && rendering_mgr != nullptr) {
+          auto &r2d_ref = rendering_mgr->ensure_renderer_2d (
+              window, m_runtime_ctx->render_ctx,
+              &m_runtime_ctx->resource_manager);
+
+          // -- 2D Overlays (drawn after the main 2D pass) --
+          // We need an extra 2D pass because the main 2D pass already
+          // uploaded and drew its batches.
+          bool has_2d_overlays = false;
+          for (auto const e : child_vps) {
+            if (registry.all_of<comp::transform_2d> (e)) {
+              has_2d_overlays = true;
+              break;
+            }
+          }
+          if (has_2d_overlays) {
+            // Build overlay sprite queue
+            for (auto const e : child_vps) {
+              if (!registry.all_of<comp::transform_2d> (e)) {
+                continue;
+              }
+              auto it = rendering_mgr->subviewport_targets.find (e);
+              if (it == rendering_mgr->subviewport_targets.end ()) {
+                continue;
+              }
+              auto *sv = registry.try_get<comp::subviewport> (e);
+              if (sv == nullptr) {
+                continue;
+              }
+
+              gfx::batch_renderer_2d::draw_command cmd{};
+              // Use the offscreen resolve texture directly.
+              cmd.texture_override = it->second.color_resolve.get ();
+              cmd.position = glm::vec2 (sv->container_position.x,
+                                        sv->container_position.y);
+              cmd.size = glm::vec2 (sv->container_size.x, sv->container_size.y);
+              cmd.color = glm::vec4 (1.0F);
+              cmd.z_index = 1000; // on top of most sprites
+              r2d_ref.submit (cmd);
+            }
+
+            r2d_ref.build_and_upload ();
+            window.begin_3d_pass (false, false, "Subviewport 2D Overlay Pass");
+            window.apply_viewport ({});
+            r2d_ref.draw ();
+            window.end_3d_pass (true);
           }
         }
 
@@ -802,34 +954,12 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   {
     ZoneScopedN ("render_impl::end_cmd");
-    // Tracy frame image: record a copy pass from the present_tex
-    // into a staging transfer buffer. Must happen before end_cmd
-    // because the copy is part of this command buffer's command
-    // stream. The fence / wait / FrameImage call happens after
-    // end_cmd below.
-    // TEMP: disabled while diagnosing a crash in the second frame's
-    // ImGui render — the copy pass may be leaving GPU state in a
-    // bad shape for the next frame.
-    // m_runtime_ctx->window.frame_image_issue_copy ();
-
-    // Close the "Frame N" debug group pushed at the top of this
-    // function. Must happen before end_cmd (which submits) so the
-    // push/pop are recorded into the same command buffer.
     if (m_runtime_ctx->render_ctx.has_active_frame ()
         && m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
       SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer ());
     }
     m_runtime_ctx->render_ctx.end_cmd ();
   }
-
-  // Submit the frame image to Tracy now that the submission fence
-  // is available. The frame_image_submit() call blocks on the GPU
-  // (single-frame latency) and then downsamples + sends via
-  // FrameImage. The fence is released by frame_image_submit().
-  // TEMP: disabled (see above).
-  // if (SDL_GPUFence *fence = m_runtime_ctx->render_ctx.current_fence ()) {
-  //   m_runtime_ctx->window.frame_image_submit (fence);
-  // }
 }
 
 } // namespace sys

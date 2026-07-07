@@ -6,6 +6,7 @@
 #include "camera_2d.hpp"
 #include "hierarchy.hpp"
 #include "singl/runtime_context.hpp"
+#include "singl/editor_context.hpp"
 
 #include <entt/meta/factory.hpp>
 #include <imgui.h>
@@ -17,7 +18,7 @@ bool
 subviewport_camera_ui::custom_inspect (
     const char * /*label*/, comp::singl::runtime_context *runtime_ctx)
 {
-  if (runtime_ctx == nullptr) {
+  if (runtime_ctx == nullptr || runtime_ctx->editor_ctx == nullptr) {
     return false;
   }
 
@@ -29,15 +30,10 @@ subviewport_camera_ui::custom_inspect (
 
   entt::registry &registry = scene->get_registry ();
 
-  // Find the subviewport entity that owns this camera_ui
-  // We need to find which subviewport component contains this camera_ui
-  entt::entity self = entt::null;
-  auto view = registry.view<subviewport> ();
-  for (auto const e : view) {
-    if (&view.get<subviewport> (e).camera == this) {
-      self = e;
-      break;
-    }
+  // The entity currently being inspected in the editor
+  entt::entity self = runtime_ctx->editor_ctx->selected_entity;
+  if (self == entt::null || !registry.all_of<subviewport> (self)) {
+    self = entt::null;
   }
 
   const char *preview = "None";
@@ -52,9 +48,8 @@ subviewport_camera_ui::custom_inspect (
     }
 
     if (self != entt::null) {
-      // Collect descendants that are cameras
+      // Collect descendants that match the camera type filter
       std::vector<entt::entity> stack;
-      // find children of self
       auto h_view = registry.view<hierarchy> ();
       for (auto const e : h_view) {
         if (h_view.get<hierarchy> (e).parent == self) {
@@ -66,10 +61,14 @@ subviewport_camera_ui::custom_inspect (
         entt::entity const e = stack.back ();
         stack.pop_back ();
 
-        bool is_camera = registry.all_of<comp::camera> (e)
-                         || registry.all_of<comp::camera_2d> (e);
+        bool matches_filter = false;
+        if (filter_2d) {
+          matches_filter = registry.all_of<comp::camera_2d> (e);
+        } else {
+          matches_filter = registry.all_of<comp::camera> (e);
+        }
 
-        if (is_camera) {
+        if (matches_filter) {
           const std::string &name = scene->get_entity_name (e);
           bool const selected = (e == value);
           if (ImGui::Selectable (name.c_str (), selected)) {
@@ -149,9 +148,12 @@ subviewport::register_meta ()
       .data<&subviewport::clear_a> ("clear_a"_hs)
       .custom<comp::meta_info> (
           meta_info{ "Clear Alpha", "Alpha clear value.", "" })
-      .data<&subviewport::camera> ("camera"_hs)
+      .data<&subviewport::camera_2d> ("camera_2d"_hs)
       .custom<comp::meta_info> (
-          meta_info{ "Camera", "Camera assigned to this viewport.", "" })
+          meta_info{ "Camera 2D", "2D camera assigned to this viewport.", "" })
+      .data<&subviewport::camera_3d> ("camera_3d"_hs)
+      .custom<comp::meta_info> (
+          meta_info{ "Camera 3D", "3D camera assigned to this viewport.", "" })
       .data<&subviewport::world_quad_size> ("world_quad_size"_hs)
       .custom<comp::meta_info> (
           meta_info{ "World Quad Size",
@@ -183,6 +185,29 @@ find_nearest_viewport (entt::registry &registry, entt::entity entity)
     ancestor = (h != nullptr) ? h->parent : entt::null;
   }
   return entt::null;
+}
+
+entt::entity
+find_parent_viewport (entt::registry &registry, entt::entity entity)
+{
+  auto *h = registry.try_get<hierarchy> (entity);
+  if (h == nullptr) {
+    return entt::null;
+  }
+  return find_nearest_viewport (registry, h->parent);
+}
+
+bool
+entity_in_viewport_scope (entt::registry &registry, entt::entity entity,
+                          entt::entity target_viewport)
+{
+  if (entity == entt::null) {
+    return false;
+  }
+  if (target_viewport != entt::null && entity == target_viewport) {
+    return false;
+  }
+  return find_nearest_viewport (registry, entity) == target_viewport;
 }
 
 } // namespace wsl::comp

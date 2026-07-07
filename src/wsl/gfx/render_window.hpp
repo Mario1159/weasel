@@ -4,6 +4,7 @@
 #include "wsl/gfx/gpu_resources.hpp"
 #include "wsl/gfx/mesh.hpp"
 #include "wsl/gfx/render_context.hpp"
+#include "wsl/gfx/subviewport_target.hpp"
 #include "wsl/gfx/viewport.hpp"
 
 #include <SDL3/SDL.h>
@@ -106,6 +107,13 @@ public:
   void begin_3d_pass (bool clear_color = true, bool clear_depth = true,
                       const char *label = "Main 3D Pass") const;
   void end_3d_pass (bool run_postprocess = true);
+
+  //! Begin a 3D render pass targeting a subviewport offscreen target.
+  void begin_subviewport_pass (const subviewport_target &target,
+                               bool clear_color = true, bool clear_depth = true,
+                               const char *label = "Subviewport Pass") const;
+  //! End the subviewport render pass (resolves MSAA, no postprocess).
+  void end_subviewport_pass ();
   void begin_ui_pass () const;
   void end_ui_pass () const;
   void new_swapchain ();

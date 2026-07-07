@@ -36,8 +36,13 @@ render_3d_system::on_render_record_draw_cmd (entt::registry &registry)
   renderer->draw_visible_models ();
   renderer->draw_visible_model_outlines ();
 
-  // If in editor mode, draw the infinite grid
-  if (ctx.contains<comp::singl::editor_context *> ()) {
+  // If in editor mode, draw the infinite grid and camera gizmos.
+  // Skip these for subviewport offscreen passes so that editor decorations
+  // do not occlude the subviewport's own contents (e.g. skybox).
+  bool const is_subviewport_pass
+      = ctx.contains<entt::entity> () && ctx.get<entt::entity> () != entt::null;
+
+  if (!is_subviewport_pass && ctx.contains<comp::singl::editor_context *> ()) {
     auto &editor_ctx = *ctx.get<comp::singl::editor_context *> ();
     if (editor_ctx.grid_visible) {
       renderer->draw_grid (editor_ctx.grid_camera_pos,

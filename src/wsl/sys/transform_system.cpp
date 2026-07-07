@@ -5,9 +5,11 @@
 #include "../comp/transform_2d.hpp"
 #include "../comp/world_transform.hpp"
 #include "reg/sig/signal_hub.hpp"
+#include "wsl/log/log.hpp"
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
+#include <unordered_set>
 
 namespace wsl
 {
@@ -16,21 +18,39 @@ namespace sys
 {
 
 void
-transform_system::update_world_recursive (entt::registry &reg, entt::entity e,
-                                          const glm::mat4 &parent_world) const
+transform_system::update_world_recursive (
+    entt::registry &reg, entt::entity e, const glm::mat4 &parent_world,
+    std::unordered_set<entt::entity> &path, int depth) const
 {
-  comp::transform const &tr = reg.get<comp::transform> (e);
-  comp::world_transform &wt = reg.get<comp::world_transform> (e);
+  if (!path.insert (e).second) {
+    wsl::log::sys ()->error (
+        "transform_system: cycle detected in hierarchy path at entity {} "
+        "(already visited from this root)",
+        static_cast<std::uint32_t> (e));
+    return;
+  }
 
-  glm::mat4 const local = tr.model ();
-  wt.value = parent_world * local;
+  glm::mat4 child_world = parent_world;
+
+  if (reg.all_of<comp::transform, comp::world_transform> (e)
+      && !reg.all_of<comp::transform_2d> (e)) {
+    comp::transform const &tr = reg.get<comp::transform> (e);
+    comp::world_transform &wt = reg.get<comp::world_transform> (e);
+
+    glm::mat4 const local = tr.model ();
+    wt.value = parent_world * local;
+    child_world = wt.value;
+  }
 
   if (auto *h = reg.try_get<comp::hierarchy> (e)) {
     for (entt::entity child = h->first; child != entt::null;
          child = reg.get<comp::hierarchy> (child).next) {
-      update_world_recursive (reg, child, static_cast<glm::mat4> (wt.value));
+      update_world_recursive (reg, child, static_cast<glm::mat4> (child_world),
+                              path, depth + 1);
     }
   }
+
+  path.erase (e);
 }
 
 void
@@ -81,7 +101,8 @@ transform_system::update_world_transforms (entt::registry &reg,
   for (entt::entity const e : view) {
     auto *h = reg.try_get<comp::hierarchy> (e);
     if ((h == nullptr) || h->parent == entt::null) {
-      update_world_recursive (reg, e, glm::mat4{ 1.0F });
+      std::unordered_set<entt::entity> path;
+      update_world_recursive (reg, e, glm::mat4{ 1.0F }, path, 0);
     }
   }
 }
