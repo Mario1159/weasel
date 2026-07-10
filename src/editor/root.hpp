@@ -15,6 +15,7 @@
 #include "build_inspector.hpp"
 #include "system_inspector.hpp"
 #include "text_editor.hpp"
+#include "shader_graph_editor.hpp"
 
 namespace editor
 {
@@ -58,6 +59,7 @@ private:
   build_inspector m_build_inspector_window;
   text_editor m_text_editor_window;
   file_list m_file_list_window;
+  shader_graph_editor m_shader_graph_editor;
 
   bool m_show_console = true;
   bool m_show_system_inspector = true;
@@ -71,6 +73,7 @@ private:
   bool m_show_build_inspector = true;
   bool m_show_text_editor = true;
   bool m_show_file_list = true;
+  bool m_show_shader_graph = true;
 
   bool m_dock_layout_built = false;
 

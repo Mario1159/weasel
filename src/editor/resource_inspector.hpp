@@ -28,6 +28,9 @@ public:
   void draw ();
   void new_scene_dialog ();
 
+  /*! \brief Request to open a material in the Shader Graph (set by UI). */
+  std::string m_request_open_shader_graph;
+
 private:
   void draw_models ();
   void draw_images ();
@@ -36,6 +39,8 @@ private:
   void draw_audio ();
   void draw_ui_layouts ();
   void draw_fonts ();
+  void draw_materials ();
+  void draw_shaders ();
 
   void import_model_dialog ();
   void import_image_dialog ();
@@ -54,6 +59,8 @@ private:
   entt::id_type m_selected_audio = entt::null;
   entt::id_type m_selected_ui_layout = entt::null;
   entt::id_type m_selected_font = entt::null;
+  entt::id_type m_selected_material = entt::null;
+  entt::id_type m_selected_shader = entt::null;
 
   int m_selected_lod_group = -1;
   int m_selected_lod_level = -1;

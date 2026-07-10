@@ -48,6 +48,16 @@ public:
                                             SDL_GPUShaderStage stage);
 
   /*!
+   * \brief Creates a shader from an in-memory bytecode blob.
+   *
+   * Used for runtime-compiled shaders (e.g. from the shader graph).
+   */
+  static SDL_GPUShader *
+  create_from_bytecode (SDL_GPUDevice *device, const uint8_t *data, size_t size,
+                        SDL_GPUShaderStage stage, Uint32 num_uniform_buffers,
+                        Uint32 num_samplers, Uint32 num_storage_buffers = 0);
+
+  /*!
    * \brief Returns the native shader format for the current platform.
    *
    * Matches the shader bytecode format that the build system compiles to

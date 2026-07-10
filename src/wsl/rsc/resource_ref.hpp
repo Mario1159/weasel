@@ -2,7 +2,6 @@
 
 #include <entt/entt.hpp>
 
-
 namespace wsl
 {
 
@@ -12,7 +11,8 @@ namespace rsc
 namespace io
 {
 
-/*! \brief Supported resource types that can be referenced in scenes and project metadata. */
+/*! \brief Supported resource types that can be referenced in scenes and project
+ * metadata. */
 enum class resource_type
 {
   //! 3D model (glTF).
@@ -24,11 +24,14 @@ enum class resource_type
   //! Another scene instance.
   scene,
   //! Audio asset (WAV, MP3, etc.).
-  audio
+  audio,
+  //! Material asset (.wslmat).
+  material
 };
 
 /*!
- * \brief A generic reference to a resource, combining its type and unique identifier.
+ * \brief A generic reference to a resource, combining its type and unique
+ * identifier.
  */
 struct resource_ref
 {

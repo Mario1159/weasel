@@ -6,7 +6,10 @@
 #include "lighting.hpp"
 #include "mesh.hpp"
 #include "model_3d.hpp"
+#include "pipeline_cache.hpp"
 #include "renderer.hpp"
+#include "shader_program.hpp"
+#include "wsl/rsc/resource_ids.hpp"
 
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_pixels.h>
@@ -79,6 +82,10 @@ public:
     float geometry_lod_bias = 0.0F;
     //! Per-instance max draw distance (0 = unlimited).
     float visibility_range = 0.0F;
+    //! Optional per-instance material override. When set (non-null) the
+    //! renderer should use this material instead of the model's own mesh
+    //! materials. TODO: hook into the draw path (custom-material / PBR).
+    rsc::material_id material_override{};
   };
 
   /*!
@@ -91,6 +98,10 @@ public:
    * \brief Releases GPU resources owned by the renderer.
    */
   ~scene_renderer ();
+
+  //! When false, custom material paths are disabled and all meshes fall back
+  //! to the legacy PBR pipeline. Used for backwards compatibility / debugging.
+  bool enable_custom_materials = true;
 
   //! Begins a frame with resolved camera data.
   void begin_frame (const view_state &view);
@@ -310,6 +321,12 @@ private:
   void bind_pipeline ();
   void render_mesh (const glm::mat4 &model, const glm::mat4 &view_proj,
                     const mesh &mesh, float mip_lod_bias = 0.0F);
+  void render_custom_primitive (const primitive &prim, float mip_lod_bias);
+  //! Renders a primitive using an explicit material instance (used both for
+  //! per-mesh custom materials and for per-instance material overrides).
+  void render_custom_primitive (const primitive &prim,
+                                const gfx::material_instance &mat_inst,
+                                float mip_lod_bias);
   inline void render_node (gfx::node &n, const glm::mat4 &view_proj,
                            float mip_lod_bias = 0.0F,
                            float geometry_lod_bias = 0.0F,
@@ -472,7 +489,28 @@ private:
   //! Clustered forward lighting. Owns the SSBOs and compute pipelines
   //! used by `cube.frag.slang` to shade point lights in clusters.
   clustered_lighting m_clustered;
+
+  //! Pipeline cache for custom material permutations.
+  pipeline_cache m_pipeline_cache;
+
+  //! Per-instance material override currently in effect for the active draw
+  //! (set from draw_command::material_override, consumed by render_mesh).
+  rsc::material_id m_active_material_override{};
 };
+
+/*!
+ * \brief Binds a custom material and its associated pipeline for a single draw.
+ *
+ * Used by scene_renderer when a primitive has use_custom_material set.
+ */
+void bind_custom_material (const gfx::material_instance &inst,
+                           const gfx::shader_program &prog,
+                           SDL_GPUCommandBuffer *cmd, SDL_GPURenderPass *pass,
+                           pipeline_cache &cache, SDL_GPUDevice *device,
+                           const SDL_GPUColorTargetDescription *color_targets,
+                           int num_color_targets,
+                           SDL_GPUTextureFormat depth_format,
+                           bool double_sided);
 
 } // namespace gfx
 

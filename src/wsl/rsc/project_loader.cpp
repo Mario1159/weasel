@@ -51,6 +51,7 @@ rsc::project_loader::create (const project &proj) const
   create_dir (proj.ui_layouts_path);
   create_dir (proj.fonts_path);
   create_dir (proj.shaders_path);
+  create_dir (proj.materials_path);
   fs::create_directories (fs::path (proj.root_path) / "src");
 
   const fs::path project_file = fs::path (proj.root_path) / manifest_file;
@@ -290,6 +291,8 @@ rsc::project_loader::scan_assets (const project &proj)
   scan_dir (resolve (proj.fonts_path), { ".otf", ".ttf" }, assets.fonts);
   scan_dir (resolve (proj.shaders_path), { ".hlsl", ".spv", ".dxil", ".metal" },
             assets.shaders);
+  scan_dir (resolve (proj.materials_path), { ".wslmat", ".wslgraph" },
+            assets.materials);
 
   std::sort (assets.models.begin (), assets.models.end ());
   std::sort (assets.images.begin (), assets.images.end ());

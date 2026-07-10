@@ -161,6 +161,32 @@ to_string (wsl::rsc::audio_state s)
   return "?";
 }
 
+static const char *
+to_string (wsl::rsc::material_state s)
+{
+  switch (s) {
+  case wsl::rsc::material_state::not_loaded:
+    return "Not loaded";
+  case wsl::rsc::material_state::loaded:
+    return "Loaded";
+  }
+  return "?";
+}
+
+static const char *
+to_string (wsl::rsc::shader_state s)
+{
+  switch (s) {
+  case wsl::rsc::shader_state::not_loaded:
+    return "Not loaded";
+  case wsl::rsc::shader_state::loading:
+    return "Loading";
+  case wsl::rsc::shader_state::loaded:
+    return "Loaded";
+  }
+  return "?";
+}
+
 void
 resource_inspector::draw ()
 {
@@ -180,7 +206,9 @@ resource_inspector::draw ()
     scenes,
     audio,
     ui_layouts,
-    fonts
+    fonts,
+    materials,
+    shaders
   };
   static active_tab tab = active_tab::models;
 
@@ -245,6 +273,18 @@ resource_inspector::draw ()
     if (ImGui::BeginTabItem ("Fonts")) {
       tab = active_tab::fonts;
       draw_fonts ();
+      ImGui::EndTabItem ();
+    }
+
+    if (ImGui::BeginTabItem ("Materials")) {
+      tab = active_tab::materials;
+      draw_materials ();
+      ImGui::EndTabItem ();
+    }
+
+    if (ImGui::BeginTabItem ("Shaders")) {
+      tab = active_tab::shaders;
+      draw_shaders ();
       ImGui::EndTabItem ();
     }
 
@@ -349,6 +389,16 @@ resource_inspector::draw ()
       can_import = false;
       has_selection = (m_selected_font != entt::null);
       selected_id = m_selected_font;
+      break;
+
+    case active_tab::materials:
+      has_selection = (m_selected_material != entt::null);
+      selected_id = m_selected_material;
+      break;
+
+    case active_tab::shaders:
+      has_selection = (m_selected_shader != entt::null);
+      selected_id = m_selected_shader;
       break;
     }
 
@@ -536,6 +586,25 @@ resource_inspector::draw ()
 
     if (!can_export) {
       ImGui::EndDisabled ();
+    }
+
+    if (tab == active_tab::materials && has_selection) {
+      ImGui::SameLine ();
+      if (ImGui::Button ("Open in Shader Graph")) {
+        auto info = m_runtime_ctx->resource_manager.info (
+            wsl::rsc::material_id{ m_selected_material });
+        if (info) {
+          // Replace .wslmat extension with .wslgraph
+          std::string graph_path = info->path;
+          auto dot = graph_path.rfind ('.');
+          if (dot != std::string::npos) {
+            graph_path = graph_path.substr (0, dot) + ".wslgraph";
+          } else {
+            graph_path += ".wslgraph";
+          }
+          m_request_open_shader_graph = graph_path;
+        }
+      }
     }
 
     ImGui::Separator ();
@@ -1393,6 +1462,98 @@ resource_inspector::draw_fonts ()
     ImSearch::EndSearch ();
   }
   ImGui::EndChild ();
+}
+
+void
+resource_inspector::draw_materials ()
+{
+  if (ImSearch::BeginSearch ()) {
+    auto &mgr = m_runtime_ctx->resource_manager;
+
+    ImGui::SameLine ();
+    ImSearch::SearchBar ();
+    ImGui::Separator ();
+
+    static ImGuiTableFlags const flags
+        = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable
+          | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter
+          | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY
+          | ImGuiTableFlags_RowBg;
+    if (ImGui::BeginTable ("MaterialTable", 3, flags)) {
+      ImGui::TableSetupColumn ("Name", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed,
+                               80.0F);
+      ImGui::TableSetupColumn ("Shader", ImGuiTableColumnFlags_WidthFixed,
+                               100.0F);
+      ImGui::TableHeadersRow ();
+
+      for (const auto &rec : mgr.list_materials ()) {
+        ImSearch::SearchableItem (rec.name.c_str (), [&] (const char *) {
+          ImGui::PushID ((int)rec.id);
+          ImGui::TableNextRow ();
+          ImGui::TableNextColumn ();
+          bool const selected = (m_selected_material == rec.id);
+          if (ImGui::Selectable (rec.name.c_str (), selected,
+                                 ImGuiSelectableFlags_SpanAllColumns
+                                     | ImGuiSelectableFlags_AllowOverlap)) {
+            m_selected_material = rec.id;
+          }
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (to_string (rec.state));
+          ImGui::TableNextColumn ();
+          ImGui::Text ("%u", rec.shader_program_id);
+          ImGui::PopID ();
+        });
+      }
+      ImSearch::Submit ();
+      ImGui::EndTable ();
+    }
+    ImSearch::EndSearch ();
+  }
+}
+
+void
+resource_inspector::draw_shaders ()
+{
+  if (ImSearch::BeginSearch ()) {
+    auto &mgr = m_runtime_ctx->resource_manager;
+
+    ImGui::SameLine ();
+    ImSearch::SearchBar ();
+    ImGui::Separator ();
+
+    static ImGuiTableFlags const flags
+        = ImGuiTableFlags_Resizable | ImGuiTableFlags_Reorderable
+          | ImGuiTableFlags_Hideable | ImGuiTableFlags_BordersOuter
+          | ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY
+          | ImGuiTableFlags_RowBg;
+    if (ImGui::BeginTable ("ShaderTable", 2, flags)) {
+      ImGui::TableSetupColumn ("Name", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn ("State", ImGuiTableColumnFlags_WidthFixed,
+                               80.0F);
+      ImGui::TableHeadersRow ();
+
+      for (const auto &rec : mgr.list_shaders ()) {
+        ImSearch::SearchableItem (rec.name.c_str (), [&] (const char *) {
+          ImGui::PushID ((int)rec.id);
+          ImGui::TableNextRow ();
+          ImGui::TableNextColumn ();
+          bool const selected = (m_selected_shader == rec.id);
+          if (ImGui::Selectable (rec.name.c_str (), selected,
+                                 ImGuiSelectableFlags_SpanAllColumns
+                                     | ImGuiSelectableFlags_AllowOverlap)) {
+            m_selected_shader = rec.id;
+          }
+          ImGui::TableNextColumn ();
+          ImGui::TextUnformatted (to_string (rec.state));
+          ImGui::PopID ();
+        });
+      }
+      ImSearch::Submit ();
+      ImGui::EndTable ();
+    }
+    ImSearch::EndSearch ();
+  }
 }
 
 } // namespace editor

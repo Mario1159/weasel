@@ -9,6 +9,8 @@
 #include "scene_loader.hpp"
 #include "../comp/component_meta.hpp"
 #include "shader_loader.hpp"
+#include "wsl/gfx/material_asset.hpp"
+#include "wsl/gfx/shader_program.hpp"
 #include <SDL3_mixer/SDL_mixer.h>
 
 #include <entt/entt.hpp>
@@ -125,6 +127,20 @@ enum class shader_state
   loaded
 };
 
+/*! \brief Represents the current loading state of a material asset. */
+enum class material_state
+{
+  not_loaded,
+  loaded
+};
+
+/*! \brief Represents the current loading state of a shader program. */
+enum class shader_program_state
+{
+  not_loaded,
+  loaded
+};
+
 /*!
  * \brief Metadata for a 3D model resource.
  */
@@ -214,6 +230,29 @@ struct shader_resource_info
   std::string path;     //!< Path to the shader file.
   std::string name;     //!< Human-readable name.
   shader_state state{}; //!< Current loading state.
+};
+
+/*!
+ * \brief Metadata for a material asset resource.
+ */
+struct material_resource_info
+{
+  entt::id_type id{};                   //!< Unique identifier.
+  std::string path;                     //!< Path to the material file.
+  std::string name;                     //!< Human-readable name.
+  material_state state{};               //!< Current loading state.
+  entt::id_type shader_program_id{ 0 }; //!< Referenced shader program.
+};
+
+/*!
+ * \brief Metadata for a shader program resource.
+ */
+struct shader_program_resource_info
+{
+  entt::id_type id{}; //!< Unique identifier.
+  std::string path;   //!< Optional path (empty for runtime generated).
+  std::string name;   //!< Human-readable name.
+  shader_program_state state{}; //!< Current loading state.
 };
 
 namespace detail
@@ -308,6 +347,28 @@ struct shader_record
   shader_state state = shader_state::not_loaded; //!< Current loading state.
 };
 
+/*!
+ * \brief Internal record tracking the state of a material asset.
+ */
+struct material_record
+{
+  std::string path; //!< Path to the material file.
+  std::string name; //!< Human-readable name.
+  material_state state = material_state::not_loaded; //!< Current loading state.
+  entt::id_type shader_program_id{ 0 }; //!< Referenced shader program.
+};
+
+/*!
+ * \brief Internal record tracking the state of a shader program.
+ */
+struct shader_program_record
+{
+  std::string path; //!< Optional path.
+  std::string name; //!< Human-readable name.
+  shader_program_state state
+      = shader_program_state::not_loaded; //!< Current loading state.
+};
+
 } // namespace detail
 
 class resource_manager
@@ -318,6 +379,8 @@ public:
   using cubemap_handle = entt::resource<gfx::cubemap>;
   using scene_handle = entt::resource<rsc::scene>;
   using shader_handle = entt::resource<gfx::shader_module>;
+  using material_handle = std::shared_ptr<gfx::material_asset>;
+  using shader_program_handle = std::shared_ptr<gfx::shader_program>;
 
   /*!
    * \brief Construct a resource manager for the runtime.
@@ -593,6 +656,59 @@ public:
   /*! \brief List all registered shaders and metadata. */
   std::vector<shader_resource_info> list_shaders () const;
 
+  // ---- Materials ----
+  /*! \brief Register a material asset path. */
+  material_id register_material (const std::string &path);
+
+  /*! \brief Import a material asset and optionally request loading. */
+  material_id import_material (const std::string &path,
+                               bool request_load = true);
+
+  /*! \brief Load a material handle for the given id. */
+  material_handle load (material_id id);
+
+  /*! \brief Unload a material asset. */
+  void unload (material_id id);
+
+  /*! \brief Get a material handle for the given id. */
+  material_handle get (material_id id);
+
+  /*! \brief Query material loading state. */
+  material_state state (material_id id) const;
+
+  /*! \brief Check whether a material id is registered. */
+  bool contains (material_id id) const;
+
+  /*! \brief Get metadata for a material id. */
+  std::optional<material_resource_info> info (material_id id) const;
+
+  /*! \brief List all registered materials. */
+  std::vector<material_resource_info> list_materials () const;
+
+  // ---- Shader Programs ----
+  /*! \brief Register a shader program (runtime generated or file path). */
+  shader_program_id register_shader_program (const std::string &path);
+
+  /*! \brief Store a runtime-generated shader program. */
+  shader_program_id
+  register_shader_program (std::shared_ptr<gfx::shader_program> prog,
+                           const std::string &name);
+
+  /*! \brief Get a shader program handle for the given id. */
+  shader_program_handle get (shader_program_id id);
+
+  /*! \brief Query shader program state. */
+  shader_program_state state (shader_program_id id) const;
+
+  /*! \brief Check whether a shader program id is registered. */
+  bool contains (shader_program_id id) const;
+
+  /*! \brief Get metadata for a shader program id. */
+  std::optional<shader_program_resource_info> info (shader_program_id id) const;
+
+  /*! \brief List all registered shader programs. */
+  std::vector<shader_program_resource_info> list_shader_programs () const;
+
   /*! \brief Set the base engine resource path used to resolve engine-provided
    * assets. */
   void set_engine_resource_path (const std::string &path);
@@ -638,6 +754,9 @@ public:
   /*! \brief Get the filesystem path for a registered audio id. */
   std::string get_resource_path (audio_id id) const;
 
+  /*! \brief Get the filesystem path for a registered material id. */
+  std::string get_resource_path (material_id id) const;
+
   /*! \brief Get the filesystem path for a generic resource reference. */
   std::string get_path (io::resource_ref ref) const;
 
@@ -669,6 +788,9 @@ private:
   std::unordered_map<entt::id_type, detail::ui_layout_record> m_ui_layout_table;
   std::unordered_map<entt::id_type, detail::font_record> m_font_table;
   std::unordered_map<entt::id_type, detail::shader_record> m_shader_table;
+  std::unordered_map<entt::id_type, detail::material_record> m_material_table;
+  std::unordered_map<entt::id_type, detail::shader_program_record>
+      m_shader_program_table;
 
   entt::resource_cache<rsc::scene, scene_loader> m_scenes;
   std::unordered_map<entt::id_type, rsc::scene *> m_loaded_scene_instances;
@@ -679,6 +801,11 @@ private:
   entt::resource_cache<gfx::cubemap, cubemap_loader> m_cubemaps;
   entt::resource_cache<gfx::image, image_loader> m_images;
   entt::resource_cache<gfx::shader_module, shader_loader> m_shaders;
+
+  std::unordered_map<entt::id_type, std::shared_ptr<gfx::material_asset>>
+      m_materials;
+  std::unordered_map<entt::id_type, std::shared_ptr<gfx::shader_program>>
+      m_shader_programs;
 
   std::shared_ptr<rsc::project> m_active_project;
   rsc::project_loader m_project_loader;

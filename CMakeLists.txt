@@ -230,6 +230,19 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
+    NAME ImNodeFlow
+    GITHUB_REPOSITORY Fattorino/ImNodeFlow
+    GIT_TAG v1.2.2
+    DOWNLOAD_ONLY TRUE
+)
+
+if(DEFINED ImNodeFlow_SOURCE_DIR)
+    add_library(imnodeflow INTERFACE)
+    target_include_directories(imnodeflow INTERFACE ${ImNodeFlow_SOURCE_DIR}/include)
+    target_sources(imnodeflow INTERFACE ${ImNodeFlow_SOURCE_DIR}/src/ImNodeFlow.cpp)
+endif()
+
+CPMAddPackage(
     NAME ImGizmo2D
     GITHUB_REPOSITORY Miisan-png/ImGizmo2D
     GIT_TAG main
@@ -486,6 +499,20 @@ set(COMPUTE_SHADER_SOURCES
 set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/compiled_shaders")
 file(MAKE_DIRECTORY "${SHADER_OUTPUT_DIR}")
 
+# Copy the shared PBR include module next to the compiled shaders so the
+# runtime shader-graph codegen can inline it (cube.frag.slang includes it at
+# build time from the same source directory).
+add_custom_command(
+    OUTPUT "${SHADER_OUTPUT_DIR}/pbr_common.slang"
+    COMMAND ${CMAKE_COMMAND} -E copy
+            "${SHADER_SOURCE_DIR}/pbr_common.slang"
+            "${SHADER_OUTPUT_DIR}/pbr_common.slang"
+    DEPENDS "${SHADER_SOURCE_DIR}/pbr_common.slang"
+    COMMENT "Copying pbr_common.slang"
+    VERBATIM
+)
+list(APPEND COMPILED_SHADERS "${SHADER_OUTPUT_DIR}/pbr_common.slang")
+
 if(WIN32)
     set(SLANG_SHADER_TARGET dxil)
     set(SHADER_EXT ".dxil")
@@ -565,7 +592,7 @@ foreach(SHADER_FILE IN LISTS COMPUTE_SHADER_SOURCES)
     list(APPEND COMPILED_SHADERS "${OUTPUT_FILE}")
 endforeach()
 
-add_custom_target(compile_shaders ALL DEPENDS ${COMPILED_SHADERS})
+add_custom_target(compile_shaders ALL DEPENDS ${COMPILED_SHADERS} "${SHADER_OUTPUT_DIR}/pbr_common.slang")
 if(SLANGC_IS_TARGET)
     add_dependencies(compile_shaders slangc)
 endif()

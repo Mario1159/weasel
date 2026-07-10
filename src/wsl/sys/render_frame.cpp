@@ -288,6 +288,7 @@ sys::build_render_frame (entt::registry &registry,
           .mip_lod_bias = instance.mip_lod_bias,
           .geometry_lod_bias = instance.geometry_lod_bias,
           .visibility_range = instance.visibility_range,
+          .material_override = instance.material_override,
       });
     }
 

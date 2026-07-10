@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-
 namespace wsl
 {
 
@@ -42,6 +41,8 @@ struct project_assets
   std::vector<std::string> fonts;
   //! List of shader file paths.
   std::vector<std::string> shaders;
+  //! List of material file paths.
+  std::vector<std::string> materials;
 };
 
 /*!
@@ -72,16 +73,17 @@ public:
   /*!
    * \brief Loads a project configuration from the specified path.
    * \param path Path to the project manifest file or project directory.
-   * \return Shared pointer to the loaded project, or `nullptr` if loading failed.
+   * \return Shared pointer to the loaded project, or `nullptr` if loading
+   * failed.
    */
-  static std::shared_ptr<project> load (const std::string &path) ;
+  static std::shared_ptr<project> load (const std::string &path);
 
   /*!
    * \brief Scans the project's resource directories for available assets.
    * \param proj The project configuration to scan.
    * \return A `project_assets` object containing the discovered asset paths.
    */
-  static project_assets scan_assets (const project &proj) ;
+  static project_assets scan_assets (const project &proj);
 
 private:
   comp::singl::runtime_context *m_runtime_ctx;

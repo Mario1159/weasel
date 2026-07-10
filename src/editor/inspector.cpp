@@ -629,6 +629,9 @@ meta_any_equal (const entt::meta_any &a, const entt::meta_any &b)
   if (type == entt::resolve<wsl::rsc::model_id> ()) {
     return a.cast<wsl::rsc::model_id> () == b.cast<wsl::rsc::model_id> ();
   }
+  if (type == entt::resolve<wsl::rsc::material_id> ()) {
+    return a.cast<wsl::rsc::material_id> () == b.cast<wsl::rsc::material_id> ();
+  }
   if (type == entt::resolve<wsl::rsc::cubemap_id> ()) {
     return a.cast<wsl::rsc::cubemap_id> () == b.cast<wsl::rsc::cubemap_id> ();
   }
@@ -915,6 +918,10 @@ inspector::draw_meta_object (const char *label, entt::meta_any &object,
     return draw_meta_value (label, object, prefab_object, default_object);
   }
 
+  if (type == entt::resolve<wsl::rsc::material_id> ()) {
+    return draw_meta_value (label, object, prefab_object, default_object);
+  }
+
   if (type.is_enum ()) {
     {
       return draw_meta_enum (label, object);
@@ -1137,6 +1144,13 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   } else if (type == entt::resolve<wsl::rsc::model_id> ()) {
     auto &current = object.cast<wsl::rsc::model_id &> ();
+    if (current.custom_inspect (label, runtime_ctx)) {
+      changed = true;
+    }
+    draw_restore_button ();
+    return changed;
+  } else if (type == entt::resolve<wsl::rsc::material_id> ()) {
+    auto &current = object.cast<wsl::rsc::material_id &> ();
     if (current.custom_inspect (label, runtime_ctx)) {
       changed = true;
     }

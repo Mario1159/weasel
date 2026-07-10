@@ -56,7 +56,8 @@ editor::root::root (wsl::comp::singl::runtime_context *runtime_ctx,
       m_resource_inspector_window (runtime_ctx, editor_ctx),
       m_game_view_window (runtime_ctx, editor_ctx),
       m_signal_inspector_window (runtime_ctx, editor_ctx, &m_selection),
-      m_build_inspector_window (runtime_ctx, editor_ctx)
+      m_build_inspector_window (runtime_ctx, editor_ctx),
+      m_shader_graph_editor (runtime_ctx, editor_ctx)
 {
   this->m_runtime_ctx = runtime_ctx;
   this->m_editor_ctx = editor_ctx;
@@ -121,6 +122,12 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   if (m_show_resources) {
     m_resource_inspector_window.draw ();
+    if (!m_resource_inspector_window.m_request_open_shader_graph.empty ()) {
+      m_show_shader_graph = true;
+      m_shader_graph_editor.load_graph (
+          m_resource_inspector_window.m_request_open_shader_graph);
+      m_resource_inspector_window.m_request_open_shader_graph.clear ();
+    }
   }
 
   if (m_show_input_map) {
@@ -165,6 +172,10 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
     m_file_list_window.draw (
         "Files", &m_show_file_list, &runtime_ctx.resource_manager,
         &m_text_editor_window, &m_show_text_editor, this->m_runtime_ctx);
+  }
+
+  if (m_show_shader_graph) {
+    m_shader_graph_editor.draw ("Shader Graph", &m_show_shader_graph);
   }
 
   if (!m_waiting_for_file_dialog && m_dialog_result.has_value ()) {
@@ -269,6 +280,7 @@ editor::root::build_default_dock_layout (ImGuiID dockspace_id)
   ImGui::DockBuilderDockWindow ("Signals", dock_right);
   ImGui::DockBuilderDockWindow ("Build", dock_right);
   ImGui::DockBuilderDockWindow ("Text Editor", dock_main);
+  ImGui::DockBuilderDockWindow ("Shader Graph", dock_main);
 
   ImGui::DockBuilderFinish (dockspace_id);
 }
@@ -429,6 +441,7 @@ editor::root::draw_main_menu ()
     ImGui::MenuItem ("Build", nullptr, &m_show_build_inspector);
     ImGui::MenuItem ("Text Editor", nullptr, &m_show_text_editor);
     ImGui::MenuItem ("Files", nullptr, &m_show_file_list);
+    ImGui::MenuItem ("Shader Graph", nullptr, &m_show_shader_graph);
     ImGui::Separator ();
 
     if (ImGui::MenuItem ("Reset Layout")) {

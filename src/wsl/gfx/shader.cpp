@@ -156,6 +156,28 @@ shader::load_skybox_shader (SDL_GPUDevice *device, const char *path,
   return shader;
 }
 
+SDL_GPUShader *
+shader::create_from_bytecode (SDL_GPUDevice *device, const uint8_t *data,
+                              size_t size, SDL_GPUShaderStage stage,
+                              Uint32 num_uniform_buffers, Uint32 num_samplers,
+                              Uint32 num_storage_buffers)
+{
+  SDL_GPUShaderCreateInfo info{};
+  info.code = data;
+  info.code_size = static_cast<Uint32> (size);
+  info.stage = stage;
+  info.entrypoint = entrypoint_for_stage (stage);
+  info.format = native_format ();
+
+  info.num_uniform_buffers = num_uniform_buffers;
+  info.num_samplers = num_samplers;
+  info.num_storage_buffers = num_storage_buffers;
+  info.num_storage_textures = 0;
+  info.props = 0;
+
+  return SDL_CreateGPUShader (device, &info);
+}
+
 SDL_GPUShaderFormat
 shader::native_format ()
 {

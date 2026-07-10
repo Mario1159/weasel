@@ -106,6 +106,7 @@ target_link_libraries(weasel PRIVATE
     imviewguizmo::imviewguizmo
     ImGuiColorTextEdit::imguicolortextedit
     imgizmo2d
+    imnodeflow
     glm_dep
     slang::slang
     CLI11::CLI11
@@ -121,7 +122,7 @@ if(TARGET imgui)
     target_link_libraries(weasel PRIVATE imgui)
 endif()
 
-target_compile_definitions(weasel PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED WEASEL_BUILD_EDITOR)
+target_compile_definitions(weasel PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED WEASEL_BUILD_EDITOR IMGUI_DEFINE_MATH_OPERATORS)
 if(WEASEL_ENABLE_MULTIPLAYER)
     target_compile_definitions(weasel PUBLIC WEASEL_ENABLE_MULTIPLAYER)
 endif()
@@ -150,3 +151,62 @@ else()
 endif()
 
 add_dependencies(weasel compile_shaders copy_otf copy_icons)
+
+# Slang loads its downstream compiler plugins (slang-glslang, which also
+# provides spirv-opt) at runtime via dlopen. These are separate shared
+# libraries that are NOT linked into the executable, so they must be deployed
+# where the dynamic loader can find them. The weasel executable's RUNPATH
+# includes $ORIGIN (the directory containing the executable), so copying the
+# plugin(s) there lets slang locate them when the shader graph compiles.
+# Without this, slang fails to load the downstream compiler and then crashes
+# with "free(): corrupted unsorted chunks" during Linkage teardown.
+set(_WEASEL_SLANG_PLUGINS slang-glslang slang-glsl-module)
+foreach(_slang_plugin ${_WEASEL_SLANG_PLUGINS})
+  if(TARGET ${_slang_plugin})
+    add_dependencies(weasel ${_slang_plugin})
+    add_custom_command(TARGET weasel POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:${_slang_plugin}>"
+        "$<TARGET_FILE_DIR:weasel>/"
+      COMMENT "Deploying Slang runtime plugin ${_slang_plugin}"
+      VERBATIM)
+    if(NOT APPLE)
+      install(FILES "$<TARGET_FILE:${_slang_plugin}>"
+        DESTINATION lib
+        COMPONENT Runtime)
+    endif()
+  endif()
+endforeach()
+
+# The shader graph compiles at runtime by shelling out to the `slangc`
+# executable (see wsl/gfx/shader_compiler.cpp). Deploy it next to the editor
+# so it is findable at runtime without relying on the system PATH.
+if(TARGET slangc)
+  add_dependencies(weasel slangc)
+  add_custom_command(TARGET weasel POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "$<TARGET_FILE:slangc>"
+      "$<TARGET_FILE_DIR:weasel>/"
+    COMMENT "Deploying slangc next to the editor"
+    VERBATIM)
+  if(NOT APPLE)
+    install(FILES "$<TARGET_FILE:slangc>"
+      DESTINATION bin
+      COMPONENT Runtime)
+  endif()
+endif()
+
+if(APPLE)
+  # Inside the macOS app bundle the plugin must live in Frameworks/ so the
+  # @executable_path/../Frameworks RUNPATH resolves it.
+  foreach(_slang_plugin ${_WEASEL_SLANG_PLUGINS})
+    if(TARGET ${_slang_plugin})
+      add_custom_command(TARGET weasel POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "$<TARGET_FILE:${_slang_plugin}>"
+          "${_WEASEL_FRAMEWORKS}/"
+        COMMENT "Deploying Slang runtime plugin ${_slang_plugin} into bundle"
+        VERBATIM)
+    endif()
+  endforeach()
+endif()

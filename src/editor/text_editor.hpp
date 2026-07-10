@@ -2,7 +2,6 @@
 
 #include <string>
 #include <TextEditor.h>
-#include <extras/TrieAutoComplete.h>
 #include <imgui.h>
 #include <memory>
 
@@ -35,7 +34,6 @@ private:
   bool m_has_loaded_once = false;
 
   std::unique_ptr<TextEditor> m_editor_ptr;
-  TrieAutoComplete m_auto_complete;
 
   ImFont *m_mono_font = nullptr; // set from renderer_imgui
 };

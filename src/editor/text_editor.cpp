@@ -18,7 +18,7 @@ read_entire_file (const char *path)
   std::ifstream const f (path, std::ios::binary);
   if (!f.good ()) {
     return {};
-}
+  }
   std::ostringstream ss;
   ss << f.rdbuf ();
   return ss.str ();
@@ -30,7 +30,7 @@ write_entire_file (const char *path, std::string_view data)
   std::ofstream f (path, std::ios::binary | std::ios::trunc);
   if (!f.good ()) {
     return false;
-}
+  }
   f.write (data.data (), (std::streamsize)data.size ());
   return true;
 }
@@ -42,7 +42,12 @@ text_editor::text_editor ()
   m_editor_ptr->SetLanguage (TextEditor::Language::Cpp ());
   m_editor_ptr->SetPalette (TextEditor::GetDarkPalette ());
 
-  m_auto_complete.Connect (m_editor_ptr.get ());
+  // NOTE: TrieAutoComplete::buildTrie() (third-party ImGuiColorTextEdit)
+  // crashes in std::unordered_map when indexing the identifiers of certain
+  // documents (e.g. large generated shader sources), taking down the editor.
+  // Until that is fixed upstream we deliberately do not connect it; the
+  // editor remains fully usable for viewing/editing without the
+  // identifier-dropdown autocomplete.
 }
 
 text_editor::~text_editor ()
@@ -69,13 +74,13 @@ text_editor::open_file (const char *path)
 {
   if ((path == nullptr) || (path[0] == 0)) {
     return false;
-}
+  }
   std::string const txt = read_entire_file (path);
   if (txt.empty ()) {
     std::ifstream const probe (path);
     if (!probe.good ()) {
       return false;
-}
+    }
   }
   m_editor_ptr->SetText (txt);
   m_current_path = path;
@@ -89,11 +94,11 @@ text_editor::save_file (const char *path)
 {
   if ((path == nullptr) || (path[0] == 0)) {
     return false;
-}
+  }
   const std::string text = m_editor_ptr->GetText ();
   if (!write_entire_file (path, text)) {
     return false;
-}
+  }
   m_current_path = path;
   return true;
 }
@@ -120,39 +125,40 @@ text_editor::draw (const char *title, bool *p_open)
       if (ImGui::MenuItem ("Close")) {
         if (p_open != nullptr) {
           *p_open = false;
-}
+        }
       }
       ImGui::EndMenu ();
     }
     if (ImGui::BeginMenu ("Edit")) {
       const bool ro = m_editor_ptr->IsReadOnlyEnabled ();
-      if (ImGui::MenuItem ("Read-only", nullptr, m_editor_ptr->IsReadOnlyEnabled ())) {
+      if (ImGui::MenuItem ("Read-only", nullptr,
+                           m_editor_ptr->IsReadOnlyEnabled ())) {
         m_editor_ptr->SetReadOnlyEnabled (!m_editor_ptr->IsReadOnlyEnabled ());
-}
+      }
 
       ImGui::Separator ();
       if (ImGui::MenuItem ("Undo", "Alt+Backspace", nullptr,
                            !ro && m_editor_ptr->CanUndo ())) {
         m_editor_ptr->Undo ();
-}
+      }
       if (ImGui::MenuItem ("Redo", "Ctrl+Y", nullptr,
                            !ro && m_editor_ptr->CanRedo ())) {
         m_editor_ptr->Redo ();
-}
+      }
 
       ImGui::Separator ();
       if (ImGui::MenuItem ("Copy", "Ctrl+C", nullptr,
                            m_editor_ptr->AnyCursorHasSelection ())) {
         m_editor_ptr->Copy ();
-}
+      }
       if (ImGui::MenuItem ("Cut", "Ctrl+X", nullptr,
                            !ro && m_editor_ptr->AnyCursorHasSelection ())) {
         m_editor_ptr->Cut ();
-}
+      }
       if (ImGui::MenuItem ("Paste", "Ctrl+V", nullptr,
                            !ro && ImGui::GetClipboardText () != nullptr)) {
         m_editor_ptr->Paste ();
-}
+      }
 
       ImGui::Separator ();
       if (ImGui::MenuItem ("Select All", "Ctrl+A")) {
@@ -175,11 +181,11 @@ text_editor::draw (const char *title, bool *p_open)
   // ---- monospace font for editor area ----
   if (m_mono_font != nullptr) {
     ImGui::PushFont (m_mono_font);
-}
+  }
   m_editor_ptr->Render ("TextEditor");
   if (m_mono_font != nullptr) {
     ImGui::PopFont ();
-}
+  }
 
   ImGui::End ();
 }

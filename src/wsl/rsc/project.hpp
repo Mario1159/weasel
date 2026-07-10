@@ -5,7 +5,6 @@
 #include <cereal/cereal.hpp>
 #include <cereal/types/string.hpp>
 
-
 namespace wsl
 {
 
@@ -13,7 +12,8 @@ namespace rsc
 {
 
 /*!
- * \brief Represents a project configuration, including metadata and resource paths.
+ * \brief Represents a project configuration, including metadata and resource
+ * paths.
  */
 struct project
 {
@@ -51,6 +51,8 @@ struct project
   std::string fonts_path;
   //! Path to the directory containing shader files.
   std::string shaders_path;
+  //! Path to the directory containing material files.
+  std::string materials_path = "materials";
 
   // -------- Default Scene --------
   //! Path to the default scene file, relative to `scenes_path`.
@@ -78,8 +80,15 @@ struct project
         cereal::make_nvp ("audio_path", audio_path),
         cereal::make_nvp ("ui_layouts_path", ui_layouts_path),
         cereal::make_nvp ("fonts_path", fonts_path),
-        cereal::make_nvp ("shaders_path", shaders_path),
-        cereal::make_nvp ("default_scene_path", default_scene_path));
+        cereal::make_nvp ("shaders_path", shaders_path));
+
+    try {
+      ar (cereal::make_nvp ("materials_path", materials_path));
+    } catch (const cereal::Exception &) {
+      // If the field is missing (e.g. old project), keep the default.
+    }
+
+    ar (cereal::make_nvp ("default_scene_path", default_scene_path));
   }
 };
 

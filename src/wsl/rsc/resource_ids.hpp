@@ -137,6 +137,123 @@ struct shader_id
   }
 };
 
+/*!
+ * \brief Unique identifier for a shader program resource.
+ */
+struct shader_program_id
+{
+  //! The hashed identifier value.
+  entt::id_type value{ 0 };
+  bool
+  operator== (const shader_program_id &other) const
+  {
+    return value == other.value;
+  }
+};
+
+/*!
+ * \brief Unique identifier for a material asset resource.
+ */
+struct material_id
+{
+  //! The hashed identifier value.
+  entt::id_type value{ 0 };
+  bool
+  operator== (const material_id &other) const
+  {
+    return value == other.value;
+  }
+  static void register_meta ();
+  bool custom_inspect (const char *label,
+                       comp::singl::runtime_context *runtime);
+};
+
+} // namespace rsc
+
+} // namespace wsl
+
+// ---------------------------------------------------------------------------
+// cereal serialization helpers for resource id types
+// ---------------------------------------------------------------------------
+
+#include <cereal/cereal.hpp>
+
+namespace wsl
+{
+
+namespace rsc
+{
+
+template <class Archive>
+void
+serialize (Archive &ar, model_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, image_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, cubemap_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, scene_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, audio_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, ui_layout_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, font_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, shader_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, shader_program_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, material_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+}
+
 } // namespace rsc
 
 } // namespace wsl

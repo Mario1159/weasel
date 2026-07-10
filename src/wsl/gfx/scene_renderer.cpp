@@ -165,7 +165,8 @@ gfx::scene_renderer::update_node_world (gfx::node &n, const glm::mat4 &parent)
 gfx::scene_renderer::scene_renderer (wsl::gfx::render_window &window,
                                      render_context *ctx,
                                      wsl::rsc::resource_manager *res_mgr)
-    : renderer (window, ctx, res_mgr), m_clustered (ctx, res_mgr)
+    : renderer (window, ctx, res_mgr), m_clustered (ctx, res_mgr),
+      m_pipeline_cache (ctx->gpu_device)
 {
 
   create_pipeline ();
@@ -272,9 +273,11 @@ gfx::scene_renderer::draw_visible_models ()
         continue;
       }
 
+      m_active_material_override = draw.material_override;
       draw_model (*draw.model, draw.scene_index, draw.transform,
                   m_active_view.view_proj, draw.mip_lod_bias,
                   draw.geometry_lod_bias, draw.visibility_range);
+      m_active_material_override = {};
     }
   }
 }
@@ -889,6 +892,20 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
 
   for (const primitive &prim : m.primitives) {
 
+    if (m_active_material_override.value != entt::null) {
+      // Per-instance material override: render every primitive of this mesh
+      // with the assigned material, ignoring the mesh's own material.
+      gfx::material_instance override_inst;
+      override_inst.asset_id = m_active_material_override;
+      render_custom_primitive (prim, override_inst, mip_lod_bias);
+      continue;
+    }
+
+    if (enable_custom_materials && prim.use_custom_material) {
+      render_custom_primitive (prim, mip_lod_bias);
+      continue;
+    }
+
     SDL_GPUGraphicsPipeline *pipe = nullptr;
 
     if (m_force_unlit) {
@@ -1088,6 +1105,421 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
                                   static_cast<Uint32> (prim.indices.size ()), 1,
                                   prim.first_index, 0, 0);
   }
+}
+
+void
+gfx::scene_renderer::render_custom_primitive (const primitive &prim,
+                                              float mip_lod_bias)
+{
+  render_custom_primitive (prim, prim.custom_mat, mip_lod_bias);
+}
+
+void
+gfx::scene_renderer::render_custom_primitive (
+    const primitive &prim, const gfx::material_instance &mat_inst,
+    float mip_lod_bias)
+{
+  if ((m_ctx == nullptr) || (m_ctx->main_pass == nullptr)
+      || (m_res_mgr == nullptr)) {
+    return;
+  }
+
+  auto mat_asset = m_res_mgr->get (mat_inst.asset_id);
+  if (!mat_asset) {
+    wsl::log::gfx ()->warn ("Custom material asset not found");
+    return;
+  }
+
+  auto prog = m_res_mgr->get (mat_asset->shader_program);
+  if (!prog || prog->fragment_bytecode.empty ()) {
+    wsl::log::gfx ()->warn ("Custom shader program not found or incomplete");
+    return;
+  }
+
+  // Load the vertex shader variant specified by the material asset.
+  auto vert_id = m_res_mgr->register_shader (mat_asset->vertex_shader_path);
+  SDL_GPUShader *vert = gfx::shader::load_from_manager (
+      m_ctx->gpu_device, m_res_mgr, vert_id, SDL_GPU_SHADERSTAGE_VERTEX, 1, 0);
+
+  if (vert == nullptr) {
+    return;
+  }
+
+  // Load/create fragment shader from runtime bytecode. SDL_GPU requires the
+  // pipeline's sampler count to match the shader's actual sampler bindings.
+  // The reflection count is authoritative: a texture-less graph declares no
+  // samplers (an unused `u_Samplers[1]` is stripped from the SPIR-V), so the
+  // count can legitimately be 0.
+  const uint32_t num_samplers = prog->fragment_reflection.num_samplers ();
+  SDL_GPUShader *frag = gfx::shader::create_from_bytecode (
+      m_ctx->gpu_device, prog->fragment_bytecode.data (),
+      prog->fragment_bytecode.size (), SDL_GPU_SHADERSTAGE_FRAGMENT,
+      prog->fragment_reflection.num_uniform_buffers (), num_samplers,
+      prog->fragment_reflection.num_storage_buffers ());
+  if (frag == nullptr) {
+    SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
+    return;
+  }
+
+  // Build pipeline description matching the main pass targets
+  SDL_GPUGraphicsPipelineCreateInfo pipe{};
+  SDL_zero (pipe);
+  pipe.vertex_shader = vert;
+  pipe.fragment_shader = frag;
+  pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+  pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
+  pipe.depth_stencil_state.enable_depth_test = true;
+  pipe.depth_stencil_state.enable_depth_write = true;
+  pipe.depth_stencil_state.enable_stencil_test = false;
+
+  pipe.target_info.has_depth_stencil_target = true;
+  pipe.target_info.depth_stencil_format = m_window->depth_format;
+
+  SDL_GPUColorTargetDescription ctd[2]{};
+  ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+  ctd[1].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+  for (int i = 0; i < 2; ++i) {
+    ctd[i].blend_state.enable_blend = true;
+    ctd[i].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    ctd[i].blend_state.dst_color_blendfactor
+        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    ctd[i].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    ctd[i].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    ctd[i].blend_state.dst_alpha_blendfactor
+        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    ctd[i].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    ctd[i].blend_state.color_write_mask
+        = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+          | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
+  }
+  pipe.target_info.num_color_targets = 2;
+  pipe.target_info.color_target_descriptions = ctd;
+
+  pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+  pipe.rasterizer_state.cull_mode
+      = mat_asset->double_sided ? SDL_GPU_CULLMODE_NONE : SDL_GPU_CULLMODE_BACK;
+
+  pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
+  pipe.multisample_state.sample_mask = 0;
+  pipe.multisample_state.enable_mask = false;
+
+  static SDL_GPUVertexBufferDescription vbuf{};
+  vbuf.slot = 0;
+  vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+  vbuf.pitch = (Uint32)sizeof (vertex);
+
+  pipe.vertex_input_state.num_vertex_buffers = 1;
+  pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
+
+  static SDL_GPUVertexAttribute attrs[4];
+  memset (attrs, 0, sizeof (attrs));
+  attrs[0].location = 0;
+  attrs[0].buffer_slot = 0;
+  attrs[0].offset = offsetof (vertex, pos);
+  attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+  attrs[1].location = 1;
+  attrs[1].buffer_slot = 0;
+  attrs[1].offset = offsetof (vertex, normal);
+  attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+  attrs[2].location = 2;
+  attrs[2].buffer_slot = 0;
+  attrs[2].offset = offsetof (vertex, uv);
+  attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+  attrs[3].location = 3;
+  attrs[3].buffer_slot = 0;
+  attrs[3].offset = offsetof (vertex, tangent);
+  attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+  pipe.vertex_input_state.num_vertex_attributes = 4;
+  pipe.vertex_input_state.vertex_attributes = attrs;
+
+  gfx::pipeline_key key{};
+  key.shader_program_hash
+      = std::hash<entt::id_type>{}(mat_asset->shader_program.value);
+  key.vertex_layout_hash = 0; // fixed for now
+  key.render_target_hash = 0; // fixed for now
+  key.flags = mat_asset->double_sided ? 1 : 0;
+
+  SDL_GPUGraphicsPipeline *gfx_pipe = m_pipeline_cache.acquire (key, pipe);
+
+  SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
+  SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
+
+  if (gfx_pipe == nullptr) {
+    return;
+  }
+
+  SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, gfx_pipe);
+
+  gfx::material_instance effective_inst = mat_inst;
+  auto has_param = [&] (const std::string &name) {
+    return effective_inst.overrides.find (name) != effective_inst.overrides.end ()
+           || mat_asset->default_parameters.find (name)
+                  != mat_asset->default_parameters.end ();
+  };
+
+  if (!has_param ("u_BaseColorFactor")) {
+    effective_inst.overrides["u_BaseColorFactor"] = gfx::material_parameter (
+        "u_BaseColorFactor", prim.mat.base_color_factor);
+  }
+  if (!has_param ("u_MetallicFactor")) {
+    effective_inst.overrides["u_MetallicFactor"] = gfx::material_parameter (
+        "u_MetallicFactor", prim.mat.metallic_factor);
+  }
+  if (!has_param ("u_RoughnessFactor")) {
+    effective_inst.overrides["u_RoughnessFactor"] = gfx::material_parameter (
+        "u_RoughnessFactor", prim.mat.roughness_factor);
+  }
+  if (!has_param ("u_EmissiveFactor")) {
+    effective_inst.overrides["u_EmissiveFactor"] = gfx::material_parameter (
+        "u_EmissiveFactor", prim.mat.emissive_factor);
+  }
+  if (!has_param ("u_MipLodBias")) {
+    effective_inst.overrides["u_MipLodBias"]
+        = gfx::material_parameter ("u_MipLodBias", mip_lod_bias);
+  }
+
+  // Build and push uniform blob (Material cbuffer, slot 0)
+  auto blob
+      = effective_inst.build_uniform_blob (prog->fragment_reflection, *mat_asset);
+  if (!blob.empty ()) {
+    SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, blob.data (),
+                                    static_cast<Uint32> (blob.size ()));
+  }
+
+  // The shader-graph material uses the engine's full PBR (via pbr_common), so
+  // we must bind the same lighting/IBL/Post/Cluster resources the standard
+  // cube.frag material receives. Lighting (slot 1) is already pushed globally
+  // each frame by the lighting system.
+
+  // ---- IBL cbuffer (slot 2) ----
+  const SDL_GPUTexture *irr = nullptr;
+  const SDL_GPUTexture *pre = nullptr;
+  const SDL_GPUTexture *lut = nullptr;
+  SDL_GPUSampler *ibl_samp = nullptr;
+  float max_mip = 0.0F;
+
+  const bool ibl_ready = (m_active_env != nullptr)
+                         && (m_active_env->ibl_irradiance != nullptr)
+                         && (m_active_env->ibl_prefilter != nullptr)
+                         && (m_active_env->ibl_brdf_lut != nullptr);
+
+  if (ibl_ready) {
+    irr = m_active_env->ibl_irradiance;
+    pre = m_active_env->ibl_prefilter;
+    lut = m_active_env->ibl_brdf_lut;
+    ibl_samp = (m_active_env->ibl_sampler != nullptr)
+                   ? m_active_env->ibl_sampler
+                   : m_default_sampler;
+    max_mip = m_active_env->prefilter_max_mip;
+  } else {
+    if ((m_active_env != nullptr) && (m_active_env->texture != nullptr)) {
+      irr = m_active_env->texture;
+      pre = m_active_env->texture;
+    }
+    ibl_samp = (m_active_env != nullptr) && (m_active_env->sampler != nullptr)
+                   ? m_active_env->sampler
+                   : m_default_sampler;
+    max_mip = 0.0F;
+  }
+
+  struct alignas (16) gpu_ibl_params
+  {
+    float intensity;
+    float prefilter_max_mip;
+    float pad0, pad1;
+  };
+  gpu_ibl_params ibl{};
+  ibl.intensity = ibl_ready ? m_ibl_intensity : 0.0F;
+  ibl.prefilter_max_mip = max_mip;
+  SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 2, &ibl, sizeof (ibl));
+
+  // ---- Post cbuffer (slot 3) ----
+  struct alignas (16) gpu_post_params
+  {
+    glm::vec4 bloom_and_ssao0;
+    glm::vec4 ssao_and_pad;
+  };
+  gpu_post_params post{};
+  post.bloom_and_ssao0
+      = glm::vec4 (bloom_threshold, bloom_knee, bloom_intensity,
+                   (ssao_enabled && (m_ssao_blur != nullptr)) ? 1.0F : 0.0F);
+  post.ssao_and_pad = glm::vec4 (ssao_intensity, 0.0F, 0.0F, 0.0F);
+  SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 3, &post, sizeof (post));
+
+  // ---- ClusterParams cbuffer (slot 4) ----
+  if (m_clustered.is_active ()) {
+    uint32_t sw = 0;
+    uint32_t sh = 0;
+    m_window->get_size (sw, sh);
+    m_clustered.push_graphics_uniforms (
+        m_ctx->main_cmd, glm::inverse (m_active_view.proj),
+        glm::vec2 (static_cast<float> (sw), static_cast<float> (sh)));
+  }
+
+  // ---- Texture/sampler bindings (15 slots, fixed PBR layout) ----
+  // t0..t3 hold any graph texture-sample nodes; t4..t14 are the PBR-internal
+  // IBL / shadow / SSAO textures. Slots without a graph texture fall back to
+  // a default so the descriptor set stays fully bound.
+  const auto &tex_refl = prog->fragment_reflection.textures;
+  SDL_GPUTextureSamplerBinding texbind[15]{};
+
+  SDL_GPUSampler *samp
+      = (m_default_sampler != nullptr) ? m_default_sampler : nullptr;
+  SDL_GPUSampler *prim_samp
+      = (prim.mat.sampler != nullptr) ? prim.mat.sampler : samp;
+  auto has_name = [] (const std::string &actual, const char *expected) {
+    return actual == expected || actual.find (expected) != std::string::npos;
+  };
+
+  static uint32_t s_custom_tex_log_budget = 64;
+  SDL_GPUSampler *use_ibl_samp
+      = (ibl_samp != nullptr) ? ibl_samp : m_default_sampler;
+  SDL_GPUSampler *shadow_samp
+      = (m_shadow_sampler != nullptr) ? m_shadow_sampler : m_default_sampler;
+
+  for (int slot = 0; slot < 15; ++slot) {
+    texbind[slot].texture = m_default_basecolor_tex;
+    texbind[slot].sampler = m_default_sampler;
+  }
+
+  for (const auto &tb : tex_refl) {
+    if (tb.set != 2 || tb.binding >= 15) {
+      continue;
+    }
+
+    const uint32_t slot = tb.binding;
+    std::string const &tex_name = tb.name;
+    SDL_GPUTexture *gpu_tex = m_default_basecolor_tex;
+    SDL_GPUSampler *gpu_samp = samp;
+    const char *source = "fallback:default";
+
+    // Engine PBR shared textures.
+    if (has_name (tex_name, "u_IrradianceMap")) {
+      gpu_tex = (irr != nullptr) ? (SDL_GPUTexture *)irr : m_default_cubemap_tex;
+      gpu_samp = use_ibl_samp;
+      source = "pbr:irradiance";
+    } else if (has_name (tex_name, "u_PrefilterMap")) {
+      gpu_tex = (pre != nullptr) ? (SDL_GPUTexture *)pre : m_default_cubemap_tex;
+      gpu_samp = use_ibl_samp;
+      source = "pbr:prefilter";
+    } else if (has_name (tex_name, "u_BRDFLUT")) {
+      gpu_tex
+          = (lut != nullptr) ? (SDL_GPUTexture *)lut : m_default_brdf_lut_tex;
+      gpu_samp = use_ibl_samp;
+      source = "pbr:brdf_lut";
+    } else if (has_name (tex_name, "u_DirShadowMap")) {
+      gpu_tex = (m_shadow_depth != nullptr) ? m_shadow_depth : m_default_basecolor_tex;
+      gpu_samp = shadow_samp;
+      source = "pbr:dir_shadow";
+    } else if (has_name (tex_name, "u_SpotShadowMap0")) {
+      gpu_tex = (m_spot_shadows[0].depth != nullptr) ? m_spot_shadows[0].depth
+                                                     : ((m_shadow_depth != nullptr)
+                                                            ? m_shadow_depth
+                                                            : m_default_basecolor_tex);
+      gpu_samp = shadow_samp;
+      source = "pbr:spot_shadow0";
+    } else if (has_name (tex_name, "u_SpotShadowMap1")) {
+      gpu_tex = (m_spot_shadows[1].depth != nullptr) ? m_spot_shadows[1].depth
+                                                     : ((m_shadow_depth != nullptr)
+                                                            ? m_shadow_depth
+                                                            : m_default_basecolor_tex);
+      gpu_samp = shadow_samp;
+      source = "pbr:spot_shadow1";
+    } else if (has_name (tex_name, "u_SpotShadowMap2")) {
+      gpu_tex = (m_spot_shadows[2].depth != nullptr) ? m_spot_shadows[2].depth
+                                                     : ((m_shadow_depth != nullptr)
+                                                            ? m_shadow_depth
+                                                            : m_default_basecolor_tex);
+      gpu_samp = shadow_samp;
+      source = "pbr:spot_shadow2";
+    } else if (has_name (tex_name, "u_SpotShadowMap3")) {
+      gpu_tex = (m_spot_shadows[3].depth != nullptr) ? m_spot_shadows[3].depth
+                                                     : ((m_shadow_depth != nullptr)
+                                                            ? m_shadow_depth
+                                                            : m_default_basecolor_tex);
+      gpu_samp = shadow_samp;
+      source = "pbr:spot_shadow3";
+    } else if (has_name (tex_name, "u_PointShadowMap0")) {
+      gpu_tex = (m_point_shadows[0].depth_cube != nullptr)
+                    ? m_point_shadows[0].depth_cube
+                    : m_default_cubemap_tex;
+      gpu_samp = shadow_samp;
+      source = "pbr:point_shadow0";
+    } else if (has_name (tex_name, "u_PointShadowMap1")) {
+      gpu_tex = (m_point_shadows[1].depth_cube != nullptr)
+                    ? m_point_shadows[1].depth_cube
+                    : m_default_cubemap_tex;
+      gpu_samp = shadow_samp;
+      source = "pbr:point_shadow1";
+    } else if (has_name (tex_name, "u_SSAOTex")) {
+      gpu_tex = (m_ssao_blur != nullptr) ? m_ssao_blur : m_default_basecolor_tex;
+      gpu_samp = (m_ssao_linear_sampler != nullptr) ? m_ssao_linear_sampler
+                                                     : m_default_sampler;
+      source = "pbr:ssao";
+    }
+    // Primitive material textures.
+    else if (has_name (tex_name, "u_BaseColorTex")) {
+      gpu_tex = (prim.mat.base_color_tex != nullptr) ? prim.mat.base_color_tex
+                                                     : m_default_basecolor_tex;
+      gpu_samp = prim_samp;
+      source = "primitive:base_color";
+    } else if (has_name (tex_name, "u_MetallicRoughnessTex")) {
+      gpu_tex = (prim.mat.metallic_roughness_tex != nullptr)
+                    ? prim.mat.metallic_roughness_tex
+                    : m_default_mr_tex;
+      gpu_samp = prim_samp;
+      source = "primitive:metallic_roughness";
+    } else if (has_name (tex_name, "u_NormalTex")) {
+      gpu_tex
+          = (prim.mat.normal_tex != nullptr) ? prim.mat.normal_tex : m_default_normal_tex;
+      gpu_samp = prim_samp;
+      source = "primitive:normal";
+    } else if (has_name (tex_name, "u_EmissiveTex")) {
+      gpu_tex = (prim.mat.emissive_tex != nullptr) ? prim.mat.emissive_tex
+                                                   : m_default_emissive_tex;
+      gpu_samp = prim_samp;
+      source = "primitive:emissive";
+    }
+
+    // Explicit material parameter overrides win over fallback bindings.
+    auto param_val = effective_inst.get_parameter (tb.name, *mat_asset);
+    if (std::holds_alternative<rsc::image_id> (param_val)) {
+      auto img = m_res_mgr->get (std::get<rsc::image_id> (param_val));
+      if (img && img->texture) {
+        gpu_tex = img->texture.get ();
+        gpu_samp = samp;
+        source = "param:image_id";
+      }
+    } else if (std::holds_alternative<rsc::cubemap_id> (param_val)) {
+      auto cub = m_res_mgr->get (std::get<rsc::cubemap_id> (param_val));
+      if (cub && cub->texture) {
+        gpu_tex = cub->texture;
+        gpu_samp = samp;
+        source = "param:cubemap_id";
+      }
+    }
+
+    texbind[slot].texture = gpu_tex;
+    texbind[slot].sampler = gpu_samp;
+
+    if (s_custom_tex_log_budget > 0) {
+      wsl::log::gfx ()->debug (
+          "[custom_mat] tex binding {} name='{}' source={} prim_has(base={},mr={},n={},e={})",
+          slot, tex_name, source, prim.mat.base_color_tex != nullptr,
+          prim.mat.metallic_roughness_tex != nullptr,
+          prim.mat.normal_tex != nullptr, prim.mat.emissive_tex != nullptr);
+      --s_custom_tex_log_budget;
+    }
+  }
+
+  SDL_BindGPUFragmentSamplers (m_ctx->main_pass, 0, texbind, 15);
+
+  // ---- Clustered lighting storage buffers ----
+  m_clustered.bind_for_graphics (m_ctx->main_pass);
+
+  SDL_DrawGPUIndexedPrimitives (m_ctx->main_pass,
+                                static_cast<Uint32> (prim.indices.size ()), 1,
+                                prim.first_index, 0, 0);
 }
 
 void

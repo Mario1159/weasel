@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "material.hpp"
+#include "material_asset.hpp"
 
 namespace wsl
 {
@@ -44,6 +45,10 @@ struct primitive
   std::vector<vertex> vertices;
   std::vector<uint32_t> indices;
   material mat;
+
+  //! When true, the renderer uses custom_mat instead of the legacy mat.
+  bool use_custom_material = false;
+  material_instance custom_mat;
 };
 
 /*!

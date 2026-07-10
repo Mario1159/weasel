@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <fstream>
 #include <cstdint>
 #include <cstdio>
 #include <entt/core/fwd.hpp>
@@ -217,6 +218,7 @@ rsc::resource_manager_view::register_meta ()
 
   rsc::model_id::register_meta ();
   rsc::audio_id::register_meta ();
+  rsc::material_id::register_meta ();
 }
 
 bool
@@ -316,6 +318,9 @@ rsc::resource_manager::load (io::resource_ref ref)
     break;
   case io::resource_type::audio:
     load (audio_id{ ref.id });
+    break;
+  case io::resource_type::material:
+    load (material_id{ ref.id });
     break;
   }
 }
@@ -1763,6 +1768,9 @@ rsc::resource_manager::unload (io::resource_ref ref)
   case io::resource_type::audio:
     unload (audio_id{ ref.id });
     break;
+  case io::resource_type::material:
+    unload (material_id{ ref.id });
+    break;
   }
 }
 
@@ -2004,6 +2012,28 @@ rsc::resource_manager::get_resource_path (audio_id id) const
 }
 
 std::string
+rsc::resource_manager::get_resource_path (material_id id) const
+{
+  if (std::optional<material_resource_info> rec = info (id)) {
+    // If it's res:// already, return as is.
+    if (rec->path.rfind ("res://", 0) == 0) {
+      return rec->path;
+    }
+
+    // Otherwise try to make it res:// relative if possible.
+    if (m_active_project) {
+      std::filesystem::path const root (m_active_project->root_path);
+      std::filesystem::path const p (rec->path);
+      if (rec->path.find (m_active_project->root_path) == 0) {
+        return "res://" + std::filesystem::relative (p, root).generic_string ();
+      }
+    }
+    return rec->path;
+  }
+  return "None";
+}
+
+std::string
 rsc::resource_manager::get_path (io::resource_ref ref) const
 {
   switch (ref.type) {
@@ -2029,6 +2059,11 @@ rsc::resource_manager::get_path (io::resource_ref ref) const
     break;
   case io::resource_type::audio:
     if (auto i = info (audio_id{ ref.id })) {
+      return i->path;
+    }
+    break;
+  case io::resource_type::material:
+    if (auto i = info (material_id{ ref.id })) {
       return i->path;
     }
     break;
@@ -2113,6 +2148,76 @@ rsc::audio_id::register_meta ()
       .type (entt::type_hash<rsc::audio_id>::value ())
       .func<&rsc::audio_id::custom_inspect> ("custom_inspect"_hs)
       .data<&rsc::audio_id::value> ("value"_hs);
+}
+
+bool
+rsc::material_id::custom_inspect (const char *label,
+                                  comp::singl::runtime_context *runtime)
+{
+  rsc::resource_manager *res_mgr
+      = (runtime != nullptr) ? &runtime->resource_manager : nullptr;
+  if (res_mgr == nullptr) {
+    ImGui::TextDisabled ("No resource manager");
+    return false;
+  }
+
+  const char *preview = "None";
+  char preview_buf[256];
+
+  if (value != entt::null) {
+    if (std::optional<material_resource_info> rec
+        = res_mgr->info (material_id{ value })) {
+      std::snprintf (preview_buf, sizeof (preview_buf), "%s (%s)",
+                     rec->name.c_str (), rec->path.c_str ());
+    } else {
+      std::snprintf (preview_buf, sizeof (preview_buf), "(%08X)",
+                     (uint32_t)value);
+    }
+    preview = preview_buf;
+  }
+
+  bool changed = false;
+
+  if (ImGui::BeginCombo (label, preview)) {
+
+    if (ImGui::Selectable ("None", value == entt::null)) {
+      value = entt::null;
+      changed = true;
+    }
+
+    for (const auto &rec : res_mgr->list_materials ()) {
+      const bool selected = (rec.id == value);
+
+      char item_buf[256];
+      std::snprintf (item_buf, sizeof (item_buf), "%s (%s)", rec.name.c_str (),
+                     rec.path.c_str ());
+
+      if (ImGui::Selectable (item_buf, selected)) {
+        value = rec.id;
+        res_mgr->load (material_id{ rec.id });
+        changed = true;
+      }
+
+      if (selected) {
+        ImGui::SetItemDefaultFocus ();
+      }
+    }
+
+    ImGui::EndCombo ();
+  }
+
+  return changed;
+}
+
+void
+rsc::material_id::register_meta ()
+{
+  using namespace entt::literals;
+
+  entt::meta_factory<rsc::material_id> ()
+      .type (entt::type_hash<rsc::material_id>::value ())
+      .func<&rsc::material_id::custom_inspect> ("custom_inspect"_hs)
+      .data<&rsc::material_id::value> ("value"_hs);
 }
 
 bool
@@ -2280,6 +2385,230 @@ void
 rsc::resource_manager::set_engine_resource_path (const std::string &path)
 {
   m_wsl_resource_path = path;
+}
+
+// ---- Materials ----
+
+rsc::material_id
+rsc::resource_manager::register_material (const std::string &path)
+{
+  return material_id{ register_resource<
+      std::unordered_map<entt::id_type, detail::material_record>,
+      detail::material_record> (m_material_table, path,
+                                material_state::not_loaded) };
+}
+
+rsc::material_id
+rsc::resource_manager::import_material (const std::string &path,
+                                        bool /*request_load*/)
+{
+  if (m_active_project == nullptr) {
+    wsl::log::rsc ()->warn ("Cannot import material without active project");
+    return material_id{};
+  }
+
+  fs::path const src (path);
+  fs::path const dst_dir = fs::path (m_active_project->root_path)
+                           / m_active_project->materials_path;
+  fs::create_directories (dst_dir);
+  fs::path const dst = dst_dir / src.filename ();
+
+  try {
+    fs::copy_file (src, dst, fs::copy_options::overwrite_existing);
+  } catch (const std::exception &e) {
+    wsl::log::rsc ()->error ("Failed to copy material: {}", e.what ());
+    return material_id{};
+  }
+
+  return register_material (dst.string ());
+}
+
+rsc::resource_manager::material_handle
+rsc::resource_manager::load (material_id id)
+{
+  detail::material_record *rec = find_record (m_material_table, id.value);
+  if (rec == nullptr) {
+    return nullptr;
+  }
+
+  auto it = m_materials.find (id.value);
+  if (it != m_materials.end ()) {
+    rec->state = material_state::loaded;
+    return it->second;
+  }
+
+  std::string const resolved = resolve_path (rec->path);
+  std::ifstream file (resolved);
+  if (!file) {
+    wsl::log::rsc ()->error ("Failed to open material file: {}", resolved);
+    return nullptr;
+  }
+
+  try {
+    cereal::JSONInputArchive archive (file);
+    auto asset = std::make_shared<gfx::material_asset> ();
+    archive (cereal::make_nvp ("material", *asset));
+    asset->id = id;
+    asset->path = rec->path;
+    if (asset->name.empty ()) {
+      asset->name = rec->name;
+    }
+    rec->shader_program_id = asset->shader_program.value;
+    m_materials[id.value] = asset;
+    rec->state = material_state::loaded;
+    return asset;
+  } catch (const std::exception &e) {
+    wsl::log::rsc ()->error ("Failed to parse material '{}': {}", resolved,
+                             e.what ());
+    return nullptr;
+  }
+}
+
+void
+rsc::resource_manager::unload (material_id id)
+{
+  if (detail::material_record *rec = find_record (m_material_table, id.value)) {
+    m_materials.erase (id.value);
+    rec->state = material_state::not_loaded;
+  }
+}
+
+rsc::resource_manager::material_handle
+rsc::resource_manager::get (material_id id)
+{
+  auto it = m_materials.find (id.value);
+  if (it != m_materials.end ()) {
+    return it->second;
+  }
+  return load (id);
+}
+
+rsc::material_state
+rsc::resource_manager::state (material_id id) const
+{
+  if (const detail::material_record *rec
+      = find_record (m_material_table, id.value)) {
+    return rec->state;
+  }
+  return material_state::not_loaded;
+}
+
+bool
+rsc::resource_manager::contains (material_id id) const
+{
+  return find_record (m_material_table, id.value) != nullptr;
+}
+
+std::optional<rsc::material_resource_info>
+rsc::resource_manager::info (material_id id) const
+{
+  const detail::material_record *rec = find_record (m_material_table, id.value);
+  if (rec == nullptr) {
+    return std::nullopt;
+  }
+
+  return material_resource_info{ .id = id.value,
+                                 .path = rec->path,
+                                 .name = rec->name,
+                                 .state = rec->state,
+                                 .shader_program_id = rec->shader_program_id };
+}
+
+std::vector<rsc::material_resource_info>
+rsc::resource_manager::list_materials () const
+{
+  std::vector<material_resource_info> infos;
+  infos.reserve (m_material_table.size ());
+
+  for (const auto &[id, rec] : m_material_table) {
+    infos.push_back (
+        material_resource_info{ .id = id,
+                                .path = rec.path,
+                                .name = rec.name,
+                                .state = rec.state,
+                                .shader_program_id = rec.shader_program_id });
+  }
+
+  sort_infos (infos);
+  return infos;
+}
+
+// ---- Shader Programs ----
+
+rsc::shader_program_id
+rsc::resource_manager::register_shader_program (const std::string &path)
+{
+  return shader_program_id{ register_resource<
+      std::unordered_map<entt::id_type, detail::shader_program_record>,
+      detail::shader_program_record> (m_shader_program_table, path,
+                                      shader_program_state::not_loaded) };
+}
+
+rsc::shader_program_id
+rsc::resource_manager::register_shader_program (
+    std::shared_ptr<gfx::shader_program> prog, const std::string &name)
+{
+  entt::id_type id = entt::hashed_string{ name.c_str () };
+  m_shader_program_table[id] = detail::shader_program_record{
+    .path = "", .name = name, .state = shader_program_state::loaded
+  };
+  m_shader_programs[id] = std::move (prog);
+  return shader_program_id{ id };
+}
+
+rsc::resource_manager::shader_program_handle
+rsc::resource_manager::get (shader_program_id id)
+{
+  auto it = m_shader_programs.find (id.value);
+  if (it != m_shader_programs.end ()) {
+    return it->second;
+  }
+  return nullptr;
+}
+
+rsc::shader_program_state
+rsc::resource_manager::state (shader_program_id id) const
+{
+  if (const detail::shader_program_record *rec
+      = find_record (m_shader_program_table, id.value)) {
+    return rec->state;
+  }
+  return shader_program_state::not_loaded;
+}
+
+bool
+rsc::resource_manager::contains (shader_program_id id) const
+{
+  return find_record (m_shader_program_table, id.value) != nullptr;
+}
+
+std::optional<rsc::shader_program_resource_info>
+rsc::resource_manager::info (shader_program_id id) const
+{
+  const detail::shader_program_record *rec
+      = find_record (m_shader_program_table, id.value);
+  if (rec == nullptr) {
+    return std::nullopt;
+  }
+
+  return shader_program_resource_info{
+    .id = id.value, .path = rec->path, .name = rec->name, .state = rec->state
+  };
+}
+
+std::vector<rsc::shader_program_resource_info>
+rsc::resource_manager::list_shader_programs () const
+{
+  std::vector<shader_program_resource_info> infos;
+  infos.reserve (m_shader_program_table.size ());
+
+  for (const auto &[id, rec] : m_shader_program_table) {
+    infos.push_back (shader_program_resource_info{
+        .id = id, .path = rec.path, .name = rec.name, .state = rec.state });
+  }
+
+  sort_infos (infos);
+  return infos;
 }
 
 } // namespace wsl

@@ -79,6 +79,18 @@ target_link_libraries(wsl PRIVATE
     ${CMAKE_DL_LIBS}
 )
 
+# Used by the runtime shader compiler to parse slangc's reflection JSON.
+if(TARGET nlohmann_json::nlohmann_json)
+    target_link_libraries(wsl PRIVATE nlohmann_json::nlohmann_json)
+endif()
+
+# Absolute path to the slangc executable deployed next to the editor, so the
+# runtime shader compiler can find it regardless of the working directory.
+if(TARGET slangc)
+    target_compile_definitions(wsl PRIVATE
+        WEASEL_SLANGC_PATH="${CMAKE_BINARY_DIR}/slangc")
+endif()
+
 # Tracy is PUBLIC because wsl's public headers (system.hpp in
 # particular) now use ZoneScopedN / ZoneText / FrameMark — anything
 # that includes wsl public headers needs the Tracy include path.
