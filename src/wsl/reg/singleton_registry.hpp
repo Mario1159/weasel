@@ -129,9 +129,10 @@ public:
    * Cached descriptors are only suitable for discovery and name lookup. They do
    * not provide construction, reflection, access, or serialization callbacks.
    */
-  void register_cached_runtime_singleton_component (
-      ::entt::id_type type_id, std::string_view type_name,
-      std::string_view display_name);
+  void
+  register_cached_runtime_singleton_component (::entt::id_type type_id,
+                                               std::string_view type_name,
+                                               std::string_view display_name);
 
   /*!
    * \brief Registers a bound singleton component type stored as a raw pointer.
@@ -339,7 +340,8 @@ singleton_registry::register_singleton_component (
 
             auto &ctx = registry.ctx ();
             if (ctx.contains<T> ()) {
-              ctx.get<T> () = std::move (value);
+              auto &existing = ctx.get<T> ();
+              existing = std::move (value);
             } else {
               ctx.emplace<T> (std::move (value));
             }

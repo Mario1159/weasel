@@ -177,8 +177,8 @@ rsc::resource_manager::resource_manager (
     comp::singl::runtime_context *m_runtime_ctx,
     const std::string &engine_res_path, bool manages_runtime_state)
     : m_runtime_ctx (m_runtime_ctx), m_scenes (scene_loader{}),
-      m_models (model_loader{ &m_runtime_ctx->render_ctx }),
-      m_cubemaps (cubemap_loader{ &m_runtime_ctx->render_ctx }),
+      m_models (model_loader{ &m_runtime_ctx->render_ctx () }),
+      m_cubemaps (cubemap_loader{ &m_runtime_ctx->render_ctx () }),
       m_images (image_loader{}), m_shaders (shader_loader{}),
       m_project_loader (m_runtime_ctx), m_wsl_resource_path (engine_res_path),
       m_manages_runtime_state (manages_runtime_state)
@@ -207,14 +207,16 @@ rsc::resource_manager_view::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rsc::resource_manager_view> ()
-      .type (entt::type_hash<rsc::resource_manager_view>::value ())
-      .custom<comp::meta_info> (
-          comp::meta_info{ "Resource Manager",
-                           "Owns project resources and background loading for "
-                           "the current runtime.",
-                           "" })
-      .func<&rsc::resource_manager_view::custom_inspect> ("custom_inspect"_hs);
+  auto &&factory_v
+      = entt::meta_factory<rsc::resource_manager_view> ()
+            .type (entt::type_hash<rsc::resource_manager_view>::value ())
+            .custom<comp::meta_info> (comp::meta_info{
+                "Resource Manager",
+                "Owns project resources and background loading for "
+                "the current runtime.",
+                "" });
+  (factory_v
+       .func<&rsc::resource_manager_view::custom_inspect>)("custom_inspect"_hs);
 
   rsc::model_id::register_meta ();
   rsc::audio_id::register_meta ();
@@ -282,7 +284,7 @@ rsc::resource_manager::load (model_id id)
   std::string const resolved = resolve_path (rec->path);
 
   if (resolved.rfind ("builtin://", 0) == 0) {
-    model_loader const loader{ &m_runtime_ctx->render_ctx };
+    model_loader const loader{ &m_runtime_ctx->render_ctx () };
     std::shared_ptr<gfx::model_3d> const ready = loader (resolved);
     if (ready) {
       m_models.force_load (id.value, std::move (*ready));
@@ -294,7 +296,7 @@ rsc::resource_manager::load (model_id id)
 
   rec->state = model_state::loading_cpu;
   rec->job = std::async (std::launch::async, [this, resolved] () {
-    model_loader const loader{ &m_runtime_ctx->render_ctx };
+    model_loader const loader{ &m_runtime_ctx->render_ctx () };
     return loader.load_cpu (resolved);
   });
   return {};
@@ -619,7 +621,7 @@ rsc::resource_manager::load (cubemap_id id)
   rec->state = cubemap_state::loading;
   std::string const resolved = resolve_path (rec->path);
   rec->job = std::async (std::launch::async, [this, resolved] () {
-    cubemap_loader const loader{ &m_runtime_ctx->render_ctx };
+    cubemap_loader const loader{ &m_runtime_ctx->render_ctx () };
     return loader (resolved);
   });
   return {};
@@ -770,7 +772,7 @@ bool
 rsc::resource_manager::activate_scene (scene_id id)
 {
   if (scene *scene = find_loaded_scene (id)) {
-    m_runtime_ctx->scene_manager.set_active (scene);
+    m_runtime_ctx->scene_manager ().set_active (scene);
     return true;
   }
 
@@ -780,7 +782,7 @@ rsc::resource_manager::activate_scene (scene_id id)
 void
 rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
 {
-  scene *active_scene = m_runtime_ctx->scene_manager.get_active ();
+  scene *active_scene = m_runtime_ctx->scene_manager ().get_active ();
   if (active_scene == nullptr) {
     return;
   }
@@ -802,7 +804,7 @@ rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
         std::shared_ptr<rsc::scene> const scn = rec->job.get ();
         if (scn) {
           rsc::scene &world_scene
-              = m_runtime_ctx->scene_manager.get_world ().add_scene (
+              = m_runtime_ctx->scene_manager ().get_world ().add_scene (
                   std::move (*scn));
           m_loaded_scene_instances[id.value] = &world_scene;
           rec->state = scene_state::loaded;
@@ -1161,9 +1163,9 @@ rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
 
   // Wait for the GPU first so we do not destroy in-flight resources.
   if ((m_runtime_ctx != nullptr)
-      && (m_runtime_ctx->render_ctx.gpu_device != nullptr)) {
+      && (m_runtime_ctx->render_ctx ().gpu_device != nullptr)) {
     // Only wait if SDL is still initialized and the device is valid
-    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
+    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx ().gpu_device);
   }
 
   for (auto &[id, rec] : m_audio_table) {
@@ -1204,21 +1206,21 @@ rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
   // access. Auxiliary managers (like editor-only engine resources) must not
   // tear down the shared runtime world.
   if (m_manages_runtime_state && (m_runtime_ctx != nullptr)) {
-    for (auto &scene : m_runtime_ctx->world.get_scenes ()) {
+    for (auto &scene : m_runtime_ctx->world ().get_scenes ()) {
       if (scene) {
         scene->stop_and_clear ();
       }
     }
 
-    m_runtime_ctx->scene_manager.set_active (nullptr);
+    m_runtime_ctx->scene_manager ().set_active (nullptr);
 
     // Sync core systems while the old scene's registry is still valid
-    if (m_runtime_ctx->core_systems) {
-      m_runtime_ctx->core_systems->sync_activation ();
+    if (m_runtime_ctx->core_systems ()) {
+      m_runtime_ctx->core_systems ()->sync_activation ();
     }
 
-    m_runtime_ctx->world.clear ();
-    m_runtime_ctx->signal_hub.clear_connections ();
+    m_runtime_ctx->world ().clear ();
+    m_runtime_ctx->signal_hub ().clear_connections ();
   }
 
   if (restore_builtin_defaults) {
@@ -1272,7 +1274,7 @@ rsc::resource_manager::load_project (const std::string &path)
   }
 
   if (m_editor_ctx != nullptr) {
-    m_editor_ctx->is_loading_project = true;
+    m_editor_ctx->is_loading_project (true);
   }
 
   const bool has_runtime_code
@@ -1288,15 +1290,16 @@ rsc::resource_manager::load_project (const std::string &path)
     .assets_job = std::async (
         std::launch::async,
         [this, proj, has_runtime_code] () {
-          if (m_runtime_ctx->editor_ctx && has_runtime_code
-              && !m_runtime_ctx->runtime_project_module.has_loaded_module ()) {
-            if (!m_runtime_ctx->runtime_project_module.compile_and_load (
+          if (m_runtime_ctx->editor_ctx () && has_runtime_code
+              && !m_runtime_ctx->runtime_project_module ()
+                      .has_loaded_module ()) {
+            if (!m_runtime_ctx->runtime_project_module ().compile_and_load (
                     *proj)) {
               wsl::log::rsc ()->warn (
                   "Project runtime module failed to compile/load in "
                   "background: "
                   "{}",
-                  m_runtime_ctx->runtime_project_module.last_status ());
+                  m_runtime_ctx->runtime_project_module ().last_status ());
             }
           }
 
@@ -1336,14 +1339,14 @@ void
 rsc::resource_manager::update_async_uploads ()
 {
   const auto activate_loaded_fallback_scene = [this] () {
-    if (m_runtime_ctx->scene_manager.get_active ()) {
+    if (m_runtime_ctx->scene_manager ().get_active ()) {
       return;
     }
 
     for (const auto &[id, scene] : m_loaded_scene_instances) {
       (void)id;
       if (scene) {
-        m_runtime_ctx->scene_manager.set_active (scene);
+        m_runtime_ctx->scene_manager ().set_active (scene);
         return;
       }
     }
@@ -1357,7 +1360,7 @@ rsc::resource_manager::update_async_uploads ()
         = m_active_project_load->project_data;
 
     if (m_active_project_load->has_runtime_code) {
-      m_runtime_ctx->runtime_project_module.finalize_load ();
+      m_runtime_ctx->runtime_project_module ().finalize_load ();
     }
 
     clear_all_resources ();
@@ -1420,7 +1423,7 @@ rsc::resource_manager::update_async_uploads ()
         "Project '{}' fully loaded through resource_manager", proj->name);
 
     if (m_editor_ctx != nullptr) {
-      m_editor_ctx->is_loading_project = false;
+      m_editor_ctx->is_loading_project (false);
       m_editor_ctx->re_register_editor_resources ();
     }
     m_active_project_load.reset ();
@@ -1471,7 +1474,7 @@ rsc::resource_manager::update_async_uploads ()
       continue;
     }
 
-    model_loader const loader{ &m_runtime_ctx->render_ctx };
+    model_loader const loader{ &m_runtime_ctx->render_ctx () };
     rec.upload
         = std::make_unique<model_loader::upload_session> (loader.begin_upload (
             *rec.cpu_data, model_loader::upload_options{
@@ -1487,7 +1490,7 @@ rsc::resource_manager::update_async_uploads ()
     }
 
     if (m_cancel_models.contains (id)) {
-      SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
+      SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx ().gpu_device);
 
       rec.upload.reset ();
       rec.cpu_data.reset ();
@@ -1498,7 +1501,7 @@ rsc::resource_manager::update_async_uploads ()
       continue;
     }
 
-    model_loader const loader{ &m_runtime_ctx->render_ctx };
+    model_loader const loader{ &m_runtime_ctx->render_ctx () };
     if (!rec.upload) {
       rec.state = model_state::not_loaded;
       continue;
@@ -1535,7 +1538,7 @@ rsc::resource_manager::update_async_uploads ()
       if (cpu_img) {
         image_loader const loader;
         gfx::image gpu_img = loader.upload_gpu (
-            m_runtime_ctx->render_ctx.gpu_device, *cpu_img);
+            m_runtime_ctx->render_ctx ().gpu_device, *cpu_img);
         if (gpu_img.texture) {
           m_images.force_load (it->first, std::move (gpu_img));
           rec.state = image_state::loaded;
@@ -1566,11 +1569,11 @@ rsc::resource_manager::update_async_uploads ()
       if (cube) {
         if (auto *rendering = m_runtime_ctx->get_active_rendering_manager ()) {
           auto &renderer = rendering->ensure_renderer (
-              m_runtime_ctx->window, m_runtime_ctx->render_ctx, this);
+              m_runtime_ctx->window (), m_runtime_ctx->render_ctx (), this);
           if (cube->equirect_to_bake != nullptr) {
             renderer.bake_equirect_to_cube (*cube, cube->equirect_to_bake);
             // We can release equirect_to_bake now as it is no longer needed
-            SDL_ReleaseGPUTexture (m_runtime_ctx->render_ctx.gpu_device,
+            SDL_ReleaseGPUTexture (m_runtime_ctx->render_ctx ().gpu_device,
                                    cube->equirect_to_bake);
             cube->equirect_to_bake = nullptr;
           }
@@ -1628,7 +1631,7 @@ rsc::resource_manager::update_async_uploads ()
 
       if (scn) {
         rsc::scene &world_scene
-            = m_runtime_ctx->scene_manager.get_world ().add_scene (
+            = m_runtime_ctx->scene_manager ().get_world ().add_scene (
                 std::move (*scn));
         m_loaded_scene_instances[it->first] = &world_scene;
         rec.state = scene_state::loaded;
@@ -1639,11 +1642,11 @@ rsc::resource_manager::update_async_uploads ()
 
         if (m_waiting_for_preferred_default_scene
             && it->first == m_preferred_default_scene_id) {
-          m_runtime_ctx->scene_manager.set_active (&world_scene);
+          m_runtime_ctx->scene_manager ().set_active (&world_scene);
           m_waiting_for_preferred_default_scene = false;
-        } else if ((m_runtime_ctx->scene_manager.get_active () == nullptr)
+        } else if ((m_runtime_ctx->scene_manager ().get_active () == nullptr)
                    && !m_waiting_for_preferred_default_scene) {
-          m_runtime_ctx->scene_manager.set_active (&world_scene);
+          m_runtime_ctx->scene_manager ().set_active (&world_scene);
         }
       } else {
         rec.state = scene_state::not_loaded;
@@ -1675,7 +1678,7 @@ rsc::resource_manager::unload (model_id id)
   }
 
   if (rec->state == model_state::loaded) {
-    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
+    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx ().gpu_device);
     m_models.erase (id.value);
     rec->state = model_state::not_loaded;
   }
@@ -1695,7 +1698,7 @@ rsc::resource_manager::unload (image_id id)
   }
 
   if (rec->state == image_state::loaded) {
-    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
+    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx ().gpu_device);
     m_images.erase (id.value);
     rec->state = image_state::not_loaded;
   }
@@ -1715,7 +1718,7 @@ rsc::resource_manager::unload (cubemap_id id)
   }
 
   if (rec->state == cubemap_state::loaded) {
-    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
+    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx ().gpu_device);
     m_cubemaps.erase (id.value);
     rec->state = cubemap_state::not_loaded;
   }
@@ -1735,9 +1738,9 @@ rsc::resource_manager::unload (scene_id id)
   }
 
   if (rec->state == scene_state::loaded) {
-    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx.gpu_device);
+    SDL_WaitForGPUIdle (m_runtime_ctx->render_ctx ().gpu_device);
     if (scene *scene = find_loaded_scene (id)) {
-      m_runtime_ctx->scene_manager.destroy_scene (scene);
+      m_runtime_ctx->scene_manager ().destroy_scene (scene);
       m_loaded_scene_instances.erase (id.value);
     }
 
@@ -1834,7 +1837,7 @@ rsc::model_id::custom_inspect (const char *label,
                                comp::singl::runtime_context *runtime)
 {
   rsc::resource_manager *res_mgr
-      = (runtime != nullptr) ? &runtime->resource_manager : nullptr;
+      = (runtime != nullptr) ? &runtime->resource_manager () : nullptr;
   if (res_mgr == nullptr) {
     ImGui::TextDisabled ("No resource manager");
     return false;
@@ -2076,15 +2079,15 @@ rsc::model_id::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rsc::model_id> ()
-      .type (entt::type_hash<rsc::model_id>::value ())
+  auto &&factory_mi = entt::meta_factory<rsc::model_id> ().type (
+      entt::type_hash<rsc::model_id>::value ());
 
-      // IMPORTANT: register the hook
-      // Signature: bool model_id::custom_inspect(const char*,
-      // runtime_context*)
-      .func<&rsc::model_id::custom_inspect> ("custom_inspect"_hs)
+  // IMPORTANT: register the hook
+  // Signature: bool model_id::custom_inspect(const char*,
+  // runtime_context*)
+  (factory_mi.func<&rsc::model_id::custom_inspect>)("custom_inspect"_hs);
 
-      .data<&rsc::model_id::value> ("value"_hs);
+  (factory_mi.data<&rsc::model_id::value>)("value"_hs);
 }
 
 bool
@@ -2092,7 +2095,7 @@ rsc::audio_id::custom_inspect (const char *label,
                                comp::singl::runtime_context *runtime)
 {
   rsc::resource_manager const *res_mgr
-      = (runtime != nullptr) ? &runtime->resource_manager : nullptr;
+      = (runtime != nullptr) ? &runtime->resource_manager () : nullptr;
   if (res_mgr == nullptr) {
     ImGui::TextDisabled ("No resource manager");
     return false;
@@ -2144,10 +2147,10 @@ rsc::audio_id::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rsc::audio_id> ()
-      .type (entt::type_hash<rsc::audio_id>::value ())
-      .func<&rsc::audio_id::custom_inspect> ("custom_inspect"_hs)
-      .data<&rsc::audio_id::value> ("value"_hs);
+  auto &&factory_ai = entt::meta_factory<rsc::audio_id> ().type (
+      entt::type_hash<rsc::audio_id>::value ());
+  (factory_ai.func<&rsc::audio_id::custom_inspect>)("custom_inspect"_hs);
+  (factory_ai.data<&rsc::audio_id::value>)("value"_hs);
 }
 
 bool
@@ -2155,7 +2158,7 @@ rsc::material_id::custom_inspect (const char *label,
                                   comp::singl::runtime_context *runtime)
 {
   rsc::resource_manager *res_mgr
-      = (runtime != nullptr) ? &runtime->resource_manager : nullptr;
+      = (runtime != nullptr) ? &runtime->resource_manager () : nullptr;
   if (res_mgr == nullptr) {
     ImGui::TextDisabled ("No resource manager");
     return false;
@@ -2214,10 +2217,10 @@ rsc::material_id::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rsc::material_id> ()
-      .type (entt::type_hash<rsc::material_id>::value ())
-      .func<&rsc::material_id::custom_inspect> ("custom_inspect"_hs)
-      .data<&rsc::material_id::value> ("value"_hs);
+  auto &&factory_mati = entt::meta_factory<rsc::material_id> ().type (
+      entt::type_hash<rsc::material_id>::value ());
+  (factory_mati.func<&rsc::material_id::custom_inspect>)("custom_inspect"_hs);
+  (factory_mati.data<&rsc::material_id::value>)("value"_hs);
 }
 
 bool
@@ -2225,7 +2228,7 @@ rsc::image_id::custom_inspect (const char *label,
                                comp::singl::runtime_context *runtime)
 {
   rsc::resource_manager *res_mgr
-      = (runtime != nullptr) ? &runtime->resource_manager : nullptr;
+      = (runtime != nullptr) ? &runtime->resource_manager () : nullptr;
   if (res_mgr == nullptr) {
     ImGui::TextDisabled ("No resource manager");
     return false;
@@ -2283,10 +2286,10 @@ rsc::image_id::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rsc::image_id> ()
-      .type (entt::type_hash<rsc::image_id>::value ())
-      .func<&rsc::image_id::custom_inspect> ("custom_inspect"_hs)
-      .data<&rsc::image_id::value> ("value"_hs);
+  auto &&factory_ii = entt::meta_factory<rsc::image_id> ().type (
+      entt::type_hash<rsc::image_id>::value ());
+  (factory_ii.func<&rsc::image_id::custom_inspect>)("custom_inspect"_hs);
+  (factory_ii.data<&rsc::image_id::value>)("value"_hs);
 }
 
 rsc::shader_id

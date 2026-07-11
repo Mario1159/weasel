@@ -97,10 +97,10 @@ scene::on_system_added (sys::ecs_system &system)
     return;
   }
 
-  m_runtime_ctx->signal_hub.clear_system_declarations (system.get_type_id ());
-  system.register_signals (m_runtime_ctx->signal_hub);
-  system.register_event_handlers (m_runtime_ctx->signal_hub);
-  system.register_iterations (m_runtime_ctx->signal_hub);
+  m_runtime_ctx->signal_hub().clear_system_declarations (system.get_type_id ());
+  system.register_signals (m_runtime_ctx->signal_hub());
+  system.register_event_handlers (m_runtime_ctx->signal_hub());
+  system.register_iterations (m_runtime_ctx->signal_hub());
 }
 
 void
@@ -177,7 +177,7 @@ scene::shutdown_systems ()
 bool
 scene::is_playing () const
 {
-  return (m_runtime_ctx != nullptr) ? m_runtime_ctx->is_running : m_running;
+  return (m_runtime_ctx != nullptr) ? m_runtime_ctx->is_running() : m_running;
 }
 
 void
@@ -248,12 +248,12 @@ scene::add_resource (io::resource_type type, entt::id_type id)
 
   // If this scene is the active one, load immediately
   if (m_runtime_ctx != nullptr) {
-    scene const *active_scene = m_runtime_ctx->scene_manager.get_active ();
+    scene const *active_scene = m_runtime_ctx->scene_manager().get_active ();
     wsl::log::rsc ()->trace ("Active scene={} this={}", (void *)active_scene,
                              (void *)this);
     if (active_scene == this) {
       wsl::log::rsc ()->trace ("Calling resource_manager.load");
-      rsc::resource_manager &res_mgr = m_runtime_ctx->resource_manager;
+      rsc::resource_manager &res_mgr = m_runtime_ctx->resource_manager();
       res_mgr.load ({ type, id });
     }
   }
@@ -293,7 +293,7 @@ scene::set_entity_name (entt::entity e, std::string name)
 }
 
 const std::string &
-scene::get_entity_name (entt::entity e) const
+scene::get_entity_name ([[maybe_unused]] entt::entity e) const
 {
   static const std::string unnamed = "<unnamed>";
   if (std::unordered_map<entt::entity, std::string>::const_iterator const it
@@ -352,20 +352,20 @@ scene::ensure_context_bindings ()
     if (ctx.contains<scene_manager *> ()) {
       ctx.erase<scene_manager *> ();
     }
-    ctx.emplace<scene_manager *> (&m_runtime_ctx->scene_manager);
+    ctx.emplace<scene_manager *> (&m_runtime_ctx->scene_manager());
 
     if (ctx.contains<resource_manager_view *> ()) {
       ctx.erase<resource_manager_view *> ();
     }
     ctx.emplace<resource_manager_view *> (
-        &m_runtime_ctx->resource_manager_view);
+        &m_runtime_ctx->resource_manager_view());
 
     if (ctx.contains<comp::singl::ui_manager *> ()) {
       ctx.erase<comp::singl::ui_manager *> ();
     }
-    ctx.emplace<comp::singl::ui_manager *> (&m_runtime_ctx->ui_manager);
+    ctx.emplace<comp::singl::ui_manager *> (&m_runtime_ctx->ui_manager());
 
-    m_runtime_ctx->singleton_registry.apply_core_singletons (m_registry);
+    m_runtime_ctx->singleton_registry().apply_core_singletons (m_registry);
   }
 }
 
@@ -373,7 +373,7 @@ void
 scene::reset_scene_context ()
 {
   if (m_runtime_ctx != nullptr) {
-    m_runtime_ctx->singleton_registry.reset_scene_registry (m_registry);
+    m_runtime_ctx->singleton_registry().reset_scene_registry (m_registry);
   }
 
   ensure_context_bindings ();
@@ -411,7 +411,7 @@ scene::copy_entity (scene &src_scene, entt::entity src_entity,
         continue;
       }
 
-      if (m_runtime_ctx->component_registry.copy_world_component (
+      if (m_runtime_ctx->component_registry().copy_world_component (
               src_reg, src_entity, dst_reg, dst_entity, id)) {
         continue;
       }

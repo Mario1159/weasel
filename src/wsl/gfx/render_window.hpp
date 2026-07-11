@@ -67,41 +67,247 @@ public:
     return m_vsync;
   }
 
-  SDL_Window *handler = nullptr;
-  wsl::gfx::texture swapchain;
+  // SDL window handle
+  [[nodiscard]] SDL_Window *
+  handler () const
+  {
+    return m_handler;
+  }
 
-  // entt::registry *registry;
-  wsl::gfx::render_context *ctx;
+  // Swapchain texture
+  [[nodiscard]] wsl::gfx::texture &
+  swapchain ()
+  {
+    return m_swapchain;
+  }
+  [[nodiscard]] const wsl::gfx::texture &
+  swapchain () const
+  {
+    return m_swapchain;
+  }
 
-  gpu_texture depth_texture;
-  SDL_GPUTextureFormat depth_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+  // Render context
+  [[nodiscard]] wsl::gfx::render_context *
+  ctx () const
+  {
+    return m_ctx;
+  }
 
-  gpu_texture msaa_hdr_scene;
-  gpu_texture msaa_hdr_bloom;
+  // Depth texture
+  [[nodiscard]] gpu_texture &
+  depth_texture ()
+  {
+    return m_depth_texture;
+  }
+  [[nodiscard]] const gpu_texture &
+  depth_texture () const
+  {
+    return m_depth_texture;
+  }
+  [[nodiscard]] SDL_GPUTextureFormat
+  depth_format () const
+  {
+    return m_depth_format;
+  }
+  void
+  depth_format (SDL_GPUTextureFormat fmt)
+  {
+    m_depth_format = fmt;
+  }
 
-  gpu_texture hdr_scene;     // resolved HDR scene (sampler)
-  gpu_texture hdr_bloom_src; // resolved HDR bloom source (sampler)
+  // MSAA HDR textures
+  [[nodiscard]] gpu_texture &
+  msaa_hdr_scene ()
+  {
+    return m_msaa_hdr_scene;
+  }
+  [[nodiscard]] const gpu_texture &
+  msaa_hdr_scene () const
+  {
+    return m_msaa_hdr_scene;
+  }
+  [[nodiscard]] gpu_texture &
+  msaa_hdr_bloom ()
+  {
+    return m_msaa_hdr_bloom;
+  }
+  [[nodiscard]] const gpu_texture &
+  msaa_hdr_bloom () const
+  {
+    return m_msaa_hdr_bloom;
+  }
 
-  // half-res bloom ping-pong
-  gpu_texture bloom_a;
-  gpu_texture bloom_b;
+  // Resolved HDR textures
+  [[nodiscard]] gpu_texture &
+  hdr_scene ()
+  {
+    return m_hdr_scene;
+  }
+  [[nodiscard]] const gpu_texture &
+  hdr_scene () const
+  {
+    return m_hdr_scene;
+  }
+  [[nodiscard]] gpu_texture &
+  hdr_bloom_src ()
+  {
+    return m_hdr_bloom_src;
+  }
+  [[nodiscard]] const gpu_texture &
+  hdr_bloom_src () const
+  {
+    return m_hdr_bloom_src;
+  }
 
-  // final LDR (tonemapped + bloom) output that can be sampled by ImGui /
-  // GameView
-  wsl::gfx::texture present_tex;
-  SDL_GPUTextureFormat swapchain_format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+  // Bloom ping-pong
+  [[nodiscard]] gpu_texture &
+  bloom_a ()
+  {
+    return m_bloom_a;
+  }
+  [[nodiscard]] const gpu_texture &
+  bloom_a () const
+  {
+    return m_bloom_a;
+  }
+  [[nodiscard]] gpu_texture &
+  bloom_b ()
+  {
+    return m_bloom_b;
+  }
+  [[nodiscard]] const gpu_texture &
+  bloom_b () const
+  {
+    return m_bloom_b;
+  }
 
-  gpu_graphics_pipeline pipe_downsample;
-  gpu_graphics_pipeline pipe_blur;
-  gpu_graphics_pipeline pipe_composite;
+  // Present texture
+  [[nodiscard]] wsl::gfx::texture &
+  present_tex ()
+  {
+    return m_present_tex;
+  }
+  [[nodiscard]] const wsl::gfx::texture &
+  present_tex () const
+  {
+    return m_present_tex;
+  }
 
-  gpu_sampler linear_sampler;
+  // Swapchain format
+  [[nodiscard]] SDL_GPUTextureFormat
+  swapchain_format () const
+  {
+    return m_swapchain_format;
+  }
+  void
+  swapchain_format (SDL_GPUTextureFormat fmt)
+  {
+    m_swapchain_format = fmt;
+  }
 
-  int current_sample_count = SDL_GPU_SAMPLECOUNT_4;
-  bool present_to_swapchain = true;
-  SDL_FColor scene_clear_color{ 0.1F, 0.1F, 0.1F, 1.0F };
-  float exposure = 1.0F;
-  float bloom_intensity = 1.0F;
+  // Pipelines
+  [[nodiscard]] gpu_graphics_pipeline &
+  pipe_downsample ()
+  {
+    return m_pipe_downsample;
+  }
+  [[nodiscard]] const gpu_graphics_pipeline &
+  pipe_downsample () const
+  {
+    return m_pipe_downsample;
+  }
+  [[nodiscard]] gpu_graphics_pipeline &
+  pipe_blur ()
+  {
+    return m_pipe_blur;
+  }
+  [[nodiscard]] const gpu_graphics_pipeline &
+  pipe_blur () const
+  {
+    return m_pipe_blur;
+  }
+  [[nodiscard]] gpu_graphics_pipeline &
+  pipe_composite ()
+  {
+    return m_pipe_composite;
+  }
+  [[nodiscard]] const gpu_graphics_pipeline &
+  pipe_composite () const
+  {
+    return m_pipe_composite;
+  }
+
+  // Linear sampler
+  [[nodiscard]] gpu_sampler &
+  linear_sampler ()
+  {
+    return m_linear_sampler;
+  }
+  [[nodiscard]] const gpu_sampler &
+  linear_sampler () const
+  {
+    return m_linear_sampler;
+  }
+
+  // Sample count
+  [[nodiscard]] int
+  current_sample_count () const
+  {
+    return m_current_sample_count;
+  }
+  void
+  current_sample_count (int count)
+  {
+    m_current_sample_count = count;
+  }
+
+  // Present to swapchain
+  [[nodiscard]] bool
+  present_to_swapchain () const
+  {
+    return m_present_to_swapchain;
+  }
+  void
+  present_to_swapchain (bool val)
+  {
+    m_present_to_swapchain = val;
+  }
+
+  // Scene clear color
+  [[nodiscard]] SDL_FColor
+  scene_clear_color () const
+  {
+    return m_scene_clear_color;
+  }
+  void
+  scene_clear_color (SDL_FColor color)
+  {
+    m_scene_clear_color = color;
+  }
+
+  // Exposure
+  [[nodiscard]] float
+  exposure () const
+  {
+    return m_exposure;
+  }
+  void
+  exposure (float val)
+  {
+    m_exposure = val;
+  }
+
+  // Bloom intensity
+  [[nodiscard]] float
+  bloom_intensity () const
+  {
+    return m_bloom_intensity;
+  }
+  void
+  bloom_intensity (float val)
+  {
+    m_bloom_intensity = val;
+  }
 
   void create_depth_texture ();
   void begin_3d_pass (bool clear_color = true, bool clear_depth = true,
@@ -151,7 +357,7 @@ public:
 
   //! Push a viewport onto the stack. The active viewport is applied to the
   //! main render pass on the next begin_3d_pass().
-  void push_viewport (const gfx::viewport &vp);
+  void push_viewport (const gfx::viewport &viewport);
   //! Pop the top viewport. If no viewports remain, full-screen rendering
   //! resumes.
   void pop_viewport ();
@@ -167,7 +373,7 @@ public:
 
   //! Applies the given viewport directly to the active main render pass.
   //! Does not use the viewport stack.
-  void apply_viewport (const gfx::viewport &vp) const;
+  void apply_viewport (const gfx::viewport &viewport) const;
 
   [[nodiscard]] wsl::rsc::resource_manager *
   resource_manager () const
@@ -195,9 +401,41 @@ private:
   gpu_graphics_pipeline create_downsample_pipe ();
   gpu_graphics_pipeline create_blur_pipe ();
 
-private:
   wsl::rsc::resource_manager *m_res_mgr = nullptr;
   std::vector<gfx::viewport> m_viewport_stack;
+
+  // --- Private member variables (previously public) ---
+  SDL_Window *m_handler = nullptr;
+  wsl::gfx::texture m_swapchain;
+  wsl::gfx::render_context *m_ctx = nullptr;
+
+  gpu_texture m_depth_texture;
+  SDL_GPUTextureFormat m_depth_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+
+  gpu_texture m_msaa_hdr_scene;
+  gpu_texture m_msaa_hdr_bloom;
+
+  gpu_texture m_hdr_scene;
+  gpu_texture m_hdr_bloom_src;
+
+  gpu_texture m_bloom_a;
+  gpu_texture m_bloom_b;
+
+  wsl::gfx::texture m_present_tex;
+  SDL_GPUTextureFormat m_swapchain_format
+      = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+
+  gpu_graphics_pipeline m_pipe_downsample;
+  gpu_graphics_pipeline m_pipe_blur;
+  gpu_graphics_pipeline m_pipe_composite;
+
+  gpu_sampler m_linear_sampler;
+
+  int m_current_sample_count = SDL_GPU_SAMPLECOUNT_4;
+  bool m_present_to_swapchain = true;
+  SDL_FColor m_scene_clear_color{ 0.1F, 0.1F, 0.1F, 1.0F };
+  float m_exposure = 1.0F;
+  float m_bloom_intensity = 1.0F;
 
   // Tracy frame image capture state. Owned by the render window;
   // the staging transfer buffer is (re)allocated in

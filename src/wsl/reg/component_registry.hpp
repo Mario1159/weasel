@@ -335,7 +335,7 @@ private:
     std::size_t count{};
     ar (cereal::make_nvp ("count", count));
 
-    if (count == 0u) {
+    if (count == 0U) {
       return;
     }
 
@@ -449,7 +449,7 @@ component_registry::register_world_component (
       return false;
     }
 
-    registry.remove<T> (entity);
+    (registry.remove<T>)(entity);
     return true;
   };
 

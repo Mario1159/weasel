@@ -34,14 +34,14 @@ namespace wsl::gfx
 //   wsl.gfx.cluster    — clustered_lighting CPU-side data
 //                        (light grid + index lists, see
 //                        clustered_lighting.cpp)
-inline constexpr const char *kTracyPoolTextures = "wsl.gfx.textures";
-inline constexpr const char *kTracyPoolBuffers = "wsl.gfx.buffers";
-inline constexpr const char *kTracyPoolTransfer = "wsl.gfx.transfer";
-inline constexpr const char *kTracyPoolSamplers = "wsl.gfx.samplers";
-inline constexpr const char *kTracyPoolPipelines = "wsl.gfx.pipelines";
-inline constexpr const char *kTracyPoolShaders = "wsl.gfx.shaders";
-inline constexpr const char *kTracyPoolImGui = "wsl.gfx.imgui";
-inline constexpr const char *kTracyPoolCluster = "wsl.gfx.cluster";
+inline constexpr const char *k_tracy_pool_textures = "wsl.gfx.textures";
+inline constexpr const char *k_tracy_pool_buffers = "wsl.gfx.buffers";
+inline constexpr const char *k_tracy_pool_transfer = "wsl.gfx.transfer";
+inline constexpr const char *k_tracy_pool_samplers = "wsl.gfx.samplers";
+inline constexpr const char *k_tracy_pool_pipelines = "wsl.gfx.pipelines";
+inline constexpr const char *k_tracy_pool_shaders = "wsl.gfx.shaders";
+inline constexpr const char *k_tracy_pool_imgui = "wsl.gfx.imgui";
+inline constexpr const char *k_tracy_pool_cluster = "wsl.gfx.cluster";
 
 // Report a freshly-created GPU texture to Tracy. The pool name is
 // a string literal whose address will be reused by the matching

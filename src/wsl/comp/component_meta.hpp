@@ -140,13 +140,10 @@ humanize_identifier (std::string_view identifier)
   bool capitalize_next = true;
 
   for (std::size_t index = 0; index < name.size (); ++index) {
-    const char ch = name[index];
-    const unsigned char value = static_cast<unsigned char> (ch);
+    const char cur = name[index];
+    const unsigned char value = static_cast<unsigned char> (cur);
 
-    if (ch == '_' || ch == '-'
-        || ((((((((std::isspace (value) != 0) != 0) != 0) != 0) != 0) != 0)
-             != 0)
-            != 0)) {
+    if (cur == '_' || cur == '-' || std::isspace (value)) {
       if (!out.empty () && out.back () != ' ') {
         out.push_back (' ');
       }
@@ -154,31 +151,17 @@ humanize_identifier (std::string_view identifier)
       continue;
     }
 
-    const bool split_camel_case
-        = index > 0 && !capitalize_next
-          && ((((((((std::isupper (value) != 0) != 0) != 0) != 0) != 0) != 0)
-               != 0)
-              != 0)
-          && ((((((((std::islower (static_cast<unsigned char> (name[index - 1]))
-                     != 0)
-                    != 0)
-                   != 0)
-                  != 0)
-                 != 0)
-                != 0)
-               != 0)
-              != 0);
+    bool const split_camel_case
+        = index > 0 && !capitalize_next && (std::isupper (value) != 0)
+          && (std::islower (static_cast<unsigned char> (name[index - 1])) != 0);
     if (split_camel_case && !out.empty () && out.back () != ' ') {
       out.push_back (' ');
     }
 
-    if (capitalize_next
-        && ((((((((std::isalpha (value) != 0) != 0) != 0) != 0) != 0) != 0)
-             != 0)
-            != 0)) {
+    if (capitalize_next && std::isalpha (value)) {
       out.push_back (static_cast<char> (std::toupper (value)));
     } else {
-      out.push_back (ch);
+      out.push_back (cur);
     }
 
     capitalize_next = false;
@@ -326,21 +309,21 @@ meta_icon_path (const entt::meta_type &meta)
  */
 template <class Archive, typename T>
 inline void
-serialize_field_if_diff (Archive &ar, const char *name, T &field,
+serialize_field_if_diff (Archive &archive, const char *name, T &field,
                          const T &default_value)
 {
   if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
     if (field != default_value) {
-      ar (cereal::make_nvp (name, field));
+      archive (cereal::make_nvp (name, field));
     }
   } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
     try {
-      ar (cereal::make_nvp (name, field));
+      archive (cereal::make_nvp (name, field));
     } catch (const std::exception &) {
       /* keep current value (default) */
     }
   } else {
-    ar (cereal::make_nvp (name, field));
+    archive (cereal::make_nvp (name, field));
   }
 }
 

@@ -193,7 +193,8 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "  help            - Show help\n";
   oss << "  exit/quit       - Exit REPL\n";
   oss << "  cls             - Clear screen\n";
-  oss << "  sig             - Signal management (ls, handlers, connections, connect, disconnect)\n\n";
+  oss << "  sig             - Signal management (ls, handlers, connections, "
+         "connect, disconnect)\n\n";
 
   oss << "== Documented but NOT Implemented ==\n";
   oss << "  (none)\n\n";
@@ -235,7 +236,8 @@ handle_cli_capabilities (const mcp::json &params)
   return build_text_response (oss.str ());
 }
 
-mcp_server_app::mcp_server_app (const std::string &host, int port)
+mcp_server_app::mcp_server_app ([[maybe_unused]] const std::string &host,
+                                [[maybe_unused]] int port)
     : m_server (mcp::server::configuration{ host, port })
 {
   mcp::json capabilities = { { "tools", mcp::json::object () } };

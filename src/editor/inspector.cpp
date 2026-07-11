@@ -41,7 +41,7 @@ get_singleton_inspector_registry (
     wsl::comp::singl::editor_context &editor_ctx,
     entt::registry &fallback_registry)
 {
-  if (wsl::rsc::scene *scene = runtime_ctx.scene_manager.get_active ()) {
+  if (wsl::rsc::scene *scene = runtime_ctx.scene_manager ().get_active ()) {
     return scene->get_registry ();
   }
 
@@ -60,19 +60,19 @@ get_singleton_inspector_registry (
   if (ctx.template contains<wsl::rsc::scene_manager *> ()) {
     ctx.erase<wsl::rsc::scene_manager *> ();
   }
-  ctx.emplace<wsl::rsc::scene_manager *> (&runtime_ctx.scene_manager);
+  ctx.emplace<wsl::rsc::scene_manager *> (&runtime_ctx.scene_manager ());
 
   if (ctx.template contains<wsl::rsc::resource_manager_view *> ()) {
     ctx.erase<wsl::rsc::resource_manager_view *> ();
   }
   ctx.emplace<wsl::rsc::resource_manager_view *> (
-      &runtime_ctx.resource_manager_view);
+      &runtime_ctx.resource_manager_view ());
 
   if (ctx.template contains<wsl::comp::singl::ui_manager *> ()) {
     ctx.erase<wsl::comp::singl::ui_manager *> ();
   }
-  ctx.emplace<wsl::comp::singl::ui_manager *> (&runtime_ctx.ui_manager);
-  runtime_ctx.singleton_registry.apply_core_singletons (fallback_registry);
+  ctx.emplace<wsl::comp::singl::ui_manager *> (&runtime_ctx.ui_manager ());
+  runtime_ctx.singleton_registry ().apply_core_singletons (fallback_registry);
 
   return fallback_registry;
 }
@@ -141,13 +141,15 @@ inspector::draw ()
   } else {
     switch (m_selection.kind) {
     case selection_kind::entity:
-      if ((runtime_ctx->scene_manager.get_active () != nullptr)
-          && runtime_ctx->scene_manager.get_active ()->get_registry ().valid (
-              m_selection.selected_entity)) {
+      if ((runtime_ctx->scene_manager ().get_active () != nullptr)
+          && runtime_ctx->scene_manager ()
+                 .get_active ()
+                 ->get_registry ()
+                 .valid (m_selection.selected_entity)) {
         draw_entity_inspector (m_selection.selected_entity);
       } else {
         draw_centered_icon (
-            m_editor_ctx, m_editor_ctx->icon_inspector, 128.0F,
+            m_editor_ctx, m_editor_ctx->icon_inspector (), 128.0F,
             "Select a system, entity or singleton component\nto inspect and "
             "edit their fields.");
       }
@@ -159,7 +161,7 @@ inspector::draw ()
 
     default:
       draw_centered_icon (
-          m_editor_ctx, m_editor_ctx->icon_inspector, 128.0F,
+          m_editor_ctx, m_editor_ctx->icon_inspector (), 128.0F,
           "Select a system, entity or singleton component\nto inspect and "
           "edit their fields.");
       break;
@@ -185,14 +187,14 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
   ImGui::Separator ();
 
   entt::registry *registry = nullptr;
-  if (wsl::rsc::scene *scene = runtime_ctx->scene_manager.get_active ()) {
+  if (wsl::rsc::scene *scene = runtime_ctx->scene_manager ().get_active ()) {
     registry = &scene->get_registry ();
   }
 
   bool init_on_startup = system->is_init_on_startup ();
   if (ImGui::Checkbox ("Init On Startup", &init_on_startup)) {
     system->set_init_on_startup (init_on_startup, registry,
-                                 runtime_ctx->is_running);
+                                 runtime_ctx->is_running ());
   }
 
   bool editor_active = system->is_editor_active ();
@@ -215,7 +217,7 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
   ImGui::TextUnformatted ("Iterations");
   ImGui::PopFont ();
 
-  auto &db = runtime_ctx->signal_db;
+  auto &db = runtime_ctx->signal_db ();
   const entt::id_type sys_tid = system->get_type_id ();
 
   bool any = false;
@@ -253,10 +255,10 @@ inspector::draw_singleton_inspector (entt::id_type type)
 {
   entt::registry &registry = get_singleton_inspector_registry (
       *runtime_ctx, *m_editor_ctx, m_no_scene_registry);
-  const bool has_scene = runtime_ctx->scene_manager.get_active () != nullptr;
+  const bool has_scene = runtime_ctx->scene_manager ().get_active () != nullptr;
 
   const wsl::reg::singleton_registry::descriptor *desc
-      = runtime_ctx->singleton_registry.find (type);
+      = runtime_ctx->singleton_registry ().find (type);
   entt::meta_type const meta = entt::resolve (type);
 
   if (desc == nullptr) {
@@ -315,7 +317,7 @@ inspector::draw_singleton_inspector (entt::id_type type)
 void
 inspector::draw_entity_inspector (entt::entity entity)
 {
-  auto &scene_mgr = runtime_ctx->scene_manager;
+  auto &scene_mgr = runtime_ctx->scene_manager ();
   auto &scene = *scene_mgr.get_active ();
   entt::registry &reg = scene.get_registry ();
 
@@ -326,7 +328,8 @@ inspector::draw_entity_inspector (entt::entity entity)
 
   if (m_is_prefab_instance) {
     auto &pi = reg.get<wsl::comp::prefab_instance> (entity);
-    if (auto prefab_scene = runtime_ctx->resource_manager.get (pi.prefab_id)) {
+    if (auto prefab_scene
+        = runtime_ctx->resource_manager ().get (pi.prefab_id)) {
       m_prefab_registry = &prefab_scene->get_registry ();
       m_prefab_entity = pi.prefab_entity;
     }
@@ -358,8 +361,8 @@ inspector::draw_entity_inspector (entt::entity entity)
     }
 
     entt::id_type const type_id
-        = runtime_ctx->component_registry.to_stable_id (internal_id);
-    const auto *descriptor = runtime_ctx->component_registry.find (type_id);
+        = runtime_ctx->component_registry ().to_stable_id (internal_id);
+    const auto *descriptor = runtime_ctx->component_registry ().find (type_id);
     std::string const display_name
         = (descriptor != nullptr) ? descriptor->display_name : "Unknown";
 
@@ -396,7 +399,7 @@ inspector::draw_entity_inspector (entt::entity entity)
     // Draw Icon if any
     std::string const icon = get_icon_path (meta);
     if (!icon.empty ()) {
-      auto *editor_res = &m_editor_ctx->editor_resources;
+      auto *editor_res = &m_editor_ctx->editor_resources ();
       auto img_id = editor_res->register_image (icon);
 
       if (editor_res->state (img_id) == wsl::rsc::image_state::not_loaded) {
@@ -441,7 +444,8 @@ inspector::draw_entity_inspector (entt::entity entity)
 
           glm::vec3 entity_scale{ 1.0F, 1.0F, 1.0F };
           if (auto *t = reg.try_get<wsl::comp::transform> (entity); t) {
-            entity_scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
+            entity_scale
+                = glm::vec3 (t->scale.x (), t->scale.y (), t->scale.z ());
           }
 
           if (type_id == entt::type_hash<wsl::comp::hierarchy>::value ()) {
@@ -496,13 +500,13 @@ inspector::draw_hierarchy_component (entt::entity entity)
 {
 
   entt::registry &registry
-      = runtime_ctx->scene_manager.get_active ()->get_registry ();
+      = runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   ImGui::PushID ((int)entt::to_integral (entity));
 
   wsl::comp::hierarchy const &h = registry.get<wsl::comp::hierarchy> (entity);
 
-  wsl::rsc::scene const *scene = runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene const *scene = runtime_ctx->scene_manager ().get_active ();
 
   const char *preview = "None";
   if (h.parent != entt::null) {
@@ -548,7 +552,7 @@ inspector::set_parent (entt::entity child, entt::entity new_parent)
 {
 
   entt::registry &registry
-      = runtime_ctx->scene_manager.get_active ()->get_registry ();
+      = runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   wsl::comp::hierarchy &ch = registry.get<wsl::comp::hierarchy> (child);
 
@@ -761,8 +765,8 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
       if (btn_x > ImGui::GetCursorPosX ())
         ImGui::SetCursorPosX (btn_x);
 
-      auto *editor_res = &m_editor_ctx->editor_resources;
-      auto img_id = m_editor_ctx->icon_refresh;
+      auto *editor_res = &m_editor_ctx->editor_resources ();
+      auto img_id = m_editor_ctx->icon_refresh ();
       if (editor_res->state (img_id) == wsl::rsc::image_state::not_loaded) {
         editor_res->load (img_id);
       }
@@ -831,7 +835,7 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
 bool
 inspector::draw_render_viewport_field (entt::meta_any &object)
 {
-  auto &scene = *runtime_ctx->scene_manager.get_active ();
+  auto &scene = *runtime_ctx->scene_manager ().get_active ();
   auto &registry = scene.get_registry ();
 
   entt::entity current = object.cast<entt::entity> ();
@@ -931,7 +935,7 @@ inspector::draw_meta_object (const char *label, entt::meta_any &object,
     return draw_meta_sequence (label, object);
   else if (type.is_class ()) {
     if (ImGui::TreeNode (label)) {
-      bool changed = draw_meta_class (object, { 1.0f, 1.0f, 1.0f },
+      bool changed = draw_meta_class (object, { 1.0F, 1.0F, 1.0F },
                                       prefab_object, default_object);
       ImGui::TreePop ();
       return changed;
@@ -1039,11 +1043,11 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
 {
   auto type = object.type ();
 
-  if (!runtime_ctx->scene_manager.get_active ()) {
+  if (!runtime_ctx->scene_manager ().get_active ()) {
     return false;
   }
   entt::registry &registry
-      = runtime_ctx->scene_manager.get_active ()->get_registry ();
+      = runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   bool changed = false;
 
@@ -1061,7 +1065,7 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
   };
 
   if (type == entt::resolve<entt::entity> ()) {
-    auto &scene = *runtime_ctx->scene_manager.get_active ();
+    auto &scene = *runtime_ctx->scene_manager ().get_active ();
 
     entt::entity const current = object.cast<entt::entity> ();
 
@@ -1099,7 +1103,7 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   }
   if (type == entt::resolve<wsl::rsc::cubemap_id> ()) {
-    wsl::rsc::resource_manager *res_mgr = &runtime_ctx->resource_manager;
+    wsl::rsc::resource_manager *res_mgr = &runtime_ctx->resource_manager ();
 
     auto &current = object.cast<wsl::rsc::cubemap_id &> ();
 
@@ -1204,7 +1208,7 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     // ImGui has no native DragUInt, so use int but clamp
     int tmp = static_cast<int> (v);
 
-    if (ImGui::DragInt (label, &tmp, 1.0f, 0, INT32_MAX)) {
+    if (ImGui::DragInt (label, &tmp, 1.0F, 0, INT32_MAX)) {
       object = static_cast<uint32_t> (tmp);
       changed = true;
     }
@@ -1212,7 +1216,7 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   } else if (type == entt::resolve<float> ()) {
     float v = object.cast<float> ();
-    if (ImGui::DragFloat (label, &v, 0.1f)) {
+    if (ImGui::DragFloat (label, &v, 0.1F)) {
       object = v;
       changed = true;
     }
@@ -1230,8 +1234,8 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
       for (int j = 0; j < 4; ++j) {
         ImGui::PushID (j);
         float v = m[i][j];
-        ImGui::SetNextItemWidth (ImGui::CalcItemWidth () / 4.1f);
-        ImGui::InputFloat ("##v", &v, 0.0f, 0.0f, "%.3f",
+        ImGui::SetNextItemWidth (ImGui::CalcItemWidth () / 4.1F);
+        ImGui::InputFloat ("##v", &v, 0.0F, 0.0F, "%.3f",
                            ImGuiInputTextFlags_ReadOnly);
         if (j < 3)
           ImGui::SameLine ();
@@ -1264,7 +1268,7 @@ inspector::draw_add_component_ui (entt::entity entity)
   ImGui::TextUnformatted ("Add Component");
   ImGui::PopFont ();
 
-  auto &reg = runtime_ctx->scene_manager.get_active ()->get_registry ();
+  auto &reg = runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   auto label_for = [] (const entt::meta_type &meta) -> std::string {
     return wsl::comp::meta_display_name (meta, "<unregistered>");
@@ -1282,7 +1286,7 @@ inspector::draw_add_component_ui (entt::entity entity)
   }
 
   if (ImGui::BeginCombo ("##add_component", preview)) {
-    for (const auto *desc : runtime_ctx->component_registry.ordered ()) {
+    for (const auto *desc : runtime_ctx->component_registry ().ordered ()) {
       if ((desc == nullptr) || !desc->can_add_default) {
         continue;
       }
@@ -1312,7 +1316,7 @@ inspector::draw_add_component_ui (entt::entity entity)
   if (selected_type != entt::null) {
     if (ImGui::Button ("Add")) {
       if (const auto *desc
-          = runtime_ctx->component_registry.find (selected_type);
+          = runtime_ctx->component_registry ().find (selected_type);
           (desc != nullptr) && (desc->emplace_default != nullptr)) {
         desc->emplace_default (reg, entity);
       }

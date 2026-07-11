@@ -29,12 +29,12 @@ camera::register_meta ()
                                            "Projection parameters only",
                                            "engine://icons/comp_camera.svg" })
       .func<&comp::camera::custom_inspect> ("custom_inspect"_hs)
-      .data<&camera::fov> ("fov"_hs)
+      .data<&camera::m_fov> ("fov"_hs)
       .custom<comp::meta_info> (
           meta_info{ "FOV", "Field of view in degrees", "" })
-      .data<&camera::near> ("near"_hs)
+      .data<&camera::m_near> ("near"_hs)
       .custom<comp::meta_info> (meta_info{ "Near", "Near clipping plane", "" })
-      .data<&camera::far> ("far"_hs)
+      .data<&camera::m_far> ("far"_hs)
       .custom<comp::meta_info> (meta_info{ "Far", "Far clipping plane", "" });
 }
 
@@ -48,11 +48,12 @@ camera::custom_inspect (const char * /*label*/,
 
   bool changed = false;
 
-  changed |= ImGui::DragFloat ("FOV", &fov, 0.5F, 1.0F, 179.0F, "%.1f");
-  changed |= ImGui::DragFloat ("Near", &near, 0.01F, 0.01F, far * 0.5F, "%.3f");
+  changed |= ImGui::DragFloat ("FOV", &m_fov, 0.5F, 1.0F, 179.0F, "%.1f");
   changed
-      |= ImGui::DragFloat ("Far", &far, 0.1F, near * 2.0F, 10000.0F, "%.1f");
-  changed |= ImGui::Checkbox ("Only For Editor", &only_for_editor);
+      |= ImGui::DragFloat ("Near", &m_near, 0.01F, 0.01F, m_far * 0.5F, "%.3f");
+  changed |= ImGui::DragFloat ("Far", &m_far, 0.1F, m_near * 2.0F, 10000.0F,
+                               "%.1f");
+  changed |= ImGui::Checkbox ("Only For Editor", &m_only_for_editor);
 
   return changed;
 }

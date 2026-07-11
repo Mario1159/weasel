@@ -121,7 +121,8 @@ clamp01 (float v)
 static ImVec4
 rgba_u8 (int r, int g, int b, float a = 1.0F)
 {
-  return ImVec4 (r / 255.F, g / 255.F, b / 255.F, a);
+  return ImVec4 (static_cast<float> (r) / 255.F, static_cast<float> (g) / 255.F,
+                 static_cast<float> (b) / 255.F, a);
 }
 
 // --- RGB <-> HSL (all in 0..1) ---
@@ -473,12 +474,12 @@ renderer_imgui::renderer_imgui (wsl::gfx::render_window &window,
 
   apply_editor_style (theme);
 
-  ImGui_ImplSDL3_InitForSDLGPU (window.handler);
+  ImGui_ImplSDL3_InitForSDLGPU (window.handler());
 
   ImGui_ImplSDLGPU3_InitInfo init_info{};
   init_info.Device = ctx->gpu_device;
   init_info.ColorTargetFormat
-      = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, window.handler);
+      = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, window.handler());
   init_info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
   init_info.SwapchainComposition = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
   init_info.PresentMode = SDL_GPU_PRESENTMODE_IMMEDIATE;
@@ -727,7 +728,7 @@ renderer_imgui::render_model_preview_low_lod (
     wsl::comp::singl::runtime_context &runtime_ctx, entt::id_type model_id,
     uint32_t w, uint32_t h)
 {
-  auto &mgr = runtime_ctx.resource_manager;
+  auto &mgr = runtime_ctx.resource_manager();
 
   SDL_GPUCommandBuffer const *cmd = m_ctx->main_cmd;
   if (cmd == nullptr) {

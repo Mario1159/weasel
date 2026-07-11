@@ -33,7 +33,9 @@ constexpr uint32_t kParamIndexInPlaySession = 1;
 constexpr uint32_t kParamIndexFrame = 2;
 
 void
-publish_parameters (uint64_t frame_index, bool is_running, bool in_play_session)
+publish_parameters ([[maybe_unused]] uint64_t frame_index,
+                    [[maybe_unused]] bool is_running,
+                    [[maybe_unused]] bool in_play_session)
 {
   // v0.13.1 takes a `bool isBool` flag rather than an enum.
   // Setup is idempotent — Tracy re-broadcasts on every connection
@@ -166,7 +168,7 @@ tracy_telemetry_frame_mark (uint64_t frame_index)
 }
 
 void
-tracy_telemetry_secondary_frame_begin (const char *name)
+tracy_telemetry_secondary_frame_begin ([[maybe_unused]] const char *name)
 {
   // Open a secondary frame set. Tracy displays these as a separate
   // row in the Frame view. Must be paired with a matching
@@ -175,7 +177,7 @@ tracy_telemetry_secondary_frame_begin (const char *name)
 }
 
 void
-tracy_telemetry_secondary_frame_end (const char *name)
+tracy_telemetry_secondary_frame_end ([[maybe_unused]] const char *name)
 {
   FrameMarkEnd (name);
 }

@@ -17,7 +17,7 @@ editor_app::editor_app (const std::string &name, int width, int height,
   m_runtime_context->set_editor_ctx (m_editor_ctx.get ());
 
   comp::singl::editor_context::register_meta ();
-  m_runtime_context->singleton_registry
+  m_runtime_context->singleton_registry ()
       .register_bound_singleton_component<comp::singl::editor_context> (
           { "Editor Context", true });
 }
@@ -30,10 +30,10 @@ editor_app::init_editor_subsystems ()
   // Create editor-specific renderers via virtual factories.
   // NOTE: this must be called from the derived class constructor
   // after the base class construction is complete.
-  m_editor_ctx->imgui_renderer = create_imgui_renderer (
-      m_runtime_context->window, &m_runtime_context->render_ctx);
-  m_editor_ctx->debug_renderer = create_debug_renderer (
-      m_runtime_context->window, &m_runtime_context->render_ctx);
+  m_editor_ctx->set_imgui_renderer (create_imgui_renderer (
+      m_runtime_context->window (), &m_runtime_context->render_ctx ()));
+  m_editor_ctx->set_debug_renderer (create_debug_renderer (
+      m_runtime_context->window (), &m_runtime_context->render_ctx ()));
 
   m_ui_layer = create_ui_layer (m_runtime_context.get (), m_editor_ctx.get ());
 }
@@ -54,14 +54,14 @@ void
 editor_app::on_update (double dt)
 {
   m_editor_ctx->tick_editor_camera_anim (static_cast<float> (dt));
-  m_editor_ctx->editor_resources.update_async_uploads ();
+  m_editor_ctx->editor_resources ().update_async_uploads ();
 
-  m_runtime_context->runtime_project_module.poll_async_reload ();
+  m_runtime_context->runtime_project_module ().poll_async_reload ();
 
-  if (m_editor_ctx->pending_project_load) {
-    m_runtime_context->resource_manager.load_project (
-        *m_editor_ctx->pending_project_load);
-    m_editor_ctx->pending_project_load.reset ();
+  if (m_editor_ctx->pending_project_load ()) {
+    m_runtime_context->resource_manager ().load_project (
+        *m_editor_ctx->pending_project_load ());
+    m_editor_ctx->pending_project_load (std::nullopt);
   }
 }
 
@@ -76,8 +76,8 @@ editor_app::on_render ()
   callbacks.record_ui_draw_cmd
       = [this] (entt::registry &) { m_ui_layer->record_draw_commands (); };
 
-  m_runtime_context->core_systems->render (m_runtime_context->window,
-                                           callbacks);
+  m_runtime_context->core_systems ()->render (m_runtime_context->window (),
+                                              callbacks);
 }
 
 } // namespace wsl

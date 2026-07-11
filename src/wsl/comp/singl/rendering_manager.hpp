@@ -26,7 +26,7 @@ struct rendering_manager : singleton_component
   std::unique_ptr<gfx::scene_renderer> renderer;
   std::unique_ptr<gfx::batch_renderer_2d> renderer_2d;
   rsc::cubemap_id skybox{};
-  math::quatf skybox_rotation{};
+  math::quatf skybox_rotation;
 
   math::vec3f clear_color{ 0.1F, 0.1F, 0.1F };
   float clear_alpha = 1.0F;
@@ -284,7 +284,8 @@ struct rendering_manager : singleton_component
   serialize (Archive &archive)
   {
     rendering_manager def{};
-    serialize_field_if_diff (archive, "skybox", skybox.value, def.skybox.value);
+    serialize_field_if_diff (archive, "skybox", skybox.value,
+                             def.skybox.value);
     serialize_field_if_diff (archive, "skybox_rotation", skybox_rotation,
                              def.skybox_rotation);
     serialize_field_if_diff (archive, "clear_color", clear_color,

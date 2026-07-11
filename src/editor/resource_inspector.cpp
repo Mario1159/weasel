@@ -402,15 +402,15 @@ resource_inspector::draw ()
       break;
     }
 
-    wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+    wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
     const bool selected_scene_loaded
         = tab == active_tab::scenes && m_selected_scene != entt::null
-          && m_runtime_ctx->resource_manager.state (
+          && m_runtime_ctx->resource_manager ().state (
                  wsl::rsc::scene_id{ m_selected_scene })
                  == wsl::rsc::scene_state::loaded;
     wsl::rsc::scene const *selected_loaded_scene
         = tab == active_tab::scenes && m_selected_scene != entt::null
-              ? m_runtime_ctx->resource_manager.find_loaded_scene (
+              ? m_runtime_ctx->resource_manager ().find_loaded_scene (
                     wsl::rsc::scene_id{ m_selected_scene })
               : nullptr;
 
@@ -425,7 +425,7 @@ resource_inspector::draw ()
         ImGui::BeginDisabled ();
       }
 
-      auto s_info = m_runtime_ctx->resource_manager.info (
+      auto s_info = m_runtime_ctx->resource_manager ().info (
           wsl::rsc::scene_id{ m_selected_scene });
       bool const is_prefab = s_info && s_info->is_prefab;
 
@@ -433,26 +433,26 @@ resource_inspector::draw ()
         ImGui::Button ("Load Scene");
       } else if (is_prefab) {
         if (ImGui::Button ("Instantiate Prefab")) {
-          m_runtime_ctx->resource_manager.instantiate_prefab (
+          m_runtime_ctx->resource_manager ().instantiate_prefab (
               wsl::rsc::scene_id{ m_selected_scene });
         }
       } else if (!selected_scene_loaded) {
         if (ImGui::Button ("Load Scene")) {
-          m_runtime_ctx->resource_manager.load (
+          m_runtime_ctx->resource_manager ().load (
               wsl::rsc::scene_id{ m_selected_scene });
         }
       } else {
         const bool is_active
             = selected_loaded_scene != nullptr
               && selected_loaded_scene
-                     == m_runtime_ctx->scene_manager.get_active ();
+                     == m_runtime_ctx->scene_manager ().get_active ();
 
         if (is_active) {
           ImGui::BeginDisabled ();
         }
 
         if (ImGui::Button (is_active ? "Active Scene" : "Set Active")) {
-          m_runtime_ctx->resource_manager.activate_scene (
+          m_runtime_ctx->resource_manager ().activate_scene (
               wsl::rsc::scene_id{ m_selected_scene });
         }
 
@@ -462,7 +462,7 @@ resource_inspector::draw ()
 
         ImGui::SameLine ();
         if (ImGui::Button ("Unload Scene")) {
-          m_runtime_ctx->resource_manager.unload (
+          m_runtime_ctx->resource_manager ().unload (
               wsl::rsc::scene_id{ m_selected_scene });
         }
       }
@@ -486,9 +486,9 @@ resource_inspector::draw ()
             // preview-owned
             switch (type) {
             case wsl::rsc::io::resource_type::model:
-              m_runtime_ctx->resource_manager.load (
+              m_runtime_ctx->resource_manager ().load (
                   wsl::rsc::model_id{ selected_id });
-              m_runtime_ctx->resource_manager
+              m_runtime_ctx->resource_manager ()
                   .release_preview_ownership_if_matches (
                       wsl::rsc::model_id{ selected_id });
               break;
@@ -496,7 +496,7 @@ resource_inspector::draw ()
             case wsl::rsc::io::resource_type::cubemap:
             case wsl::rsc::io::resource_type::scene:
             case wsl::rsc::io::resource_type::audio:
-              m_runtime_ctx->resource_manager.load ({ type, selected_id });
+              m_runtime_ctx->resource_manager ().load ({ type, selected_id });
               break;
             }
           }
@@ -506,20 +506,22 @@ resource_inspector::draw ()
 
             // If it is not the current temp preview, unload it now
             if (type != wsl::rsc::io::resource_type::model
-                || m_runtime_ctx->resource_manager.current_preview_model ()
+                || m_runtime_ctx->resource_manager ()
+                           .current_preview_model ()
                            .value
                        != selected_id) {
 
               switch (type) {
               case wsl::rsc::io::resource_type::model:
-                m_runtime_ctx->resource_manager.unload (
+                m_runtime_ctx->resource_manager ().unload (
                     wsl::rsc::model_id{ selected_id });
                 break;
               case wsl::rsc::io::resource_type::image:
               case wsl::rsc::io::resource_type::cubemap:
               case wsl::rsc::io::resource_type::scene:
               case wsl::rsc::io::resource_type::audio:
-                m_runtime_ctx->resource_manager.unload ({ type, selected_id });
+                m_runtime_ctx->resource_manager ().unload (
+                    { type, selected_id });
                 break;
               }
             }
@@ -591,7 +593,7 @@ resource_inspector::draw ()
     if (tab == active_tab::materials && has_selection) {
       ImGui::SameLine ();
       if (ImGui::Button ("Open in Shader Graph")) {
-        auto info = m_runtime_ctx->resource_manager.info (
+        auto info = m_runtime_ctx->resource_manager ().info (
             wsl::rsc::material_id{ m_selected_material });
         if (info) {
           // Replace .wslmat extension with .wslgraph
@@ -630,7 +632,7 @@ resource_inspector::draw ()
       }
 
       m_editor_ctx->get_imgui_renderer ()->request_model_preview (
-          m_runtime_ctx, &m_runtime_ctx->resource_manager, model_to_preview,
+          m_runtime_ctx, &m_runtime_ctx->resource_manager (), model_to_preview,
           (uint32_t)child_avail.x, (uint32_t)child_avail.y);
       preview_tex
           = m_editor_ctx->get_imgui_renderer ()->get_model_preview_texture ();
@@ -709,7 +711,7 @@ resource_inspector::draw ()
         }
       }
     } else if (tab == active_tab::audio) {
-      auto &mgr = m_runtime_ctx->resource_manager;
+      auto &mgr = m_runtime_ctx->resource_manager ();
 
       ImGui::SetCursorScreenPos (
           ImVec2 (child_min.x + (child_avail.x * 0.5F) - 100,
@@ -755,7 +757,7 @@ resource_inspector::draw ()
 
     // ---- Overlayed Info ----
     {
-      auto &mgr = m_runtime_ctx->resource_manager;
+      auto &mgr = m_runtime_ctx->resource_manager ();
       std::string info;
       auto make_hex = [] (entt::id_type v) {
         char buf[64];
@@ -841,7 +843,8 @@ resource_inspector::draw ()
           }
         }
         float const line_h = ImGui::GetTextLineHeight () * text_scale;
-        ImVec2 const text_size (max_w * text_scale, lines * line_h);
+        ImVec2 const text_size (max_w * text_scale,
+                                static_cast<float> (lines) * line_h);
         const float margin = 8.0F;
         const float box_pad = 6.0F;
         ImVec2 const text_pos (child_min.x + margin, child_min.y + child_avail.y
@@ -867,7 +870,7 @@ resource_inspector::draw ()
 void
 resource_inspector::draw_models ()
 {
-  auto &mgr = m_runtime_ctx->resource_manager;
+  auto &mgr = m_runtime_ctx->resource_manager ();
   ImGui::BeginChild ("ModelListChild", ImVec2 (0, 0), 1);
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
@@ -911,7 +914,7 @@ resource_inspector::draw_models ()
       };
       std::vector<entry> entries;
       const bool has_project
-          = (m_runtime_ctx->resource_manager.current_project () != nullptr);
+          = (m_runtime_ctx->resource_manager ().current_project () != nullptr);
       for (const auto &m : models) {
         if (!has_project
             && (m.path.find ("builtin://") != std::string::npos
@@ -948,18 +951,19 @@ resource_inspector::draw_models ()
             m_selected_lod_group = -1;
             m_selected_lod_level = -1;
             wsl::rsc::scene const *scene
-                = m_runtime_ctx->scene_manager.get_active ();
+                = m_runtime_ctx->scene_manager ().get_active ();
             const bool pinned = (scene
                                  && scene->has_resource (
                                      wsl::rsc::io::resource_type::model, e.id));
             if (!pinned) {
               {
-                m_runtime_ctx->resource_manager.load_preview_model_low_lod (
+                m_runtime_ctx->resource_manager ().load_preview_model_low_lod (
                     wsl::rsc::model_id{ e.id });
               }
             } else {
-              m_runtime_ctx->resource_manager.load (wsl::rsc::model_id{ e.id });
-              m_runtime_ctx->resource_manager
+              m_runtime_ctx->resource_manager ().load (
+                  wsl::rsc::model_id{ e.id });
+              m_runtime_ctx->resource_manager ()
                   .release_preview_ownership_if_matches (
                       wsl::rsc::model_id{ e.id });
             }
@@ -990,7 +994,7 @@ resource_inspector::draw_models ()
 void
 resource_inspector::draw_images ()
 {
-  auto &mgr = m_runtime_ctx->resource_manager;
+  auto &mgr = m_runtime_ctx->resource_manager ();
   ImGui::BeginChild ("ImageListChild", ImVec2 (0, 0), 1);
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
@@ -1034,7 +1038,7 @@ resource_inspector::draw_images ()
       };
       std::vector<entry> entries;
       const bool has_project
-          = (m_runtime_ctx->resource_manager.current_project () != nullptr);
+          = (m_runtime_ctx->resource_manager ().current_project () != nullptr);
       for (const auto &img : images) {
         uintmax_t fsize = 0;
         try {
@@ -1110,7 +1114,7 @@ resource_inspector::draw_images ()
 void
 resource_inspector::draw_scenes ()
 {
-  auto &mgr = m_runtime_ctx->resource_manager;
+  auto &mgr = m_runtime_ctx->resource_manager ();
   ImGui::BeginChild ("SceneListChild", ImVec2 (0, 0), 1);
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
@@ -1154,10 +1158,10 @@ resource_inspector::draw_scenes ()
           }
           if (ImGui::IsItemHovered () && ImGui::IsMouseDoubleClicked (0)) {
             if (rec.is_prefab) {
-              m_runtime_ctx->resource_manager.instantiate_prefab (
+              m_runtime_ctx->resource_manager ().instantiate_prefab (
                   wsl::rsc::scene_id{ rec.id });
             } else {
-              m_runtime_ctx->resource_manager.load (
+              m_runtime_ctx->resource_manager ().load (
                   wsl::rsc::scene_id{ rec.id });
             }
           }
@@ -1185,10 +1189,10 @@ resource_inspector::import_model_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager.import_model (files[0]);
+        self->m_runtime_ctx->resource_manager ().import_model (files[0]);
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
       gltf_filters, SDL_arraysize (gltf_filters), nullptr, false);
 }
 
@@ -1201,10 +1205,10 @@ resource_inspector::import_image_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager.import_image (files[0]);
+        self->m_runtime_ctx->resource_manager ().import_image (files[0]);
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
       texture_filters, SDL_arraysize (texture_filters), nullptr, false);
 }
 
@@ -1217,10 +1221,10 @@ resource_inspector::import_scene_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager.import_scene (files[0]);
+        self->m_runtime_ctx->resource_manager ().import_scene (files[0]);
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
       scene_filters, SDL_arraysize (scene_filters), nullptr, false);
 }
 
@@ -1236,14 +1240,14 @@ resource_inspector::save_scene_dialog ()
         std::filesystem::path const p (files[0]);
         bool const is_prefab = p.extension () == ".prefab";
         wsl::rsc::scene const *scene
-            = self->m_runtime_ctx->scene_manager.get_active ();
+            = self->m_runtime_ctx->scene_manager ().get_active ();
         if (scene) {
-          self->m_runtime_ctx->resource_manager.save_scene (*scene, files[0],
-                                                            is_prefab);
+          self->m_runtime_ctx->resource_manager ().save_scene (*scene, files[0],
+                                                               is_prefab);
         }
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
       scene_filters, SDL_arraysize (scene_filters), nullptr);
 }
 
@@ -1261,14 +1265,15 @@ resource_inspector::new_scene_dialog ()
         std::string const name = p.stem ().string ();
         bool const is_prefab = p.extension () == ".prefab";
 
-        auto &scene = self->m_runtime_ctx->scene_manager.create_default_scene (
-            name, true);
-        self->m_runtime_ctx->resource_manager.save_scene (scene, path,
-                                                          is_prefab);
-        self->m_runtime_ctx->resource_manager.register_scene (path);
+        auto &scene
+            = self->m_runtime_ctx->scene_manager ().create_default_scene (name,
+                                                                          true);
+        self->m_runtime_ctx->resource_manager ().save_scene (scene, path,
+                                                             is_prefab);
+        self->m_runtime_ctx->resource_manager ().register_scene (path);
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
       scene_filters, SDL_arraysize (scene_filters), nullptr);
 }
 
@@ -1281,17 +1286,17 @@ resource_inspector::import_cubemap_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager.import_cubemap (files[0]);
+        self->m_runtime_ctx->resource_manager ().import_cubemap (files[0]);
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
       cubemap_filters, SDL_arraysize (cubemap_filters), nullptr, false);
 }
 
 void
 resource_inspector::draw_audio ()
 {
-  auto &mgr = m_runtime_ctx->resource_manager;
+  auto &mgr = m_runtime_ctx->resource_manager ();
   ImGui::BeginChild ("AudioListChild", ImVec2 (0, 0), 1);
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
@@ -1335,17 +1340,17 @@ resource_inspector::import_audio_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager.import_audio (files[0]);
+        self->m_runtime_ctx->resource_manager ().import_audio (files[0]);
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window.handler : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
       audio_filters, SDL_arraysize (audio_filters), nullptr, false);
 }
 
 void
 resource_inspector::draw_ui_layouts ()
 {
-  auto &mgr = m_runtime_ctx->resource_manager;
+  auto &mgr = m_runtime_ctx->resource_manager ();
   ImGui::BeginChild ("UIListChild", ImVec2 (0, 0), 1);
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
@@ -1406,7 +1411,7 @@ resource_inspector::draw_ui_layouts ()
 void
 resource_inspector::draw_fonts ()
 {
-  auto &mgr = m_runtime_ctx->resource_manager;
+  auto &mgr = m_runtime_ctx->resource_manager ();
   ImGui::BeginChild ("FontListChild", ImVec2 (0, 0), 1);
   if (ImSearch::BeginSearch ()) {
     bool pushed = false;
@@ -1468,7 +1473,7 @@ void
 resource_inspector::draw_materials ()
 {
   if (ImSearch::BeginSearch ()) {
-    auto &mgr = m_runtime_ctx->resource_manager;
+    auto &mgr = m_runtime_ctx->resource_manager ();
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();
@@ -1516,7 +1521,7 @@ void
 resource_inspector::draw_shaders ()
 {
   if (ImSearch::BeginSearch ()) {
-    auto &mgr = m_runtime_ctx->resource_manager;
+    auto &mgr = m_runtime_ctx->resource_manager ();
 
     ImGui::SameLine ();
     ImSearch::SearchBar ();

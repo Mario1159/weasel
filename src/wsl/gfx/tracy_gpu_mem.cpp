@@ -61,7 +61,8 @@ texture_size_bytes (const SDL_GPUTextureCreateInfo &info)
   uint64_t bpp = bytes_per_pixel (info.format);
   // Standard mip chain: each level is 1/4 the size of the previous.
   uint64_t mip_total = 0;
-  uint64_t mw = w, mh = h;
+  uint64_t mw = w;
+  uint64_t mh = h;
   for (uint64_t i = 0; i < mips; ++i) {
     mip_total += mw * mh * bpp;
     mw = std::max (mw / 2, uint64_t (1));
@@ -73,12 +74,13 @@ texture_size_bytes (const SDL_GPUTextureCreateInfo &info)
 } // namespace
 
 void
-tracy_alloc_texture (SDL_GPUTexture *tex, const SDL_GPUTextureCreateInfo &info)
+tracy_alloc_texture (SDL_GPUTexture *tex,
+                     [[maybe_unused]] const SDL_GPUTextureCreateInfo &info)
 {
   if (tex == nullptr) {
     return;
   }
-  TracyAllocN (tex, texture_size_bytes (info), kTracyPoolTextures);
+  TracyAllocN (tex, texture_size_bytes (info), k_tracy_pool_textures);
 }
 
 void
@@ -87,16 +89,16 @@ tracy_free_texture (SDL_GPUTexture *tex)
   if (tex == nullptr) {
     return;
   }
-  TracyFreeN (tex, kTracyPoolTextures);
+  TracyFreeN (tex, k_tracy_pool_textures);
 }
 
 void
-tracy_alloc_buffer (SDL_GPUBuffer *buf, uint64_t size_bytes)
+tracy_alloc_buffer (SDL_GPUBuffer *buf, [[maybe_unused]] uint64_t size_bytes)
 {
   if (buf == nullptr) {
     return;
   }
-  TracyAllocN (buf, size_bytes, kTracyPoolBuffers);
+  TracyAllocN (buf, size_bytes, k_tracy_pool_buffers);
 }
 
 void
@@ -105,16 +107,17 @@ tracy_free_buffer (SDL_GPUBuffer *buf)
   if (buf == nullptr) {
     return;
   }
-  TracyFreeN (buf, kTracyPoolBuffers);
+  TracyFreeN (buf, k_tracy_pool_buffers);
 }
 
 void
-tracy_alloc_transfer (SDL_GPUTransferBuffer *buf, size_t size_bytes)
+tracy_alloc_transfer (SDL_GPUTransferBuffer *buf,
+                      [[maybe_unused]] size_t size_bytes)
 {
   if (buf == nullptr) {
     return;
   }
-  TracyAllocN (buf, size_bytes, kTracyPoolTransfer);
+  TracyAllocN (buf, size_bytes, k_tracy_pool_transfer);
 }
 
 void
@@ -123,7 +126,7 @@ tracy_free_transfer (SDL_GPUTransferBuffer *buf)
   if (buf == nullptr) {
     return;
   }
-  TracyFreeN (buf, kTracyPoolTransfer);
+  TracyFreeN (buf, k_tracy_pool_transfer);
 }
 
 // Samplers / pipelines / shaders don't have a meaningful byte
@@ -142,7 +145,7 @@ tracy_alloc_sampler (SDL_GPUSampler *samp)
   if (samp == nullptr) {
     return;
   }
-  TracyAllocN (samp, kHandleSize, kTracyPoolSamplers);
+  TracyAllocN (samp, kHandleSize, k_tracy_pool_samplers);
 }
 
 void
@@ -151,7 +154,7 @@ tracy_free_sampler (SDL_GPUSampler *samp)
   if (samp == nullptr) {
     return;
   }
-  TracyFreeN (samp, kTracyPoolSamplers);
+  TracyFreeN (samp, k_tracy_pool_samplers);
 }
 
 void
@@ -160,7 +163,7 @@ tracy_alloc_pipeline (SDL_GPUGraphicsPipeline *pipe)
   if (pipe == nullptr) {
     return;
   }
-  TracyAllocN (pipe, kHandleSize, kTracyPoolPipelines);
+  TracyAllocN (pipe, kHandleSize, k_tracy_pool_pipelines);
 }
 
 void
@@ -169,7 +172,7 @@ tracy_free_pipeline (SDL_GPUGraphicsPipeline *pipe)
   if (pipe == nullptr) {
     return;
   }
-  TracyFreeN (pipe, kTracyPoolPipelines);
+  TracyFreeN (pipe, k_tracy_pool_pipelines);
 }
 
 void
@@ -178,7 +181,7 @@ tracy_alloc_compute_pipeline (SDL_GPUComputePipeline *pipe)
   if (pipe == nullptr) {
     return;
   }
-  TracyAllocN (pipe, kHandleSize, kTracyPoolPipelines);
+  TracyAllocN (pipe, kHandleSize, k_tracy_pool_pipelines);
 }
 
 void
@@ -187,7 +190,7 @@ tracy_free_compute_pipeline (SDL_GPUComputePipeline *pipe)
   if (pipe == nullptr) {
     return;
   }
-  TracyFreeN (pipe, kTracyPoolPipelines);
+  TracyFreeN (pipe, k_tracy_pool_pipelines);
 }
 
 void
@@ -196,7 +199,7 @@ tracy_alloc_shader (SDL_GPUShader *shader)
   if (shader == nullptr) {
     return;
   }
-  TracyAllocN (shader, kHandleSize, kTracyPoolShaders);
+  TracyAllocN (shader, kHandleSize, k_tracy_pool_shaders);
 }
 
 void
@@ -205,16 +208,16 @@ tracy_free_shader (SDL_GPUShader *shader)
   if (shader == nullptr) {
     return;
   }
-  TracyFreeN (shader, kTracyPoolShaders);
+  TracyFreeN (shader, k_tracy_pool_shaders);
 }
 
 void
-tracy_alloc_imgui (void *ptr, size_t size_bytes)
+tracy_alloc_imgui (void *ptr, [[maybe_unused]] size_t size_bytes)
 {
   if (ptr == nullptr) {
     return;
   }
-  TracyAllocN (ptr, size_bytes, kTracyPoolImGui);
+  TracyAllocN (ptr, size_bytes, k_tracy_pool_imgui);
 }
 
 void
@@ -223,16 +226,16 @@ tracy_free_imgui (void *ptr)
   if (ptr == nullptr) {
     return;
   }
-  TracyFreeN (ptr, kTracyPoolImGui);
+  TracyFreeN (ptr, k_tracy_pool_imgui);
 }
 
 void
-tracy_alloc_cluster (void *ptr, size_t size_bytes)
+tracy_alloc_cluster (void *ptr, [[maybe_unused]] size_t size_bytes)
 {
   if (ptr == nullptr) {
     return;
   }
-  TracyAllocN (ptr, size_bytes, kTracyPoolCluster);
+  TracyAllocN (ptr, size_bytes, k_tracy_pool_cluster);
 }
 
 void
@@ -241,7 +244,7 @@ tracy_free_cluster (void *ptr)
   if (ptr == nullptr) {
     return;
   }
-  TracyFreeN (ptr, kTracyPoolCluster);
+  TracyFreeN (ptr, k_tracy_pool_cluster);
 }
 
 // --------------------------------------------------------------------

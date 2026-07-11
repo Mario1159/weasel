@@ -418,7 +418,7 @@ gfx::scene_renderer::draw_debug_lines (const std::vector<debug_vertex> &verts,
 
       // Depth
       pi.target_info.has_depth_stencil_target = true;
-      pi.target_info.depth_stencil_format = m_window->depth_format;
+      pi.target_info.depth_stencil_format = m_window->depth_format();
       pi.depth_stencil_state.enable_depth_test = true;
       pi.depth_stencil_state.enable_depth_write = true;
       pi.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
@@ -689,7 +689,7 @@ gfx::scene_renderer::create_pipeline ()
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format;
+  pipe.target_info.depth_stencil_format = m_window->depth_format();
 
   SDL_GPUColorTargetDescription ctd[2]{};
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
@@ -1173,7 +1173,7 @@ gfx::scene_renderer::render_custom_primitive (
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format;
+  pipe.target_info.depth_stencil_format = m_window->depth_format();
 
   SDL_GPUColorTargetDescription ctd[2]{};
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
@@ -1252,7 +1252,8 @@ gfx::scene_renderer::render_custom_primitive (
 
   gfx::material_instance effective_inst = mat_inst;
   auto has_param = [&] (const std::string &name) {
-    return effective_inst.overrides.find (name) != effective_inst.overrides.end ()
+    return effective_inst.overrides.find (name)
+               != effective_inst.overrides.end ()
            || mat_asset->default_parameters.find (name)
                   != mat_asset->default_parameters.end ();
   };
@@ -1279,8 +1280,8 @@ gfx::scene_renderer::render_custom_primitive (
   }
 
   // Build and push uniform blob (Material cbuffer, slot 0)
-  auto blob
-      = effective_inst.build_uniform_blob (prog->fragment_reflection, *mat_asset);
+  auto blob = effective_inst.build_uniform_blob (prog->fragment_reflection,
+                                                 *mat_asset);
   if (!blob.empty ()) {
     SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, blob.data (),
                                     static_cast<Uint32> (blob.size ()));
@@ -1395,11 +1396,13 @@ gfx::scene_renderer::render_custom_primitive (
 
     // Engine PBR shared textures.
     if (has_name (tex_name, "u_IrradianceMap")) {
-      gpu_tex = (irr != nullptr) ? (SDL_GPUTexture *)irr : m_default_cubemap_tex;
+      gpu_tex
+          = (irr != nullptr) ? (SDL_GPUTexture *)irr : m_default_cubemap_tex;
       gpu_samp = use_ibl_samp;
       source = "pbr:irradiance";
     } else if (has_name (tex_name, "u_PrefilterMap")) {
-      gpu_tex = (pre != nullptr) ? (SDL_GPUTexture *)pre : m_default_cubemap_tex;
+      gpu_tex
+          = (pre != nullptr) ? (SDL_GPUTexture *)pre : m_default_cubemap_tex;
       gpu_samp = use_ibl_samp;
       source = "pbr:prefilter";
     } else if (has_name (tex_name, "u_BRDFLUT")) {
@@ -1408,35 +1411,36 @@ gfx::scene_renderer::render_custom_primitive (
       gpu_samp = use_ibl_samp;
       source = "pbr:brdf_lut";
     } else if (has_name (tex_name, "u_DirShadowMap")) {
-      gpu_tex = (m_shadow_depth != nullptr) ? m_shadow_depth : m_default_basecolor_tex;
+      gpu_tex = (m_shadow_depth != nullptr) ? m_shadow_depth
+                                            : m_default_basecolor_tex;
       gpu_samp = shadow_samp;
       source = "pbr:dir_shadow";
     } else if (has_name (tex_name, "u_SpotShadowMap0")) {
-      gpu_tex = (m_spot_shadows[0].depth != nullptr) ? m_spot_shadows[0].depth
-                                                     : ((m_shadow_depth != nullptr)
-                                                            ? m_shadow_depth
-                                                            : m_default_basecolor_tex);
+      gpu_tex = (m_spot_shadows[0].depth != nullptr)
+                    ? m_spot_shadows[0].depth
+                    : ((m_shadow_depth != nullptr) ? m_shadow_depth
+                                                   : m_default_basecolor_tex);
       gpu_samp = shadow_samp;
       source = "pbr:spot_shadow0";
     } else if (has_name (tex_name, "u_SpotShadowMap1")) {
-      gpu_tex = (m_spot_shadows[1].depth != nullptr) ? m_spot_shadows[1].depth
-                                                     : ((m_shadow_depth != nullptr)
-                                                            ? m_shadow_depth
-                                                            : m_default_basecolor_tex);
+      gpu_tex = (m_spot_shadows[1].depth != nullptr)
+                    ? m_spot_shadows[1].depth
+                    : ((m_shadow_depth != nullptr) ? m_shadow_depth
+                                                   : m_default_basecolor_tex);
       gpu_samp = shadow_samp;
       source = "pbr:spot_shadow1";
     } else if (has_name (tex_name, "u_SpotShadowMap2")) {
-      gpu_tex = (m_spot_shadows[2].depth != nullptr) ? m_spot_shadows[2].depth
-                                                     : ((m_shadow_depth != nullptr)
-                                                            ? m_shadow_depth
-                                                            : m_default_basecolor_tex);
+      gpu_tex = (m_spot_shadows[2].depth != nullptr)
+                    ? m_spot_shadows[2].depth
+                    : ((m_shadow_depth != nullptr) ? m_shadow_depth
+                                                   : m_default_basecolor_tex);
       gpu_samp = shadow_samp;
       source = "pbr:spot_shadow2";
     } else if (has_name (tex_name, "u_SpotShadowMap3")) {
-      gpu_tex = (m_spot_shadows[3].depth != nullptr) ? m_spot_shadows[3].depth
-                                                     : ((m_shadow_depth != nullptr)
-                                                            ? m_shadow_depth
-                                                            : m_default_basecolor_tex);
+      gpu_tex = (m_spot_shadows[3].depth != nullptr)
+                    ? m_spot_shadows[3].depth
+                    : ((m_shadow_depth != nullptr) ? m_shadow_depth
+                                                   : m_default_basecolor_tex);
       gpu_samp = shadow_samp;
       source = "pbr:spot_shadow3";
     } else if (has_name (tex_name, "u_PointShadowMap0")) {
@@ -1452,9 +1456,10 @@ gfx::scene_renderer::render_custom_primitive (
       gpu_samp = shadow_samp;
       source = "pbr:point_shadow1";
     } else if (has_name (tex_name, "u_SSAOTex")) {
-      gpu_tex = (m_ssao_blur != nullptr) ? m_ssao_blur : m_default_basecolor_tex;
+      gpu_tex
+          = (m_ssao_blur != nullptr) ? m_ssao_blur : m_default_basecolor_tex;
       gpu_samp = (m_ssao_linear_sampler != nullptr) ? m_ssao_linear_sampler
-                                                     : m_default_sampler;
+                                                    : m_default_sampler;
       source = "pbr:ssao";
     }
     // Primitive material textures.
@@ -1470,8 +1475,8 @@ gfx::scene_renderer::render_custom_primitive (
       gpu_samp = prim_samp;
       source = "primitive:metallic_roughness";
     } else if (has_name (tex_name, "u_NormalTex")) {
-      gpu_tex
-          = (prim.mat.normal_tex != nullptr) ? prim.mat.normal_tex : m_default_normal_tex;
+      gpu_tex = (prim.mat.normal_tex != nullptr) ? prim.mat.normal_tex
+                                                 : m_default_normal_tex;
       gpu_samp = prim_samp;
       source = "primitive:normal";
     } else if (has_name (tex_name, "u_EmissiveTex")) {
@@ -1504,7 +1509,8 @@ gfx::scene_renderer::render_custom_primitive (
 
     if (s_custom_tex_log_budget > 0) {
       wsl::log::gfx ()->debug (
-          "[custom_mat] tex binding {} name='{}' source={} prim_has(base={},mr={},n={},e={})",
+          "[custom_mat] tex binding {} name='{}' source={} "
+          "prim_has(base={},mr={},n={},e={})",
           slot, tex_name, source, prim.mat.base_color_tex != nullptr,
           prim.mat.metallic_roughness_tex != nullptr,
           prim.mat.normal_tex != nullptr, prim.mat.emissive_tex != nullptr);
@@ -1617,7 +1623,7 @@ gfx::scene_renderer::create_skybox_pipeline ()
   pipe.target_info.color_target_descriptions = ctd;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format;
+  pipe.target_info.depth_stencil_format = m_window->depth_format();
 
   pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
   pipe.multisample_state.sample_mask = 0;
@@ -1713,7 +1719,7 @@ gfx::scene_renderer::create_unlit_pipeline ()
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format;
+  pipe.target_info.depth_stencil_format = m_window->depth_format();
 
   pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
 
@@ -1870,7 +1876,7 @@ gfx::scene_renderer::create_preview_bg_pipeline ()
   pipe.target_info.color_target_descriptions = ctd;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format;
+  pipe.target_info.depth_stencil_format = m_window->depth_format();
 
   pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
 
@@ -4004,7 +4010,7 @@ gfx::scene_renderer::create_outline_pipeline ()
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format;
+  pipe.target_info.depth_stencil_format = m_window->depth_format();
 
   SDL_GPUColorTargetDescription ctd[2]{};
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
@@ -4218,7 +4224,7 @@ gfx::scene_renderer::create_grid_pipeline ()
 
   pipe.target_info.color_target_descriptions = ctd;
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format;
+  pipe.target_info.depth_stencil_format = m_window->depth_format();
 
   pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
   pipe.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;

@@ -314,9 +314,8 @@ private:
         std::is_base_of_v<sys::ecs_system, T>,
         "Registered system types must derive from wsl::sys::ecs_system.");
 
-    if constexpr (std::is_constructible_v<T, const std::string &>) {
-      return std::make_unique<T> (display_name);
-    } else if constexpr (std::is_constructible_v<T, std::string>) {
+    if constexpr (std::is_constructible_v<T, const std::string &>
+                  || std::is_constructible_v<T, std::string>) {
       return std::make_unique<T> (display_name);
     } else if constexpr (std::is_constructible_v<T, const char *>) {
       return std::make_unique<T> (display_name.c_str ());

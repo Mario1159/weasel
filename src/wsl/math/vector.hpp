@@ -27,18 +27,37 @@ namespace math
 
 struct vec2f
 {
-  float x{ 0 }, y{ 0 };
-
   vec2f () = default;
-  vec2f (float x, float y) : x (x), y (y) {}
-  vec2f (const glm::vec2 &v) : x (v.x), y (v.y) {}
+  vec2f (float x_val, float y_val) : m_x (x_val), m_y (y_val) {}
+  vec2f (const glm::vec2 &v) : m_x (v.x), m_y (v.y) {}
 
-  operator glm::vec2 () const { return glm::vec2{ x, y }; }
+  float
+  x () const
+  {
+    return m_x;
+  }
+  float &
+  x ()
+  {
+    return m_x;
+  }
+  float
+  y () const
+  {
+    return m_y;
+  }
+  float &
+  y ()
+  {
+    return m_y;
+  }
+
+  operator glm::vec2 () const { return glm::vec2{ m_x, m_y }; }
 
   bool
   operator== (const vec2f &other) const
   {
-    return x == other.x && y == other.y;
+    return m_x == other.m_x && m_y == other.m_y;
   }
   bool
   operator!= (const vec2f &other) const
@@ -70,11 +89,11 @@ struct vec2f
     bool changed = false;
 
     ImGui::SetNextItemWidth (w);
-    changed |= draw_drag_with_stripe ("##x", x, IM_COL32 (255, 0, 0, 255));
+    changed |= draw_drag_with_stripe ("##x", m_x, IM_COL32 (255, 0, 0, 255));
     ImGui::SameLine (0.0F, spacing);
 
     ImGui::SetNextItemWidth (w);
-    changed |= draw_drag_with_stripe ("##y", y, IM_COL32 (0, 200, 0, 255));
+    changed |= draw_drag_with_stripe ("##y", m_y, IM_COL32 (0, 200, 0, 255));
 
     ImGui::PopID ();
     return changed;
@@ -85,8 +104,8 @@ struct vec2f
   serialize (Archive &archive)
   {
     vec2f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
-    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
+    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
+    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
   }
 
   static void
@@ -96,29 +115,66 @@ struct vec2f
     entt::meta_factory<vec2f> ()
         .type (entt::type_hash<vec2f>::value ())
         .func<&vec2f::custom_inspect> ("custom_inspect"_hs)
-        .data<&vec2f::x> ("x"_hs)
+        .data<&vec2f::m_x> ("x"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
-        .data<&vec2f::y> ("y"_hs)
+        .data<&vec2f::m_y> ("y"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" });
   }
+
+private:
+  float m_x{ 0 }, m_y{ 0 };
 };
 
 struct vec3f
 {
-  float x{ 0 }, y{ 0 }, z{ 0 };
-
   vec3f () = default;
-  vec3f (float x, float y, float z) : x (x), y (y), z (z) {}
-  vec3f (const glm::vec3 &v) : x (v.x), y (v.y), z (v.z) {}
-  vec3f (const JPH::Vec3 &v) : x (v.GetX ()), y (v.GetY ()), z (v.GetZ ()) {}
+  vec3f (float x_val, float y_val, float z_val)
+      : m_x (x_val), m_y (y_val), m_z (z_val)
+  {
+  }
+  vec3f (const glm::vec3 &v) : m_x (v.x), m_y (v.y), m_z (v.z) {}
+  vec3f (const JPH::Vec3 &v) : m_x (v.GetX ()), m_y (v.GetY ()), m_z (v.GetZ ())
+  {
+  }
 
-  operator glm::vec3 () const { return glm::vec3{ x, y, z }; }
-  operator JPH::Vec3 () const { return JPH::Vec3{ x, y, z }; }
+  float
+  x () const
+  {
+    return m_x;
+  }
+  float &
+  x ()
+  {
+    return m_x;
+  }
+  float
+  y () const
+  {
+    return m_y;
+  }
+  float &
+  y ()
+  {
+    return m_y;
+  }
+  float
+  z () const
+  {
+    return m_z;
+  }
+  float &
+  z ()
+  {
+    return m_z;
+  }
+
+  operator glm::vec3 () const { return glm::vec3{ m_x, m_y, m_z }; }
+  operator JPH::Vec3 () const { return JPH::Vec3{ m_x, m_y, m_z }; }
 
   bool
   operator== (const vec3f &other) const
   {
-    return x == other.x && y == other.y && z == other.z;
+    return m_x == other.m_x && m_y == other.m_y && m_z == other.m_z;
   }
   bool
   operator!= (const vec3f &other) const
@@ -129,18 +185,18 @@ struct vec3f
   vec3f &
   operator+= (const glm::vec3 &v)
   {
-    x += v.x;
-    y += v.y;
-    z += v.z;
+    m_x += v.x;
+    m_y += v.y;
+    m_z += v.z;
     return *this;
   }
 
   vec3f &
   operator-= (const glm::vec3 &v)
   {
-    x -= v.x;
-    y -= v.y;
-    z -= v.z;
+    m_x -= v.x;
+    m_y -= v.y;
+    m_z -= v.z;
     return *this;
   }
 
@@ -178,25 +234,25 @@ struct vec3f
     // Split available width into 3 items with spacing.
     float const full = ImGui::CalcItemWidth ();
     float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
-    float const w = (full - ((((((spacing * 2.0F))))))) / 3.0F;
+    float const w = (full - (spacing * 2.0F)) / 3.0F;
 
     bool changed = false;
 
     // X
     ImGui::SetNextItemWidth (w);
-    changed |= draw_drag_with_stripe ("##x", x, IM_COL32 (255, 0, 0, 255));
+    changed |= draw_drag_with_stripe ("##x", m_x, IM_COL32 (255, 0, 0, 255));
 
     ImGui::SameLine (0.0F, spacing);
 
     // Y
     ImGui::SetNextItemWidth (w);
-    changed |= draw_drag_with_stripe ("##y", y, IM_COL32 (0, 200, 0, 255));
+    changed |= draw_drag_with_stripe ("##y", m_y, IM_COL32 (0, 200, 0, 255));
 
     ImGui::SameLine (0.0F, spacing);
 
     // Z
     ImGui::SetNextItemWidth (w);
-    changed |= draw_drag_with_stripe ("##z", z, IM_COL32 (0, 128, 255, 255));
+    changed |= draw_drag_with_stripe ("##z", m_z, IM_COL32 (0, 128, 255, 255));
 
     ImGui::PopID ();
     return changed;
@@ -212,11 +268,11 @@ struct vec3f
         // ---- NEW: register the custom inspector function in meta ----
         .func<&vec3f::custom_inspect> ("custom_inspect"_hs)
 
-        .data<&vec3f::x> ("x"_hs)
+        .data<&vec3f::m_x> ("x"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
-        .data<&vec3f::y> ("y"_hs)
+        .data<&vec3f::m_y> ("y"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
-        .data<&vec3f::z> ("z"_hs)
+        .data<&vec3f::m_z> ("z"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" });
   }
 
@@ -225,26 +281,72 @@ struct vec3f
   serialize (Archive &archive)
   {
     vec3f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
-    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
-    wsl::comp::serialize_field_if_diff (archive, "z", z, def.z);
+    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
+    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
+    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
   }
+
+private:
+  float m_x{ 0 }, m_y{ 0 }, m_z{ 0 };
 };
 
 struct vec4f
 {
-  float x{ 0 }, y{ 0 }, z{ 0 }, w{ 0 };
-
   vec4f () = default;
-  vec4f (float x, float y, float z, float w) : x (x), y (y), z (z), w (w) {}
-  vec4f (const glm::vec4 &v) : x (v.x), y (v.y), z (v.z), w (v.w) {}
+  vec4f (float x_val, float y_val, float z_val, float w_val)
+      : m_x (x_val), m_y (y_val), m_z (z_val), m_w (w_val)
+  {
+  }
+  vec4f (const glm::vec4 &v) : m_x (v.x), m_y (v.y), m_z (v.z), m_w (v.w) {}
 
-  operator glm::vec4 () const { return glm::vec4{ x, y, z, w }; }
+  float
+  x () const
+  {
+    return m_x;
+  }
+  float &
+  x ()
+  {
+    return m_x;
+  }
+  float
+  y () const
+  {
+    return m_y;
+  }
+  float &
+  y ()
+  {
+    return m_y;
+  }
+  float
+  z () const
+  {
+    return m_z;
+  }
+  float &
+  z ()
+  {
+    return m_z;
+  }
+  float
+  w () const
+  {
+    return m_w;
+  }
+  float &
+  w ()
+  {
+    return m_w;
+  }
+
+  operator glm::vec4 () const { return glm::vec4{ m_x, m_y, m_z, m_w }; }
 
   bool
   operator== (const vec4f &other) const
   {
-    return x == other.x && y == other.y && z == other.z && w == other.w;
+    return m_x == other.m_x && m_y == other.m_y && m_z == other.m_z
+           && m_w == other.m_w;
   }
   bool
   operator!= (const vec4f &other) const
@@ -271,25 +373,25 @@ struct vec4f
 
     float const full = ImGui::CalcItemWidth ();
     float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
-    float const item_w = (full - spacing * 3.0F) / 4.0F;
+    float const item_w = (full - (spacing * 3.0F)) / 4.0F;
 
     bool changed = false;
 
     ImGui::SetNextItemWidth (item_w);
-    changed |= draw_drag_with_stripe ("##x", x, IM_COL32 (255, 0, 0, 255));
+    changed |= draw_drag_with_stripe ("##x", m_x, IM_COL32 (255, 0, 0, 255));
     ImGui::SameLine (0.0F, spacing);
 
     ImGui::SetNextItemWidth (item_w);
-    changed |= draw_drag_with_stripe ("##y", y, IM_COL32 (0, 200, 0, 255));
+    changed |= draw_drag_with_stripe ("##y", m_y, IM_COL32 (0, 200, 0, 255));
     ImGui::SameLine (0.0F, spacing);
 
     ImGui::SetNextItemWidth (item_w);
-    changed |= draw_drag_with_stripe ("##z", z, IM_COL32 (0, 128, 255, 255));
+    changed |= draw_drag_with_stripe ("##z", m_z, IM_COL32 (0, 128, 255, 255));
     ImGui::SameLine (0.0F, spacing);
 
     ImGui::SetNextItemWidth (item_w);
-    changed |= draw_drag_with_stripe ("##w", this->w,
-                                      IM_COL32 (255, 255, 255, 255));
+    changed
+        |= draw_drag_with_stripe ("##w", m_w, IM_COL32 (255, 255, 255, 255));
 
     ImGui::PopID ();
     return changed;
@@ -300,10 +402,10 @@ struct vec4f
   serialize (Archive &archive)
   {
     vec4f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
-    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
-    wsl::comp::serialize_field_if_diff (archive, "z", z, def.z);
-    wsl::comp::serialize_field_if_diff (archive, "w", w, def.w);
+    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
+    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
+    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
+    wsl::comp::serialize_field_if_diff (archive, "w", m_w, def.m_w);
   }
 
   static void
@@ -313,31 +415,77 @@ struct vec4f
     entt::meta_factory<vec4f> ()
         .type (entt::type_hash<vec4f>::value ())
         .func<&vec4f::custom_inspect> ("custom_inspect"_hs)
-        .data<&vec4f::x> ("x"_hs)
+        .data<&vec4f::m_x> ("x"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
-        .data<&vec4f::y> ("y"_hs)
+        .data<&vec4f::m_y> ("y"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
-        .data<&vec4f::z> ("z"_hs)
+        .data<&vec4f::m_z> ("z"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" })
-        .data<&vec4f::w> ("w"_hs)
+        .data<&vec4f::m_w> ("w"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "w", "W Coordinate", "" });
   }
+
+private:
+  float m_x{ 0 }, m_y{ 0 }, m_z{ 0 }, m_w{ 0 };
 };
 
 struct quatf
 {
-  float x{ 0 }, y{ 0 }, z{ 0 }, w{ 1 };
-
   quatf () = default;
-  quatf (float x, float y, float z, float w) : x (x), y (y), z (z), w (w) {}
-  quatf (const glm::quat &q) : x (q.x), y (q.y), z (q.z), w (q.w) {}
+  quatf (float x_val, float y_val, float z_val, float w_val)
+      : m_x (x_val), m_y (y_val), m_z (z_val), m_w (w_val)
+  {
+  }
+  quatf (const glm::quat &q) : m_x (q.x), m_y (q.y), m_z (q.z), m_w (q.w) {}
 
-  operator glm::quat () const { return glm::quat{ w, x, y, z }; }
+  float
+  x () const
+  {
+    return m_x;
+  }
+  float &
+  x ()
+  {
+    return m_x;
+  }
+  float
+  y () const
+  {
+    return m_y;
+  }
+  float &
+  y ()
+  {
+    return m_y;
+  }
+  float
+  z () const
+  {
+    return m_z;
+  }
+  float &
+  z ()
+  {
+    return m_z;
+  }
+  float
+  w () const
+  {
+    return m_w;
+  }
+  float &
+  w ()
+  {
+    return m_w;
+  }
+
+  operator glm::quat () const { return glm::quat{ m_w, m_x, m_y, m_z }; }
 
   bool
   operator== (const quatf &other) const
   {
-    return x == other.x && y == other.y && z == other.z && w == other.w;
+    return m_x == other.m_x && m_y == other.m_y && m_z == other.m_z
+           && m_w == other.m_w;
   }
   bool
   operator!= (const quatf &other) const
@@ -364,7 +512,7 @@ struct quatf
 
     float const full = ImGui::CalcItemWidth ();
     float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
-    float const w = (full - spacing * 2.0F) / 3.0F;
+    float const w = (full - (spacing * 2.0F)) / 3.0F;
 
     glm::vec3 euler
         = glm::degrees (glm::eulerAngles (static_cast<glm::quat> (*this)));
@@ -388,10 +536,10 @@ struct quatf
     if (changed) {
       glm::quat const q = glm::quat (glm::radians (euler));
       quatf &self = const_cast<quatf &> (*this);
-      self.x = q.x;
-      self.y = q.y;
-      self.z = q.z;
-      self.w = q.w;
+      self.m_x = q.x;
+      self.m_y = q.y;
+      self.m_z = q.z;
+      self.m_w = q.w;
     }
 
     ImGui::PopID ();
@@ -405,13 +553,13 @@ struct quatf
     entt::meta_factory<quatf> ()
         .type (entt::type_hash<quatf>::value ())
         .func<&quatf::custom_inspect> ("custom_inspect"_hs)
-        .data<&quatf::x> ("x"_hs)
+        .data<&quatf::m_x> ("x"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
-        .data<&quatf::y> ("y"_hs)
+        .data<&quatf::m_y> ("y"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
-        .data<&quatf::z> ("z"_hs)
+        .data<&quatf::m_z> ("z"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" })
-        .data<&quatf::w> ("w"_hs)
+        .data<&quatf::m_w> ("w"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "w", "W Coordinate", "" });
   }
 
@@ -420,11 +568,14 @@ struct quatf
   serialize (Archive &archive)
   {
     quatf def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", x, def.x);
-    wsl::comp::serialize_field_if_diff (archive, "y", y, def.y);
-    wsl::comp::serialize_field_if_diff (archive, "z", z, def.z);
-    wsl::comp::serialize_field_if_diff (archive, "w", w, def.w);
+    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
+    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
+    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
+    wsl::comp::serialize_field_if_diff (archive, "w", m_w, def.m_w);
   }
+
+private:
+  float m_x{ 0 }, m_y{ 0 }, m_z{ 0 }, m_w{ 1 };
 };
 
 } // namespace math

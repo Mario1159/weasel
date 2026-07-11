@@ -644,10 +644,10 @@ file_list::draw (const char *title, bool *p_open,
         ImGui::BeginDisabled ();
       }
 
-      auto *editor_ctx = runtime_ctx->editor_ctx;
+      auto *editor_ctx = runtime_ctx->editor_ctx ();
       if (editor_ctx != nullptr) {
         auto handle
-            = editor_ctx->editor_resources.get (editor_ctx->icon_refresh);
+            = editor_ctx->editor_resources ().get (editor_ctx->icon_refresh ());
         const float btn_size = ImGui::GetFrameHeight ();
         const float icon_padding = 4.0F;
         const float icon_size = btn_size - (icon_padding * 2.0F);
@@ -659,7 +659,7 @@ file_list::draw (const char *title, bool *p_open,
                                   (ImTextureID)handle->texture.get (),
                                   ImVec2 (icon_size, icon_size))) {
             if (proj) {
-              runtime_ctx->runtime_project_module.compile_and_load_async (
+              runtime_ctx->runtime_project_module ().compile_and_load_async (
                   *proj);
             }
           }
@@ -668,7 +668,7 @@ file_list::draw (const char *title, bool *p_open,
           if (ImGui::Button ("R##reload_scripts",
                              ImVec2 (btn_size, btn_size))) {
             if (proj) {
-              runtime_ctx->runtime_project_module.compile_and_load_async (
+              runtime_ctx->runtime_project_module ().compile_and_load_async (
                   *proj);
             }
           }

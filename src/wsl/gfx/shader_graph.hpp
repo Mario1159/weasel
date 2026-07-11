@@ -130,8 +130,8 @@ struct graph_node
   uint64_t id = 0;
   std::string name;
   graph_node_kind kind = graph_node_kind::unknown;
-  float pos_x = 0.0f;
-  float pos_y = 0.0f;
+  float pos_x = 0.0F;
+  float pos_y = 0.0F;
 
   //! Node-specific properties (e.g., default value for a uniform).
   std::unordered_map<std::string, std::string> properties;

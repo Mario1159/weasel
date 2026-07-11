@@ -22,8 +22,8 @@
  */
 
 #ifndef __MIKKTSPACE_H__
+// NOLINTBEGIN(readability-identifier-naming)
 #define __MIKKTSPACE_H__
-
 
 
 
@@ -144,4 +144,5 @@ tbool gen_tang_space(const SMikkTSpaceContext * p_context, float f_angular_thres
 }
 #endif
 
+// NOLINTEND(readability-identifier-naming)
 #endif

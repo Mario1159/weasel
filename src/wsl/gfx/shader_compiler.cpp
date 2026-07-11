@@ -179,8 +179,8 @@ parse_reflection (const std::filesystem::path &json_path,
       if (b == p.end () || !b->is_object ())
         continue;
       std::string kind = b->value ("kind", "");
-      uint32_t set = b->value ("space", 0u);
-      uint32_t binding = b->value ("index", 0u);
+      uint32_t set = b->value ("space", 0U);
+      uint32_t binding = b->value ("index", 0U);
       std::string name = p.value ("name", "");
 
       if (kind == "constantBuffer") {
@@ -203,8 +203,8 @@ parse_reflection (const std::filesystem::path &json_path,
                   continue;
                 shader_buffer_member m{};
                 m.name = f.value ("name", "");
-                m.offset = fb->value ("offset", 0u);
-                m.size = fb->value ("size", 0u);
+                m.offset = fb->value ("offset", 0U);
+                m.size = fb->value ("size", 0U);
                 ubo_size = std::max (ubo_size, m.offset + m.size);
                 ub.members.push_back (std::move (m));
               }
@@ -213,7 +213,7 @@ parse_reflection (const std::filesystem::path &json_path,
             if (evl != et->end ()) {
               auto eb = evl->find ("binding");
               if (eb != evl->end ()) {
-                uint32_t s = eb->value ("size", 0u);
+                uint32_t s = eb->value ("size", 0U);
                 if (s)
                   ubo_size = s;
               }
@@ -262,7 +262,7 @@ parse_reflection (const std::filesystem::path &json_path,
         if (t != p.end ()) {
           auto arr = t->find ("array");
           if (arr != t->end ()) {
-            count = arr->value ("elementCount", 1u);
+            count = arr->value ("elementCount", 1U);
           }
         }
         target->sampler_count

@@ -44,10 +44,10 @@ render_3d_system::on_render_record_draw_cmd (entt::registry &registry)
 
   if (!is_subviewport_pass && ctx.contains<comp::singl::editor_context *> ()) {
     auto &editor_ctx = *ctx.get<comp::singl::editor_context *> ();
-    if (editor_ctx.grid_visible) {
-      renderer->draw_grid (editor_ctx.grid_camera_pos,
-                           editor_ctx.grid_fog_center,
-                           editor_ctx.grid_fog_radius);
+    if (editor_ctx.grid_visible ()) {
+      renderer->draw_grid (editor_ctx.grid_camera_pos (),
+                           editor_ctx.grid_fog_center (),
+                           editor_ctx.grid_fog_radius ());
     }
 
     // Draw camera gizmos in the 3D pass (editor-only, not tied to physics
@@ -55,9 +55,9 @@ render_3d_system::on_render_record_draw_cmd (entt::registry &registry)
     if ((renderer != nullptr)
         && ctx.contains<comp::singl::runtime_context *> ()) {
       auto &runtime_ctx = *ctx.get<comp::singl::runtime_context *> ();
-      if (!runtime_ctx.is_running) {
+      if (!runtime_ctx.is_running ()) {
         comp::singl::editor_context::resolved_camera rc;
-        auto *scene = runtime_ctx.scene_manager.get_active ();
+        auto *scene = runtime_ctx.scene_manager ().get_active ();
         bool const have_rc
             = editor_ctx.resolve_game_view_camera (registry, scene, rc);
 
@@ -72,14 +72,15 @@ render_3d_system::on_render_record_draw_cmd (entt::registry &registry)
         lines.reserve (256);
 
         for (entt::entity const entity : view) {
-          if (have_rc && !rc.using_engine_default && entity == rc.entity) {
+          if (have_rc && !rc.using_engine_default ()
+              && entity == rc.entity ()) {
             continue;
           }
 
           const comp::camera &camera = view.get<comp::camera> (entity);
           const comp::world_transform &wt
               = view.get<comp::world_transform> (entity);
-          glm::mat4 const wtm = wt.value;
+          glm::mat4 const wtm = wt.value ();
 
           // compute basis
           glm::vec3 const origin = glm::vec3 (wtm[3]);
@@ -98,11 +99,12 @@ render_3d_system::on_render_record_draw_cmd (entt::registry &registry)
           glm::vec3 const up = glm::normalize (glm::cross (right, forward));
           right = glm::normalize (glm::cross (forward, up));
 
-          float const vertical_fov_deg = glm::clamp (camera.fov, 1.0F, 175.0F);
+          float const vertical_fov_deg
+              = glm::clamp (camera.fov (), 1.0F, 175.0F);
           float const aspect_ratio = glm::clamp (
-              camera.aspect_ratio > 0.001F
-                  ? camera.aspect_ratio
-                  : (rc.aspect_ratio > 0.0F ? rc.aspect_ratio : 1.0F),
+              camera.aspect_ratio () > 0.001F
+                  ? camera.aspect_ratio ()
+                  : (rc.aspect_ratio () > 0.0F ? rc.aspect_ratio () : 1.0F),
               0.1F, 10.0F);
           float const tan_half_fov
               = std::tan (glm::radians (vertical_fov_deg) * 0.5F);
@@ -130,7 +132,7 @@ render_3d_system::on_render_record_draw_cmd (entt::registry &registry)
           float const origin_extent
               = glm::clamp (corner_length * 0.12F, 0.08F, 0.35F);
 
-          glm::vec4 const col = (entity == editor_ctx.selected_entity)
+          glm::vec4 const col = (entity == editor_ctx.selected_entity ())
                                     ? selected_color
                                     : default_color;
 

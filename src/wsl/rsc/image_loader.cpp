@@ -165,18 +165,21 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     const SDL_Palette *fmt_palette
         = nullptr; // non-indexed formats don't need a palette
     for (int y = 0; y < h; ++y) {
-      uint8_t *row = static_cast<uint8_t *> (rgba->pixels) + y * pitch;
+      uint8_t *row = static_cast<uint8_t *> (rgba->pixels) + (y * pitch);
       for (int x = 0; x < w; ++x) {
-        uint32_t pixel = *(uint32_t *)(row + x * 4);
-        uint8_t r, g, b, a;
+        uint32_t pixel = *(uint32_t *)(row + (x * 4));
+        uint8_t r;
+        uint8_t g;
+        uint8_t b;
+        uint8_t a;
         SDL_GetRGBA (pixel, fmt_details, fmt_palette, &r, &g, &b, &a);
         if (a == 255)
           continue;
-        uint8_t pr = static_cast<uint8_t> ((int (r) * int (a) + 127) / 255);
-        uint8_t pg = static_cast<uint8_t> ((int (g) * int (a) + 127) / 255);
-        uint8_t pb = static_cast<uint8_t> ((int (b) * int (a) + 127) / 255);
+        uint8_t pr = static_cast<uint8_t> (((int (r) * int (a)) + 127) / 255);
+        uint8_t pg = static_cast<uint8_t> (((int (g) * int (a)) + 127) / 255);
+        uint8_t pb = static_cast<uint8_t> (((int (b) * int (a)) + 127) / 255);
         uint32_t mapped = SDL_MapRGBA (fmt_details, fmt_palette, pr, pg, pb, a);
-        *(uint32_t *)(row + x * 4) = mapped;
+        *(uint32_t *)(row + (x * 4)) = mapped;
       }
     }
     SDL_UnlockSurface (rgba);
@@ -315,8 +318,8 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
 
   // Upload each mip level by scaling the source surface on the CPU.
   for (uint32_t level = 0; level < mip_levels; ++level) {
-    const uint32_t lw = std::max<uint32_t> (1u, width >> level);
-    const uint32_t lh = std::max<uint32_t> (1u, height >> level);
+    const uint32_t lw = std::max<uint32_t> (1U, width >> level);
+    const uint32_t lh = std::max<uint32_t> (1U, height >> level);
 
     // Create a temporary surface for this mip level. Level 0 uses the
     // already-converted 'rgba' surface; for others, create and blit-scaled.
@@ -376,8 +379,9 @@ image_loader::upload_gpu (SDL_GPUDevice *device, raw::image_cpu &cpu)
     uint8_t *mapped_ptr = static_cast<uint8_t *> (mapped);
     uint8_t *src = static_cast<uint8_t *> (level_surf->pixels);
     for (uint32_t y = 0; y < lh; ++y) {
-      std::memcpy (mapped_ptr + size_t (y) * lw * bytes_per_pixel,
-                   src + size_t (y) * level_surf->pitch, lw * bytes_per_pixel);
+      std::memcpy (mapped_ptr + (size_t (y) * lw * bytes_per_pixel),
+                   src + (size_t (y) * level_surf->pitch),
+                   lw * bytes_per_pixel);
     }
     SDL_UnmapGPUTransferBuffer (device, tb.get ());
 

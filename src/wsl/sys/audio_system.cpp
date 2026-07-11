@@ -8,7 +8,6 @@
 #include <entt/entity/fwd.hpp>
 #include <string>
 
-
 namespace wsl
 {
 
@@ -23,62 +22,62 @@ void
 audio_system::register_signals (reg::sig::signal_hub &hub)
 {
   hub.declare_signal<comp::audio::play, audio_system, comp::audio> (
-      +[](const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::play *>(sig)->entity;
+      +[] (const void *sig) -> entt::entity {
+        return static_cast<const comp::audio::play *> (sig)->entity;
       });
   hub.declare_signal<comp::audio::stop, audio_system, comp::audio> (
-      +[](const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::stop *>(sig)->entity;
+      +[] (const void *sig) -> entt::entity {
+        return static_cast<const comp::audio::stop *> (sig)->entity;
       });
   hub.declare_signal<comp::audio::pause, audio_system, comp::audio> (
-      +[](const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::pause *>(sig)->entity;
+      +[] (const void *sig) -> entt::entity {
+        return static_cast<const comp::audio::pause *> (sig)->entity;
       });
   hub.declare_signal<comp::audio::resume, audio_system, comp::audio> (
-      +[](const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::resume *>(sig)->entity;
+      +[] (const void *sig) -> entt::entity {
+        return static_cast<const comp::audio::resume *> (sig)->entity;
       });
   hub.declare_signal<comp::audio::set_volume, audio_system, comp::audio> (
-      +[](const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::set_volume *>(sig)->entity;
+      +[] (const void *sig) -> entt::entity {
+        return static_cast<const comp::audio::set_volume *> (sig)->entity;
       });
 }
 
 void
 audio_system::register_event_handlers (reg::sig::signal_hub &hub)
 {
-  hub.declare_connectable_handler<comp::audio::play, audio_system, comp::audio> (
-      "on_play",
-      +[](sys::ecs_system &sys, entt::registry &reg, entt::entity ent,
-         const void *sig) {
+  hub.declare_connectable_handler<comp::audio::play, audio_system,
+                                  comp::audio> (
+      "on_play", +[] (sys::ecs_system &sys, entt::registry &reg,
+                      entt::entity ent, const void *sig) {
         static_cast<audio_system &> (sys).on_play (
             reg, ent, *static_cast<const comp::audio::play *> (sig));
       });
-  hub.declare_connectable_handler<comp::audio::stop, audio_system, comp::audio> (
-      "on_stop",
-      +[](sys::ecs_system &sys, entt::registry &reg, entt::entity ent,
-         const void *sig) {
+  hub.declare_connectable_handler<comp::audio::stop, audio_system,
+                                  comp::audio> (
+      "on_stop", +[] (sys::ecs_system &sys, entt::registry &reg,
+                      entt::entity ent, const void *sig) {
         static_cast<audio_system &> (sys).on_stop (
             reg, ent, *static_cast<const comp::audio::stop *> (sig));
       });
-  hub.declare_connectable_handler<comp::audio::pause, audio_system, comp::audio> (
-      "on_pause",
-      +[](sys::ecs_system &sys, entt::registry &reg, entt::entity ent,
-         const void *sig) {
+  hub.declare_connectable_handler<comp::audio::pause, audio_system,
+                                  comp::audio> (
+      "on_pause", +[] (sys::ecs_system &sys, entt::registry &reg,
+                       entt::entity ent, const void *sig) {
         static_cast<audio_system &> (sys).on_pause (
             reg, ent, *static_cast<const comp::audio::pause *> (sig));
       });
-  hub.declare_connectable_handler<comp::audio::resume, audio_system, comp::audio> (
-      "on_resume",
-      +[](sys::ecs_system &sys, entt::registry &reg, entt::entity ent,
-         const void *sig) {
+  hub.declare_connectable_handler<comp::audio::resume, audio_system,
+                                  comp::audio> (
+      "on_resume", +[] (sys::ecs_system &sys, entt::registry &reg,
+                        entt::entity ent, const void *sig) {
         static_cast<audio_system &> (sys).on_resume (
             reg, ent, *static_cast<const comp::audio::resume *> (sig));
       });
-  hub.declare_connectable_handler<comp::audio::set_volume, audio_system, comp::audio> (
-      "on_set_volume",
-      +[](sys::ecs_system &sys, entt::registry &reg, entt::entity ent,
-         const void *sig) {
+  hub.declare_connectable_handler<comp::audio::set_volume, audio_system,
+                                  comp::audio> (
+      "on_set_volume", +[] (sys::ecs_system &sys, entt::registry &reg,
+                            entt::entity ent, const void *sig) {
         static_cast<audio_system &> (sys).on_set_volume (
             reg, ent, *static_cast<const comp::audio::set_volume *> (sig));
       });
@@ -142,7 +141,7 @@ audio_system::on_update (entt::registry &registry, double /*dt*/)
     return;
   }
   auto &runtime_ctx = *ctx.get<comp::singl::runtime_context *> ();
-  MIX_Mixer *mixer = runtime_ctx.resource_manager.mixer ();
+  MIX_Mixer *mixer = runtime_ctx.resource_manager ().mixer ();
 
   if (mixer == nullptr) {
     return;
@@ -166,7 +165,8 @@ audio_system::on_update (entt::registry &registry, double /*dt*/)
     // Handle Start/Stop
     if (audio.playing && !audio.was_playing) {
       // START
-      MIX_Audio *resource = runtime_ctx.resource_manager.get (audio.audio_resource);
+      MIX_Audio *resource
+          = runtime_ctx.resource_manager ().get (audio.audio_resource);
       if (resource != nullptr) {
         if (audio.loop) {
           // If already looping something else, stop it.
@@ -182,7 +182,7 @@ audio_system::on_update (entt::registry &registry, double /*dt*/)
         } else {
           MIX_PlayAudio (mixer, resource);
           // For one-shots, we set playing back to false immediately
-          audio.playing = false; 
+          audio.playing = false;
         }
       }
     } else if (!audio.playing && audio.was_playing) {
@@ -203,7 +203,8 @@ audio_system::on_update (entt::registry &registry, double /*dt*/)
 
   // Cleanup loops for entities that no longer have the audio component
   for (auto it = m_active_loops.begin (); it != m_active_loops.end ();) {
-    if (!registry.valid (it->first) || !registry.all_of<comp::audio> (it->first)) {
+    if (!registry.valid (it->first)
+        || !registry.all_of<comp::audio> (it->first)) {
       MIX_DestroyTrack (it->second);
       it = m_active_loops.erase (it);
     } else {

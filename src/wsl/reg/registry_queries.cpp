@@ -85,14 +85,16 @@ registry_queries::get_related_signals (entt::registry &registry,
   // Related by explicit connections
   for (const sig::signal_connection_debug_entry &connection :
        m_hub.db->connections) {
-    if (connection.source_entity == entity || connection.target_entity == entity) {
+    if (connection.source_entity == entity
+        || connection.target_entity == entity) {
       related_signal_ids.insert (connection.signal_type_id);
     }
   }
 
   result.reserve (related_signal_ids.size ());
   for (entt::id_type signal_id : related_signal_ids) {
-    if (std::unordered_map<entt::id_type, sig::signal_debug_entry>::const_iterator const it
+    if (std::unordered_map<entt::id_type,
+                           sig::signal_debug_entry>::const_iterator const it
         = m_hub.db->entries.find (signal_id);
         it != m_hub.db->entries.end ()) {
       result.push_back (&it->second);
@@ -211,7 +213,7 @@ registry_queries::find_connections_for_signal (
 
 std::vector<const sig::signal_connection_debug_entry *>
 registry_queries::find_connections_for_system (
-    entt::id_type system_type_id) const
+    [[maybe_unused]] entt::id_type system_type_id) const
 {
   std::vector<const sig::signal_connection_debug_entry *> result;
   if (m_hub.db == nullptr) {
@@ -222,7 +224,8 @@ registry_queries::find_connections_for_system (
        m_hub.db->connections) {
     // Check if the signal is owned by the system
     bool owner = false;
-    if (std::unordered_map<entt::id_type, sig::signal_debug_entry>::const_iterator const it
+    if (std::unordered_map<entt::id_type,
+                           sig::signal_debug_entry>::const_iterator const it
         = m_hub.db->entries.find (connection.signal_type_id);
         it != m_hub.db->entries.end ()) {
       if (it->second.owner_system_type_id == system_type_id) {
@@ -240,7 +243,7 @@ registry_queries::find_connections_for_system (
 
 std::vector<const sig::signal_connection_debug_entry *>
 registry_queries::find_connections_for_world_component (
-    entt::id_type component_type_id) const
+    [[maybe_unused]] entt::id_type component_type_id) const
 {
   std::vector<const sig::signal_connection_debug_entry *> result;
   if (m_hub.db == nullptr) {
@@ -252,7 +255,8 @@ registry_queries::find_connections_for_world_component (
     bool related = false;
 
     // Related by signal signature
-    if (std::unordered_map<entt::id_type, sig::signal_debug_entry>::const_iterator const it
+    if (std::unordered_map<entt::id_type,
+                           sig::signal_debug_entry>::const_iterator const it
         = m_hub.db->entries.find (connection.signal_type_id);
         it != m_hub.db->entries.end ()) {
       if (it->second.has_component (component_type_id)) {

@@ -61,19 +61,97 @@ public:
   {
     rsc::ui_layout_id def_id{};
     serialize_field_if_diff (archive, "active_document_id",
-                             active_document_id.value, def_id.value);
+                             m_active_document_id.value, def_id.value);
   }
 
-  editor::ui_system_interface system_interface;
-  std::unique_ptr<RenderInterface_SDL_GPU> render_interface;
-  Rml::Context *context = nullptr;
-  Rml::ElementDocument *active_document_instance = nullptr;
+  // -- getters / setters
+  // -------------------------------------------------------
 
-  rsc::ui_layout_id active_document_id{ entt::null };
-  rsc::ui_layout_id loaded_document_id{ entt::null };
-  bool needs_reload = false;
+  const editor::ui_system_interface &
+  system_interface () const
+  {
+    return m_system_interface;
+  }
+  editor::ui_system_interface &
+  system_interface ()
+  {
+    return m_system_interface;
+  }
+
+  RenderInterface_SDL_GPU *
+  render_interface () const
+  {
+    return m_render_interface.get ();
+  }
+  std::unique_ptr<RenderInterface_SDL_GPU> &
+  render_interface ()
+  {
+    return m_render_interface;
+  }
+
+  Rml::Context *
+  context () const
+  {
+    return m_context;
+  }
+  Rml::Context *&
+  context ()
+  {
+    return m_context;
+  }
+
+  Rml::ElementDocument *
+  active_document_instance () const
+  {
+    return m_active_document_instance;
+  }
+  Rml::ElementDocument *&
+  active_document_instance ()
+  {
+    return m_active_document_instance;
+  }
+
+  const rsc::ui_layout_id &
+  active_document_id () const
+  {
+    return m_active_document_id;
+  }
+  rsc::ui_layout_id &
+  active_document_id ()
+  {
+    return m_active_document_id;
+  }
+
+  const rsc::ui_layout_id &
+  loaded_document_id () const
+  {
+    return m_loaded_document_id;
+  }
+  rsc::ui_layout_id &
+  loaded_document_id ()
+  {
+    return m_loaded_document_id;
+  }
+
+  bool
+  needs_reload () const
+  {
+    return m_needs_reload;
+  }
+  bool &
+  needs_reload ()
+  {
+    return m_needs_reload;
+  }
 
 private:
+  editor::ui_system_interface m_system_interface;
+  std::unique_ptr<RenderInterface_SDL_GPU> m_render_interface;
+  Rml::Context *m_context = nullptr;
+  Rml::ElementDocument *m_active_document_instance = nullptr;
+  rsc::ui_layout_id m_active_document_id{ entt::null };
+  rsc::ui_layout_id m_loaded_document_id{ entt::null };
+  bool m_needs_reload = false;
   entt::registry *m_prepared_registry = nullptr;
   std::unordered_set<std::string> m_loaded_fonts;
   std::unordered_set<std::string> m_active_model_names;

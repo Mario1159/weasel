@@ -102,21 +102,21 @@ public:
   wsl::input::action_map &
   get_app_input_map ()
   {
-    return app_input_map;
+    return m_app_input_map;
   }
 
   /*! \brief Returns the application input map. */
   const wsl::input::action_map &
   get_app_input_map () const
   {
-    return app_input_map;
+    return m_app_input_map;
   }
 
   /*! \brief Returns current input map (may be null). */
   wsl::input::action_map *
   get_current_input_map () const
   {
-    return current_input_map;
+    return m_current_input_map;
   }
 
   /*! \brief Returns whether this context was created in headless mode. */
@@ -126,17 +126,201 @@ public:
     return m_headless;
   }
 
-  rsc::world world;
-  rsc::scene_manager scene_manager;
+  rsc::world const &
+  world () const
+  {
+    return m_world;
+  }
+  rsc::world &
+  world ()
+  {
+    return m_world;
+  }
+  rsc::scene_manager const &
+  scene_manager () const
+  {
+    return m_scene_manager;
+  }
+  rsc::scene_manager &
+  scene_manager ()
+  {
+    return m_scene_manager;
+  }
+  reg::component_registry const &
+  component_registry () const
+  {
+    return m_component_registry;
+  }
+  reg::component_registry &
+  component_registry ()
+  {
+    return m_component_registry;
+  }
+  reg::singleton_registry const &
+  singleton_registry () const
+  {
+    return m_singleton_registry;
+  }
+  reg::singleton_registry &
+  singleton_registry ()
+  {
+    return m_singleton_registry;
+  }
+  reg::system_factory_registry const &
+  system_factory_registry () const
+  {
+    return m_system_factory_registry;
+  }
+  reg::system_factory_registry &
+  system_factory_registry ()
+  {
+    return m_system_factory_registry;
+  }
+  reg::sig::signal_debug_db const &
+  signal_db () const
+  {
+    return m_signal_db;
+  }
+  reg::sig::signal_debug_db &
+  signal_db ()
+  {
+    return m_signal_db;
+  }
+  entt::dispatcher const &
+  dispatcher () const
+  {
+    return m_dispatcher;
+  }
+  entt::dispatcher &
+  dispatcher ()
+  {
+    return m_dispatcher;
+  }
+  reg::sig::signal_hub const &
+  signal_hub () const
+  {
+    return m_signal_hub;
+  }
+  reg::sig::signal_hub &
+  signal_hub ()
+  {
+    return m_signal_hub;
+  }
+  reg::registry_queries const &
+  reg_queries () const
+  {
+    return m_reg_queries;
+  }
+  reg::registry_queries &
+  reg_queries ()
+  {
+    return m_reg_queries;
+  }
+  reg::runtime::runtime_project_module const &
+  runtime_project_module () const
+  {
+    return m_runtime_project_module;
+  }
+  reg::runtime::runtime_project_module &
+  runtime_project_module ()
+  {
+    return m_runtime_project_module;
+  }
 
-  reg::component_registry component_registry;
-  reg::singleton_registry singleton_registry;
-  reg::system_factory_registry system_factory_registry;
-  reg::sig::signal_debug_db signal_db;
-  entt::dispatcher dispatcher;
-  reg::sig::signal_hub signal_hub;
-  reg::registry_queries reg_queries;
-  reg::runtime::runtime_project_module runtime_project_module;
+  gfx::render_context const &
+  render_ctx () const
+  {
+    return m_render_ctx;
+  }
+  gfx::render_context &
+  render_ctx ()
+  {
+    return m_render_ctx;
+  }
+  rsc::resource_manager const &
+  resource_manager () const
+  {
+    return m_resource_manager;
+  }
+  rsc::resource_manager &
+  resource_manager ()
+  {
+    return m_resource_manager;
+  }
+  rsc::resource_manager_view const &
+  resource_manager_view () const
+  {
+    return m_resource_manager_view;
+  }
+  rsc::resource_manager_view &
+  resource_manager_view ()
+  {
+    return m_resource_manager_view;
+  }
+  gfx::render_window const &
+  window () const
+  {
+    return m_window;
+  }
+  gfx::render_window &
+  window ()
+  {
+    return m_window;
+  }
+  comp::singl::ui_manager const &
+  ui_manager () const
+  {
+    return m_ui_manager;
+  }
+  comp::singl::ui_manager &
+  ui_manager ()
+  {
+    return m_ui_manager;
+  }
+
+  std::unique_ptr<sys::core_systems> const &
+  core_systems () const
+  {
+    return m_core_systems;
+  }
+  std::unique_ptr<sys::core_systems> &
+  core_systems ()
+  {
+    return m_core_systems;
+  }
+
+  bool
+  is_running () const
+  {
+    return m_is_running;
+  }
+  bool
+  in_play_session () const
+  {
+    return m_in_play_session;
+  }
+  void
+  set_in_play_session (bool v)
+  {
+    m_in_play_session = v;
+  }
+
+  class editor_context *
+  editor_ctx () const
+  {
+    return m_editor_ctx;
+  }
+
+  std::unordered_map<entt::id_type, std::string> const &
+  scene_save_states () const
+  {
+    return m_scene_save_states;
+  }
+  std::unordered_map<entt::id_type, std::string> &
+  scene_save_states ()
+  {
+    return m_scene_save_states;
+  }
 
 private:
   struct sdl_init_guard
@@ -148,29 +332,34 @@ private:
   };
   sdl_init_guard sdl_init_guard_;
 
-public:
-  gfx::render_context render_ctx;
-  rsc::resource_manager resource_manager;
-  rsc::resource_manager_view resource_manager_view;
-  gfx::render_window window;
+  rsc::world m_world;
+  rsc::scene_manager m_scene_manager;
+  reg::component_registry m_component_registry;
+  reg::singleton_registry m_singleton_registry;
+  reg::system_factory_registry m_system_factory_registry;
+  reg::sig::signal_debug_db m_signal_db;
+  entt::dispatcher m_dispatcher;
+  reg::sig::signal_hub m_signal_hub;
+  reg::registry_queries m_reg_queries;
+  reg::runtime::runtime_project_module m_runtime_project_module;
 
-  comp::singl::ui_manager ui_manager;
-
+  gfx::render_context m_render_ctx;
+  rsc::resource_manager m_resource_manager;
+  rsc::resource_manager_view m_resource_manager_view;
+  gfx::render_window m_window;
+  comp::singl::ui_manager m_ui_manager;
   bool m_headless = false;
-  std::unique_ptr<sys::core_systems> core_systems;
+  std::unique_ptr<sys::core_systems> m_core_systems;
+  bool m_is_running = false;
+  bool m_in_play_session = false;
+  class editor_context *m_editor_ctx = nullptr;
+  std::unordered_map<entt::id_type, std::string> m_scene_save_states;
 
-  bool is_running = false;
-  bool in_play_session = false;
+  wsl::input::action_map m_app_input_map;
+  wsl::input::action_map *m_current_input_map = nullptr;
 
-  class editor_context *editor_ctx = nullptr;
-  std::unordered_map<entt::id_type, std::string> scene_save_states;
-
-private:
-  wsl::input::action_map app_input_map;
-  wsl::input::action_map *current_input_map = nullptr;
-
-  rsc::scene *play_session_origin_scene = nullptr;
-  rsc::scene_id play_session_origin_scene_id{ entt::null };
+  rsc::scene *m_play_session_origin_scene = nullptr;
+  rsc::scene_id m_play_session_origin_scene_id{ entt::null };
 
   bool m_needs_save_active_scene = false;
 };

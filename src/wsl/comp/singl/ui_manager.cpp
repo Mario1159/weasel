@@ -30,22 +30,22 @@ ui_manager::ui_manager (gfx::render_context &ctx,
                         wsl::gfx::render_window &window,
                         wsl::rsc::resource_manager *res_mgr)
 {
-  if (ctx.gpu_device == nullptr || window.handler == nullptr) {
+  if (ctx.gpu_device == nullptr || window.handler() == nullptr) {
     wsl::log::editor ()->trace ("Headless mode, skipping RmlUi initialization");
     return;
   }
 
-  render_interface = std::make_unique<RenderInterface_SDL_GPU> (ctx.gpu_device,
-                                                                window.handler);
+  m_render_interface = std::make_unique<RenderInterface_SDL_GPU> (
+      ctx.gpu_device, window.handler());
   wsl::log::editor ()->trace ("Using GPU device {}", (void *)ctx.gpu_device);
-  Rml::SetRenderInterface (render_interface.get ());
-  Rml::SetSystemInterface (&system_interface);
+  Rml::SetRenderInterface (m_render_interface.get ());
+  Rml::SetSystemInterface (&m_system_interface);
   Rml::Initialise ();
 
   int width = 0;
   int height = 0;
   window.get_size (width, height);
-  context = Rml::CreateContext ("UI Context", Rml::Vector2i{ width, height });
+  m_context = Rml::CreateContext ("UI Context", Rml::Vector2i{ width, height });
 
   if (res_mgr != nullptr) {
     for (const auto &font : res_mgr->list_fonts ()) {
@@ -57,12 +57,12 @@ ui_manager::ui_manager (gfx::render_context &ctx,
 
 ui_manager::~ui_manager ()
 {
-  if (context == nullptr)
+  if (m_context == nullptr)
     return;
 
-  if (active_document_instance != nullptr) {
-    active_document_instance->Close ();
-    active_document_instance = nullptr;
+  if (m_active_document_instance != nullptr) {
+    m_active_document_instance->Close ();
+    m_active_document_instance = nullptr;
   }
 
   clear_scene_bindings ();
@@ -73,14 +73,16 @@ void
 ui_manager::register_meta ()
 {
   using namespace entt::literals;
-  entt::meta_factory<comp::singl::ui_manager> ()
-      .type (entt::type_hash<comp::singl::ui_manager>::value ())
-      .custom<comp::meta_info> (
-          comp::meta_info{ "UI Manager",
-                           "Runtime-owned RmlUi context and renderer used "
-                           "by the active scene.",
-                           "" })
-      .func<&comp::singl::ui_manager::custom_inspect> ("custom_inspect"_hs);
+  auto &&factory_ui
+      = entt::meta_factory<comp::singl::ui_manager> ()
+            .type (entt::type_hash<comp::singl::ui_manager>::value ())
+            .custom<comp::meta_info> (comp::meta_info{
+                "UI Manager",
+                "Runtime-owned RmlUi context and renderer used "
+                "by the active scene.",
+                "" });
+  (factory_ui
+       .func<&comp::singl::ui_manager::custom_inspect>)("custom_inspect"_hs);
 }
 
 bool
@@ -92,21 +94,22 @@ ui_manager::custom_inspect (const char *label,
     return false;
   }
 
-  auto &res_mgr = runtime->resource_manager;
+  auto &res_mgr = runtime->resource_manager ();
   bool changed = false;
 
   const char *preview = "None";
-  if (active_document_id.value != entt::null) {
-    if (auto info = res_mgr.info (active_document_id)) {
+  if (m_active_document_id.value != entt::null) {
+    if (auto info = res_mgr.info (m_active_document_id)) {
       preview = info->name.c_str ();
     }
   }
 
   if (ImGui::BeginCombo ("Active Document", preview)) {
-    if (ImGui::Selectable ("None", active_document_id.value == entt::null)) {
-      if (active_document_id.value != entt::null) {
-        active_document_id.value = entt::null;
-        needs_reload = true;
+    if (ImGui::Selectable ("None",
+                           m_active_document_id.value == entt::null)) {
+      if (m_active_document_id.value != entt::null) {
+        m_active_document_id.value = entt::null;
+        m_needs_reload = true;
         changed = true;
       }
     }
@@ -117,10 +120,10 @@ ui_manager::custom_inspect (const char *label,
         continue;
       }
 
-      const bool selected = (info.id == active_document_id.value);
+      const bool selected = (info.id == m_active_document_id.value);
       if (ImGui::Selectable (info.name.c_str (), selected)) {
-        active_document_id.value = info.id;
-        needs_reload = true;
+        m_active_document_id.value = info.id;
+        m_needs_reload = true;
         changed = true;
       }
       if (selected) {
@@ -130,9 +133,9 @@ ui_manager::custom_inspect (const char *label,
     ImGui::EndCombo ();
   }
 
-  if (active_document_id.value != entt::null) {
+  if (m_active_document_id.value != entt::null) {
     if (ImGui::Button ("Reload Document")) {
-      needs_reload = true;
+      m_needs_reload = true;
       changed = true;
     }
   }
@@ -143,9 +146,9 @@ ui_manager::custom_inspect (const char *label,
 void
 ui_manager::clear_scene_bindings ()
 {
-  if (context != nullptr) {
+  if (m_context != nullptr) {
     for (const std::string &name : m_active_model_names) {
-      context->RemoveDataModel (name);
+      m_context->RemoveDataModel (name);
     }
   }
 
@@ -161,12 +164,12 @@ ui_manager::prepare_scene (entt::registry &registry)
     return;
   }
 
-  if (active_document_instance != nullptr) {
-    active_document_instance->Close ();
-    active_document_instance = nullptr;
+  if (m_active_document_instance != nullptr) {
+    m_active_document_instance->Close ();
+    m_active_document_instance = nullptr;
   }
 
-  loaded_document_id.value = entt::null;
+  m_loaded_document_id.value = entt::null;
   clear_scene_bindings ();
   m_prepared_registry = &registry;
 }
@@ -189,18 +192,18 @@ Rml::DataModelConstructor
 ui_manager::ensure_data_model (entt::registry &registry,
                                const std::string &name)
 {
-  if ((context == nullptr) || name.empty ()) {
+  if ((m_context == nullptr) || name.empty ()) {
     return {};
   }
 
   prepare_scene (registry);
 
   Rml::DataModelConstructor constructor;
-  const auto data_models = context->GetDataModels ();
+  const auto data_models = m_context->GetDataModels ();
   if (const auto it = data_models.find (name); it != data_models.end ()) {
     constructor = it->second;
   } else {
-    constructor = context->CreateDataModel (name);
+    constructor = m_context->CreateDataModel (name);
   }
 
   if (constructor) {

@@ -85,7 +85,7 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
     const comp::point_light &light
         = point_light_view.get<comp::point_light> (entity);
 
-    glm::mat4 const wm = world.value;
+    glm::mat4 const wm = world.value ();
     const glm::vec3 position = glm::vec3 (wm[3]);
 
     gpu_point_light gpu_light{};
@@ -124,7 +124,7 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
         = dir_light_view.get<comp::directional_light> (entity);
 
     gpu_dir_light &gpu_light = lighting.dirs[lighting.counts.x++];
-    glm::mat4 const wm = world.value;
+    glm::mat4 const wm = world.value ();
     const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
 
     gpu_light.dir_pad = glm::vec4 (direction, 0.0F);
@@ -145,7 +145,7 @@ lighting_system::on_render_record_draw_cmd (entt::registry &registry)
         = spot_light_view.get<comp::spot_light> (entity);
 
     gpu_spot_light &gpu_light = lighting.spots[lighting.counts.y++];
-    glm::mat4 const wm = world.value;
+    glm::mat4 const wm = world.value ();
     const glm::vec3 position = glm::vec3 (wm[3]);
     const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
 

@@ -11,19 +11,18 @@ namespace editor
 ecs_inspector::ecs_inspector (wsl::comp::singl::runtime_context *runtime_ctx,
                               wsl::comp::singl::editor_context *editor_ctx,
                               ecs_selection &sel)
-    : m_selection (sel),
-      m_runtime_ctx (runtime_ctx),
+    : m_selection (sel), m_runtime_ctx (runtime_ctx),
       m_entities_and_singletons (runtime_ctx, editor_ctx, sel),
       m_inspector (runtime_ctx, editor_ctx, sel)
 {
-  runtime_ctx->dispatcher.sink<wsl::event::scene_changed> ()
-      .connect<&ecs_inspector::on_scene_changed> (*this);
+  auto sink = (runtime_ctx->dispatcher().sink<wsl::event::scene_changed>)();
+  (sink.connect<&ecs_inspector::on_scene_changed>)(*this);
 }
 
 ecs_inspector::~ecs_inspector ()
 {
-  m_runtime_ctx->dispatcher.sink<wsl::event::scene_changed> ()
-      .disconnect<&ecs_inspector::on_scene_changed> (*this);
+  auto sink = (m_runtime_ctx->dispatcher().sink<wsl::event::scene_changed>)();
+  (sink.disconnect<&ecs_inspector::on_scene_changed>)(*this);
 }
 
 void

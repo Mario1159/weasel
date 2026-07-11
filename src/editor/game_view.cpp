@@ -85,7 +85,7 @@ make_mouse_ray (const ImVec2 &mouse_pos, const ImVec2 &img_min,
   float const ndc_x = (x * 2.0F) - 1.0F;
   float const ndc_y = 1.0F - (y * 2.0F);
 
-  glm::mat4 const inv_vp = glm::inverse (rc.vp);
+  glm::mat4 const inv_vp = glm::inverse (rc.vp ());
 
   // Use far plane point; works fine for ray direction.
   glm::vec4 const far_clip (ndc_x, ndc_y, 1.0F, 1.0F);
@@ -93,7 +93,7 @@ make_mouse_ray (const ImVec2 &mouse_pos, const ImVec2 &img_min,
   far_world4 /= far_world4.w;
 
   pick_ray ray;
-  ray.origin = rc.world_pos;
+  ray.origin = rc.world_pos ();
   ray.dir = glm::normalize (glm::vec3 (far_world4) - ray.origin);
   return ray;
 }
@@ -189,7 +189,7 @@ pick_entity_from_game_view (
     wsl::comp::model_instance_3d const &instance
         = view.get<wsl::comp::model_instance_3d> (entity);
 
-    auto model = runtime_ctx->resource_manager.get (instance.id);
+    auto model = runtime_ctx->resource_manager ().get (instance.id);
     if (!model) {
       continue;
     }
@@ -203,7 +203,7 @@ pick_entity_from_game_view (
 
     glm::vec3 world_min;
     glm::vec3 world_max;
-    transform_aabb (local_min, local_max, world.value, world_min, world_max);
+    transform_aabb (local_min, local_max, world.value (), world_min, world_max);
 
     float t_hit = 0.0F;
     if (ray_aabb_intersect (ray.origin, ray.dir, world_min, world_max, t_hit)) {
@@ -234,10 +234,10 @@ pick_entity_2d (entt::registry &registry,
   float const px = (mouse_pos.x - img_min.x) * scale_x;
   float const py = (mouse_pos.y - img_min.y) * scale_y;
 
-  float const ndc_x = (px / tex_width) * 2.0F - 1.0F;
-  float const ndc_y = 1.0F - (py / tex_height) * 2.0F;
+  float const ndc_x = ((px / static_cast<float> (tex_width)) * 2.0F) - 1.0F;
+  float const ndc_y = 1.0F - ((py / static_cast<float> (tex_height)) * 2.0F);
 
-  glm::mat4 const inv_vp = glm::inverse (rc.vp);
+  glm::mat4 const inv_vp = glm::inverse (rc.vp ());
   glm::vec4 world = inv_vp * glm::vec4 (ndc_x, ndc_y, 0.0F, 1.0F);
   world /= world.w;
   glm::vec2 const mouse_world (world.x, world.y);
@@ -371,7 +371,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
       = std::clamp (m_toolbar_height, 20.0F, std::max (20.0F, max_height));
 
   if ((m_editor_ctx != nullptr) && (m_runtime_ctx != nullptr)
-      && !m_runtime_ctx->is_running) {
+      && !m_runtime_ctx->is_running ()) {
     m_editor_ctx->tick_editor_camera_anim (ImGui::GetIO ().DeltaTime);
   }
 
@@ -408,8 +408,8 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   ImVec2 const img_size = size;
 
   if (m_editor_ctx != nullptr) {
-    m_editor_ctx->last_img_min = glm::vec2 (img_min.x, img_min.y);
-    m_editor_ctx->last_img_size = glm::vec2 (img_size.x, img_size.y);
+    m_editor_ctx->last_img_min (glm::vec2 (img_min.x, img_min.y));
+    m_editor_ctx->last_img_size (glm::vec2 (img_size.x, img_size.y));
   }
 
   ImGui::SetCursorPos (ImVec2 (cursor.x + offset.x, cursor.y + offset.y));
@@ -418,7 +418,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   // Resolve the SAME camera used to render the Game View
   auto *scene = ((m_runtime_ctx) != nullptr)
-                    ? m_runtime_ctx->scene_manager.get_active ()
+                    ? m_runtime_ctx->scene_manager ().get_active ()
                     : nullptr;
 
   wsl::comp::singl::editor_context::resolved_camera rc{};
@@ -428,7 +428,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   if ((scene != nullptr) && (m_editor_ctx != nullptr)) {
     have_cam = m_editor_ctx->resolve_game_view_camera (registry, scene, rc);
-    if (!m_runtime_ctx->is_running) {
+    if (!m_runtime_ctx->is_running ()) {
       current_mode = m_editor_ctx->resolve_game_view_mode (registry, scene);
     }
   }
@@ -440,17 +440,17 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   bool block_picking = false;
   bool block_entity_gizmo = false;
 
-  if ((m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running && have_cam) {
+  if ((m_runtime_ctx != nullptr) && !m_runtime_ctx->is_running () && have_cam) {
     switch (current_mode) {
     case wsl::comp::singl::editor_context::game_view_mode::mode_3d_edit:
     case wsl::comp::singl::editor_context::game_view_mode::mode_3d_fly: {
       // 3D view gizmo
       bool show_view_gizmo = false;
       if (m_editor_ctx != nullptr) {
-        show_view_gizmo = (m_editor_ctx->game_view_camera_selection
+        show_view_gizmo = (m_editor_ctx->game_view_camera_selection ()
                            == wsl::comp::singl::editor_context::
                                game_view_camera_sel::default_editor)
-                          || (m_editor_ctx->game_view_camera_selection
+                          || (m_editor_ctx->game_view_camera_selection ()
                               == wsl::comp::singl::editor_context::
                                   game_view_camera_sel::editor_3d);
       }
@@ -471,8 +471,8 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
                                     img_min.y + half + pad);
         ImVec2 const tool_anchor = rotate_center;
 
-        glm::vec3 cam_pos = m_editor_ctx->editor_cam_pos;
-        glm::quat cam_rot = m_editor_ctx->editor_cam_rot;
+        glm::vec3 cam_pos = m_editor_ctx->editor_cam_pos ();
+        glm::quat cam_rot = m_editor_ctx->editor_cam_rot ();
         glm::vec3 pivot (0.0F);
 
         if ((m_selection != nullptr)
@@ -483,7 +483,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
           const wsl::comp::world_transform &wt
               = registry.get<wsl::comp::world_transform> (
                   m_selection->selected_entity);
-          pivot = extract_translation (wt.value);
+          pivot = extract_translation (wt.value ());
         }
 
         m_orbit_pivot = pivot;
@@ -501,7 +501,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
             v = -glm::normalize (forward);
             d2 = 1.0F;
           }
-          cam_pos = pivot + (v / std::sqrt (d2)) * min_dist;
+          cam_pos = pivot + ((v / std::sqrt (d2)) * min_dist);
         }
 
         bool modified = false;
@@ -518,8 +518,8 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         modified |= ImViewGuizmo::Pan (cam_pos, cam_rot, btn_pos, 0.01F);
 
         if (modified || ImViewGuizmo::IsUsing ()) {
-          m_editor_ctx->editor_cam_pos = cam_pos;
-          m_editor_ctx->editor_cam_rot = cam_rot;
+          m_editor_ctx->editor_cam_pos (cam_pos);
+          m_editor_ctx->editor_cam_rot (cam_rot);
           m_editor_ctx->cancel_editor_camera_anim ();
         }
 
@@ -533,15 +533,15 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         ImGuizmo::SetDrawlist ();
         ImGuizmo::SetRect (img_min.x, img_min.y, img_size.x, img_size.y);
 
-        glm::mat4 view = rc.view;
-        glm::mat4 proj = rc.proj;
+        glm::mat4 view = rc.view ();
+        glm::mat4 proj = rc.proj ();
 
         if (m_show_grid) {
           glm::vec3 const forward
               = -glm::vec3 (view[0][2], view[1][2], view[2][2]);
           float const tilt = std::abs (forward.y);
           float const ground_t
-              = (tilt > 0.01F) ? (std::abs (rc.world_pos.y) / tilt) : 500.0F;
+              = (tilt > 0.01F) ? (std::abs (rc.world_pos ().y) / tilt) : 500.0F;
           float const base_fog_radius
               = std::min (250.0F, (ground_t * std::sqrt (ground_t)) + 10.0F);
           glm::vec3 const flat_fwd
@@ -550,15 +550,15 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
                     : glm::vec3 (0, 0, 0);
           float const shift_dist = std::min (ground_t, base_fog_radius * 0.5F);
           glm::vec3 const fog_center
-              = glm::vec3 (rc.world_pos.x, 0, rc.world_pos.z)
+              = glm::vec3 (rc.world_pos ().x, 0, rc.world_pos ().z)
                 + flat_fwd * shift_dist;
 
-          m_editor_ctx->grid_visible = true;
-          m_editor_ctx->grid_camera_pos = rc.world_pos;
-          m_editor_ctx->grid_fog_center = fog_center;
-          m_editor_ctx->grid_fog_radius = base_fog_radius;
+          m_editor_ctx->grid_visible (true);
+          m_editor_ctx->grid_camera_pos (rc.world_pos ());
+          m_editor_ctx->grid_fog_center (fog_center);
+          m_editor_ctx->grid_fog_radius (base_fog_radius);
         } else {
-          m_editor_ctx->grid_visible = false;
+          m_editor_ctx->grid_visible (false);
         }
 
         if ((m_selection != nullptr)
@@ -572,7 +572,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
             wsl::comp::world_transform const &wt
                 = registry.get<wsl::comp::world_transform> (e);
 
-            glm::mat4 world = wt.value;
+            glm::mat4 world = wt.value ();
 
             ImGuizmo::SetOrthographic (false);
             ImGuizmo::Manipulate (glm::value_ptr (view), glm::value_ptr (proj),
@@ -588,7 +588,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
                         h->parent)) {
                   const wsl::comp::world_transform &pwt
                       = registry.get<wsl::comp::world_transform> (h->parent);
-                  local = glm::inverse (static_cast<glm::mat4> (pwt.value))
+                  local = glm::inverse (static_cast<glm::mat4> (pwt.value ()))
                           * world;
                 }
               }
@@ -619,10 +619,10 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
         if (picked != entt::null) {
           m_selection->select_entity (picked);
-          m_editor_ctx->selected_entity = picked;
+          m_editor_ctx->selected_entity (picked);
         } else {
           m_selection->clear_entity_singleton ();
-          m_editor_ctx->selected_entity = entt::null;
+          m_editor_ctx->selected_entity (entt::null);
         }
       }
       break;
@@ -630,7 +630,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
     case wsl::comp::singl::editor_context::game_view_mode::mode_2d_edit: {
       // Hide 3D grid
-      m_editor_ctx->grid_visible = false;
+      m_editor_ctx->grid_visible (false);
 
       // 2D camera controls (pan / zoom)
       if (img_hovered) {
@@ -642,37 +642,31 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
         float const wheel = ImGui::GetIO ().MouseWheel;
         if (wheel != 0.0F) {
-          float &zoom = m_editor_ctx->editor_camera_2d.zoom;
+          wsl::comp::camera_2d cam2d = m_editor_ctx->editor_camera_2d ();
+          float zoom = cam2d.zoom;
           float const old_zoom = zoom;
-          zoom = std::clamp (zoom + wheel * 0.1F, 0.01F, 100.0F);
+          zoom = std::clamp (zoom + (wheel * 0.1F), 0.01F, 100.0F);
+          cam2d.zoom = zoom;
+          m_editor_ctx->editor_camera_2d (cam2d);
 
-          // Zoom centered on the mouse: keep the world point that
-          // was under the cursor still under it after the zoom
-          // change. Derived from
-          //   new_pos = world - mouse/new_zoom,
-          //   world  = pos      + mouse/old_zoom,
-          // so dpos = mouse * (1/old_zoom - 1/new_zoom).
           if (zoom != old_zoom) {
             float const dpos = (1.0F / old_zoom) - (1.0F / zoom);
-            m_editor_ctx->editor_cam_2d_pos.x += mouse_x * dpos;
-            m_editor_ctx->editor_cam_2d_pos.y += mouse_y * dpos;
+            glm::vec2 pos = m_editor_ctx->editor_cam_2d_pos ();
+            pos.x += mouse_x * dpos;
+            pos.y += mouse_y * dpos;
+            m_editor_ctx->editor_cam_2d_pos (pos);
           }
         }
 
         if (ImGui::IsMouseDown (ImGuiMouseButton_Middle)) {
           ImVec2 const delta = ImGui::GetIO ().MouseDelta;
           if (delta.x != 0.0F || delta.y != 0.0F) {
-            float const inv_zoom = 1.0F / m_editor_ctx->editor_camera_2d.zoom;
-            // "Grab and drag": dragging the world toward the mouse
-            // moves the camera in the opposite direction. Both X
-            // and Y are subtractions because the view transform
-            // applies `(world - pos) * zoom` to map world → screen,
-            // and the screen Y axis points down (projection is
-            // `ortho(0, w, h, 0, ...)`), so a positive screen-Y
-            // delta requires a positive world-Y delta at the same
-            // world point, which means pos.y must decrease.
-            m_editor_ctx->editor_cam_2d_pos.x -= delta.x * inv_zoom;
-            m_editor_ctx->editor_cam_2d_pos.y -= delta.y * inv_zoom;
+            float const inv_zoom
+                = 1.0F / m_editor_ctx->editor_camera_2d ().zoom;
+            glm::vec2 pos = m_editor_ctx->editor_cam_2d_pos ();
+            pos.x -= delta.x * inv_zoom;
+            pos.y -= delta.y * inv_zoom;
+            m_editor_ctx->editor_cam_2d_pos (pos);
           }
         }
       }
@@ -693,8 +687,8 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         // but ImGizmo2D works in the fitted display rect (img_size).
         // Compute the effective zoom so that world-to-screen mapping matches
         // the rendered image exactly.
-        float const half_w = 1.0F / rc.proj[0][0];
-        float const half_h = 1.0F / rc.proj[1][1];
+        float const half_w = 1.0F / rc.proj ()[0][0];
+        float const half_h = 1.0F / rc.proj ()[1][1];
         float const world_w = 2.0F * half_w;
         float const world_h = 2.0F * half_h;
         float const effective_zoom = img_size.x / world_w;
@@ -705,11 +699,11 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         // view), so we pass the centre of the visible area (in
         // world units) and include the camera zoom in the ImGizmo2D
         // scale factor.
-        float const cam_zoom = m_editor_ctx->editor_camera_2d.zoom;
-        float const center_x
-            = m_editor_ctx->editor_cam_2d_pos.x + world_w / (2.0F * cam_zoom);
-        float const center_y
-            = m_editor_ctx->editor_cam_2d_pos.y + world_h / (2.0F * cam_zoom);
+        float const cam_zoom = m_editor_ctx->editor_camera_2d ().zoom;
+        float const center_x = m_editor_ctx->editor_cam_2d_pos ().x
+                               + (world_w / (2.0F * cam_zoom));
+        float const center_y = m_editor_ctx->editor_cam_2d_pos ().y
+                               + (world_h / (2.0F * cam_zoom));
         float const imguizmo_zoom = effective_zoom * cam_zoom;
 
         ImGizmo2D::SetDrawList (dl);
@@ -723,32 +717,32 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
         bool modified = false;
         switch (m_current_op) {
         case ImGuizmo::TRANSLATE: {
-          float pos_x = t2d.position.x;
-          float pos_y = t2d.position.y;
+          float pos_x = t2d.position.x ();
+          float pos_y = t2d.position.y ();
           modified = ImGizmo2D::Translate ("selected", &pos_x, &pos_y);
           if (modified) {
-            t2d.position.x = pos_x;
-            t2d.position.y = pos_y;
+            t2d.position.x () = pos_x;
+            t2d.position.y () = pos_y;
           }
           break;
         }
         case ImGuizmo::ROTATE: {
           float angle = t2d.rotation;
-          modified = ImGizmo2D::Rotate ("selected", &t2d.position.x,
-                                        &t2d.position.y, &angle);
+          modified = ImGizmo2D::Rotate ("selected", &t2d.position.x (),
+                                        &t2d.position.y (), &angle);
           if (modified) {
             t2d.rotation = angle;
           }
           break;
         }
         case ImGuizmo::SCALE: {
-          float sx = t2d.scale.x;
-          float sy = t2d.scale.y;
-          modified = ImGizmo2D::Scale ("selected", &t2d.position.x,
-                                       &t2d.position.y, &sx, &sy);
+          float sx = t2d.scale.x ();
+          float sy = t2d.scale.y ();
+          modified = ImGizmo2D::Scale ("selected", &t2d.position.x (),
+                                       &t2d.position.y (), &sx, &sy);
           if (modified) {
-            t2d.scale.x = sx;
-            t2d.scale.y = sy;
+            t2d.scale.x () = sx;
+            t2d.scale.y () = sy;
           }
           break;
         }
@@ -763,8 +757,8 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
       if (registry.ctx ().contains<wsl::comp::singl::rendering_manager> ()) {
         auto &rendering
             = registry.ctx ().get<wsl::comp::singl::rendering_manager> ();
-        float const vw = rendering.root_viewport_virtual_size.x;
-        float const vh = rendering.root_viewport_virtual_size.y;
+        float const vw = rendering.root_viewport_virtual_size.x ();
+        float const vh = rendering.root_viewport_virtual_size.y ();
 
         // Top-left origin convention: the virtual viewport spans
         // (0, 0) → (vw, vh) in world space, matching the 3D view's
@@ -778,12 +772,12 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
         ImVec2 screen[4];
         for (int i = 0; i < 4; ++i) {
-          glm::vec4 ndc = rc.vp * glm::vec4 (corners[i], 1.0F);
+          glm::vec4 ndc = rc.vp () * glm::vec4 (corners[i], 1.0F);
           if (ndc.w != 0.0F) {
             ndc /= ndc.w;
           }
-          screen[i].x = img_min.x + (ndc.x * 0.5F + 0.5F) * img_size.x;
-          screen[i].y = img_min.y + (1.0F - ndc.y) * 0.5F * img_size.y;
+          screen[i].x = img_min.x + (((ndc.x * 0.5F) + 0.5F) * img_size.x);
+          screen[i].y = img_min.y + ((1.0F - ndc.y) * 0.5F * img_size.y);
         }
 
         ImU32 const col = IM_COL32 (255, 255, 255, 128);
@@ -803,10 +797,10 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
         if (picked != entt::null) {
           m_selection->select_entity (picked);
-          m_editor_ctx->selected_entity = picked;
+          m_editor_ctx->selected_entity (picked);
         } else {
           m_selection->clear_entity_singleton ();
-          m_editor_ctx->selected_entity = entt::null;
+          m_editor_ctx->selected_entity (entt::null);
         }
       }
       break;
@@ -815,7 +809,7 @@ game_view::draw (entt::registry &registry, wsl::gfx::render_window &rw)
     case wsl::comp::singl::editor_context::game_view_mode::mode_2d_view:
     case wsl::comp::singl::editor_context::game_view_mode::mode_3d_view:
       // View mode: no editor gizmos, no picking
-      m_editor_ctx->grid_visible = false;
+      m_editor_ctx->grid_visible (false);
       break;
     }
   }
@@ -858,9 +852,9 @@ draw_icon_button (wsl::comp::singl::editor_context *editor_ctx,
   const float padding = 4.0F;
   const ImVec2 image_size (size - (padding * 2.0F), size - (padding * 2.0F));
 
-  auto handle = editor_ctx->editor_resources.get (icon_id);
+  auto handle = editor_ctx->editor_resources ().get (icon_id);
   if (!handle || ((*handle).texture.get () == nullptr)) {
-    editor_ctx->editor_resources.load (icon_id);
+    editor_ctx->editor_resources ().load (icon_id);
     if (ImGui::Button ("??", ImVec2 (size, size))) {
       if (clicked != nullptr) {
         *clicked = true;
@@ -913,18 +907,18 @@ game_view::draw_camera_header (entt::registry &registry,
 
   ImGui::BeginGroup ();
 
-  if (runtime_ctx.in_play_session) {
-    if (runtime_ctx.is_running) {
+  if (runtime_ctx.in_play_session ()) {
+    if (runtime_ctx.is_running ()) {
       bool do_pause = false;
-      draw_icon_button (m_editor_ctx, m_editor_ctx->icon_pause, "Pause",
+      draw_icon_button (m_editor_ctx, m_editor_ctx->icon_pause (), "Pause",
                         &do_pause, true, false, btn_size);
       if (do_pause) {
         runtime_ctx.set_running (false);
       }
     } else {
       bool do_play = false;
-      draw_icon_button (m_editor_ctx, m_editor_ctx->icon_play, "Play", &do_play,
-                        true, false, btn_size);
+      draw_icon_button (m_editor_ctx, m_editor_ctx->icon_play (), "Play",
+                        &do_play, true, false, btn_size);
       if (do_play) {
         runtime_ctx.set_running (true);
         ImGui::SetWindowFocus ();
@@ -932,21 +926,21 @@ game_view::draw_camera_header (entt::registry &registry,
     }
     ImGui::SameLine ();
     bool do_stop = false;
-    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_stop, "Stop", &do_stop,
-                      true, false, btn_size);
+    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_stop (), "Stop",
+                      &do_stop, true, false, btn_size);
     if (do_stop) {
       runtime_ctx.stop ();
     }
   } else {
     bool do_play = false;
-    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_play, "Play", &do_play,
-                      true, false, btn_size);
+    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_play (), "Play",
+                      &do_play, true, false, btn_size);
     if (do_play) {
       runtime_ctx.set_running (true);
       ImGui::SetWindowFocus ();
     }
     ImGui::SameLine ();
-    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_stop, "Stop", nullptr,
+    draw_icon_button (m_editor_ctx, m_editor_ctx->icon_stop (), "Stop", nullptr,
                       false, false, btn_size);
   }
 
@@ -956,14 +950,10 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::SameLine ();
 
   auto toggle_op = [this] (ImGuizmo::OPERATION op) {
-    if (m_current_op == op) {
-      m_current_op = (ImGuizmo::OPERATION)0; // hide
-    } else {
-      m_current_op = op;
-    }
+    m_current_op = (m_current_op == op) ? (ImGuizmo::OPERATION)0 : op;
   };
 
-  if (runtime_ctx.is_running) {
+  if (runtime_ctx.is_running ()) {
     ImGui::BeginDisabled ();
   }
 
@@ -972,8 +962,9 @@ game_view::draw_camera_header (entt::registry &registry,
   const bool scl_on = (m_current_op == ImGuizmo::SCALE);
 
   bool clicked_tr = false;
-  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_translate, "Translate (W)",
-                    &clicked_tr, !runtime_ctx.is_running, tr_on, btn_size);
+  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_translate (),
+                    "Translate (W)", &clicked_tr, !runtime_ctx.is_running (),
+                    tr_on, btn_size);
   if (clicked_tr) {
     toggle_op (ImGuizmo::TRANSLATE);
   }
@@ -981,8 +972,8 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::SameLine ();
 
   bool clicked_rot = false;
-  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_rotate, "Rotate (E)",
-                    &clicked_rot, !runtime_ctx.is_running, rot_on, btn_size);
+  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_rotate (), "Rotate (E)",
+                    &clicked_rot, !runtime_ctx.is_running (), rot_on, btn_size);
   if (clicked_rot) {
     toggle_op (ImGuizmo::ROTATE);
   }
@@ -990,8 +981,8 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::SameLine ();
 
   bool clicked_scl = false;
-  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_scale, "Scale (R)",
-                    &clicked_scl, !runtime_ctx.is_running, scl_on, btn_size);
+  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_scale (), "Scale (R)",
+                    &clicked_scl, !runtime_ctx.is_running (), scl_on, btn_size);
   if (clicked_scl) {
     toggle_op (ImGuizmo::SCALE);
   }
@@ -1001,8 +992,8 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::SameLine ();
 
   // ===================== viewport combo =====================
-  auto *scene = m_runtime_ctx->scene_manager.get_active ();
-  if (runtime_ctx.is_running) {
+  auto *scene = m_runtime_ctx->scene_manager ().get_active ();
+  if (runtime_ctx.is_running ()) {
     ImGui::BeginDisabled ();
   }
 
@@ -1011,12 +1002,12 @@ game_view::draw_camera_header (entt::registry &registry,
   // ===================== viewport combo =====================
   const char *vp_preview = "Root Viewport";
   char vp_buf[256];
-  if (ed.game_view_selected_viewport != entt::null && scene != nullptr) {
+  if (ed.game_view_selected_viewport () != entt::null && scene != nullptr) {
     auto const &reg = scene->get_registry ();
-    if (reg.valid (ed.game_view_selected_viewport)) {
+    if (reg.valid (ed.game_view_selected_viewport ())) {
       std::snprintf (
           vp_buf, sizeof (vp_buf), "%s",
-          scene->get_entity_name (ed.game_view_selected_viewport).c_str ());
+          scene->get_entity_name (ed.game_view_selected_viewport ()).c_str ());
       vp_preview = vp_buf;
     }
   }
@@ -1024,13 +1015,13 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::SetNextItemWidth (combo_vp_w);
   if (ImGui::BeginCombo ("##viewport_combo", vp_preview)) {
     if (ImGui::Selectable ("Root Viewport",
-                           ed.game_view_selected_viewport == entt::null)) {
-      ed.game_view_selected_viewport = entt::null;
-      ed.game_view_camera_selection = wsl::comp::singl::editor_context::
-          game_view_camera_sel::default_editor;
-      ed.game_view_selected_camera_entity = entt::null;
+                           ed.game_view_selected_viewport () == entt::null)) {
+      ed.game_view_selected_viewport (entt::null);
+      ed.game_view_camera_selection (wsl::comp::singl::editor_context::
+                                         game_view_camera_sel::default_editor);
+      ed.game_view_selected_camera_entity (entt::null);
     }
-    if (ed.game_view_selected_viewport == entt::null) {
+    if (ed.game_view_selected_viewport () == entt::null) {
       ImGui::SetItemDefaultFocus ();
     }
 
@@ -1039,12 +1030,13 @@ game_view::draw_camera_header (entt::registry &registry,
       auto sv_view = reg.view<wsl::comp::subviewport> ();
       for (entt::entity const e : sv_view) {
         std::string const &name = scene->get_entity_name (e);
-        bool const selected = (e == ed.game_view_selected_viewport);
+        bool const selected = (e == ed.game_view_selected_viewport ());
         if (ImGui::Selectable (name.c_str (), selected)) {
-          ed.game_view_selected_viewport = e;
-          ed.game_view_camera_selection = wsl::comp::singl::editor_context::
-              game_view_camera_sel::default_editor;
-          ed.game_view_selected_camera_entity = entt::null;
+          ed.game_view_selected_viewport (e);
+          ed.game_view_camera_selection (
+              wsl::comp::singl::editor_context::game_view_camera_sel::
+                  default_editor);
+          ed.game_view_selected_camera_entity (entt::null);
         }
         if (selected) {
           ImGui::SetItemDefaultFocus ();
@@ -1061,7 +1053,7 @@ game_view::draw_camera_header (entt::registry &registry,
   char cam_buf[256];
 
   auto get_camera_preview_name = [&] () -> const char * {
-    switch (ed.game_view_camera_selection) {
+    switch (ed.game_view_camera_selection ()) {
     case wsl::comp::singl::editor_context::game_view_camera_sel::default_editor:
       return "Default Editor Camera";
     case wsl::comp::singl::editor_context::game_view_camera_sel::editor_3d:
@@ -1072,13 +1064,13 @@ game_view::draw_camera_header (entt::registry &registry,
         default_runtime:
       return "Default Runtime Camera";
     case wsl::comp::singl::editor_context::game_view_camera_sel::entity:
-      if (ed.game_view_selected_camera_entity != entt::null
+      if (ed.game_view_selected_camera_entity () != entt::null
           && scene != nullptr) {
         auto const &reg = scene->get_registry ();
-        if (reg.valid (ed.game_view_selected_camera_entity)) {
+        if (reg.valid (ed.game_view_selected_camera_entity ())) {
           std::snprintf (
               cam_buf, sizeof (cam_buf), "%s",
-              scene->get_entity_name (ed.game_view_selected_camera_entity)
+              scene->get_entity_name (ed.game_view_selected_camera_entity ())
                   .c_str ());
           return cam_buf;
         }
@@ -1110,13 +1102,13 @@ game_view::draw_camera_header (entt::registry &registry,
     };
 
     for (auto const &opt : fixed_opts) {
-      bool const selected = (ed.game_view_camera_selection == opt.sel
+      bool const selected = (ed.game_view_camera_selection () == opt.sel
                              && opt.sel
                                     != wsl::comp::singl::editor_context::
                                         game_view_camera_sel::entity);
       if (ImGui::Selectable (opt.label, selected)) {
-        ed.game_view_camera_selection = opt.sel;
-        ed.game_view_selected_camera_entity = entt::null;
+        ed.game_view_camera_selection (opt.sel);
+        ed.game_view_selected_camera_entity (entt::null);
       }
       if (selected) {
         ImGui::SetItemDefaultFocus ();
@@ -1126,7 +1118,7 @@ game_view::draw_camera_header (entt::registry &registry,
     // Entity cameras that belong to the current viewport
     if (scene != nullptr) {
       auto &reg = scene->get_registry ();
-      entt::entity const target_vp = ed.game_view_selected_viewport;
+      entt::entity const target_vp = ed.game_view_selected_viewport ();
 
       auto add_camera_opts = [&] (auto cam_view) {
         for (entt::entity const e : cam_view) {
@@ -1134,14 +1126,15 @@ game_view::draw_camera_header (entt::registry &registry,
             continue;
           }
           const std::string &name = scene->get_entity_name (e);
-          bool const selected = (ed.game_view_camera_selection
-                                     == wsl::comp::singl::editor_context::
-                                         game_view_camera_sel::entity
-                                 && e == ed.game_view_selected_camera_entity);
+          bool const selected
+              = (ed.game_view_camera_selection ()
+                     == wsl::comp::singl::editor_context::game_view_camera_sel::
+                         entity
+                 && e == ed.game_view_selected_camera_entity ());
           if (ImGui::Selectable (name.c_str (), selected)) {
-            ed.game_view_camera_selection = wsl::comp::singl::editor_context::
-                game_view_camera_sel::entity;
-            ed.game_view_selected_camera_entity = e;
+            ed.game_view_camera_selection (
+                wsl::comp::singl::editor_context::game_view_camera_sel::entity);
+            ed.game_view_selected_camera_entity (e);
           }
           if (selected) {
             ImGui::SetItemDefaultFocus ();
@@ -1156,7 +1149,7 @@ game_view::draw_camera_header (entt::registry &registry,
     ImGui::EndCombo ();
   }
 
-  if (runtime_ctx.is_running) {
+  if (runtime_ctx.is_running ()) {
     ImGui::EndDisabled ();
   }
 
@@ -1164,44 +1157,46 @@ game_view::draw_camera_header (entt::registry &registry,
 
   // ===================== reset camera button =====================
   bool clicked_reset = false;
-  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_reset_cam, "Reset Camera",
-                    &clicked_reset, !runtime_ctx.is_running, false, btn_size);
+  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_reset_cam (),
+                    "Reset Camera", &clicked_reset, !runtime_ctx.is_running (),
+                    false, btn_size);
 
   if (clicked_reset && (m_editor_ctx != nullptr)) {
     m_orbit_pivot = glm::vec3 (0.0F, 0.0F, 0.0F);
     m_editor_ctx->reset_editor_camera ();
 
-    ed.game_view_camera_selection = wsl::comp::singl::editor_context::
-        game_view_camera_sel::default_editor;
-    ed.game_view_selected_camera_entity = entt::null;
-    ed.game_view_selected_viewport = entt::null;
+    ed.game_view_camera_selection (
+        wsl::comp::singl::editor_context::game_view_camera_sel::default_editor);
+    ed.game_view_selected_camera_entity (entt::null);
+    ed.game_view_selected_viewport (entt::null);
   }
 
   ImGui::SameLine ();
 
-  bool const can_focus = (!runtime_ctx.is_running && (m_editor_ctx != nullptr)
-                          && (m_selection != nullptr)
-                          && m_selection->kind == selection_kind::entity
-                          && m_selection->selected_entity != entt::null
-                          && registry.all_of<wsl::comp::world_transform> (
-                              m_selection->selected_entity));
+  bool const can_focus
+      = (!runtime_ctx.is_running () && (m_editor_ctx != nullptr)
+         && (m_selection != nullptr)
+         && m_selection->kind == selection_kind::entity
+         && m_selection->selected_entity != entt::null
+         && registry.all_of<wsl::comp::world_transform> (
+             m_selection->selected_entity));
 
   bool clicked_focus = false;
-  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_focus_cam,
+  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_focus_cam (),
                     "Focus on Selection (F)", &clicked_focus, can_focus, false,
                     btn_size);
 
   if (clicked_focus && can_focus) {
     wsl::comp::singl::editor_context &ed = *this->m_editor_ctx;
-    ed.game_view_camera_selection = wsl::comp::singl::editor_context::
-        game_view_camera_sel::default_editor;
-    ed.game_view_selected_camera_entity = entt::null;
-    ed.game_view_selected_viewport = entt::null;
+    ed.game_view_camera_selection (
+        wsl::comp::singl::editor_context::game_view_camera_sel::default_editor);
+    ed.game_view_selected_camera_entity (entt::null);
+    ed.game_view_selected_viewport (entt::null);
 
     const wsl::comp::world_transform &wt
         = registry.get<wsl::comp::world_transform> (
             m_selection->selected_entity);
-    glm::vec3 const target = extract_translation (wt.value);
+    glm::vec3 const target = extract_translation (wt.value ());
 
     m_orbit_pivot = target;
     m_editor_ctx->focus_editor_camera_to_point (target);
@@ -1212,14 +1207,14 @@ game_view::draw_camera_header (entt::registry &registry,
   ImGui::SameLine ();
 
   bool clicked_grid = false;
-  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_grid, "Toggle Grid (G)",
+  draw_icon_button (m_editor_ctx, m_editor_ctx->icon_grid (), "Toggle Grid (G)",
                     &clicked_grid, true, m_show_grid, btn_size);
 
   if (clicked_grid) {
     m_show_grid = !m_show_grid;
   }
 
-  if (runtime_ctx.is_running) {
+  if (runtime_ctx.is_running ()) {
     ImGui::EndDisabled ();
   }
 

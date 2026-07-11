@@ -43,13 +43,14 @@ find_scancode_index (SDL_Scancode sc)
        ++i) {
     if (scancode_list[i].code == sc) {
       return i;
-}
-}
+    }
+  }
   return 0;
 }
 
 void
-input_map_inspector::draw (entt::registry & /*unused*/, wsl::comp::singl::runtime_context *runtime_ctx)
+input_map_inspector::draw (entt::registry & /*unused*/,
+                           wsl::comp::singl::runtime_context *runtime_ctx)
 {
   if (!ImGui::Begin ("Input Map")) {
     ImGui::End ();
@@ -95,26 +96,26 @@ input_map_inspector::draw (entt::registry & /*unused*/, wsl::comp::singl::runtim
     }
 
     // ---- Modifiers ----
-    bool ctrl = (key.mod & SDL_KMOD_CTRL) != 0u;
-    bool shift = (key.mod & SDL_KMOD_SHIFT) != 0u;
-    bool alt = (key.mod & SDL_KMOD_ALT) != 0u;
-    bool gui = (key.mod & SDL_KMOD_GUI) != 0u;
+    bool ctrl = (key.mod & SDL_KMOD_CTRL) != 0U;
+    bool shift = (key.mod & SDL_KMOD_SHIFT) != 0U;
+    bool alt = (key.mod & SDL_KMOD_ALT) != 0U;
+    bool gui = (key.mod & SDL_KMOD_GUI) != 0U;
 
     if (ImGui::Checkbox ("Ctrl", &ctrl) || ImGui::Checkbox ("Shift", &shift)
         || ImGui::Checkbox ("Alt", &alt) || ImGui::Checkbox ("GUI", &gui)) {
       key.mod = SDL_KMOD_NONE;
       if (ctrl) {
         key.mod |= SDL_KMOD_CTRL;
-}
+      }
       if (shift) {
         key.mod |= SDL_KMOD_SHIFT;
-}
+      }
       if (alt) {
         key.mod |= SDL_KMOD_ALT;
-}
+      }
       if (gui) {
         key.mod |= SDL_KMOD_GUI;
-}
+      }
     }
 
     ImGui::SameLine ();
@@ -169,16 +170,16 @@ input_map_inspector::draw (entt::registry & /*unused*/, wsl::comp::singl::runtim
     k.mod = SDL_KMOD_NONE;
     if (new_ctrl) {
       k.mod |= SDL_KMOD_CTRL;
-}
+    }
     if (new_shift) {
       k.mod |= SDL_KMOD_SHIFT;
-}
+    }
     if (new_alt) {
       k.mod |= SDL_KMOD_ALT;
-}
+    }
     if (new_gui) {
       k.mod |= SDL_KMOD_GUI;
-}
+    }
 
     map[new_action] = k;
 

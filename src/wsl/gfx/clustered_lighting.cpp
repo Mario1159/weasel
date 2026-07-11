@@ -91,13 +91,10 @@ bool
 sphere_intersects_frustum (const glm::vec3 &center, float radius,
                            const frustum_planes &frustum)
 {
-  for (const glm::vec4 &plane : frustum.planes) {
+  return std::ranges::all_of (frustum.planes, [&] (const glm::vec4 &plane) {
     const float distance = glm::dot (plane, glm::vec4 (center, 1.0F));
-    if (distance < -radius) {
-      return false;
-    }
-  }
-  return true;
+    return distance >= -radius;
+  });
 }
 
 } // namespace
@@ -135,7 +132,7 @@ clustered_lighting::destroy_resources ()
     m_cull_pipe = nullptr;
   }
 
-  for (uint32_t i = 0; i < kClusterBufSlots; ++i) {
+  for (uint32_t i = 0; i < k_cluster_buf_slots; ++i) {
     if (m_cluster_bufs[i] != nullptr) {
       SDL_ReleaseGPUBuffer (m_ctx->gpu_device, m_cluster_bufs[i]);
       m_cluster_bufs[i] = nullptr;
@@ -180,7 +177,7 @@ clustered_lighting::create_buffers ()
   // (avoids a use-after-free on the underlying VkBuffer on AMDVK/Mesa
   // when the buffer is recorded against before SDL_GPU's internal
   // allocator has finished wiring it up).
-  for (uint32_t i = 0; i < kClusterBufSlots; ++i) {
+  for (uint32_t i = 0; i < k_cluster_buf_slots; ++i) {
     m_cluster_bufs[i] = SDL_CreateGPUBuffer (m_ctx->gpu_device, &cb);
     if (m_cluster_bufs[i] == nullptr) {
       wsl::log::gfx ()->error (

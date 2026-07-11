@@ -119,7 +119,7 @@ ui_render_interface::create_pipeline (wsl::rsc::resource_manager *res_mgr)
 
   SDL_GPUColorTargetDescription ct{};
   ct.format
-      = SDL_GetGPUSwapchainTextureFormat (m_ctx->gpu_device, m_window->handler);
+      = SDL_GetGPUSwapchainTextureFormat (m_ctx->gpu_device, m_window->handler());
 
   info.target_info.num_color_targets = 1;
   info.target_info.color_target_descriptions = &ct;

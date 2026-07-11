@@ -70,7 +70,7 @@ struct point_light : world_component
   void
   serialize (Archive &archive)
   {
-    point_light def{};
+    point_light const def{};
     serialize_field_if_diff (archive, "color", color, def.color);
     serialize_field_if_diff (archive, "intensity", intensity, def.intensity);
     serialize_field_if_diff (archive, "radius", radius, def.radius);

@@ -59,32 +59,32 @@ engine_ui::handle_event (const SDL_Event &event)
       && toggle_it->second.matches_event (event.key)) {
     m_game_focus = !m_game_focus;
 
-    SDL_SetWindowRelativeMouseMode (m_runtime_ctx->window.handler,
+    SDL_SetWindowRelativeMouseMode (m_runtime_ctx->window().handler(),
                                     !m_game_focus);
     SDL_ShowCursor ();
 
     wsl::reg::sig::emit<game_focus_toggled> (
-        m_runtime_ctx->signal_hub, game_focus_toggled{ m_game_focus });
+        m_runtime_ctx->signal_hub(), game_focus_toggled{ m_game_focus });
     return;
   }
 
   // Editor toolbar shortcuts
   if (event.key.scancode == SDL_SCANCODE_F5) {
-    if (!m_runtime_ctx->is_running) {
+    if (!m_runtime_ctx->is_running()) {
       m_runtime_ctx->set_running (true);
     }
     return;
   }
 
   if (event.key.scancode == SDL_SCANCODE_F7) {
-    if (m_runtime_ctx->is_running) {
+    if (m_runtime_ctx->is_running()) {
       m_runtime_ctx->set_running (false);
     }
     return;
   }
 
   if (event.key.scancode == SDL_SCANCODE_F8) {
-    if (m_runtime_ctx->in_play_session) {
+    if (m_runtime_ctx->in_play_session()) {
       m_runtime_ctx->stop ();
     }
     return;
@@ -112,7 +112,7 @@ engine_ui::build_draw_data (entt::registry &registry)
   }
 
   m_editor_ctx->get_imgui_renderer ()->begin_frame ();
-  m_root.draw (registry, m_runtime_ctx->window);
+  m_root.draw (registry, m_runtime_ctx->window());
 
   TracyPlot ("FPS", ImGui::GetIO ().Framerate);
   m_editor_ctx->get_imgui_renderer ()->end_frame ();

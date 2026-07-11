@@ -97,7 +97,7 @@ public:
   /*!
    * \brief Releases GPU resources owned by the renderer.
    */
-  ~scene_renderer ();
+  ~scene_renderer () override;
 
   //! When false, custom material paths are disabled and all meshes fall back
   //! to the legacy PBR pipeline. Used for backwards compatibility / debugging.

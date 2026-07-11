@@ -41,7 +41,7 @@ namespace gfx
 SDL_GPUSampler *
 render_window::ensure_linear_sampler ()
 {
-  if (!linear_sampler) {
+  if (!m_linear_sampler) {
     SDL_GPUSamplerCreateInfo si{};
     si.min_filter = SDL_GPU_FILTER_LINEAR;
     si.mag_filter = SDL_GPU_FILTER_LINEAR;
@@ -49,9 +49,9 @@ render_window::ensure_linear_sampler ()
     si.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     si.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     si.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    linear_sampler = gpu_sampler (ctx->gpu_device, si);
+    m_linear_sampler = gpu_sampler (m_ctx->gpu_device, si);
   }
-  return linear_sampler.get ();
+  return m_linear_sampler.get ();
 }
 
 void
@@ -70,22 +70,22 @@ render_window::create_fullscreen_pipe (const char *frag_shader_path,
   auto vert_id = m_res_mgr->register_shader (
       "engine://compiled_shaders/fullscreen.vert.slang.spv");
   SDL_GPUShader *vert = wsl::gfx::shader::load_from_manager (
-      ctx->gpu_device, m_res_mgr, vert_id, SDL_GPU_SHADERSTAGE_VERTEX,
+      m_ctx->gpu_device, m_res_mgr, vert_id, SDL_GPU_SHADERSTAGE_VERTEX,
       /*num_uniform_buffers=*/0,
       /*num_samplers=*/0);
 
   auto frag_id = m_res_mgr->register_shader (frag_shader_path);
   SDL_GPUShader *frag = wsl::gfx::shader::load_from_manager (
-      ctx->gpu_device, m_res_mgr, frag_id, SDL_GPU_SHADERSTAGE_FRAGMENT,
+      m_ctx->gpu_device, m_res_mgr, frag_id, SDL_GPU_SHADERSTAGE_FRAGMENT,
       /*num_uniform_buffers=*/num_uniform_buffers,
       /*num_samplers=*/num_samplers);
 
   if ((vert == nullptr) || (frag == nullptr)) {
     if (vert != nullptr) {
-      SDL_ReleaseGPUShader (ctx->gpu_device, vert);
+      SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
     }
     if (frag != nullptr) {
-      SDL_ReleaseGPUShader (ctx->gpu_device, frag);
+      SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
     }
     return nullptr;
   }
@@ -124,11 +124,11 @@ render_window::create_fullscreen_pipe (const char *frag_shader_path,
   pipe.multisample_state.enable_mask = false;
 
   SDL_GPUGraphicsPipeline *out
-      = SDL_CreateGPUGraphicsPipeline (ctx->gpu_device, &pipe);
+      = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
   wsl::gfx::tracy_alloc_pipeline (out);
 
-  SDL_ReleaseGPUShader (ctx->gpu_device, vert);
-  SDL_ReleaseGPUShader (ctx->gpu_device, frag);
+  SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
+  SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
 
   return out;
 }
@@ -136,12 +136,12 @@ render_window::create_fullscreen_pipe (const char *frag_shader_path,
 gpu_graphics_pipeline
 render_window::create_composite_pipe ()
 {
-  // composite outputs to swapchain format (LDR)
+  // composite outputs to m_swapchain format (LDR)
   SDL_GPUTextureFormat const sc_fmt
-      = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, handler);
+      = SDL_GetGPUSwapchainTextureFormat (m_ctx->gpu_device, m_handler);
 
   return gpu_graphics_pipeline::adopt (
-      ctx->gpu_device,
+      m_ctx->gpu_device,
       create_fullscreen_pipe (
           "engine://compiled_shaders/composite_tonemap.frag.slang.spv", sc_fmt,
           /*num_uniform_buffers=*/1, /*Composite cbuffer*/
@@ -152,7 +152,7 @@ gpu_graphics_pipeline
 render_window::create_downsample_pipe ()
 {
   return gpu_graphics_pipeline::adopt (
-      ctx->gpu_device,
+      m_ctx->gpu_device,
       create_fullscreen_pipe (
           "engine://compiled_shaders/bloom_downsample.frag.slang.spv",
           SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
@@ -164,7 +164,7 @@ gpu_graphics_pipeline
 render_window::create_blur_pipe ()
 {
   return gpu_graphics_pipeline::adopt (
-      ctx->gpu_device,
+      m_ctx->gpu_device,
       create_fullscreen_pipe (
           "engine://compiled_shaders/bloom_blur.frag.slang.spv",
           SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,
@@ -173,21 +173,21 @@ render_window::create_blur_pipe ()
 }
 
 render_window::render_window (const char *name, int width, int height,
-                              wsl::gfx::render_context *ctx,
+                              wsl::gfx::render_context *m_ctx,
                               wsl::rsc::resource_manager *res_mgr,
                               bool headless, bool try_disable_vsync_on_startup)
-    : ctx (ctx), m_res_mgr (res_mgr)
+    : m_ctx (m_ctx), m_res_mgr (res_mgr)
 {
   if (headless) {
     wsl::log::gfx ()->debug ("Headless mode, skipping window creation");
     return;
   }
 
-  handler = SDL_CreateWindow (name, width, height, SDL_WINDOW_RESIZABLE);
-  SDL_ShowWindow (handler);
-  SDL_ClaimWindowForGPUDevice (ctx->gpu_device, handler);
-  swapchain_format
-      = SDL_GetGPUSwapchainTextureFormat (ctx->gpu_device, handler);
+  m_handler = SDL_CreateWindow (name, width, height, SDL_WINDOW_RESIZABLE);
+  SDL_ShowWindow (m_handler);
+  SDL_ClaimWindowForGPUDevice (m_ctx->gpu_device, m_handler);
+  m_swapchain_format
+      = SDL_GetGPUSwapchainTextureFormat (m_ctx->gpu_device, m_handler);
 
   // Default behavior: try to disable vsync so the triple-buffered
   // pipeline can actually overlap frames. The change is wrapped in
@@ -203,21 +203,21 @@ render_window::render_window (const char *name, int width, int height,
     if (!set_vsync (false)) {
       wsl::log::gfx ()->error (
           "render_window: failed to disable vsync on startup, "
-          "swapchain remains vsync-paced (VSYNC).");
+          "m_swapchain remains vsync-paced (VSYNC).");
     }
   }
 
-  wsl::log::gfx ()->debug ("Window: {} ({}x{}), swapchain format={:#x}", name,
+  wsl::log::gfx ()->debug ("Window: {} ({}x{}), m_swapchain format={:#x}", name,
                            width, height,
-                           static_cast<unsigned> (swapchain_format));
+                           static_cast<unsigned> (m_swapchain_format));
 
   // Allocate initial resources based on current size.
   on_resize ();
 
   // Create post-process pipelines (once).
-  pipe_downsample = create_downsample_pipe ();
-  pipe_blur = create_blur_pipe ();
-  pipe_composite = create_composite_pipe ();
+  m_pipe_downsample = create_downsample_pipe ();
+  m_pipe_blur = create_blur_pipe ();
+  m_pipe_composite = create_composite_pipe ();
 
   // Tracy frame image capture. Target size must be divisible by 4
   // (Tracy requirement). 320x180 is the recommended thumbnail size
@@ -228,7 +228,7 @@ render_window::render_window (const char *name, int width, int height,
 bool
 render_window::set_vsync (bool enabled)
 {
-  if (handler == nullptr || ctx->gpu_device == nullptr) {
+  if (m_handler == nullptr || m_ctx->gpu_device == nullptr) {
     wsl::log::gfx ()->error ("render_window::set_vsync: no window or device");
     return false;
   }
@@ -242,7 +242,7 @@ render_window::set_vsync (bool enabled)
     // vsync ON: prefer MAILBOX (lower-latency vsync, drops pending
     // images instead of queueing them) when available, fall back to
     // plain VSYNC otherwise.
-    if (SDL_WindowSupportsGPUPresentMode (ctx->gpu_device, handler,
+    if (SDL_WindowSupportsGPUPresentMode (m_ctx->gpu_device, m_handler,
                                           SDL_GPU_PRESENTMODE_MAILBOX)) {
       requested = SDL_GPU_PRESENTMODE_MAILBOX;
     } else {
@@ -253,7 +253,7 @@ render_window::set_vsync (bool enabled)
     // if the backend doesn't advertise it — we'd rather keep the
     // previous mode than call `SDL_SetGPUSwapchainParameters` with a
     // mode that's known to fail.
-    if (!SDL_WindowSupportsGPUPresentMode (ctx->gpu_device, handler,
+    if (!SDL_WindowSupportsGPUPresentMode (m_ctx->gpu_device, m_handler,
                                            SDL_GPU_PRESENTMODE_IMMEDIATE)) {
       wsl::log::gfx ()->error (
           "render_window::set_vsync: IMMEDIATE present mode not "
@@ -263,7 +263,7 @@ render_window::set_vsync (bool enabled)
     requested = SDL_GPU_PRESENTMODE_IMMEDIATE;
   }
 
-  if (!SDL_SetGPUSwapchainParameters (ctx->gpu_device, handler,
+  if (!SDL_SetGPUSwapchainParameters (m_ctx->gpu_device, m_handler,
                                       m_swapchain_composition, requested)) {
     wsl::log::gfx ()->error (
         "render_window::set_vsync: SDL_SetGPUSwapchainParameters "
@@ -285,50 +285,50 @@ render_window::set_vsync (bool enabled)
 
 render_window::~render_window ()
 {
-  if (ctx->gpu_device == nullptr) {
-    if (handler != nullptr)
-      SDL_DestroyWindow (handler);
+  if (m_ctx->gpu_device == nullptr) {
+    if (m_handler != nullptr)
+      SDL_DestroyWindow (m_handler);
     return;
   }
 
   frame_image_shutdown ();
 
-  SDL_WaitForGPUIdle (ctx->gpu_device);
+  SDL_WaitForGPUIdle (m_ctx->gpu_device);
 
-  pipe_downsample.reset ();
-  pipe_blur.reset ();
-  pipe_composite.reset ();
+  m_pipe_downsample.reset ();
+  m_pipe_blur.reset ();
+  m_pipe_composite.reset ();
 
-  linear_sampler.reset ();
+  m_linear_sampler.reset ();
 
-  bloom_a.reset ();
-  bloom_b.reset ();
-  hdr_scene.reset ();
-  hdr_bloom_src.reset ();
-  msaa_hdr_scene.reset ();
-  msaa_hdr_bloom.reset ();
+  m_bloom_a.reset ();
+  m_bloom_b.reset ();
+  m_hdr_scene.reset ();
+  m_hdr_bloom_src.reset ();
+  m_msaa_hdr_scene.reset ();
+  m_msaa_hdr_bloom.reset ();
 
-  depth_texture.reset ();
-  // present_tex.texture_data is a raw pointer (from
+  m_depth_texture.reset ();
+  // m_present_tex.texture_data is a raw pointer (from
   // wsl::gfx::texture). Free it manually with Tracy bookkeeping
   // to match the tracy_alloc_texture call in create_hdr_target().
-  if (present_tex.texture_data != nullptr) {
-    wsl::gfx::tracy_free_texture (present_tex.texture_data);
-    SDL_ReleaseGPUTexture (ctx->gpu_device, present_tex.texture_data);
-    present_tex.texture_data = nullptr;
+  if (m_present_tex.texture_data != nullptr) {
+    wsl::gfx::tracy_free_texture (m_present_tex.texture_data);
+    SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_present_tex.texture_data);
+    m_present_tex.texture_data = nullptr;
   }
 
-  SDL_WaitForGPUIdle (ctx->gpu_device);
+  SDL_WaitForGPUIdle (m_ctx->gpu_device);
 
-  SDL_ReleaseWindowFromGPUDevice (ctx->gpu_device, handler);
-  SDL_DestroyWindow (handler);
+  SDL_ReleaseWindowFromGPUDevice (m_ctx->gpu_device, m_handler);
+  SDL_DestroyWindow (m_handler);
   SDL_PumpEvents ();
 }
 
 void
 render_window::get_size (uint32_t &width, uint32_t &height) const
 {
-  if (handler == nullptr) {
+  if (m_handler == nullptr) {
     width = 0;
     height = 0;
     return;
@@ -336,7 +336,7 @@ render_window::get_size (uint32_t &width, uint32_t &height) const
 
   int w;
   int h;
-  SDL_GetWindowSize (handler, &w, &h);
+  SDL_GetWindowSize (m_handler, &w, &h);
   width = (uint32_t)w;
   height = (uint32_t)h;
 }
@@ -344,29 +344,29 @@ render_window::get_size (uint32_t &width, uint32_t &height) const
 void
 render_window::get_size (int &width, int &height) const
 {
-  if (handler == nullptr) {
+  if (m_handler == nullptr) {
     width = 0;
     height = 0;
     return;
   }
-  SDL_GetWindowSize (handler, &width, &height);
+  SDL_GetWindowSize (m_handler, &width, &height);
 }
 
 void
 render_window::create_depth_texture ()
 {
-  if (ctx->gpu_device == nullptr || handler == nullptr)
+  if (m_ctx->gpu_device == nullptr || m_handler == nullptr)
     return;
 
-  destroy_texture (depth_texture);
+  destroy_texture (m_depth_texture);
 
   int w;
   int h;
-  SDL_GetWindowSizeInPixels (handler, &w, &h);
+  SDL_GetWindowSizeInPixels (m_handler, &w, &h);
 
   SDL_GPUTextureCreateInfo info{};
   info.type = SDL_GPU_TEXTURETYPE_2D;
-  info.format = depth_format;
+  info.format = m_depth_format;
   info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
   info.width = (uint32_t)w;
   info.height = (uint32_t)h;
@@ -374,14 +374,14 @@ render_window::create_depth_texture ()
   info.num_levels = 1;
   info.sample_count = SDL_GPU_SAMPLECOUNT_4; // MSAA matches MRT pass
 
-  depth_texture = gpu_texture (ctx->gpu_device, info);
-  if (!depth_texture) {
+  m_depth_texture = gpu_texture (m_ctx->gpu_device, info);
+  if (!m_depth_texture) {
     wsl::log::gfx ()->error ("Failed to create depth texture: {}",
                              SDL_GetError ());
   } else {
     // Resource name (vkSetDebugUtilsObjectNameEXT under the hood);
     // shows up in RenderDoc's Resource Inspector and Texture Viewer.
-    SDL_SetGPUTextureName (ctx->gpu_device, depth_texture.get (),
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_depth_texture.get (),
                            "Depth Buffer");
   }
 }
@@ -391,50 +391,51 @@ render_window::begin_3d_pass (bool clear_color, bool clear_depth,
                               const char *label) const
 {
   ZoneScoped;
-  if ((!msaa_hdr_scene) || (!msaa_hdr_bloom) || (!hdr_scene) || (!hdr_bloom_src)
-      || (!depth_texture)) {
+  if ((!m_msaa_hdr_scene) || (!m_msaa_hdr_bloom) || (!m_hdr_scene) || (!m_hdr_bloom_src)
+      || (!m_depth_texture)) {
     wsl::log::gfx ()->warn (
         "begin_3d_pass: null render target texture(s), skipping");
     return;
   }
 
 #ifdef WEASEL_ENABLE_RENDERDOC
-  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.3d", "main");
+  wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.3d", "main");
 #endif
   // Visible as a coloured region in RenderDoc's Event Browser (via
   // VK_EXT_debug_utils / ID3DUserDefinedAnnotation under the hood).
-  SDL_PushGPUDebugGroup (ctx->main_cmd, label);
+  SDL_PushGPUDebugGroup (m_ctx->main_cmd, label);
 
   SDL_GPUColorTargetInfo ct[2]{};
 
   // Scene HDR
-  ct[0].texture = msaa_hdr_scene.get ();
+  ct[0].texture = m_msaa_hdr_scene.get ();
   ct[0].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ct[0].store_op = SDL_GPU_STOREOP_RESOLVE;
-  ct[0].clear_color = scene_clear_color;
-  ct[0].resolve_texture = hdr_scene.get ();
+  ct[0].clear_color = m_scene_clear_color;
+  ct[0].resolve_texture = m_hdr_scene.get ();
 
   // Bloom source HDR
-  ct[1].texture = msaa_hdr_bloom.get ();
+  ct[1].texture = m_msaa_hdr_bloom.get ();
   ct[1].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ct[1].store_op = SDL_GPU_STOREOP_RESOLVE;
   ct[1].clear_color = { 0.0F, 0.0F, 0.0F, 1.0F };
-  ct[1].resolve_texture = hdr_bloom_src.get ();
+  ct[1].resolve_texture = m_hdr_bloom_src.get ();
 
   SDL_GPUDepthStencilTargetInfo ds{};
   SDL_zero (ds);
-  ds.texture = depth_texture.get ();
+  ds.texture = m_depth_texture.get ();
   ds.clear_depth = 1.0F;
   ds.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ds.store_op = SDL_GPU_STOREOP_STORE;
 
-  ctx->begin_main_render_pass (ct, 2, &ds);
+  m_ctx->begin_main_render_pass (ct, 2, &ds);
 
   // If a viewport is active, set it on the render pass.
   if (has_active_viewport ()) {
     auto vp = current_viewport ();
-    int w, h;
-    SDL_GetWindowSizeInPixels (handler, &w, &h);
+    int w;
+    int h;
+    SDL_GetWindowSizeInPixels (m_handler, &w, &h);
     auto pix
         = vp.to_pixels (static_cast<uint32_t> (w), static_cast<uint32_t> (h));
 
@@ -445,14 +446,14 @@ render_window::begin_3d_pass (bool clear_color, bool clear_depth,
     gpu_vp.h = static_cast<float> (pix.height);
     gpu_vp.min_depth = vp.min_depth;
     gpu_vp.max_depth = vp.max_depth;
-    ctx->set_viewport (gpu_vp);
+    m_ctx->set_viewport (gpu_vp);
 
     SDL_Rect scissor{};
     scissor.x = pix.x;
     scissor.y = pix.y;
     scissor.w = pix.width;
     scissor.h = pix.height;
-    ctx->set_scissor_rect (scissor);
+    m_ctx->set_scissor_rect (scissor);
   }
 }
 
@@ -460,19 +461,19 @@ void
 render_window::end_3d_pass (bool run_postprocess)
 {
   ZoneScoped;
-  if (ctx->has_main_render_pass ()) {
-    ctx->end_main_render_pass ();
+  if (m_ctx->has_main_render_pass ()) {
+    m_ctx->end_main_render_pass ();
   }
 
   // Close the "Main 3D Pass" debug group opened in begin_3d_pass
   // (the postprocess pass opens its own group below).
-  if (ctx->main_cmd != nullptr) {
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+  if (m_ctx->main_cmd != nullptr) {
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 
   if (run_postprocess) {
-    // Always build present_tex (Game View samples this).
-    // Only also write to swapchain if present_to_swapchain is true.
+    // Always build m_present_tex (Game View samples this).
+    // Only also write to m_swapchain if present_to_swapchain is true.
     postprocess_hdr_bloom ();
   }
 }
@@ -490,16 +491,16 @@ render_window::begin_subviewport_pass (const subviewport_target &target,
   }
 
 #ifdef WEASEL_ENABLE_RENDERDOC
-  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.3d", "subviewport");
+  wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.3d", "subviewport");
 #endif
-  SDL_PushGPUDebugGroup (ctx->main_cmd, label);
+  SDL_PushGPUDebugGroup (m_ctx->main_cmd, label);
 
   SDL_GPUColorTargetInfo ct[2]{};
 
   ct[0].texture = target.color_msaa.get ();
   ct[0].load_op = clear_color ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ct[0].store_op = SDL_GPU_STOREOP_RESOLVE;
-  ct[0].clear_color = scene_clear_color;
+  ct[0].clear_color = m_scene_clear_color;
   ct[0].resolve_texture = target.color_resolve.get ();
 
   ct[1].texture = target.bloom_msaa.get ();
@@ -515,22 +516,22 @@ render_window::begin_subviewport_pass (const subviewport_target &target,
   ds.load_op = clear_depth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
   ds.store_op = SDL_GPU_STOREOP_STORE;
 
-  ctx->begin_main_render_pass (ct, 2, &ds);
+  m_ctx->begin_main_render_pass (ct, 2, &ds);
 
   // Full target size viewport
-  ctx->reset_viewport (target.width, target.height);
-  ctx->reset_scissor_rect (target.width, target.height);
+  m_ctx->reset_viewport (target.width, target.height);
+  m_ctx->reset_scissor_rect (target.width, target.height);
 }
 
 void
 render_window::end_subviewport_pass ()
 {
   ZoneScoped;
-  if (ctx->has_main_render_pass ()) {
-    ctx->end_main_render_pass ();
+  if (m_ctx->has_main_render_pass ()) {
+    m_ctx->end_main_render_pass ();
   }
-  if (ctx->main_cmd != nullptr) {
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+  if (m_ctx->main_cmd != nullptr) {
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 }
 
@@ -539,21 +540,21 @@ render_window::begin_ui_pass () const
 {
   ZoneScoped;
 #ifdef WEASEL_ENABLE_RENDERDOC
-  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.ui", "ui");
+  wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.ui", "ui");
 #endif
-  if (ctx->main_cmd != nullptr) {
-    SDL_PushGPUDebugGroup (ctx->main_cmd, "UI Pass");
+  if (m_ctx->main_cmd != nullptr) {
+    SDL_PushGPUDebugGroup (m_ctx->main_cmd, "UI Pass");
   }
-  ctx->begin_ui_render_pass (swapchain.texture_data);
+  m_ctx->begin_ui_render_pass (m_swapchain.texture_data);
 }
 
 void
 render_window::end_ui_pass () const
 {
   ZoneScoped;
-  ctx->end_ui_render_pass ();
-  if (ctx->main_cmd != nullptr) {
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+  m_ctx->end_ui_render_pass ();
+  if (m_ctx->main_cmd != nullptr) {
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 }
 
@@ -602,8 +603,9 @@ render_window::current_viewport () const
 void
 render_window::apply_viewport (const gfx::viewport &vp) const
 {
-  int w, h;
-  SDL_GetWindowSizeInPixels (handler, &w, &h);
+  int w;
+  int h;
+  SDL_GetWindowSizeInPixels (m_handler, &w, &h);
   auto pix
       = vp.to_pixels (static_cast<uint32_t> (w), static_cast<uint32_t> (h));
 
@@ -614,14 +616,14 @@ render_window::apply_viewport (const gfx::viewport &vp) const
   gpu_vp.h = static_cast<float> (pix.height);
   gpu_vp.min_depth = vp.min_depth;
   gpu_vp.max_depth = vp.max_depth;
-  ctx->set_viewport (gpu_vp);
+  m_ctx->set_viewport (gpu_vp);
 
   SDL_Rect scissor{};
   scissor.x = pix.x;
   scissor.y = pix.y;
   scissor.w = pix.width;
   scissor.h = pix.height;
-  ctx->set_scissor_rect (scissor);
+  m_ctx->set_scissor_rect (scissor);
 }
 
 void
@@ -630,12 +632,12 @@ render_window::new_swapchain ()
   ZoneScoped;
   // Try the non-blocking acquire first. With max-3 frames in flight and
   // IMMEDIATE present mode this is essentially always successful, and
-  // when it is the CPU never blocks on the swapchain.
+  // when it is the CPU never blocks on the m_swapchain.
   //
   // The catch: per the SDL docs, when too many frames are in flight
   // `SDL_AcquireGPUSwapchainTexture` returns `true` with
   // `swapchain_texture = NULL` as an "indication to wait". Recording
-  // GPU work on a cmd buffer that holds a NULL swapchain acquire is
+  // GPU work on a cmd buffer that holds a NULL m_swapchain acquire is
   // legal but the AMDVK driver is observably fragile about it — the
   // next `SDL_DispatchGPUCompute` (or even the copy pass) segfaults
   // because the cmd buffer's submit-side present is in an
@@ -643,39 +645,39 @@ render_window::new_swapchain ()
   // crashes after the IMMEDIATE change.
   //
   // Critical: we must NOT call the blocking fallback
-  // `SDL_WaitAndAcquireGPUSwapchainTexture` on the same `ctx->main_cmd`
+  // `SDL_WaitAndAcquireGPUSwapchainTexture` on the same `m_ctx->main_cmd`
   // that already has the NULL acquire recorded — that would leave the
-  // command buffer with TWO swapchain acquires (one NULL, one valid)
+  // command buffer with TWO m_swapchain acquires (one NULL, one valid)
   // and AMDVK uses the NULL one. The fallback MUST use a fresh command
   // buffer. As a bonus, this also gives us a clean command buffer
-  // with exactly one valid swapchain acquire for the rest of the frame.
+  // with exactly one valid m_swapchain acquire for the rest of the frame.
   constexpr int kSpinAttempts = 4;
   {
     ZoneScopedN ("new_swapchain::non_blocking_spin");
     for (int attempt = 0; attempt < kSpinAttempts; ++attempt) {
       bool const ok = SDL_AcquireGPUSwapchainTexture (
-          ctx->main_cmd, handler, &swapchain.texture_data, &swapchain.width,
-          &swapchain.height);
-      if (ok && swapchain.texture_data != nullptr) {
+          m_ctx->main_cmd, m_handler, &m_swapchain.texture_data, &m_swapchain.width,
+          &m_swapchain.height);
+      if (ok && m_swapchain.texture_data != nullptr) {
         return;
       }
       if (ok) {
         // Got `true` but the texture is NULL — too many frames in flight.
         // The non-blocking acquire already left a NULL acquire on
-        // `ctx->main_cmd`, so we cannot reuse it for the blocking
+        // `m_ctx->main_cmd`, so we cannot reuse it for the blocking
         // fallback. Submit the poisoned cmd buffer as a no-op (it has
         // no recorded draws yet — `new_swapchain` is the first call
         // before any pass) and get a fresh one for the blocking acquire.
         {
           ZoneScopedN ("new_swapchain::recover_poison");
           SDL_GPUFence *poison_fence
-              = SDL_SubmitGPUCommandBufferAndAcquireFence (ctx->main_cmd);
+              = SDL_SubmitGPUCommandBufferAndAcquireFence (m_ctx->main_cmd);
           if (poison_fence != nullptr) {
-            SDL_WaitForGPUFences (ctx->gpu_device, true, &poison_fence, 1);
-            SDL_ReleaseGPUFence (ctx->gpu_device, poison_fence);
+            SDL_WaitForGPUFences (m_ctx->gpu_device, true, &poison_fence, 1);
+            SDL_ReleaseGPUFence (m_ctx->gpu_device, poison_fence);
           }
-          ctx->main_cmd = SDL_AcquireGPUCommandBuffer (ctx->gpu_device);
-          if (ctx->main_cmd == nullptr) {
+          m_ctx->main_cmd = SDL_AcquireGPUCommandBuffer (m_ctx->gpu_device);
+          if (m_ctx->main_cmd == nullptr) {
             wsl::log::gfx ()->error (
                 "new_swapchain: failed to acquire fresh cmd buffer: {}",
                 SDL_GetError ());
@@ -685,7 +687,7 @@ render_window::new_swapchain ()
         break;
       }
       // `false` is a hard error. Bail out and let the frame render to
-      // present_tex only.
+      // m_present_tex only.
       wsl::log::gfx ()->debug (
           "new_swapchain: non-blocking acquire returned false ({}), "
           "falling back to blocking acquire",
@@ -697,14 +699,14 @@ render_window::new_swapchain ()
   {
     ZoneScopedN ("new_swapchain::blocking_acquire");
     bool const ok = SDL_WaitAndAcquireGPUSwapchainTexture (
-        ctx->main_cmd, handler, &swapchain.texture_data, &swapchain.width,
-        &swapchain.height);
+        m_ctx->main_cmd, m_handler, &m_swapchain.texture_data, &m_swapchain.width,
+        &m_swapchain.height);
     if (!ok) {
       wsl::log::gfx ()->error (
           "new_swapchain: blocking acquire also failed: {}", SDL_GetError ());
-      swapchain.texture_data = nullptr;
-      swapchain.width = 0;
-      swapchain.height = 0;
+      m_swapchain.texture_data = nullptr;
+      m_swapchain.width = 0;
+      m_swapchain.height = 0;
     }
   }
 }
@@ -714,7 +716,7 @@ render_window::on_resize ()
 {
   int w;
   int h;
-  SDL_GetWindowSizeInPixels (handler, &w, &h);
+  SDL_GetWindowSizeInPixels (m_handler, &w, &h);
 
   if (w <= 0 || h <= 0) {
     return;
@@ -722,24 +724,24 @@ render_window::on_resize ()
 
   wsl::log::gfx ()->debug ("Resize: {}x{}", w, h);
 
-  SDL_WaitForGPUIdle (ctx->gpu_device);
+  SDL_WaitForGPUIdle (m_ctx->gpu_device);
 
   // Depth
   create_depth_texture ();
 
   // Destroy HDR/bloom targets
-  destroy_texture (msaa_hdr_scene);
-  destroy_texture (msaa_hdr_bloom);
-  destroy_texture (hdr_scene);
-  destroy_texture (hdr_bloom_src);
-  destroy_texture (bloom_a);
-  destroy_texture (bloom_b);
-  // present_tex.texture_data is a raw pointer; free manually with
+  destroy_texture (m_msaa_hdr_scene);
+  destroy_texture (m_msaa_hdr_bloom);
+  destroy_texture (m_hdr_scene);
+  destroy_texture (m_hdr_bloom_src);
+  destroy_texture (m_bloom_a);
+  destroy_texture (m_bloom_b);
+  // m_present_tex.texture_data is a raw pointer; free manually with
   // Tracy bookkeeping so the wsl.gfx.textures pool stays consistent.
-  if (present_tex.texture_data != nullptr) {
-    wsl::gfx::tracy_free_texture (present_tex.texture_data);
-    SDL_ReleaseGPUTexture (ctx->gpu_device, present_tex.texture_data);
-    present_tex.texture_data = nullptr;
+  if (m_present_tex.texture_data != nullptr) {
+    wsl::gfx::tracy_free_texture (m_present_tex.texture_data);
+    SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_present_tex.texture_data);
+    m_present_tex.texture_data = nullptr;
   }
 
   // MSAA HDR targets (two MRT textures)
@@ -755,7 +757,7 @@ render_window::on_resize ()
   msaa.sample_count = SDL_GPU_SAMPLECOUNT_4;
 
   auto create_hdr_target = [&] (const SDL_GPUTextureCreateInfo &ci) {
-    SDL_GPUTexture *tex = SDL_CreateGPUTexture (ctx->gpu_device, &ci);
+    SDL_GPUTexture *tex = SDL_CreateGPUTexture (m_ctx->gpu_device, &ci);
     if (tex == nullptr) {
       wsl::log::gfx ()->error ("Failed to create HDR render target ({}x{}): {}",
                                ci.width, ci.height, SDL_GetError ());
@@ -765,15 +767,15 @@ render_window::on_resize ()
     return tex;
   };
 
-  msaa_hdr_scene
-      = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (msaa));
-  msaa_hdr_bloom
-      = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (msaa));
-  if (msaa_hdr_scene)
-    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_scene.get (),
+  m_msaa_hdr_scene
+      = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (msaa));
+  m_msaa_hdr_bloom
+      = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (msaa));
+  if (m_msaa_hdr_scene)
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_msaa_hdr_scene.get (),
                            "MSAA HDR Scene (4x)");
-  if (msaa_hdr_bloom)
-    SDL_SetGPUTextureName (ctx->gpu_device, msaa_hdr_bloom.get (),
+  if (m_msaa_hdr_bloom)
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_msaa_hdr_bloom.get (),
                            "MSAA HDR Bloom (4x)");
 
   // Resolved HDR targets must be sampler + color target
@@ -781,12 +783,12 @@ render_window::on_resize ()
   res.sample_count = SDL_GPU_SAMPLECOUNT_1;
   res.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  hdr_scene = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (res));
-  hdr_bloom_src = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (res));
-  if (hdr_scene)
-    SDL_SetGPUTextureName (ctx->gpu_device, hdr_scene.get (), "HDR Scene");
-  if (hdr_bloom_src)
-    SDL_SetGPUTextureName (ctx->gpu_device, hdr_bloom_src.get (),
+  m_hdr_scene = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (res));
+  m_hdr_bloom_src = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (res));
+  if (m_hdr_scene)
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_hdr_scene.get (), "HDR Scene");
+  if (m_hdr_bloom_src)
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_hdr_bloom_src.get (),
                            "HDR Bloom Source");
 
   // Half-res bloom ping-pong
@@ -794,16 +796,16 @@ render_window::on_resize ()
   half.width = (uint32_t)std::max (1, w / 2);
   half.height = (uint32_t)std::max (1, h / 2);
 
-  bloom_a = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (half));
-  bloom_b = gpu_texture::adopt (ctx->gpu_device, create_hdr_target (half));
-  if (bloom_a)
-    SDL_SetGPUTextureName (ctx->gpu_device, bloom_a.get (),
+  m_bloom_a = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (half));
+  m_bloom_b = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (half));
+  if (m_bloom_a)
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_bloom_a.get (),
                            "Bloom A (half-res)");
-  if (bloom_b)
-    SDL_SetGPUTextureName (ctx->gpu_device, bloom_b.get (),
+  if (m_bloom_b)
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_bloom_b.get (),
                            "Bloom B (half-res)");
 
-  // Create LDR output texture (same format as swapchain) so UI can sample it
+  // Create LDR output texture (same format as m_swapchain) so UI can sample it
   SDL_GPUTextureCreateInfo out{};
   SDL_zero (out);
   out.type = SDL_GPU_TEXTURETYPE_2D;
@@ -812,43 +814,43 @@ render_window::on_resize ()
   out.layer_count_or_depth = 1;
   out.num_levels = 1;
   out.sample_count = SDL_GPU_SAMPLECOUNT_1;
-  out.format = swapchain_format;
+  out.format = m_swapchain_format;
   out.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  present_tex.texture_data = create_hdr_target (out);
-  if (present_tex.texture_data != nullptr)
-    SDL_SetGPUTextureName (ctx->gpu_device, present_tex.texture_data,
+  m_present_tex.texture_data = create_hdr_target (out);
+  if (m_present_tex.texture_data != nullptr)
+    SDL_SetGPUTextureName (m_ctx->gpu_device, m_present_tex.texture_data,
                            "Present Tex (sampleable LDR)");
-  present_tex.width = (uint32_t)w;
-  present_tex.height = (uint32_t)h;
+  m_present_tex.width = (uint32_t)w;
+  m_present_tex.height = (uint32_t)h;
 
   // Re-size the Tracy frame-image staging buffer to match the new
-  // present_tex. The GPU is already idle (SDL_WaitForGPUIdle at the
+  // m_present_tex. The GPU is already idle (SDL_WaitForGPUIdle at the
   // top of on_resize), so the existing transfer buffer is safe to
   // release. frame_image_resize() is a no-op if the dimensions
   // haven't changed, so repeated calls during a drag-resize are
   // cheap.
-  frame_image_resize (present_tex.width, present_tex.height);
+  frame_image_resize (m_present_tex.width, m_present_tex.height);
 }
 
 void
 render_window::postprocess_hdr_bloom ()
 {
   ZoneScoped;
-  if ((!hdr_bloom_src) || (!hdr_scene) || (!bloom_a) || (!bloom_b)
-      || (present_tex.texture_data == nullptr)) {
+  if ((!m_hdr_bloom_src) || (!m_hdr_scene) || (!m_bloom_a) || (!m_bloom_b)
+      || (m_present_tex.texture_data == nullptr)) {
     return;
   }
 
 #ifdef WEASEL_ENABLE_RENDERDOC
-  wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess",
+  wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess",
                                     "bloom_tonemap");
 #endif
   // Marker region in the Event Browser; closes at the end of this
   // function. The sub-passes below push their own nested groups so the
   // timeline reads as Postprocess > Bloom Downsample / Blur H / Blur V /
   // Tonemap Swapchain / Tonemap PresentTex.
-  SDL_PushGPUDebugGroup (ctx->main_cmd, "Postprocess");
+  SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Postprocess");
 
   ensure_linear_sampler ();
 
@@ -857,34 +859,34 @@ render_window::postprocess_hdr_bloom ()
   // above, so pop it before returning to keep the GPU debug-group stack
   // balanced for subsequent passes (begin_ui_pass would otherwise be
   // nesting inside the unclosed Postprocess group).
-  if ((!pipe_downsample) || (!pipe_blur) || (!pipe_composite)) {
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+  if ((!m_pipe_downsample) || (!m_pipe_blur) || (!m_pipe_composite)) {
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
     return;
   }
 
   int ww;
   int hh;
-  SDL_GetWindowSizeInPixels (handler, &ww, &hh);
+  SDL_GetWindowSizeInPixels (m_handler, &ww, &hh);
 
-  // ---------- (1) Downsample bloom_src -> bloom_a ----------
+  // ---------- (1) Downsample bloom_src -> m_bloom_a ----------
   {
     ZoneScopedN ("postprocess::downsample");
 #ifdef WEASEL_ENABLE_RENDERDOC
-    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.bloom",
+    wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess.bloom",
                                       "downsample");
 #endif
-    SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Downsample");
+    SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Bloom Downsample");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = bloom_a.get ();
+    ct.texture = m_bloom_a.get ();
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
 
     SDL_GPURenderPass *pass
-        = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
+        = SDL_BeginGPURenderPass (m_ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_downsample.get ());
+      SDL_BindGPUGraphicsPipeline (pass, m_pipe_downsample.get ());
 
       struct alignas (16) down
       {
@@ -894,18 +896,18 @@ render_window::postprocess_hdr_bloom ()
       p.texel[0] = 1.0F / float (ww);
       p.texel[1] = 1.0F / float (hh);
 
-      SDL_PushGPUFragmentUniformData (ctx->main_cmd, 0, &p, sizeof (p));
+      SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &p, sizeof (p));
 
       SDL_GPUTextureSamplerBinding b{};
       SDL_zero (b);
-      b.texture = hdr_bloom_src.get ();
-      b.sampler = linear_sampler.get ();
+      b.texture = m_hdr_bloom_src.get ();
+      b.sampler = m_linear_sampler.get ();
       SDL_BindGPUFragmentSamplers (pass, 0, &b, 1);
 
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 
   // bloom texel size (half res)
@@ -913,25 +915,25 @@ render_window::postprocess_hdr_bloom ()
   uint32_t const bh = std::max (1U, (uint32_t)hh / 2);
   float const bloom_texel[2] = { 1.0F / float (bw), 1.0F / float (bh) };
 
-  // ---------- (2) Blur H: bloom_a -> bloom_b ----------
+  // ---------- (2) Blur H: m_bloom_a -> m_bloom_b ----------
   {
     ZoneScopedN ("postprocess::blur_h");
 #ifdef WEASEL_ENABLE_RENDERDOC
-    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.bloom",
+    wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess.bloom",
                                       "blur_h");
 #endif
-    SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Blur H");
+    SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Bloom Blur H");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = bloom_b.get ();
+    ct.texture = m_bloom_b.get ();
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
 
     SDL_GPURenderPass *pass
-        = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
+        = SDL_BeginGPURenderPass (m_ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_blur.get ());
+      SDL_BindGPUGraphicsPipeline (pass, m_pipe_blur.get ());
 
       struct alignas (16) blur
       {
@@ -943,39 +945,39 @@ render_window::postprocess_hdr_bloom ()
       p.dir[0] = 1.0F;
       p.dir[1] = 0.0F;
 
-      SDL_PushGPUFragmentUniformData (ctx->main_cmd, 0, &p, sizeof (p));
+      SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &p, sizeof (p));
 
       SDL_GPUTextureSamplerBinding b{};
       SDL_zero (b);
-      b.texture = bloom_a.get ();
-      b.sampler = linear_sampler.get ();
+      b.texture = m_bloom_a.get ();
+      b.sampler = m_linear_sampler.get ();
       SDL_BindGPUFragmentSamplers (pass, 0, &b, 1);
 
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 
-  // ---------- (3) Blur V: bloom_b -> bloom_a ----------
+  // ---------- (3) Blur V: m_bloom_b -> m_bloom_a ----------
   {
     ZoneScopedN ("postprocess::blur_v");
 #ifdef WEASEL_ENABLE_RENDERDOC
-    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.bloom",
+    wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess.bloom",
                                       "blur_v");
 #endif
-    SDL_PushGPUDebugGroup (ctx->main_cmd, "Bloom Blur V");
+    SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Bloom Blur V");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = bloom_a.get ();
+    ct.texture = m_bloom_a.get ();
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
 
     SDL_GPURenderPass *pass
-        = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
+        = SDL_BeginGPURenderPass (m_ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_blur.get ());
+      SDL_BindGPUGraphicsPipeline (pass, m_pipe_blur.get ());
 
       struct alignas (16) blur
       {
@@ -987,58 +989,58 @@ render_window::postprocess_hdr_bloom ()
       p.dir[0] = 0.0F;
       p.dir[1] = 1.0F;
 
-      SDL_PushGPUFragmentUniformData (ctx->main_cmd, 0, &p, sizeof (p));
+      SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &p, sizeof (p));
 
       SDL_GPUTextureSamplerBinding b{};
       SDL_zero (b);
-      b.texture = bloom_b.get ();
-      b.sampler = linear_sampler.get ();
+      b.texture = m_bloom_b.get ();
+      b.sampler = m_linear_sampler.get ();
       SDL_BindGPUFragmentSamplers (pass, 0, &b, 1);
 
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 
-  // ---------- (4) Composite + tonemap: hdr_scene + bloom_a -> swapchain
+  // ---------- (4) Composite + tonemap: m_hdr_scene + m_bloom_a -> m_swapchain
   // ----------
-  if (swapchain.texture_data != nullptr) {
+  if (m_swapchain.texture_data != nullptr) {
     ZoneScopedN ("postprocess::composite_swapchain");
 #ifdef WEASEL_ENABLE_RENDERDOC
-    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.tonemap",
-                                      "swapchain");
+    wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess.tonemap",
+                                      "m_swapchain");
 #endif
-    SDL_PushGPUDebugGroup (ctx->main_cmd, "Tonemap Swapchain");
+    SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Tonemap Swapchain");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = swapchain.texture_data;
+    ct.texture = m_swapchain.texture_data;
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
 
     SDL_GPURenderPass *pass
-        = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
+        = SDL_BeginGPURenderPass (m_ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_composite.get ());
+      SDL_BindGPUGraphicsPipeline (pass, m_pipe_composite.get ());
 
       struct alignas (16) comp
       {
-        float exposure;
+        float m_exposure;
         float bloom_int;
         float pad[2];
       } c{};
-      c.exposure = exposure;
-      c.bloom_int = bloom_intensity;
+      c.m_exposure = m_exposure;
+      c.bloom_int = m_bloom_intensity;
 
-      SDL_PushGPUFragmentUniformData (ctx->main_cmd, 0, &c, sizeof (c));
+      SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &c, sizeof (c));
 
       SDL_GPUTextureSamplerBinding b[2]{};
       SDL_zero (b);
-      b[0].texture = hdr_scene.get ();
-      b[0].sampler = linear_sampler.get ();
-      b[1].texture = bloom_a.get ();
-      b[1].sampler = linear_sampler.get ();
+      b[0].texture = m_hdr_scene.get ();
+      b[0].sampler = m_linear_sampler.get ();
+      b[1].texture = m_bloom_a.get ();
+      b[1].sampler = m_linear_sampler.get ();
 
       SDL_BindGPUFragmentSamplers (pass, 0, b, 2);
 
@@ -1048,61 +1050,61 @@ render_window::postprocess_hdr_bloom ()
     // Close the "Tonemap Swapchain" group before the next composite
     // opens its own. Without this the Present Tex group is nested
     // inside the Swapchain group.
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 
-  // ---------- (5) Composite + tonemap also into present_tex (sampleable)
+  // ---------- (5) Composite + tonemap also into m_present_tex (sampleable)
   // ----------
-  if (present_tex.texture_data != nullptr) {
+  if (m_present_tex.texture_data != nullptr) {
     ZoneScopedN ("postprocess::composite_present_tex");
 #ifdef WEASEL_ENABLE_RENDERDOC
-    wsl::gfx::rdoc::annotate_command (ctx->main_cmd, "pass.postprocess.tonemap",
-                                      "present_tex");
+    wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess.tonemap",
+                                      "m_present_tex");
 #endif
-    SDL_PushGPUDebugGroup (ctx->main_cmd, "Tonemap Present Tex");
+    SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Tonemap Present Tex");
     SDL_GPUColorTargetInfo ct{};
     SDL_zero (ct);
-    ct.texture = present_tex.texture_data;
+    ct.texture = m_present_tex.texture_data;
     ct.load_op = SDL_GPU_LOADOP_CLEAR;
     ct.store_op = SDL_GPU_STOREOP_STORE;
     ct.clear_color = { 0, 0, 0, 1 };
 
     SDL_GPURenderPass *pass
-        = SDL_BeginGPURenderPass (ctx->main_cmd, &ct, 1, nullptr);
+        = SDL_BeginGPURenderPass (m_ctx->main_cmd, &ct, 1, nullptr);
     if (pass != nullptr) {
-      SDL_BindGPUGraphicsPipeline (pass, pipe_composite.get ());
+      SDL_BindGPUGraphicsPipeline (pass, m_pipe_composite.get ());
 
       struct alignas (16) comp
       {
-        float exposure;
+        float m_exposure;
         float bloom_int;
         float pad[2];
       } c{};
-      c.exposure = exposure;
-      c.bloom_int = bloom_intensity;
+      c.m_exposure = m_exposure;
+      c.bloom_int = m_bloom_intensity;
 
-      SDL_PushGPUFragmentUniformData (ctx->main_cmd, 0, &c, sizeof (c));
+      SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &c, sizeof (c));
 
       SDL_GPUTextureSamplerBinding b[2]{};
       SDL_zero (b);
-      b[0].texture = hdr_scene.get ();
-      b[0].sampler = linear_sampler.get ();
-      b[1].texture = bloom_a.get ();
-      b[1].sampler = linear_sampler.get ();
+      b[0].texture = m_hdr_scene.get ();
+      b[0].sampler = m_linear_sampler.get ();
+      b[1].texture = m_bloom_a.get ();
+      b[1].sampler = m_linear_sampler.get ();
 
       SDL_BindGPUFragmentSamplers (pass, 0, b, 2);
 
       SDL_DrawGPUPrimitives (pass, 3, 1, 0, 0);
       SDL_EndGPURenderPass (pass);
     }
-    SDL_PopGPUDebugGroup (ctx->main_cmd);
+    SDL_PopGPUDebugGroup (m_ctx->main_cmd);
   }
 
   // Close the "Postprocess" debug group opened at the top of this
   // function.
-  SDL_PopGPUDebugGroup (ctx->main_cmd);
+  SDL_PopGPUDebugGroup (m_ctx->main_cmd);
 
-  // Tracy frame image: read back the final composited present_tex
+  // Tracy frame image: read back the final composited m_present_tex
   // into a staging transfer buffer. Done as the very last GPU
   // command of the frame so the pixels cover everything drawn this
   // frame (postprocess + UI). The fence / wait / FrameImage call
@@ -1119,18 +1121,18 @@ render_window::frame_image_init (uint32_t target_w, uint32_t target_h)
 {
   // The downsample target is fixed at construction; the staging
   // transfer buffer is allocated separately by frame_image_resize()
-  // once the present_tex dimensions are known. The target size must
+  // once the m_present_tex dimensions are known. The target size must
   // be divisible by 4 (Tracy FrameImage requirement); 320x180 is the
   // recommended thumbnail size from the Tracy manual.
   m_fi_dst_w = target_w;
   m_fi_dst_h = target_h;
   m_fi_dst_pitch = target_w * 4;
 
-  // present_tex is in the platform's swapchain format. On every
+  // m_present_tex is in the platform's m_swapchain format. On every
   // desktop backend SDL3 GPU exposes B8G8R8A8 (see
   // SDL_GetGPUSwapchainTextureFormat). Mark the source as BGRA so
   // the downsample step can swap channels on the way out; an
-  // R8G8B8A8 swapchain (rare on desktops) would set this false.
+  // R8G8B8A8 m_swapchain (rare on desktops) would set this false.
   m_fi_src_is_bgra = true;
 
   wsl::log::gfx ()->debug (
@@ -1149,7 +1151,7 @@ render_window::frame_image_shutdown ()
 void
 render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
 {
-  if (ctx->gpu_device == nullptr || src_w == 0 || src_h == 0) {
+  if (m_ctx->gpu_device == nullptr || src_w == 0 || src_h == 0) {
     return;
   }
   // Skip the (re)allocation if the staging buffer already covers
@@ -1171,14 +1173,14 @@ render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
   // the GPU fence signals; doing it on the GPU would require a
   // compute pipeline we don't need for anything else. Allocating
   // for src_w*src_h*4 (BGRA8) gives us a buffer large enough for
-  // any swapchain size up to 4K (~33 MB).
+  // any m_swapchain size up to 4K (~33 MB).
   size_t const size = static_cast<size_t> (src_w) * src_h * 4;
 
   SDL_GPUTransferBufferCreateInfo info{};
   info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
   info.size = static_cast<uint32_t> (size);
 
-  m_fi_transfer = gpu_transfer_buffer (ctx->gpu_device, info);
+  m_fi_transfer = gpu_transfer_buffer (m_ctx->gpu_device, info);
   if (!m_fi_transfer) {
     wsl::log::rsc ()->warn (
         "render_window: failed to allocate Tracy frame-image "
@@ -1200,13 +1202,13 @@ render_window::frame_image_resize (uint32_t src_w, uint32_t src_h)
 void
 render_window::frame_image_issue_copy ()
 {
-  if (!m_fi_transfer || ctx->main_cmd == nullptr) {
+  if (!m_fi_transfer || m_ctx->main_cmd == nullptr) {
     return;
   }
-  if (present_tex.texture_data == nullptr) {
+  if (m_present_tex.texture_data == nullptr) {
     return;
   }
-  if (present_tex.width == 0 || present_tex.height == 0) {
+  if (m_present_tex.width == 0 || m_present_tex.height == 0) {
     return;
   }
   // Skip the GPU copy pass entirely when no profiler is attached.
@@ -1216,29 +1218,29 @@ render_window::frame_image_issue_copy ()
     return;
   }
 
-  // Defensive resize: if the present_tex dimensions changed (e.g.
+  // Defensive resize: if the m_present_tex dimensions changed (e.g.
   // an external resize path that didn't go through on_resize) but
   // the staging buffer wasn't reallocated, do it now. This branch
   // is unreachable in the normal flow because on_resize() calls
   // frame_image_resize() — it exists to prevent a buffer overflow
   // if that contract is ever broken.
-  if (m_fi_alloc_w != present_tex.width || m_fi_alloc_h != present_tex.height) {
-    SDL_WaitForGPUIdle (ctx->gpu_device);
-    frame_image_resize (present_tex.width, present_tex.height);
+  if (m_fi_alloc_w != m_present_tex.width || m_fi_alloc_h != m_present_tex.height) {
+    SDL_WaitForGPUIdle (m_ctx->gpu_device);
+    frame_image_resize (m_present_tex.width, m_present_tex.height);
     if (!m_fi_transfer) {
       return;
     }
   }
 
-  m_fi_src_w = present_tex.width;
-  m_fi_src_h = present_tex.height;
+  m_fi_src_w = m_present_tex.width;
+  m_fi_src_h = m_present_tex.height;
 
-  // Note: the full present_tex is copied (not yet downscaled). The
+  // Note: the full m_present_tex is copied (not yet downscaled). The
   // downscale to 320x180 happens on the CPU after the GPU fence
   // signals; doing it on the GPU would require a compute pipeline
   // we don't need for anything else.
   SDL_GPUTextureRegion src_region{};
-  src_region.texture = present_tex.texture_data;
+  src_region.texture = m_present_tex.texture_data;
   src_region.mip_level = 0;
   src_region.layer = 0;
   src_region.x = 0;
@@ -1257,10 +1259,10 @@ render_window::frame_image_issue_copy ()
   dst_info.pixels_per_row = m_fi_src_w;
   dst_info.rows_per_layer = m_fi_src_h;
 
-  SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass (ctx->main_cmd);
+  SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass (m_ctx->main_cmd);
   if (copy == nullptr) {
     // Beginning a copy pass can fail if the command buffer is in a
-    // bad state (e.g. the swapchain acquire failed earlier). Skip
+    // bad state (e.g. the m_swapchain acquire failed earlier). Skip
     // silently — no Tracy image this frame.
     return;
   }
@@ -1305,7 +1307,7 @@ render_window::frame_image_submit (SDL_GPUFence *fence)
   // buffer; the slot recycles after kMaxFramesInFlight frames and
   // begin_frame() will wait + release the same fence then.
   // Releasing it here is a use-after-free / double-free crash.
-  if (!SDL_WaitForGPUFences (ctx->gpu_device, true, &fence, 1)) {
+  if (!SDL_WaitForGPUFences (m_ctx->gpu_device, true, &fence, 1)) {
     // Fence wait failed (driver error, device lost, etc.). Skip
     // this frame's image — better to lose one frame than to
     // unmap corrupt data and crash Tracy's background thread.
@@ -1318,7 +1320,7 @@ render_window::frame_image_submit (SDL_GPUFence *fence)
 
   // Map the transfer buffer, downsample, hand to Tracy, unmap.
   void *mapped
-      = SDL_MapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer.get (), false);
+      = SDL_MapGPUTransferBuffer (m_ctx->gpu_device, m_fi_transfer.get (), false);
   if (mapped == nullptr) {
     wsl::log::gfx ()->warn (
         "render_window: SDL_MapGPUTransferBuffer failed for Tracy "
@@ -1346,26 +1348,29 @@ render_window::frame_image_submit (SDL_GPUFence *fence)
       uint32_t const sx0 = (uint64_t)dx * src_w / dst_w;
       uint32_t const sx1
           = std::max (sx0 + 1, (uint32_t)((uint64_t)(dx + 1) * src_w / dst_w));
-      uint64_t br = 0, bg = 0, bb = 0;
+      uint64_t br = 0;
+      uint64_t bg = 0;
+      uint64_t bb = 0;
       uint32_t count = 0;
       for (uint32_t sy = sy0; sy < sy1; ++sy) {
-        const uint8_t *row = src + (size_t)sy * src_w * 4;
+        const uint8_t *row = src + ((size_t)sy * src_w * 4);
         for (uint32_t sx = sx0; sx < sx1; ++sx) {
-          // SDL3 GPU swapchain format is B8G8R8A8 on desktop. Swap
+          // SDL3 GPU m_swapchain format is B8G8R8A8 on desktop. Swap
           // R/B when reading so the output is RGBA.
           if (m_fi_src_is_bgra) {
-            bb += row[sx * 4 + 0];
-            bg += row[sx * 4 + 1];
-            br += row[sx * 4 + 2];
+            bb += row[(sx * 4) + 0];
+            bg += row[(sx * 4) + 1];
+            br += row[(sx * 4) + 2];
           } else {
-            br += row[sx * 4 + 0];
-            bg += row[sx * 4 + 1];
-            bb += row[sx * 4 + 2];
+            br += row[(sx * 4) + 0];
+            bg += row[(sx * 4) + 1];
+            bb += row[(sx * 4) + 2];
           }
           ++count;
         }
       }
-      uint8_t *dst = downscaled.data () + (size_t)dy * m_fi_dst_pitch + dx * 4;
+      uint8_t *dst
+          = downscaled.data () + ((size_t)dy * m_fi_dst_pitch) + (dx * 4);
       dst[0] = (uint8_t)(br / count);
       dst[1] = (uint8_t)(bg / count);
       dst[2] = (uint8_t)(bb / count);
@@ -1381,7 +1386,7 @@ render_window::frame_image_submit (SDL_GPUFence *fence)
               static_cast<uint16_t> (dst_h), /*offset=*/0,
               /*flip=*/false);
 
-  SDL_UnmapGPUTransferBuffer (ctx->gpu_device, m_fi_transfer.get ());
+  SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, m_fi_transfer.get ());
 }
 
 } // namespace gfx

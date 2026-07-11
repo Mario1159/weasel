@@ -39,15 +39,16 @@ draw_singleton_entry (ecs_selection &selection,
                         && selection.singleton_type == desc.type_id;
 
   ImGui::PushID ((int)desc.type_id);
-  
+
   if (is_core) {
-    ImGui::PushStyleColor (ImGuiCol_Text, editor_ctx->get_imgui_renderer ()->get_theme ().primary);
+    ImGui::PushStyleColor (
+        ImGuiCol_Text, editor_ctx->get_imgui_renderer ()->get_theme ().primary);
   }
   const bool clicked = ImGui::Selectable (desc.display_name.c_str (), selected);
   if (is_core) {
     ImGui::PopStyleColor ();
   }
-  
+
   ImGui::PopID ();
 
   if (clicked) {
@@ -75,7 +76,7 @@ draw_hsplitter (const char *id, float &top_height, float thickness = 6.0F)
   // Nice cursor while hovering
   if (ImGui::IsItemHovered ()) {
     ImGui::SetMouseCursor (ImGuiMouseCursor_ResizeNS);
-}
+  }
 
   if (ImGui::IsItemActive ()) {
     top_height += ImGui::GetIO ().MouseDelta.y;
@@ -85,7 +86,7 @@ draw_hsplitter (const char *id, float &top_height, float thickness = 6.0F)
   ImU32 col = ImGui::GetColorU32 (ImGuiCol_Separator);
   if (ImGui::IsItemHovered () || ImGui::IsItemActive ()) {
     col = ImGui::GetColorU32 (ImGuiCol_SeparatorHovered);
-}
+  }
 
   ImVec2 const min = ImGui::GetItemRectMin ();
   ImVec2 const max = ImGui::GetItemRectMax ();
@@ -96,22 +97,25 @@ draw_hsplitter (const char *id, float &top_height, float thickness = 6.0F)
 void
 entities_and_singletons_panel::draw ()
 {
-  if (ImGui::Begin ("Entities and Singletons", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
-    wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  if (ImGui::Begin ("Entities and Singletons", nullptr,
+                    ImGuiWindowFlags_NoScrollbar
+                        | ImGuiWindowFlags_NoScrollWithMouse)) {
+    wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
     const bool has_scene = (scene != nullptr);
     entt::registry *registry = has_scene ? &scene->get_registry () : nullptr;
 
     ImGui::AlignTextToFramePadding ();
-    ImGui::PushFont (m_editor_ctx->get_imgui_renderer()->get_fonts().bold);
+    ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts ().bold);
     ImGui::TextUnformatted ("Entities");
     ImGui::PopFont ();
     ImGui::SameLine ();
 
     if (!has_scene) {
       ImGui::BeginDisabled ();
-}
+    }
 
-    if (ImGui::Button ("+##add_entity", ImVec2 (ImGui::GetFrameHeight (), ImGui::GetFrameHeight ()))) {
+    if (ImGui::Button ("+##add_entity", ImVec2 (ImGui::GetFrameHeight (),
+                                                ImGui::GetFrameHeight ()))) {
       entt::entity const e = registry->create ();
 
       if (m_show_hierarchy) {
@@ -125,36 +129,38 @@ entities_and_singletons_panel::draw ()
 
     if (ImGui::IsItemHovered ()) {
       ImGui::SetTooltip ("Create entity");
-}
+    }
 
     ImGui::SameLine ();
 
-    const bool can_delete = has_scene && m_selection.kind == selection_kind::entity
+    const bool can_delete = has_scene
+                            && m_selection.kind == selection_kind::entity
                             && registry->valid (m_selection.selected_entity);
 
     if (!can_delete) {
       ImGui::BeginDisabled ();
-}
+    }
 
-    if (ImGui::Button ("-##delete_entity", ImVec2 (ImGui::GetFrameHeight (), ImGui::GetFrameHeight ()))) {
+    if (ImGui::Button ("-##delete_entity", ImVec2 (ImGui::GetFrameHeight (),
+                                                   ImGui::GetFrameHeight ()))) {
       registry->destroy (m_selection.selected_entity);
       m_selection = {};
     }
 
     if (ImGui::IsItemHovered ()) {
       ImGui::SetTooltip ("Delete selected entity");
-}
+    }
 
     if (!can_delete) {
       ImGui::EndDisabled ();
-}
+    }
 
     ImGui::SameLine ();
     ImGui::Checkbox ("Hierarchy", &m_show_hierarchy);
 
     if (!has_scene) {
       ImGui::EndDisabled ();
-}
+    }
 
     ImGui::Separator ();
 
@@ -162,7 +168,9 @@ entities_and_singletons_panel::draw ()
     const float total_avail_h = ImGui::GetContentRegionAvail ().y;
     const float splitter_h = 6.0F;
     const float title_h = ImGui::GetTextLineHeightWithSpacing ();
-    const float search_bar_h = ImGui::GetFrameHeightWithSpacing () + 4.0F; // Approx height of search bar + internal padding
+    const float search_bar_h
+        = ImGui::GetFrameHeightWithSpacing ()
+          + 4.0F; // Approx height of search bar + internal padding
 
     // Overhead: 2 search bars + 1 title (Singletons) + 1 splitter
     float const total_overhead = (search_bar_h * 2.0F) + title_h + splitter_h;
@@ -170,7 +178,7 @@ entities_and_singletons_panel::draw ()
 
     // Initial distribution: 1/2 each
     if (m_entities_height < 0.0F && usable_h > 0.0F) {
-        m_entities_height = usable_h / 2.0F;
+      m_entities_height = usable_h / 2.0F;
     }
 
     // Dynamic clamping to ensure everything fits
@@ -184,7 +192,7 @@ entities_and_singletons_panel::draw ()
       ImSearch::SearchBar ("Search");
 
       ImGui::BeginChild ("EntitiesRegion", ImVec2 (0, m_entities_height), 1);
-      if (m_runtime_ctx->resource_manager.current_project ()) {
+      if (m_runtime_ctx->resource_manager ().current_project ()) {
         if (has_scene) {
           draw_entity_list ();
         } else {
@@ -192,7 +200,7 @@ entities_and_singletons_panel::draw ()
         }
       } else {
         draw_centered_icon (
-            m_editor_ctx, m_editor_ctx->icon_entity, 64.0F,
+            m_editor_ctx, m_editor_ctx->icon_entity (), 64.0F,
             "Entities are boxes of components,\nAdd an entity to the current "
             "scene\nby pressing the \"+\" Button,\nEdit the entity in the "
             "inspector.");
@@ -214,21 +222,22 @@ entities_and_singletons_panel::draw ()
 
     if (!has_scene) {
       ImGui::BeginDisabled ();
-}
+    }
 
     draw_add_singleton_ui ();
 
     ImGui::SameLine ();
-    const auto *selected_desc
-        = m_runtime_ctx->singleton_registry.find (m_selection.singleton_type);
+    const auto *selected_desc = m_runtime_ctx->singleton_registry ().find (
+        m_selection.singleton_type);
     const bool can_remove_singleton
         = has_scene && m_selection.kind == selection_kind::singleton
-          && (selected_desc != nullptr) && !selected_desc->core && (selected_desc->contains != nullptr)
+          && (selected_desc != nullptr) && !selected_desc->core
+          && (selected_desc->contains != nullptr)
           && selected_desc->contains (*registry);
 
     if (!can_remove_singleton && has_scene) {
       ImGui::BeginDisabled ();
-}
+    }
 
     if (ImGui::Button (
             "-##remove_singleton",
@@ -241,11 +250,11 @@ entities_and_singletons_panel::draw ()
 
     if (!can_remove_singleton && has_scene) {
       ImGui::EndDisabled ();
-}
+    }
 
     if (!has_scene) {
       ImGui::EndDisabled ();
-}
+    }
 
     ImGui::PushID ("SingletonsSearchID");
     if (ImSearch::BeginSearch ()) {
@@ -253,24 +262,28 @@ entities_and_singletons_panel::draw ()
 
       ImGui::BeginChild ("SingletonRegion", ImVec2 (0, 0), 1);
 
-      if (m_runtime_ctx->resource_manager.current_project ()) {
+      if (m_runtime_ctx->resource_manager ().current_project ()) {
         // Core singletons first
-        auto ordered = m_runtime_ctx->singleton_registry.ordered ();
+        auto ordered = m_runtime_ctx->singleton_registry ().ordered ();
         for (const auto *desc : ordered) {
           if ((desc != nullptr) && desc->core) {
-            ImSearch::SearchableItem (desc->display_name.c_str (), [&, desc] (const char *) {
-              draw_singleton_entry (m_selection, m_editor_ctx, *desc, true);
-            });
+            ImSearch::SearchableItem (
+                desc->display_name.c_str (), [&, desc] (const char *) {
+                  draw_singleton_entry (m_selection, m_editor_ctx, *desc, true);
+                });
           }
         }
 
         // Scene singletons next (ONLY those added to the scene)
         if (has_scene) {
           for (const auto *desc : ordered) {
-            if ((desc != nullptr) && !desc->core && (desc->contains != nullptr) && desc->contains (*registry)) {
-              ImSearch::SearchableItem (desc->display_name.c_str (), [&, desc] (const char *) {
-                draw_singleton_entry (m_selection, m_editor_ctx, *desc, false);
-              });
+            if ((desc != nullptr) && !desc->core && (desc->contains != nullptr)
+                && desc->contains (*registry)) {
+              ImSearch::SearchableItem (
+                  desc->display_name.c_str (), [&, desc] (const char *) {
+                    draw_singleton_entry (m_selection, m_editor_ctx, *desc,
+                                          false);
+                  });
             }
           }
         } else {
@@ -278,7 +291,7 @@ entities_and_singletons_panel::draw ()
         }
       } else {
         draw_centered_icon (
-            m_editor_ctx, m_editor_ctx->icon_singleton, 64.0F,
+            m_editor_ctx, m_editor_ctx->icon_singleton (), 64.0F,
             "Singletons are unique components that exist once in a scene,\n"
             "Manage them here to configure global scene parameters.");
       }
@@ -293,9 +306,6 @@ entities_and_singletons_panel::draw ()
   ImGui::End ();
 }
 
-
-
-
 void
 entities_and_singletons_panel::draw_entity_list ()
 {
@@ -303,7 +313,7 @@ entities_and_singletons_panel::draw_entity_list ()
     draw_entity_tree ();
   } else {
     draw_entity_flat ();
-}
+  }
 
   if (m_request_rename_popup) {
     ImGui::OpenPopup ("Rename Entity");
@@ -317,7 +327,7 @@ entities_and_singletons_panel::draw_entity_list ()
 
     if (ImGui::Button ("OK")) {
       if (m_rename_entity != entt::null) {
-        wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+        wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
         scene->set_entity_name (m_rename_entity, std::string (m_rename_buffer));
       }
       m_rename_entity = entt::null;
@@ -338,7 +348,7 @@ entities_and_singletons_panel::draw_entity_list ()
 void
 entities_and_singletons_panel::draw_entity_flat ()
 {
-  auto &scene = *m_runtime_ctx->scene_manager.get_active ();
+  auto &scene = *m_runtime_ctx->scene_manager ().get_active ();
   auto view = scene.get_registry ().view<entt::entity> ();
 
   for (entt::entity const entity : view) {
@@ -353,32 +363,35 @@ void
 entities_and_singletons_panel::draw_entity_tree ()
 {
   entt::registry &registry
-      = m_runtime_ctx->scene_manager.get_active ()->get_registry ();
+      = m_runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   auto view = registry.view<entt::entity, wsl::comp::hierarchy> ();
 
   for (entt::entity const e : view) {
-    wsl::comp::hierarchy  const&h = registry.get<wsl::comp::hierarchy> (e);
+    wsl::comp::hierarchy const &h = registry.get<wsl::comp::hierarchy> (e);
     if (h.parent == entt::null) {
       draw_entity_subtree (e, 0);
-}
+    }
   }
 }
 
 void
-entities_and_singletons_panel::draw_entity_subtree (entt::entity entity, int depth)
+entities_and_singletons_panel::draw_entity_subtree (entt::entity entity,
+                                                    int depth)
 {
-  auto &scene = *m_runtime_ctx->scene_manager.get_active ();
+  auto &scene = *m_runtime_ctx->scene_manager ().get_active ();
   entt::registry &registry = scene.get_registry ();
 
   const std::string &name = scene.get_entity_name (entity);
 
-  if (ImSearch::PushSearchable (name.c_str (), [&, entity, depth] (const char *) {
-    draw_entity_row (entity, depth);
-    return true; // Always show children
-  })) {
+  if (ImSearch::PushSearchable (name.c_str (),
+                                [&, entity, depth] (const char *) {
+                                  draw_entity_row (entity, depth);
+                                  return true; // Always show children
+                                })) {
     if (registry.all_of<wsl::comp::hierarchy> (entity)) {
-      wsl::comp::hierarchy  const&h = registry.get<wsl::comp::hierarchy> (entity);
+      wsl::comp::hierarchy const &h
+          = registry.get<wsl::comp::hierarchy> (entity);
       entt::entity child = h.first;
 
       while (child != entt::null) {
@@ -393,18 +406,18 @@ entities_and_singletons_panel::draw_entity_subtree (entt::entity entity, int dep
 void
 entities_and_singletons_panel::draw_entity_row (entt::entity entity, int depth)
 {
-  wsl::rsc::scene  const*scene = m_runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene const *scene = m_runtime_ctx->scene_manager ().get_active ();
 
   const std::string &name = scene->get_entity_name (entity);
 
-  bool const selected
-      = m_selection.kind == selection_kind::entity && m_selection.selected_entity == entity;
+  bool const selected = m_selection.kind == selection_kind::entity
+                        && m_selection.selected_entity == entity;
 
   ImGui::PushID ((int)entity);
 
   if (depth > 0) {
-    ImGui::Indent (depth * 14.0F);
-}
+    ImGui::Indent (static_cast<float> (depth) * 14.0F);
+  }
 
   if (ImGui::Selectable ("##entity", selected,
                          ImGuiSelectableFlags_SpanAllColumns)) {
@@ -441,8 +454,8 @@ entities_and_singletons_panel::draw_entity_row (entt::entity entity, int depth)
   ImGui::TextDisabled (" (%u)", (uint32_t)entity);
 
   if (depth > 0) {
-    ImGui::Unindent (depth * 14.0F);
-}
+    ImGui::Unindent (static_cast<float> (depth) * 14.0F);
+  }
 
   ImGui::PopID ();
 }
@@ -450,12 +463,13 @@ entities_and_singletons_panel::draw_entity_row (entt::entity entity, int depth)
 void
 entities_and_singletons_panel::draw_core_singleton_list ()
 {
-  auto ordered = m_runtime_ctx->singleton_registry.ordered ();
+  auto ordered = m_runtime_ctx->singleton_registry ().ordered ();
   for (const auto *desc : ordered) {
     if ((desc != nullptr) && desc->core) {
-      ImSearch::SearchableItem (desc->display_name.c_str (), [&, desc] (const char *) {
-        draw_singleton_entry (m_selection, m_editor_ctx, *desc, true);
-      });
+      ImSearch::SearchableItem (
+          desc->display_name.c_str (), [&, desc] (const char *) {
+            draw_singleton_entry (m_selection, m_editor_ctx, *desc, true);
+          });
     }
   }
 }
@@ -463,12 +477,13 @@ entities_and_singletons_panel::draw_core_singleton_list ()
 void
 entities_and_singletons_panel::draw_scene_singleton_list ()
 {
-  auto ordered = m_runtime_ctx->singleton_registry.ordered ();
+  auto ordered = m_runtime_ctx->singleton_registry ().ordered ();
   for (const auto *desc : ordered) {
     if ((desc != nullptr) && !desc->core) {
-      ImSearch::SearchableItem (desc->display_name.c_str (), [&, desc] (const char *) {
-        draw_singleton_entry (m_selection, m_editor_ctx, *desc, false);
-      });
+      ImSearch::SearchableItem (
+          desc->display_name.c_str (), [&, desc] (const char *) {
+            draw_singleton_entry (m_selection, m_editor_ctx, *desc, false);
+          });
     }
   }
 }
@@ -476,11 +491,10 @@ entities_and_singletons_panel::draw_scene_singleton_list ()
 void
 entities_and_singletons_panel::draw_add_singleton_ui ()
 {
-  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
 
-  if (ImGui::Button ("+##add_singleton",
-                     ImVec2 (ImGui::GetFrameHeight (),
-                             ImGui::GetFrameHeight ()))) {
+  if (ImGui::Button ("+##add_singleton", ImVec2 (ImGui::GetFrameHeight (),
+                                                 ImGui::GetFrameHeight ()))) {
     ImGui::OpenPopup ("AddSingletonPopup");
   }
 
@@ -491,14 +505,16 @@ entities_and_singletons_panel::draw_add_singleton_ui ()
       ImSearch::SearchBar ("Search Singletons");
       ImGui::Separator ();
 
-      auto ordered = m_runtime_ctx->singleton_registry.ordered ();
+      auto ordered = m_runtime_ctx->singleton_registry ().ordered ();
       for (const auto *desc : ordered) {
-        if ((desc != nullptr) && !desc->core && (desc->contains != nullptr) && !desc->contains (reg)) {
-          ImSearch::SearchableItem (desc->display_name.c_str (), [&, desc] (const char *) {
-            if (ImGui::MenuItem (desc->display_name.c_str ())) {
-              desc->emplace_default (reg);
-            }
-          });
+        if ((desc != nullptr) && !desc->core && (desc->contains != nullptr)
+            && !desc->contains (reg)) {
+          ImSearch::SearchableItem (
+              desc->display_name.c_str (), [&, desc] (const char *) {
+                if (ImGui::MenuItem (desc->display_name.c_str ())) {
+                  desc->emplace_default (reg);
+                }
+              });
         }
       }
       ImSearch::Submit ();
@@ -510,15 +526,17 @@ entities_and_singletons_panel::draw_add_singleton_ui ()
 }
 
 entt::entity
-entities_and_singletons_panel::duplicate_entity (entt::entity original, entt::entity parent)
+entities_and_singletons_panel::duplicate_entity (entt::entity original,
+                                                 entt::entity parent)
 {
-  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
   if (scene == nullptr) {
     return entt::null;
-}
+  }
 
   // If no parent was specified, use the original's parent
-  if (parent == entt::null && scene->get_registry ().all_of<wsl::comp::hierarchy> (original)) {
+  if (parent == entt::null
+      && scene->get_registry ().all_of<wsl::comp::hierarchy> (original)) {
     parent = scene->get_registry ().get<wsl::comp::hierarchy> (original).parent;
   }
 
@@ -527,32 +545,35 @@ entities_and_singletons_panel::duplicate_entity (entt::entity original, entt::en
   // If we have a parent, we need to register ourselves as a sibling if needed
   if (parent != entt::null) {
     entt::registry &reg = scene->get_registry ();
-    wsl::comp::hierarchy  const&ph = reg.get<wsl::comp::hierarchy> (parent);
-    
+    wsl::comp::hierarchy const &ph = reg.get<wsl::comp::hierarchy> (parent);
+
     // Find the original in the children list to insert after it
     entt::entity curr = ph.first;
     if (curr == original) {
-        entt::entity const next_to_orig = reg.get<wsl::comp::hierarchy>(original).next;
-        reg.get<wsl::comp::hierarchy>(original).next = clone;
-        reg.get<wsl::comp::hierarchy>(clone).next = next_to_orig;
+      entt::entity const next_to_orig
+          = reg.get<wsl::comp::hierarchy> (original).next;
+      reg.get<wsl::comp::hierarchy> (original).next = clone;
+      reg.get<wsl::comp::hierarchy> (clone).next = next_to_orig;
     } else {
-        bool found = false;
-        while (curr != entt::null) {
-            wsl::comp::hierarchy  const&ch = reg.get<wsl::comp::hierarchy>(curr);
-            if (ch.next == original) {
-                entt::entity const next_to_orig = reg.get<wsl::comp::hierarchy>(original).next;
-                reg.get<wsl::comp::hierarchy>(original).next = clone;
-                reg.get<wsl::comp::hierarchy>(clone).next = next_to_orig;
-                found = true;
-                break;
-            }
-            if (ch.next == entt::null) { break;
-}
-            curr = ch.next;
+      bool found = false;
+      while (curr != entt::null) {
+        wsl::comp::hierarchy const &ch = reg.get<wsl::comp::hierarchy> (curr);
+        if (ch.next == original) {
+          entt::entity const next_to_orig
+              = reg.get<wsl::comp::hierarchy> (original).next;
+          reg.get<wsl::comp::hierarchy> (original).next = clone;
+          reg.get<wsl::comp::hierarchy> (clone).next = next_to_orig;
+          found = true;
+          break;
         }
-        if (!found && curr != entt::null) {
-            reg.get<wsl::comp::hierarchy>(curr).next = clone;
+        if (ch.next == entt::null) {
+          break;
         }
+        curr = ch.next;
+      }
+      if (!found && curr != entt::null) {
+        reg.get<wsl::comp::hierarchy> (curr).next = clone;
+      }
     }
   }
 
@@ -566,21 +587,23 @@ entities_and_singletons_panel::duplicate_entity (entt::entity original, entt::en
 void
 entities_and_singletons_panel::delete_entity (entt::entity entity)
 {
-  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
   entt::registry &reg = scene->get_registry ();
 
   if (!reg.valid (entity)) {
     return;
-}
+  }
 
   // Clear selection if it matches
-  if (m_selection.kind == selection_kind::entity && m_selection.selected_entity == entity) {
+  if (m_selection.kind == selection_kind::entity
+      && m_selection.selected_entity == entity) {
     m_selection.clear_all ();
   }
 
   // Recursively delete children
   if (reg.all_of<wsl::comp::hierarchy> (entity)) {
-    wsl::comp::hierarchy const h = reg.get<wsl::comp::hierarchy> (entity); // Copy to avoid invalidated ref
+    wsl::comp::hierarchy const h = reg.get<wsl::comp::hierarchy> (
+        entity); // Copy to avoid invalidated ref
     entt::entity child = h.first;
     while (child != entt::null) {
       entt::entity const next = reg.get<wsl::comp::hierarchy> (child).next;
@@ -613,31 +636,34 @@ entities_and_singletons_panel::delete_entity (entt::entity entity)
 void
 entities_and_singletons_panel::make_prefab (entt::entity entity)
 {
-  wsl::rsc::scene *active_scene = m_runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene *active_scene = m_runtime_ctx->scene_manager ().get_active ();
   if (active_scene == nullptr) {
     return;
-}
+  }
 
-  std::shared_ptr<wsl::rsc::project> const proj = m_runtime_ctx->resource_manager.current_project ();
+  std::shared_ptr<wsl::rsc::project> const proj
+      = m_runtime_ctx->resource_manager ().current_project ();
   if (!proj) {
     return;
-}
+  }
 
   std::string name = active_scene->get_entity_name (entity);
   if (name.empty ()) {
     name = "unnamed_prefab";
-}
+  }
 
   std::string filename_base = name;
   for (char &c : filename_base) {
     if (std::isspace (c) != 0) {
       c = '_';
-}
+    }
   }
 
   std::string const filename = filename_base + ".prefab";
-  std::filesystem::path const rel_path = std::filesystem::path ("scenes") / filename;
-  std::filesystem::path const abs_path = std::filesystem::path (proj->root_path) / rel_path;
+  std::filesystem::path const rel_path
+      = std::filesystem::path ("scenes") / filename;
+  std::filesystem::path const abs_path
+      = std::filesystem::path (proj->root_path) / rel_path;
 
   // Ensure directory exists
   std::filesystem::create_directories (abs_path.parent_path ());
@@ -647,48 +673,66 @@ entities_and_singletons_panel::make_prefab (entt::entity entity)
   temp_scene.copy_entity (*active_scene, entity, entt::null);
 
   // Save the temporary scene as a prefab
-  if (m_runtime_ctx->resource_manager.save_scene (temp_scene, abs_path.string (), true)) {
-    // Automatically register the new prefab in the resource manager using absolute path
-    // consistent with how scan_assets works.
-    wsl::rsc::scene_id prefab_id = m_runtime_ctx->resource_manager.register_scene (abs_path.string ());
-    m_runtime_ctx->resource_manager.load (prefab_id); // Start loading it so it's available for overrides
+  if (m_runtime_ctx->resource_manager ().save_scene (
+          temp_scene, abs_path.string (), true)) {
+    // Automatically register the new prefab in the resource manager using
+    // absolute path consistent with how scan_assets works.
+    wsl::rsc::scene_id prefab_id
+        = m_runtime_ctx->resource_manager ().register_scene (
+            abs_path.string ());
+    m_runtime_ctx->resource_manager ().load (
+        prefab_id); // Start loading it so it's available for overrides
 
     // Tag the original entity (and its children) as instances of this prefab
-    // We need to find the root in the temp_scene to get its original ID if we wanted to be precise,
-    // but here we just saved 'entity' as the root of the prefab.
-    // In the prefab scene, the root entity ID might be different from 'entity'.
-    // Actually, copy_entity returns the new entity.
-    
+    // We need to find the root in the temp_scene to get its original ID if we
+    // wanted to be precise, but here we just saved 'entity' as the root of the
+    // prefab. In the prefab scene, the root entity ID might be different from
+    // 'entity'. Actually, copy_entity returns the new entity.
+
     // Let's get the root entity from temp_scene (it should be the only root)
     entt::entity prefab_root = entt::null;
-    temp_scene.get_registry ().view<entt::entity> ().each ([&] (entt::entity e) {
-      if (temp_scene.get_registry ().all_of<wsl::comp::hierarchy> (e)) {
-        if (temp_scene.get_registry ().get<wsl::comp::hierarchy> (e).parent == entt::null) {
-          prefab_root = e;
-        }
-      } else {
-        prefab_root = e;
-      }
-    });
+    temp_scene.get_registry ().view<entt::entity> ().each (
+        [&] (entt::entity e) {
+          if (temp_scene.get_registry ().all_of<wsl::comp::hierarchy> (e)) {
+            if (temp_scene.get_registry ().get<wsl::comp::hierarchy> (e).parent
+                == entt::null) {
+              prefab_root = e;
+            }
+          } else {
+            prefab_root = e;
+          }
+        });
 
     if (prefab_root != entt::null) {
-        auto tag_recursive = [&] (auto self, entt::entity src, entt::entity p_src) -> void {
-            active_scene->get_registry ().emplace_or_replace<wsl::comp::prefab_instance> (src, prefab_id, p_src);
-            
-            if (active_scene->get_registry ().all_of<wsl::comp::hierarchy> (src) && 
-                temp_scene.get_registry ().all_of<wsl::comp::hierarchy> (p_src)) {
-                
-                entt::entity child = active_scene->get_registry ().get<wsl::comp::hierarchy> (src).first;
-                entt::entity p_child = temp_scene.get_registry ().get<wsl::comp::hierarchy> (p_src).first;
-                
-                while (child != entt::null && p_child != entt::null) {
-                    self (self, child, p_child);
-                    child = active_scene->get_registry ().get<wsl::comp::hierarchy> (child).next;
-                    p_child = temp_scene.get_registry ().get<wsl::comp::hierarchy> (p_child).next;
-                }
-            }
-        };
-        tag_recursive (tag_recursive, entity, prefab_root);
+      auto tag_recursive
+          = [&] (auto self, entt::entity src, entt::entity p_src) -> void {
+        active_scene->get_registry ()
+            .emplace_or_replace<wsl::comp::prefab_instance> (src, prefab_id,
+                                                             p_src);
+
+        if (active_scene->get_registry ().all_of<wsl::comp::hierarchy> (src)
+            && temp_scene.get_registry ().all_of<wsl::comp::hierarchy> (
+                p_src)) {
+
+          entt::entity child = active_scene->get_registry ()
+                                   .get<wsl::comp::hierarchy> (src)
+                                   .first;
+          entt::entity p_child = temp_scene.get_registry ()
+                                     .get<wsl::comp::hierarchy> (p_src)
+                                     .first;
+
+          while (child != entt::null && p_child != entt::null) {
+            self (self, child, p_child);
+            child = active_scene->get_registry ()
+                        .get<wsl::comp::hierarchy> (child)
+                        .next;
+            p_child = temp_scene.get_registry ()
+                          .get<wsl::comp::hierarchy> (p_child)
+                          .next;
+          }
+        }
+      };
+      tag_recursive (tag_recursive, entity, prefab_root);
     }
   }
 }

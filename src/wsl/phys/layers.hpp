@@ -7,7 +7,6 @@
 
 #include <cstdint>
 
-
 namespace wsl
 {
 
@@ -30,14 +29,15 @@ static constexpr layer_mask_t all_collision_layers
 
 // Legacy object layers are kept for non-rigidbody physics objects like
 // character controllers and area sensors.
-static constexpr JPH::ObjectLayer STATIC = 0;
+static constexpr JPH::ObjectLayer
+    STATIC // NOLINT(readability-identifier-naming)
+    = 0;
 static constexpr JPH::ObjectLayer dynamic = 1;
 static constexpr JPH::ObjectLayer character = 2;
 
 static constexpr JPH::ObjectLayer encoded_rigidbody_flag = 1U << 15;
 static constexpr uint16_t encoded_layer_bits = 3;
-static constexpr uint16_t encoded_layer_mask
-    = (1U << encoded_layer_bits) - 1U;
+static constexpr uint16_t encoded_layer_mask = (1U << encoded_layer_bits) - 1U;
 static constexpr uint16_t encoded_mask_shift = encoded_layer_bits;
 static constexpr uint16_t encoded_mask_bits = collision_layer_count;
 static constexpr uint16_t encoded_collision_mask
@@ -46,7 +46,7 @@ static constexpr uint16_t encoded_motion_shift
     = encoded_mask_shift + encoded_mask_bits;
 static constexpr uint16_t encoded_motion_mask = 0x3U << encoded_motion_shift;
 
-enum class motion_bucket : uint16_t
+enum class motion_bucket : std::uint8_t
 {
   static_body = 0,
   moving_body = 1,
@@ -114,9 +114,8 @@ get_collision_mask (JPH::ObjectLayer layer)
     return all_collision_layers;
   }
 
-  return clamp_layer_mask (
-      static_cast<layer_mask_t> ((layer & encoded_collision_mask)
-                                 >> encoded_mask_shift));
+  return clamp_layer_mask (static_cast<layer_mask_t> (
+      (layer & encoded_collision_mask) >> encoded_mask_shift));
 }
 
 constexpr JPH::ObjectLayer

@@ -133,7 +133,8 @@ build_cylinder_primitive (uint32_t radial_segments = 32)
   const float tau = std::numbers::pi_v<float> * 2.0F;
 
   for (uint32_t i = 0; i <= radial_segments; ++i) {
-    const float u = static_cast<float> (i) / radial_segments;
+    const float u
+        = static_cast<float> (i) / static_cast<float> (radial_segments);
     const float angle = u * tau;
     const float x = std::cos (angle) * radius;
     const float z = std::sin (angle) * radius;
@@ -158,7 +159,8 @@ build_cylinder_primitive (uint32_t radial_segments = 32)
                                         { 1.0F, 0.0F, 0.0F }));
 
   for (uint32_t i = 0; i <= radial_segments; ++i) {
-    const float u = static_cast<float> (i) / radial_segments;
+    const float u
+        = static_cast<float> (i) / static_cast<float> (radial_segments);
     const float angle = u * tau;
     const float x = std::cos (angle) * radius;
     const float z = std::sin (angle) * radius;
@@ -180,7 +182,8 @@ build_cylinder_primitive (uint32_t radial_segments = 32)
                                         { 1.0F, 0.0F, 0.0F }));
 
   for (uint32_t i = 0; i <= radial_segments; ++i) {
-    const float u = static_cast<float> (i) / radial_segments;
+    const float u
+        = static_cast<float> (i) / static_cast<float> (radial_segments);
     const float angle = u * tau;
     const float x = std::cos (angle) * radius;
     const float z = std::sin (angle) * radius;
@@ -212,13 +215,14 @@ build_uv_sphere_primitive (uint32_t radial_segments = 32, uint32_t rings = 16)
   const float tau = std::numbers::pi_v<float> * 2.0F;
 
   for (uint32_t ring = 0; ring <= rings; ++ring) {
-    const float v = static_cast<float> (ring) / rings;
+    const float v = static_cast<float> (ring) / static_cast<float> (rings);
     const float phi = v * std::numbers::pi_v<float>;
     const float y = std::cos (phi) * radius;
     const float ring_radius = std::sin (phi) * radius;
 
     for (uint32_t seg = 0; seg <= radial_segments; ++seg) {
-      const float u = static_cast<float> (seg) / radial_segments;
+      const float u
+          = static_cast<float> (seg) / static_cast<float> (radial_segments);
       const float theta = u * tau;
 
       const float x = std::cos (theta) * ring_radius;
@@ -396,7 +400,7 @@ gfx::model_3d::build_gpu_buffers (gfx::render_context *ctx)
 }
 
 void
-gfx::model_3d::destroy_gpu_buffers (gfx::render_context *ctx)
+gfx::model_3d::destroy_gpu_buffers (gfx::render_context * /*ctx*/)
 {
   m_vertex_buffer.reset ();
   m_index_buffer.reset ();

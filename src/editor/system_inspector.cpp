@@ -57,11 +57,12 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
   const float checkbox_w = ImGui::GetFrameHeight (); // good approximation
   entt::registry *registry = nullptr;
   if (runtime_ctx != nullptr) {
-    if (auto *scene = runtime_ctx->scene_manager.get_active ()) {
+    if (auto *scene = runtime_ctx->scene_manager ().get_active ()) {
       registry = &scene->get_registry ();
     }
   }
-  const bool is_playing = (runtime_ctx != nullptr) && runtime_ctx->is_running;
+  const bool is_playing
+      = (runtime_ctx != nullptr) && runtime_ctx->is_running ();
 
   for (wsl::sys::ecs_system *system : systems) {
     if (system == nullptr) {
@@ -110,8 +111,8 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
       // Editor activation (show/hide)
       bool const ed_active = system->is_editor_active ();
       wsl::rsc::image_id const ed_icon
-          = ed_active ? editor_ctx->icon_show : editor_ctx->icon_hide;
-      auto ed_handle = editor_ctx->editor_resources.get (ed_icon);
+          = ed_active ? editor_ctx->icon_show () : editor_ctx->icon_hide ();
+      auto ed_handle = editor_ctx->editor_resources ().get (ed_icon);
 
       ImGui::PushStyleColor (ImGuiCol_Button, ImVec4 (0, 0, 0, 0));
       if (ed_handle && (*ed_handle).texture.get ()) {
@@ -121,7 +122,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
           system->set_editor_active (!ed_active);
         }
       } else {
-        editor_ctx->editor_resources.load (ed_icon);
+        editor_ctx->editor_resources ().load (ed_icon);
         if (ImGui::Button (ed_active ? "S##ed" : "H##ed",
                            ImVec2 (checkbox_w, checkbox_w))) {
           system->set_editor_active (!ed_active);
@@ -150,7 +151,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
         ImGui::PushStyleColor (ImGuiCol_Button, ImVec4 (0, 0, 0, 0));
         if (rt_active) {
           auto rt_handle
-              = editor_ctx->editor_resources.get (editor_ctx->icon_play);
+              = editor_ctx->editor_resources ().get (editor_ctx->icon_play ());
           if (rt_handle && (*rt_handle).texture.get ()) {
             if (ImGui::ImageButton ("##rt_active_btn",
                                     (ImTextureID)(*rt_handle).texture.get (),
@@ -158,7 +159,7 @@ draw_system_list (const std::vector<wsl::sys::ecs_system *> &systems,
               system->set_init_on_startup (!rt_active, registry, is_playing);
             }
           } else {
-            editor_ctx->editor_resources.load (editor_ctx->icon_play);
+            editor_ctx->editor_resources ().load (editor_ctx->icon_play ());
             if (ImGui::Button (rt_active ? "P##rt" : " ##rt",
                                ImVec2 (checkbox_w, checkbox_w))) {
               system->set_init_on_startup (!rt_active, registry, is_playing);
@@ -197,7 +198,7 @@ system_inspector::draw ()
 
   ecs_selection *selection_ptr = m_selection;
 
-  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
   const bool has_scene = (scene != nullptr);
 
   ImGui::AlignTextToFramePadding ();
@@ -251,10 +252,10 @@ system_inspector::draw ()
 
     ImGui::BeginChild ("SystemsRegion", ImVec2 (0, 0), 1);
 
-    if (m_runtime_ctx->resource_manager.current_project ()) {
+    if (m_runtime_ctx->resource_manager ().current_project ()) {
       // Core systems
-      draw_system_list (m_runtime_ctx->core_systems->to_vec (), m_runtime_ctx,
-                        m_editor_ctx, selection_ptr, true);
+      draw_system_list (m_runtime_ctx->core_systems ()->to_vec (),
+                        m_runtime_ctx, m_editor_ctx, selection_ptr, true);
 
       // App systems
       if (has_scene) {
@@ -265,7 +266,7 @@ system_inspector::draw ()
       }
     } else {
       draw_centered_icon (
-          m_editor_ctx, m_editor_ctx->icon_system, 128.0F,
+          m_editor_ctx, m_editor_ctx->icon_system (), 128.0F,
           "Systems contain all the logic of the game,\nload a project to get "
           "the core systems of your project\nand code your own systems.");
     }
@@ -282,7 +283,7 @@ system_inspector::draw ()
 void
 system_inspector::draw_add_system_ui ()
 {
-  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
 
   if (ImGui::Button ("+##add_system", ImVec2 (ImGui::GetFrameHeight (),
                                               ImGui::GetFrameHeight ()))) {
@@ -295,7 +296,7 @@ system_inspector::draw_add_system_ui ()
       ImSearch::SearchBar ("Search Systems");
       ImGui::Separator ();
 
-      auto systems = m_runtime_ctx->system_factory_registry.get_systems ();
+      auto systems = m_runtime_ctx->system_factory_registry ().get_systems ();
       auto scene_systems = scene->get_systems ();
 
       for (const auto *desc : systems) {
@@ -317,7 +318,8 @@ system_inspector::draw_add_system_ui ()
         ImSearch::SearchableItem (
             desc->display_name.c_str (), [&, desc] (const char *) {
               if (ImGui::MenuItem (desc->display_name.c_str ())) {
-                if (auto sys = m_runtime_ctx->system_factory_registry.create (
+                if (auto sys
+                    = m_runtime_ctx->system_factory_registry ().create (
                         desc->display_name, *scene)) {
                   scene->add_system_instance (std::move (sys));
                 }

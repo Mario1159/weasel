@@ -204,7 +204,9 @@ init ()
   s_api = api;
   s_module = module;
 
-  int major = 0, minor = 0, patch = 0;
+  int major = 0;
+  int minor = 0;
+  int patch = 0;
   api->GetAPIVersion (&major, &minor, &patch);
   wsl::log::gfx ()->info (
       "RenderDoc: API {}.{}.{} loaded, capture support active", major, minor,

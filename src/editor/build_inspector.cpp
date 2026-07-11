@@ -57,7 +57,7 @@ build_inspector::draw ()
     return;
   }
 
-  auto project = m_runtime_ctx->resource_manager.current_project ();
+  auto project = m_runtime_ctx->resource_manager ().current_project ();
   const bool has_project = project != nullptr;
 
   auto active_jobs = job_manager::get ().get_active_jobs ();
@@ -202,33 +202,34 @@ build_inspector::draw ()
 void
 build_inspector::refresh_cmake_info ()
 {
-  auto project = m_runtime_ctx->resource_manager.current_project ();
+  auto project = m_runtime_ctx->resource_manager ().current_project ();
   if (!project) {
     return;
   }
 
   std::string const name = "Refreshing CMake Info";
-  auto future = std::async (
-      std::launch::async, [this, root_path = project->root_path] () {
-        std::string const build_dir = root_path + "/build";
+  auto future = std::async (std::launch::async, [this,
+                                                 root_path
+                                                 = project->root_path] () {
+    std::string const build_dir = root_path + "/build";
 
-        std::string extra_args;
-        if (!m_editor_ctx->wsl_library_path.empty ()) {
-          extra_args = "-DWeasel_DIR=" + m_editor_ctx->wsl_library_path;
-        }
+    std::string extra_args;
+    if (!m_editor_ctx->wsl_library_path ().empty ()) {
+      extra_args = "-DWeasel_DIR=" + m_editor_ctx->wsl_library_path ();
+    }
 
-        if (m_cmake_api.query_and_configure (root_path, build_dir, extra_args,
-                                             m_runtime_ctx->resource_manager)) {
-          this->m_project_info = m_cmake_api.parse_replies (build_dir);
-        }
-      });
+    if (m_cmake_api.query_and_configure (root_path, build_dir, extra_args,
+                                         m_runtime_ctx->resource_manager ())) {
+      this->m_project_info = m_cmake_api.parse_replies (build_dir);
+    }
+  });
   job_manager::get ().add_job (name, std::move (future));
 }
 
 void
 build_inspector::build_target (const std::string &target_name)
 {
-  auto project = m_runtime_ctx->resource_manager.current_project ();
+  auto project = m_runtime_ctx->resource_manager ().current_project ();
   if (!project) {
     return;
   }
@@ -249,42 +250,43 @@ build_inspector::build_target (const std::string &target_name)
 void
 build_inspector::configure_project (const std::string &kit_name)
 {
-  auto project = m_runtime_ctx->resource_manager.current_project ();
+  auto project = m_runtime_ctx->resource_manager ().current_project ();
   if (!project) {
     return;
   }
 
   std::string const name = "Configuring Project (" + kit_name + ")";
-  auto future = std::async (
-      std::launch::async, [this, root_path = project->root_path, kit_name] () {
-        std::string const build_dir = root_path + "/build";
+  auto future = std::async (std::launch::async, [this,
+                                                 root_path = project->root_path,
+                                                 kit_name] () {
+    std::string const build_dir = root_path + "/build";
 
-        // Use the kit name to set build type for now.
-        std::string extra_args;
-        if (!m_editor_ctx->wsl_library_path.empty ()) {
-          extra_args = "-DWeasel_DIR=" + m_editor_ctx->wsl_library_path;
-        }
+    // Use the kit name to set build type for now.
+    std::string extra_args;
+    if (!m_editor_ctx->wsl_library_path ().empty ()) {
+      extra_args = "-DWeasel_DIR=" + m_editor_ctx->wsl_library_path ();
+    }
 
-        if (kit_name != "Default") {
-          if (!extra_args.empty ()) {
-            extra_args += " ";
-          }
-          extra_args += "-DCMAKE_BUILD_TYPE=" + kit_name;
-        }
+    if (kit_name != "Default") {
+      if (!extra_args.empty ()) {
+        extra_args += " ";
+      }
+      extra_args += "-DCMAKE_BUILD_TYPE=" + kit_name;
+    }
 
-        wsl::log::editor ()->debug ("Configuring with kit {}", kit_name);
-        if (m_cmake_api.query_and_configure (root_path, build_dir, extra_args,
-                                             m_runtime_ctx->resource_manager)) {
-          this->m_project_info = m_cmake_api.parse_replies (build_dir);
-        }
-      });
+    wsl::log::editor ()->debug ("Configuring with kit {}", kit_name);
+    if (m_cmake_api.query_and_configure (root_path, build_dir, extra_args,
+                                         m_runtime_ctx->resource_manager ())) {
+      this->m_project_info = m_cmake_api.parse_replies (build_dir);
+    }
+  });
   job_manager::get ().add_job (name, std::move (future));
 }
 
 void
 build_inspector::run_test (const std::string &test_name)
 {
-  auto project = m_runtime_ctx->resource_manager.current_project ();
+  auto project = m_runtime_ctx->resource_manager ().current_project ();
   if (!project) {
     return;
   }

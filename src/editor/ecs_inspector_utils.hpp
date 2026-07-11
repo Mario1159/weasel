@@ -188,9 +188,9 @@ draw_centered_icon (wsl::comp::singl::editor_context *editor_ctx,
     return;
   }
 
-  auto handle = editor_ctx->editor_resources.get (icon_id);
+  auto handle = editor_ctx->editor_resources ().get (icon_id);
   if (!handle || ((*handle).texture.get () == nullptr)) {
-    editor_ctx->editor_resources.load (icon_id);
+    editor_ctx->editor_resources ().load (icon_id);
     return;
   }
 

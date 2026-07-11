@@ -46,7 +46,8 @@ public:
   serialize (Archive &archive)
   {
     skybox_instance_3d def{};
-    serialize_field_if_diff (archive, "cubemap_id", id.value, def.id.value);
+    serialize_field_if_diff (archive, "cubemap_id", id.value,
+                             def.id.value);
   }
 };
 

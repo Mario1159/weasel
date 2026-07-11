@@ -99,7 +99,7 @@ entity_snapshot_wrapper::load_json (cereal::JSONInputArchive &ar)
   }
 
   entt::entity next_after_last = entt::entity{ static_cast<entt::id_type> (
-      entt::to_integral (placeholder) + 1u) };
+      entt::to_integral (placeholder) + 1U) };
   storage.start_from (next_after_last);
   storage.free_list (free_list_count);
 }
@@ -109,7 +109,7 @@ void
 scene_snapshot_serializer::save_scene (Archive &archive) const
 {
   resource_manager::serialization_context::get ()
-      = &runtime_ctx->resource_manager;
+      = &runtime_ctx->resource_manager ();
 
   scene_header header;
   header.scene_name = scene_ref.get_name ();
@@ -125,10 +125,10 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
         static_cast<uint32_t> (entt::to_integral (entry.first)), entry.second);
   }
 
-  header.connections = runtime_ctx->signal_hub.get_all_connections ();
+  header.connections = runtime_ctx->signal_hub ().get_all_connections ();
 
   for (const resource_ref &ref : scene_ref.get_load_list ()) {
-    std::string path = runtime_ctx->resource_manager.get_path (ref);
+    std::string path = runtime_ctx->resource_manager ().get_path (ref);
     wsl::log::rsc ()->trace ("Serializing autoload type={} path={}",
                              (int)ref.type, path);
     header.autoload.push_back ({ ref.type, path });
@@ -149,23 +149,23 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
   }
 
   for (const reg::component_registry::descriptor *desc :
-       runtime_ctx->component_registry.get_world_components (
+       runtime_ctx->component_registry ().get_world_components (
            reg::world_component_order::type_id)) {
     if (!desc) {
       continue;
     }
 
     if constexpr (std::is_same_v<Archive, cereal::BinaryOutputArchive>) {
-      runtime_ctx->component_registry.save_world_component_binary (
+      runtime_ctx->component_registry ().save_world_component_binary (
           archive, registry, desc->type_id);
     } else if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      runtime_ctx->component_registry.save_world_component_json (
+      runtime_ctx->component_registry ().save_world_component_json (
           archive, registry, desc->type_id);
     }
   }
 
   for (const reg::singleton_registry::descriptor *desc :
-       runtime_ctx->singleton_registry.get_singleton_components (
+       runtime_ctx->singleton_registry ().get_singleton_components (
            reg::singleton_component_order::type_id)) {
     if (!desc || !desc->serialize_with_scene) {
       continue;
@@ -177,11 +177,11 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
 
     if (has && !header.is_prefab) {
       if constexpr (std::is_same_v<Archive, cereal::BinaryOutputArchive>) {
-        runtime_ctx->singleton_registry.save_singleton_binary (
+        runtime_ctx->singleton_registry ().save_singleton_binary (
             archive, registry, desc->type_id);
       } else if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-        runtime_ctx->singleton_registry.save_singleton_json (archive, registry,
-                                                             desc->type_id);
+        runtime_ctx->singleton_registry ().save_singleton_json (
+            archive, registry, desc->type_id);
       }
     }
   }
@@ -194,11 +194,11 @@ void
 scene_snapshot_serializer::load_scene (Archive &archive)
 {
   resource_manager::serialization_context::get ()
-      = &runtime_ctx->resource_manager;
+      = &runtime_ctx->resource_manager ();
 
   wsl::log::rsc ()->trace ("Loading scene");
   scene_ref.stop_and_clear ();
-  runtime_ctx->signal_hub.clear_connections ();
+  runtime_ctx->signal_hub ().clear_connections ();
 
   scene_header header;
   wsl::log::rsc ()->trace ("Loading header");
@@ -216,11 +216,12 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   wsl::log::rsc ()->debug (
       "Registered {} connectable handlers",
-      runtime_ctx->signal_hub.db
-          ? runtime_ctx->signal_hub.db->connectable_handlers.size ()
+      runtime_ctx->signal_hub ().db
+          ? runtime_ctx->signal_hub ().db->connectable_handlers.size ()
           : 0);
 
-  reg::system_factory_registry &factory = runtime_ctx->system_factory_registry;
+  reg::system_factory_registry &factory
+      = runtime_ctx->system_factory_registry ();
 
   for (const std::string &sys_name : header.systems) {
     if (std::unique_ptr<sys::ecs_system> sys
@@ -244,7 +245,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   wsl::log::rsc ()->trace ("Loading components");
   for (const reg::component_registry::descriptor *desc :
-       runtime_ctx->component_registry.get_world_components (
+       runtime_ctx->component_registry ().get_world_components (
            reg::world_component_order::type_id)) {
     if (!desc) {
       continue;
@@ -252,10 +253,10 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
     try {
       if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>) {
-        runtime_ctx->component_registry.load_world_component_binary (
+        runtime_ctx->component_registry ().load_world_component_binary (
             archive, loader, desc->type_id);
       } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        runtime_ctx->component_registry.load_world_component_json (
+        runtime_ctx->component_registry ().load_world_component_json (
             archive, scene_ref.get_registry (), desc->type_id);
       }
     } catch (const std::exception &) {
@@ -270,7 +271,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   wsl::log::rsc ()->trace ("Loading singletons");
   entt::registry &scene_registry = scene_ref.get_registry ();
   for (const reg::singleton_registry::descriptor *desc :
-       runtime_ctx->singleton_registry.get_singleton_components (
+       runtime_ctx->singleton_registry ().get_singleton_components (
            reg::singleton_component_order::type_id)) {
     if (!desc || !desc->serialize_with_scene) {
       continue;
@@ -283,11 +284,11 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
       if (has && !header.is_prefab) {
         if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>) {
-          runtime_ctx->singleton_registry.load_singleton_binary (
+          runtime_ctx->singleton_registry ().load_singleton_binary (
               archive, scene_registry, desc->type_id);
         } else if constexpr (std::is_same_v<Archive,
                                             cereal::JSONInputArchive>) {
-          runtime_ctx->singleton_registry.load_singleton_json (
+          runtime_ctx->singleton_registry ().load_singleton_json (
               archive, scene_registry, desc->type_id);
         }
       }
@@ -310,10 +311,10 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   wsl::log::rsc ()->trace ("Restoring {} connections",
                            header.connections.size ());
-  // runtime_ctx->signal_hub.clear_connections (); // DON'T CLEAR ALL, additive
-  // or handled by scene replacement
+  // runtime_ctx->signal_hub().clear_connections (); // DON'T CLEAR ALL,
+  // additive or handled by scene replacement
   for (const auto &conn : header.connections) {
-    if (!runtime_ctx->signal_hub.connect (
+    if (!runtime_ctx->signal_hub ().connect (
             conn.signal_type_id, conn.system_type_id, conn.handler_name,
             conn.source_entity, conn.target_entity,
             &scene_ref.get_registry ())) {
@@ -375,7 +376,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
       if (auto *wt = scene_registry.try_get<comp::world_transform> (e); wt) {
-        glm::mat4 const &wm = wt->value;
+        glm::mat4 const &wm = wt->value ();
         world_pos = glm::vec3 (wm[3]);
         world_rot = glm::quat_cast (wm);
         scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
@@ -384,7 +385,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       } else if (auto *t = scene_registry.try_get<comp::transform> (e); t) {
         world_pos = (glm::vec3)t->position;
         world_rot = (glm::quat)t->rotation;
-        scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
+        scale = glm::vec3 (t->scale.x (), t->scale.y (), t->scale.z ());
       }
 
       // Apply rigid_body offset to get the final body world position
@@ -406,7 +407,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       comp::world_transform &wt = view.get<comp::world_transform> (e);
 
       wsl::log::rsc ()->trace ("Creating character for entity {}", (uint32_t)e);
-      glm::vec3 const pos = glm::vec3 (static_cast<glm::mat4> (wt.value)[3]);
+      glm::vec3 const pos = glm::vec3 (static_cast<glm::mat4> (wt.value ())[3]);
       cb.recreate (engine, (math::vec3f)pos);
     }
   }
@@ -424,7 +425,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
       glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
       if (auto *wt = scene_registry.try_get<comp::world_transform> (e); wt) {
-        glm::mat4 const &wm = wt->value;
+        glm::mat4 const &wm = wt->value ();
         world_pos = glm::vec3 (wm[3]);
         world_rot = glm::quat_cast (wm);
         scale = glm::vec3 (glm::length (glm::vec3 (wm[0])),
@@ -433,7 +434,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       } else if (auto *t = scene_registry.try_get<comp::transform> (e); t) {
         world_pos = (glm::vec3)t->position;
         world_rot = (glm::quat)t->rotation;
-        scale = glm::vec3 (t->scale.x, t->scale.y, t->scale.z);
+        scale = glm::vec3 (t->scale.x (), t->scale.y (), t->scale.z ());
       }
 
       // Apply area offset

@@ -81,17 +81,18 @@ editor::root::set_console_command_handler (console::command_handler_t handler)
 }
 
 void
-editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
+editor::root::draw (entt::registry &registry,
+                    wsl::gfx::render_window &render_window)
 {
   wsl::comp::singl::runtime_context &runtime_ctx = *this->m_runtime_ctx;
-  if (m_editor_ctx->game_fullscreen) {
+  if (m_editor_ctx->game_fullscreen ()) {
     return;
   }
 
   if (m_selection.kind == selection_kind::entity) {
-    m_editor_ctx->selected_entity = m_selection.selected_entity;
+    m_editor_ctx->selected_entity (m_selection.selected_entity);
   } else {
-    m_editor_ctx->selected_entity = entt::null;
+    m_editor_ctx->selected_entity (entt::null);
   }
 
   draw_dockspace ();
@@ -154,9 +155,9 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   if (m_show_game_view) {
     m_game_view_window.set_render_texture (
-        this->m_runtime_ctx->window.present_tex);
+        this->m_runtime_ctx->window ().present_tex ());
     m_game_view_window.set_selection (&m_selection);
-    m_game_view_window.draw (registry, rw);
+    m_game_view_window.draw (registry, render_window);
   }
 
   // feed mono font and background color from renderer_imgui
@@ -170,7 +171,7 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
 
   if (m_show_file_list) {
     m_file_list_window.draw (
-        "Files", &m_show_file_list, &runtime_ctx.resource_manager,
+        "Files", &m_show_file_list, &runtime_ctx.resource_manager (),
         &m_text_editor_window, &m_show_text_editor, this->m_runtime_ctx);
   }
 
@@ -181,8 +182,8 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
   if (!m_waiting_for_file_dialog && m_dialog_result.has_value ()) {
     if (m_current_dialog_mode == dialog_mode::open_project) {
       m_selection = {};
-      runtime_ctx.editor_ctx->selected_entity = entt::null;
-      runtime_ctx.editor_ctx->pending_project_load = *m_dialog_result;
+      runtime_ctx.editor_ctx ()->selected_entity (entt::null);
+      runtime_ctx.editor_ctx ()->pending_project_load (*m_dialog_result);
       update_recent_projects (*m_dialog_result);
       m_show_welcome = false;
       wsl::log::editor ()->debug ("Editor: queued load_project for {}",
@@ -191,14 +192,15 @@ editor::root::draw (entt::registry &registry, wsl::gfx::render_window &rw)
       std::snprintf (m_new_project_folder, sizeof (m_new_project_folder), "%s",
                      m_dialog_result->c_str ());
     } else if (m_current_dialog_mode == dialog_mode::load_scene) {
-      m_runtime_ctx->resource_manager.import_scene (*m_dialog_result);
+      m_runtime_ctx->resource_manager ().import_scene (*m_dialog_result);
     } else if (m_current_dialog_mode == dialog_mode::save_scene) {
-      wsl::rsc::scene const *scene = m_runtime_ctx->scene_manager.get_active ();
+      wsl::rsc::scene const *scene
+          = m_runtime_ctx->scene_manager ().get_active ();
       if (scene != nullptr) {
-        std::filesystem::path const p (*m_dialog_result);
-        bool const is_prefab = p.extension () == ".prefab";
-        m_runtime_ctx->resource_manager.save_scene (*scene, *m_dialog_result,
-                                                    is_prefab);
+        std::filesystem::path const path_var (*m_dialog_result);
+        bool const is_prefab = path_var.extension () == ".prefab";
+        m_runtime_ctx->resource_manager ().save_scene (*scene, *m_dialog_result,
+                                                       is_prefab);
       }
     }
 
@@ -375,7 +377,7 @@ editor::root::draw_main_menu ()
         m_waiting_for_file_dialog = true;
         m_dialog_result.reset ();
         SDL_ShowOpenFileDialog (file_dialog_callback, this,
-                                m_runtime_ctx->window.handler, filters,
+                                m_runtime_ctx->window ().handler (), filters,
                                 SDL_arraysize (filters), nullptr, false);
       }
     }
@@ -388,19 +390,19 @@ editor::root::draw_main_menu ()
         m_waiting_for_file_dialog = true;
         m_dialog_result.reset ();
         SDL_ShowSaveFileDialog (file_dialog_callback, this,
-                                m_runtime_ctx->window.handler, filters,
+                                m_runtime_ctx->window ().handler (), filters,
                                 SDL_arraysize (filters), nullptr);
       }
     }
     if (ImGui::MenuItem ("Reload Scene")) {
-      auto *active_scene = m_runtime_ctx->scene_manager.get_active ();
+      auto *active_scene = m_runtime_ctx->scene_manager ().get_active ();
       if (active_scene != nullptr) {
         for (const auto &info :
-             m_runtime_ctx->resource_manager.list_scenes ()) {
+             m_runtime_ctx->resource_manager ().list_scenes ()) {
           if (!info.is_prefab && info.name == active_scene->get_name ()) {
-            wsl::rsc::scene_id sid{ info.id };
-            m_runtime_ctx->resource_manager.unload (sid);
-            m_runtime_ctx->resource_manager.load (sid);
+            wsl::rsc::scene_id const sid{ info.id };
+            m_runtime_ctx->resource_manager ().unload (sid);
+            m_runtime_ctx->resource_manager ().load (sid);
             break;
           }
         }
@@ -521,7 +523,7 @@ editor::root::draw_new_project_popup ()
 
       m_selection = {};
       m_editor_ctx->reset_editor_camera ();
-      m_runtime_ctx->resource_manager.new_project (proj);
+      m_runtime_ctx->resource_manager ().new_project (proj);
 
       const std::string project_file
           = (std::filesystem::path (proj.root_path) / "wslpro.json").string ();
@@ -555,12 +557,13 @@ editor::root::open_project_file ()
   m_waiting_for_file_dialog = true;
   m_dialog_result.reset ();
 
-  SDL_ShowOpenFileDialog (file_dialog_callback,          // callback
-                          this,                          // userdata
-                          m_runtime_ctx->window.handler, // your SDL_Window*
-                          filters, SDL_arraysize (filters),
-                          nullptr, // default location
-                          false    // allow_many
+  SDL_ShowOpenFileDialog (
+      file_dialog_callback,                // callback
+      this,                                // userdata
+      m_runtime_ctx->window ().handler (), // your SDL_Window*
+      filters, SDL_arraysize (filters),
+      nullptr, // default location
+      false    // allow_many
   );
 }
 
@@ -578,7 +581,7 @@ editor::root::save_project_file ()
   m_dialog_result.reset ();
 
   SDL_ShowSaveFileDialog (file_dialog_callback, this,
-                          m_runtime_ctx->window.handler, filters,
+                          m_runtime_ctx->window ().handler (), filters,
                           SDL_arraysize (filters), nullptr);
 }
 
@@ -615,34 +618,33 @@ editor::root::open_project_folder_dialog ()
   m_dialog_result.reset ();
 
   SDL_ShowOpenFolderDialog (file_dialog_callback, this,
-                            m_runtime_ctx->window.handler, nullptr, false);
+                            m_runtime_ctx->window ().handler (), nullptr,
+                            false);
 }
 
 void
 editor::root::apply_preferences_style ()
 {
   // Apply font
-  ImGuiIO &io = ImGui::GetIO ();
+  ImGuiIO &imgui_io = ImGui::GetIO ();
 
-  // Your load order is: regular, light, medium, semibold, bold, mono
-  // So indices 0..4 are the UI fonts, and mono is 5.
-  if ((io.Fonts != nullptr) && io.Fonts->Fonts.Size >= 5) {
+  if ((imgui_io.Fonts != nullptr) && imgui_io.Fonts->Fonts.Size >= 5) {
     int idx = m_pref_font_index;
     idx = std::max (0, std::min (4, idx));
-    io.FontDefault = io.Fonts->Fonts[idx];
+    imgui_io.FontDefault = imgui_io.Fonts->Fonts[idx];
   }
 
-  io.FontGlobalScale = m_pref_font_scale;
+  imgui_io.FontGlobalScale = m_pref_font_scale;
 
   // Apply theme -> derived style colors
-  wsl::gfx::editor_theme t{};
-  t.primary = m_pref_primary;
-  t.secondary = m_pref_secondary;
-  t.background1 = m_pref_bg1;
-  t.background2 = m_pref_bg2;
-  t.foreground = m_pref_fg;
+  wsl::gfx::editor_theme theme{};
+  theme.primary = m_pref_primary;
+  theme.secondary = m_pref_secondary;
+  theme.background1 = m_pref_bg1;
+  theme.background2 = m_pref_bg2;
+  theme.foreground = m_pref_fg;
 
-  m_editor_ctx->get_imgui_renderer ()->apply_editor_style (t);
+  m_editor_ctx->get_imgui_renderer ()->apply_editor_style (theme);
 }
 
 void
@@ -651,8 +653,8 @@ editor::root::draw_preferences_popup ()
   bool open = true; // controls the X button on the modal
 
   // Optional: center it
-  ImGuiViewport const *vp = ImGui::GetMainViewport ();
-  ImGui::SetNextWindowPos (vp->GetCenter (), ImGuiCond_Appearing,
+  ImGuiViewport const *viewport_ptr = ImGui::GetMainViewport ();
+  ImGui::SetNextWindowPos (viewport_ptr->GetCenter (), ImGuiCond_Appearing,
                            ImVec2 (0.5F, 0.5F));
 
   if (ImGui::BeginPopupModal ("Preferences", &open,
@@ -660,7 +662,7 @@ editor::root::draw_preferences_popup ()
     if (ImGui::BeginTabBar ("prefs_tabs")) {
 
       if (ImGui::BeginTabItem ("Style")) {
-        const char *font_items[]
+        const char *const font_items[]
             = { "Regular", "Light", "Medium", "Semibold", "Bold" };
         ImGui::TextUnformatted ("Font");
         ImGui::SetNextItemWidth (220.0F);
@@ -730,8 +732,8 @@ void
 editor::root::draw_build_settings_popup ()
 {
   bool open = true;
-  ImGuiViewport const *vp = ImGui::GetMainViewport ();
-  ImGui::SetNextWindowPos (vp->GetCenter (), ImGuiCond_Appearing,
+  ImGuiViewport const *viewport_ptr = ImGui::GetMainViewport ();
+  ImGui::SetNextWindowPos (viewport_ptr->GetCenter (), ImGuiCond_Appearing,
                            ImVec2 (0.5F, 0.5F));
 
   if (ImGui::BeginPopupModal ("Build Settings", &open,
@@ -741,9 +743,10 @@ editor::root::draw_build_settings_popup ()
     ImGui::SetNextItemWidth (400.0F);
 
     char buf[512];
-    std::strncpy (buf, m_editor_ctx->wsl_library_path.c_str (), sizeof (buf));
+    std::strncpy (buf, m_editor_ctx->wsl_library_path ().c_str (),
+                  sizeof (buf));
     if (ImGui::InputText ("##wsl_path", buf, sizeof (buf))) {
-      m_editor_ctx->wsl_library_path = buf;
+      m_editor_ctx->wsl_library_path (buf);
     }
 
     ImGui::TextUnformatted ("WSL Resource Path");
@@ -752,10 +755,10 @@ editor::root::draw_build_settings_popup ()
     char res_buf[512];
     std::strncpy (
         res_buf,
-        m_runtime_ctx->resource_manager.get_engine_resource_path ().c_str (),
+        m_runtime_ctx->resource_manager ().get_engine_resource_path ().c_str (),
         sizeof (res_buf));
     if (ImGui::InputText ("##wsl_res_path", res_buf, sizeof (res_buf))) {
-      m_runtime_ctx->resource_manager.set_engine_resource_path (res_buf);
+      m_runtime_ctx->resource_manager ().set_engine_resource_path (res_buf);
     }
 
     ImGui::Spacing ();
@@ -780,14 +783,14 @@ void
 editor::root::draw_project_settings_popup ()
 {
   bool open = true;
-  ImGuiViewport const *vp = ImGui::GetMainViewport ();
-  ImGui::SetNextWindowPos (vp->GetCenter (), ImGuiCond_Appearing,
+  ImGuiViewport const *viewport_ptr = ImGui::GetMainViewport ();
+  ImGui::SetNextWindowPos (viewport_ptr->GetCenter (), ImGuiCond_Appearing,
                            ImVec2 (0.5F, 0.5F));
 
   if (ImGui::BeginPopupModal ("Project Settings", &open,
                               ImGuiWindowFlags_AlwaysAutoResize)) {
 
-    auto proj = m_runtime_ctx->resource_manager.current_project ();
+    auto proj = m_runtime_ctx->resource_manager ().current_project ();
     if (!proj) {
       ImGui::TextDisabled ("No project loaded.");
       ImGui::Spacing ();
@@ -821,13 +824,14 @@ editor::root::draw_project_settings_popup ()
     ImGui::TextUnformatted ("Default Scene");
     ImGui::SetNextItemWidth (400.0F);
 
-    auto scenes = m_runtime_ctx->resource_manager.list_scenes ();
+    auto scenes = m_runtime_ctx->resource_manager ().list_scenes ();
     std::vector<std::string> scene_paths;
     scene_paths.reserve (scenes.size ());
     int current_scene_idx = -1;
     for (const auto &rec : scenes) {
-      if (rec.is_prefab)
+      if (rec.is_prefab) {
         continue;
+      }
       scene_paths.push_back (rec.path);
       if (rec.path == proj->default_scene_path) {
         current_scene_idx = static_cast<int> (scene_paths.size ()) - 1;
@@ -927,11 +931,12 @@ editor::root::draw_welcome_tab ()
 {
   if (ImGui::Begin ("Welcome", &m_show_welcome)) {
     // Draw background image anchored to bottom-right
-    if (m_editor_ctx->icon_welcome_bg.value != entt::null) {
-      if (m_editor_ctx->editor_resources.state (m_editor_ctx->icon_welcome_bg)
+    if (m_editor_ctx->icon_welcome_bg ().value != entt::null) {
+      if (m_editor_ctx->editor_resources ().state (
+              m_editor_ctx->icon_welcome_bg ())
           == wsl::rsc::image_state::loaded) {
-        auto handle = m_editor_ctx->editor_resources.get (
-            m_editor_ctx->icon_welcome_bg);
+        auto handle = m_editor_ctx->editor_resources ().get (
+            m_editor_ctx->icon_welcome_bg ());
         if (handle) {
           ImVec2 const window_pos = ImGui::GetWindowPos ();
           ImVec2 const window_size = ImGui::GetWindowSize ();
@@ -1027,8 +1032,8 @@ editor::root::draw_welcome_tab ()
                 label.c_str (), false, 0,
                 ImVec2 (ImGui::GetContentRegionAvail ().x - 25, 0))) {
           m_selection = {};
-          m_runtime_ctx->editor_ctx->selected_entity = entt::null;
-          m_runtime_ctx->editor_ctx->pending_project_load = path;
+          m_runtime_ctx->editor_ctx ()->selected_entity (entt::null);
+          m_runtime_ctx->editor_ctx ()->pending_project_load (path);
           update_recent_projects (path);
           m_show_welcome = false;
         }
@@ -1166,14 +1171,14 @@ editor::root::draw_status_bar ()
   std::string status_text;
   if (!active_jobs.empty ()) {
     status_text = active_jobs.front ().name;
-  } else if (m_editor_ctx->is_loading_project) {
+  } else if (m_editor_ctx->is_loading_project ()) {
     status_text = "Loading project...";
   } else {
     auto last_info = job_manager::get ().get_last_finished_info ();
     if (last_info) {
       status_text = *last_info;
     } else {
-      auto *active_scene = m_runtime_ctx->scene_manager.get_active ();
+      auto *active_scene = m_runtime_ctx->scene_manager ().get_active ();
       if (active_scene != nullptr) {
         status_text = active_scene->get_name ();
       } else {

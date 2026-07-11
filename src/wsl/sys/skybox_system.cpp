@@ -30,7 +30,7 @@ skybox_system::on_render_record_draw_cmd (entt::registry &registry)
     // If procedural skybox is active, ensure it is baked with current sun
     // direction
     if (rendering->skybox.value == rsc::builtin_skybox_procedural) {
-      auto handle = runtime_ctx.resource_manager.get (rendering->skybox);
+      auto handle = runtime_ctx.resource_manager ().get (rendering->skybox);
       if (handle) {
         renderer->bake_procedural_skybox (*handle,
                                           rendering->get_sun_direction ());

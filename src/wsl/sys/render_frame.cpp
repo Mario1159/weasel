@@ -43,7 +43,7 @@ sys::build_render_frame (entt::registry &registry,
   ZoneScoped;
   out.reset ();
 
-  auto *scene = runtime_ctx.scene_manager.get_active ();
+  auto *scene = runtime_ctx.scene_manager ().get_active ();
   if (scene == nullptr) {
     return false;
   }
@@ -55,25 +55,25 @@ sys::build_render_frame (entt::registry &registry,
   // Main viewport (target_viewport == entt::null) in editor mode uses the
   // editor's camera selection. Subviewports always use their own camera
   // fields so that offscreen rendering is independent of the toolbar.
-  if (runtime_ctx.editor_ctx != nullptr && target_viewport == entt::null) {
-    auto &editor_ctx = *runtime_ctx.editor_ctx;
+  if (runtime_ctx.editor_ctx () != nullptr && target_viewport == entt::null) {
+    auto &editor_ctx = *runtime_ctx.editor_ctx ();
     wsl::comp::singl::editor_context::resolved_camera resolved_camera;
     if (!editor_ctx.resolve_game_view_camera (registry, scene,
                                               resolved_camera)) {
       return false;
     }
 
-    out.view.valid = resolved_camera.valid;
-    out.view.aspect_ratio = resolved_camera.aspect_ratio;
-    out.view.world_position = resolved_camera.world_pos;
-    out.view.view = resolved_camera.view;
-    out.view.proj = resolved_camera.proj;
-    out.view.view_proj = resolved_camera.vp;
+    out.view.valid = resolved_camera.valid ();
+    out.view.aspect_ratio = resolved_camera.aspect_ratio ();
+    out.view.world_position = resolved_camera.world_pos ();
+    out.view.view = resolved_camera.view ();
+    out.view.proj = resolved_camera.proj ();
+    out.view.view_proj = resolved_camera.vp ();
 
-    effective_camera = resolved_camera.entity;
+    effective_camera = resolved_camera.entity ();
 
     // Determine 2D mode from editor camera selection
-    if (!runtime_ctx.is_running) {
+    if (!runtime_ctx.is_running ()) {
       auto mode = editor_ctx.resolve_game_view_mode (registry, scene);
       out.is_2d_view = (mode
                             == wsl::comp::singl::editor_context::
@@ -86,13 +86,13 @@ sys::build_render_frame (entt::registry &registry,
     // Determine the camera to use for this viewport
     uint32_t w;
     uint32_t h;
-    runtime_ctx.window.get_size (w, h);
+    runtime_ctx.window ().get_size (w, h);
     float aspect = (w > 0 && h > 0) ? (float)w / (float)h : 1.0F;
 
     if (target_viewport != entt::null) {
       if (auto *sv = registry.try_get<comp::subviewport> (target_viewport)) {
-        w = static_cast<uint32_t> (sv->virtual_size.x);
-        h = static_cast<uint32_t> (sv->virtual_size.y);
+        w = static_cast<uint32_t> (sv->virtual_size.x ());
+        h = static_cast<uint32_t> (sv->virtual_size.y ());
 
         // For 3D subviewport quads, the camera aspect ratio must match
         // world_quad_size so the offscreen texture fills the quad without
@@ -101,8 +101,8 @@ sys::build_render_frame (entt::registry &registry,
         bool const is_3d_quad
             = registry.all_of<comp::transform, comp::world_transform> (
                 target_viewport);
-        if (is_3d_quad && sv->world_quad_size.y > 0.0F) {
-          aspect = sv->world_quad_size.x / sv->world_quad_size.y;
+        if (is_3d_quad && sv->world_quad_size.y () > 0.0F) {
+          aspect = sv->world_quad_size.x () / sv->world_quad_size.y ();
         } else {
           aspect = (h > 0) ? (float)w / (float)h : 1.0F;
         }
@@ -115,23 +115,23 @@ sys::build_render_frame (entt::registry &registry,
     // when the editor is using "Default Runtime Camera" or when there is no
     // editor context.
     bool use_editor_camera = false;
-    if (runtime_ctx.editor_ctx != nullptr && !runtime_ctx.is_running
+    if (runtime_ctx.editor_ctx () != nullptr && !runtime_ctx.is_running ()
         && target_viewport != entt::null
-        && runtime_ctx.editor_ctx->game_view_selected_viewport
+        && runtime_ctx.editor_ctx ()->game_view_selected_viewport ()
                == target_viewport) {
-      auto &editor_ctx = *runtime_ctx.editor_ctx;
+      auto &editor_ctx = *runtime_ctx.editor_ctx ();
       wsl::comp::singl::editor_context::resolved_camera resolved_camera;
       if (editor_ctx.resolve_game_view_camera (registry, scene,
                                                resolved_camera)) {
-        if (resolved_camera.valid) {
+        if (resolved_camera.valid ()) {
           use_editor_camera = true;
           out.view.valid = true;
           out.view.aspect_ratio = aspect;
-          out.view.world_position = resolved_camera.world_pos;
-          out.view.view = resolved_camera.view;
-          out.view.proj = resolved_camera.proj;
-          out.view.view_proj = resolved_camera.vp;
-          effective_camera = resolved_camera.entity;
+          out.view.world_position = resolved_camera.world_pos ();
+          out.view.view = resolved_camera.view ();
+          out.view.proj = resolved_camera.proj ();
+          out.view.view_proj = resolved_camera.vp ();
+          effective_camera = resolved_camera.entity ();
 
           // Determine 2D mode from editor camera selection
           auto mode = editor_ctx.resolve_game_view_mode (registry, scene);
@@ -171,7 +171,7 @@ sys::build_render_frame (entt::registry &registry,
         const auto &cam = registry.get<comp::camera> (effective_camera);
         const comp::world_transform &wt
             = registry.get<comp::world_transform> (effective_camera);
-        glm::mat4 const wtm = wt.value;
+        glm::mat4 const wtm = wt.value ();
 
         // When the camera lives inside a subviewport its world_transform
         // inherits the parent subviewport's scale (world_quad_size).  Scale
@@ -189,7 +189,9 @@ sys::build_render_frame (entt::registry &registry,
           // distorts the skybox and frustum.  glm::decompose extracts the
           // pure rotation (quaternion) and translation without scale,
           // skew or perspective — numerically stable and exact.
-          glm::vec3 scale, skew, translation;
+          glm::vec3 scale;
+          glm::vec3 skew;
+          glm::vec3 translation;
           glm::vec4 perspective;
           glm::quat rotation;
           glm::decompose (wtm, scale, rotation, translation, skew, perspective);
@@ -201,15 +203,16 @@ sys::build_render_frame (entt::registry &registry,
         out.view.aspect_ratio = aspect;
         out.view.world_position = glm::vec3 (cam_transform[3]);
         out.view.view = glm::inverse (cam_transform);
-        out.view.proj = glm::perspective (glm::radians (cam.fov), aspect,
-                                          cam.near, cam.far);
+        out.view.proj = glm::perspective (glm::radians (cam.fov ()), aspect,
+                                          cam.near (), cam.far ());
       } else {
         const auto &cam2d = registry.get<comp::camera_2d> (effective_camera);
         const auto &t2d = registry.get<comp::transform_2d> (effective_camera);
 
         out.view.valid = true;
         out.view.aspect_ratio = aspect;
-        out.view.world_position = glm::vec3 (t2d.position.x, t2d.position.y, 0);
+        out.view.world_position
+            = glm::vec3 (t2d.position.x (), t2d.position.y (), 0);
         // World (0, 0) lands at the top-left of the game view in
         // both the 2D and 3D paths. The projection is
         // `ortho(0, w, h, 0, -1, 1)` — Y=0 is the top in
@@ -223,8 +226,8 @@ sys::build_render_frame (entt::registry &registry,
         view_mat
             = glm::scale (view_mat, glm::vec3 (cam2d.zoom, cam2d.zoom, 1.0F));
         view_mat = glm::translate (
-            view_mat, glm::vec3 (-t2d.position.x * cam2d.zoom,
-                                 -t2d.position.y * cam2d.zoom, 0.0F));
+            view_mat, glm::vec3 (-t2d.position.x () * cam2d.zoom,
+                                 -t2d.position.y () * cam2d.zoom, 0.0F));
         out.view.view = view_mat;
         out.view.proj
             = glm::ortho (0.0F, (float)w, (float)h, 0.0F, -1.0F, 1.0F);
@@ -254,8 +257,8 @@ sys::build_render_frame (entt::registry &registry,
   // Only collect 3D draw commands for non-2D views
   if (!out.is_2d_view) {
     const entt::entity selected_entity
-        = ((runtime_ctx.editor_ctx != nullptr) && !runtime_ctx.is_running)
-              ? runtime_ctx.editor_ctx->selected_entity
+        = ((runtime_ctx.editor_ctx () != nullptr) && !runtime_ctx.is_running ())
+              ? runtime_ctx.editor_ctx ()->selected_entity ()
               : entt::null;
 
     auto draw_view
@@ -274,7 +277,7 @@ sys::build_render_frame (entt::registry &registry,
       const comp::model_instance_3d &instance
           = draw_view.get<comp::model_instance_3d> (entity);
 
-      auto model = runtime_ctx.resource_manager.get (instance.id);
+      auto model = runtime_ctx.resource_manager ().get (instance.id);
       if (!model) {
         continue;
       }
@@ -282,7 +285,7 @@ sys::build_render_frame (entt::registry &registry,
       out.draw_commands.push_back (gfx::scene_renderer::draw_command{
           .model = &(*model),
           .scene_index = instance.scene_index,
-          .transform = static_cast<glm::mat4> (world.value),
+          .transform = static_cast<glm::mat4> (world.value ()),
           .entity = entity,
           .draw_outline = (entity == selected_entity),
           .mip_lod_bias = instance.mip_lod_bias,
@@ -294,7 +297,7 @@ sys::build_render_frame (entt::registry &registry,
 
     if (ctx.contains<comp::singl::rendering_manager> ()) {
       const auto &rendering = ctx.get<comp::singl::rendering_manager> ();
-      auto cubemap = runtime_ctx.resource_manager.get (rendering.skybox);
+      auto cubemap = runtime_ctx.resource_manager ().get (rendering.skybox);
       if (cubemap) {
         out.environment = &(*cubemap);
       }
@@ -322,13 +325,13 @@ sys::build_camera_view_state (entt::registry &registry,
       && registry.all_of<comp::camera, comp::world_transform> (camera_entity)) {
     const auto &cam = registry.get<comp::camera> (camera_entity);
     const auto &wt = registry.get<comp::world_transform> (camera_entity);
-    glm::mat4 const wtm = wt.value;
+    glm::mat4 const wtm = wt.value ();
 
     out.valid = true;
     out.world_position = glm::vec3 (wtm[3]);
     out.view = glm::inverse (wtm);
-    out.proj = glm::perspective (glm::radians (cam.fov), out.aspect_ratio,
-                                 cam.near, cam.far);
+    out.proj = glm::perspective (glm::radians (cam.fov ()), out.aspect_ratio,
+                                 cam.near (), cam.far ());
     out.view_proj = out.proj * out.view;
   } else if (camera_entity != entt::null
              && registry.all_of<comp::camera_2d, comp::transform_2d> (
@@ -340,15 +343,15 @@ sys::build_camera_view_state (entt::registry &registry,
     float const vp_h = static_cast<float> (window_height);
 
     out.valid = true;
-    out.world_position = glm::vec3 (t2d.position.x, t2d.position.y, 0.0F);
+    out.world_position = glm::vec3 (t2d.position.x (), t2d.position.y (), 0.0F);
     // Top-left convention: the camera's `position` is the top-left
     // of the visible area, matching the 3D-view top-left
     // convention. The zoom scales world units.
     glm::mat4 view_mat = glm::mat4 (1.0F);
     view_mat = glm::scale (view_mat, glm::vec3 (cam2d.zoom, cam2d.zoom, 1.0F));
-    view_mat = glm::translate (view_mat,
-                               glm::vec3 (-t2d.position.x * cam2d.zoom,
-                                          -t2d.position.y * cam2d.zoom, 0.0F));
+    view_mat = glm::translate (
+        view_mat, glm::vec3 (-t2d.position.x () * cam2d.zoom,
+                             -t2d.position.y () * cam2d.zoom, 0.0F));
     out.view = view_mat;
     out.proj = glm::ortho (0.0F, vp_w, vp_h, 0.0F, -1.0F, 1.0F);
     out.view_proj = out.proj * out.view;

@@ -22,7 +22,7 @@ material_instance::get_parameter (const std::string &name,
   if (def != asset.default_parameters.end ()) {
     return def->second.value;
   }
-  return float (0.0f); // safe fallback
+  return float (0.0F); // safe fallback
 }
 
 std::vector<uint8_t>

@@ -15,13 +15,13 @@ struct sprite_2d : world_component
 {
   //! Image resource to display.
   wsl::rsc::image_id image = wsl::rsc::image_id{ 0 };
-  
+
   //! Size of the sprite in pixels (before transform scaling).
   math::vec2f size{ 100.0F, 100.0F };
-  
+
   //! Tint color applied to the sprite.
   math::vec4f color{ 1.0F, 1.0F, 1.0F, 1.0F };
-  
+
   //! Texture coordinate offset and scale.
   math::vec2f uv_offset{ 0.0F, 0.0F };
   math::vec2f uv_scale{ 1.0F, 1.0F };
@@ -40,8 +40,9 @@ struct sprite_2d : world_component
   void
   serialize (Archive &archive)
   {
-    sprite_2d def{};
-    serialize_field_if_diff (archive, "image", image.value, def.image.value);
+    sprite_2d const def{};
+    serialize_field_if_diff (archive, "image", image.value,
+                             def.image.value);
     serialize_field_if_diff (archive, "size", size, def.size);
     serialize_field_if_diff (archive, "color", color, def.color);
     serialize_field_if_diff (archive, "uv_offset", uv_offset, def.uv_offset);

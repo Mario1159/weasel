@@ -38,8 +38,8 @@ transform_system::update_world_recursive (
     comp::world_transform &wt = reg.get<comp::world_transform> (e);
 
     glm::mat4 const local = tr.model ();
-    wt.value = parent_world * local;
-    child_world = wt.value;
+    wt.value () = parent_world * local;
+    child_world = wt.value ();
   }
 
   if (auto *h = reg.try_get<comp::hierarchy> (e)) {

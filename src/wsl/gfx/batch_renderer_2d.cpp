@@ -2,10 +2,8 @@
 #include "render_context.hpp"
 #include "render_window.hpp"
 #include "shader.hpp"
-#include "tracy_gpu_mem.hpp"
 #include "wsl/rsc/resource_manager.hpp"
 #include <algorithm>
-#include <glm/gtc/matrix_transform.hpp>
 
 namespace wsl::gfx
 {
@@ -61,17 +59,20 @@ batch_renderer_2d::build_and_upload ()
 
   // Sort by z-index then image
   std::sort (m_queue.begin (), m_queue.end (),
-             [] (const draw_command &a, const draw_command &b) {
-               if (a.z_index != b.z_index)
-                 return a.z_index < b.z_index;
-               return a.image.value < b.image.value;
+             [] (const draw_command &lhs, const draw_command &rhs) {
+               if (lhs.z_index != rhs.z_index) {
+                 return lhs.z_index < rhs.z_index;
+               }
+               return lhs.image.value < rhs.image.value;
              });
 
-  uint32_t w, h;
-  m_window->get_size (w, h);
+  uint32_t window_width;
+  uint32_t window_height;
+  m_window->get_size (window_width, window_height);
   m_projection = m_override_projection.has_value ()
                      ? *m_override_projection
-                     : glm::ortho (0.0F, (float)w, (float)h, 0.0F, -1.0F, 1.0F);
+                     : glm::ortho (0.0F, (float)window_width,
+                                   (float)window_height, 0.0F, -1.0F, 1.0F);
   m_override_projection.reset ();
 
   m_vertices.clear ();
@@ -102,13 +103,13 @@ batch_renderer_2d::build_and_upload ()
     }
 
     // Quad vertices with rotation support
-    float const x = cmd.position.x;
-    float const y = cmd.position.y;
-    float const sw = cmd.size.x;
-    float const sh = cmd.size.y;
+    float const pos_x = cmd.position.x;
+    float const pos_y = cmd.position.y;
+    float const size_w = cmd.size.x;
+    float const size_h = cmd.size.y;
 
-    float const half_sw = sw * 0.5F;
-    float const half_sh = sh * 0.5F;
+    float const half_sw = size_w * 0.5F;
+    float const half_sh = size_h * 0.5F;
 
     glm::vec2 const corners[4] = { { -half_sw, -half_sh },
                                    { half_sw, -half_sh },
@@ -121,26 +122,28 @@ batch_renderer_2d::build_and_upload ()
 
     for (int i = 0; i < 4; ++i) {
       rotated_corners[i].x
-          = x + half_sw + (corners[i].x * cos_r - corners[i].y * sin_r);
+          = pos_x + half_sw + (corners[i].x * cos_r - corners[i].y * sin_r);
       rotated_corners[i].y
-          = y + half_sh + (corners[i].x * sin_r + corners[i].y * cos_r);
+          = pos_y + half_sh + (corners[i].x * sin_r + corners[i].y * cos_r);
     }
 
-    glm::vec2 u0 = cmd.uv_offset;
-    glm::vec2 u1 = cmd.uv_offset + cmd.uv_scale;
+    glm::vec2 uv0 = cmd.uv_offset;
+    glm::vec2 uv1 = cmd.uv_offset + cmd.uv_scale;
 
-    if (cmd.flip_h)
-      std::swap (u0.x, u1.x);
-    if (cmd.flip_v)
-      std::swap (u0.y, u1.y);
+    if (cmd.flip_h) {
+      std::swap (uv0.x, uv1.x);
+    }
+    if (cmd.flip_v) {
+      std::swap (uv0.y, uv1.y);
+    }
 
-    m_vertices.push_back ({ rotated_corners[0], { u0.x, u0.y }, cmd.color });
-    m_vertices.push_back ({ rotated_corners[1], { u1.x, u0.y }, cmd.color });
-    m_vertices.push_back ({ rotated_corners[2], { u1.x, u1.y }, cmd.color });
+    m_vertices.push_back ({ rotated_corners[0], { uv0.x, uv0.y }, cmd.color });
+    m_vertices.push_back ({ rotated_corners[1], { uv1.x, uv0.y }, cmd.color });
+    m_vertices.push_back ({ rotated_corners[2], { uv1.x, uv1.y }, cmd.color });
 
-    m_vertices.push_back ({ rotated_corners[0], { u0.x, u0.y }, cmd.color });
-    m_vertices.push_back ({ rotated_corners[2], { u1.x, u1.y }, cmd.color });
-    m_vertices.push_back ({ rotated_corners[3], { u0.x, u1.y }, cmd.color });
+    m_vertices.push_back ({ rotated_corners[0], { uv0.x, uv0.y }, cmd.color });
+    m_vertices.push_back ({ rotated_corners[2], { uv1.x, uv1.y }, cmd.color });
+    m_vertices.push_back ({ rotated_corners[3], { uv0.x, uv1.y }, cmd.color });
   }
 
   if (!m_vertices.empty ()) {
@@ -188,13 +191,14 @@ batch_renderer_2d::draw ()
   SDL_PushGPUVertexUniformData (m_ctx->command_buffer (), 0, &m_projection,
                                 sizeof (m_projection));
 
-  for (const auto &b : m_batches) {
-    SDL_GPUTexture *t = b.texture ? b.texture : m_window->hdr_scene.get ();
-    if (t) {
-      SDL_GPUTextureSamplerBinding tex_binding{ t, m_sampler.get () };
+  for (const auto &batch : m_batches) {
+    SDL_GPUTexture *tex
+        = batch.texture ? batch.texture : m_window->hdr_scene().get ();
+    if (tex) {
+      SDL_GPUTextureSamplerBinding tex_binding{ tex, m_sampler.get () };
       SDL_BindGPUFragmentSamplers (pass, 0, &tex_binding, 1);
     }
-    SDL_DrawGPUPrimitives (pass, b.vertex_count, 1, b.first_vertex, 0);
+    SDL_DrawGPUPrimitives (pass, batch.vertex_count, 1, batch.first_vertex, 0);
   }
 
   m_queue.clear ();
@@ -223,8 +227,9 @@ batch_renderer_2d::create_pipeline ()
       = shader::load_from_manager (m_ctx->gpu_device, m_res_mgr, frag_id,
                                    SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 1);
 
-  if (!vert || !frag)
+  if (!vert || !frag) {
     return;
+  }
 
   SDL_GPUGraphicsPipelineCreateInfo pipe{};
   SDL_zero (pipe);

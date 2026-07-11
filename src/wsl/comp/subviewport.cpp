@@ -18,12 +18,12 @@ bool
 subviewport_camera_ui::custom_inspect (
     const char * /*label*/, comp::singl::runtime_context *runtime_ctx)
 {
-  if (runtime_ctx == nullptr || runtime_ctx->editor_ctx == nullptr) {
+  if (runtime_ctx == nullptr || runtime_ctx->editor_ctx () == nullptr) {
     return false;
   }
 
   bool changed = false;
-  rsc::scene *scene = runtime_ctx->scene_manager.get_active ();
+  rsc::scene *scene = runtime_ctx->scene_manager ().get_active ();
   if (scene == nullptr) {
     return false;
   }
@@ -31,7 +31,7 @@ subviewport_camera_ui::custom_inspect (
   entt::registry &registry = scene->get_registry ();
 
   // The entity currently being inspected in the editor
-  entt::entity self = runtime_ctx->editor_ctx->selected_entity;
+  entt::entity self = runtime_ctx->editor_ctx ()->selected_entity ();
   if (self == entt::null || !registry.all_of<subviewport> (self)) {
     self = entt::null;
   }

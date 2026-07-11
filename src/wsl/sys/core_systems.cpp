@@ -54,9 +54,9 @@ apply_rendering_manager (entt::registry &registry,
   }
 
   auto &rendering = registry.ctx ().get<comp::singl::rendering_manager> ();
-  auto &renderer
-      = rendering.ensure_renderer (runtime_ctx.window, runtime_ctx.render_ctx,
-                                   &runtime_ctx.resource_manager);
+  auto &renderer = rendering.ensure_renderer (runtime_ctx.window (),
+                                              runtime_ctx.render_ctx (),
+                                              &runtime_ctx.resource_manager ());
   renderer.ssao_enabled = rendering.ssao_enabled;
   renderer.ssao_radius = rendering.ssao_radius;
   renderer.ssao_bias = rendering.ssao_bias;
@@ -73,11 +73,11 @@ apply_rendering_manager (entt::registry &registry,
   renderer.set_shadow_map_strength (rendering.shadow_strength);
   renderer.set_ibl_intensity (rendering.ibl_intensity);
 
-  runtime_ctx.window.scene_clear_color
-      = SDL_FColor{ rendering.clear_color.x, rendering.clear_color.y,
-                    rendering.clear_color.z, rendering.clear_alpha };
-  runtime_ctx.window.exposure = rendering.exposure;
-  runtime_ctx.window.bloom_intensity = rendering.bloom_intensity;
+  runtime_ctx.window ().scene_clear_color (
+      SDL_FColor{ rendering.clear_color.x (), rendering.clear_color.y (),
+                  rendering.clear_color.z (), rendering.clear_alpha });
+  runtime_ctx.window ().exposure (rendering.exposure);
+  runtime_ctx.window ().bloom_intensity (rendering.bloom_intensity);
 }
 
 } // namespace
@@ -99,18 +99,20 @@ core_systems::register_debug_metadata ()
       continue;
     }
 
-    m_runtime_ctx->signal_hub.clear_system_declarations (sys->get_type_id ());
-    sys->register_signals (m_runtime_ctx->signal_hub);
-    sys->register_event_handlers (m_runtime_ctx->signal_hub);
-    sys->register_iterations (m_runtime_ctx->signal_hub);
+    m_runtime_ctx->signal_hub ().clear_system_declarations (
+        sys->get_type_id ());
+    sys->register_signals (m_runtime_ctx->signal_hub ());
+    sys->register_event_handlers (m_runtime_ctx->signal_hub ());
+    sys->register_iterations (m_runtime_ctx->signal_hub ());
   }
 
-  if (rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ()) {
+  if (rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ()) {
     for (auto &sys : scene->systems) {
-      m_runtime_ctx->signal_hub.clear_system_declarations (sys->get_type_id ());
-      sys->register_signals (m_runtime_ctx->signal_hub);
-      sys->register_event_handlers (m_runtime_ctx->signal_hub);
-      sys->register_iterations (m_runtime_ctx->signal_hub);
+      m_runtime_ctx->signal_hub ().clear_system_declarations (
+          sys->get_type_id ());
+      sys->register_signals (m_runtime_ctx->signal_hub ());
+      sys->register_event_handlers (m_runtime_ctx->signal_hub ());
+      sys->register_iterations (m_runtime_ctx->signal_hub ());
     }
   }
 }
@@ -118,7 +120,7 @@ core_systems::register_debug_metadata ()
 void
 core_systems::register_factory_types (comp::singl::runtime_context &rtc)
 {
-  auto &factory = rtc.system_factory_registry;
+  auto &factory = rtc.system_factory_registry ();
   factory.register_system_type<transform_system> ({ "Transform" });
   factory.register_system_type<physics_system> ({ "Physics" });
   factory.register_system_type<render_3d_system> ({ "3D Render" });
@@ -210,7 +212,7 @@ core_systems::sync_activation ()
 
   ensure_dummy_context_bindings ();
 
-  rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
   entt::registry *registry
       = (scene != nullptr) ? &scene->get_registry () : &m_dummy_registry;
 
@@ -235,12 +237,12 @@ core_systems::sync_activation ()
       continue;
     }
 
-    sys->refresh_activation (registry, m_runtime_ctx->is_running);
+    sys->refresh_activation (registry, m_runtime_ctx->is_running ());
   }
 
   if (scene != nullptr) {
     for (auto &sys : scene->systems) {
-      sys->refresh_activation (registry, m_runtime_ctx->is_running);
+      sys->refresh_activation (registry, m_runtime_ctx->is_running ());
     }
   }
 }
@@ -252,13 +254,13 @@ core_systems::update (double dt)
 
   sync_activation ();
   m_runtime_ctx->sync ();
-  m_runtime_ctx->resource_manager.update_async_uploads ();
+  m_runtime_ctx->resource_manager ().update_async_uploads ();
 
   if (m_editor_ctx != nullptr) {
-    m_editor_ctx->editor_resources.update_async_uploads ();
+    m_editor_ctx->editor_resources ().update_async_uploads ();
   }
 
-  rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
   entt::registry &registry
       = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
 
@@ -307,7 +309,7 @@ core_systems::event_handler (const SDL_Event &e)
 
   sync_activation ();
 
-  rsc::scene *scene = m_runtime_ctx->scene_manager.get_active ();
+  rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
   entt::registry &registry
       = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
 
@@ -394,20 +396,21 @@ core_systems::ensure_dummy_context_bindings ()
     if (ctx.contains<rsc::scene_manager *> ()) {
       ctx.erase<rsc::scene_manager *> ();
     }
-    ctx.emplace<rsc::scene_manager *> (&m_runtime_ctx->scene_manager);
+    ctx.emplace<rsc::scene_manager *> (&m_runtime_ctx->scene_manager ());
 
     if (ctx.contains<rsc::resource_manager_view *> ()) {
       ctx.erase<rsc::resource_manager_view *> ();
     }
     ctx.emplace<rsc::resource_manager_view *> (
-        &m_runtime_ctx->resource_manager_view);
+        &m_runtime_ctx->resource_manager_view ());
 
     if (ctx.contains<comp::singl::ui_manager *> ()) {
       ctx.erase<comp::singl::ui_manager *> ();
     }
-    ctx.emplace<comp::singl::ui_manager *> (&m_runtime_ctx->ui_manager);
+    ctx.emplace<comp::singl::ui_manager *> (&m_runtime_ctx->ui_manager ());
 
-    m_runtime_ctx->singleton_registry.apply_core_singletons (m_dummy_registry);
+    m_runtime_ctx->singleton_registry ().apply_core_singletons (
+        m_dummy_registry);
   }
 }
 void
@@ -425,7 +428,7 @@ core_systems::render_impl (wsl::gfx::render_window &window,
     ZoneScopedN ("render_impl::setup");
     sync_activation ();
 
-    scene = m_runtime_ctx->scene_manager.get_active ();
+    scene = m_runtime_ctx->scene_manager ().get_active ();
     registry_ptr
         = (scene != nullptr) ? &scene->get_registry () : &m_dummy_registry;
   }
@@ -454,9 +457,9 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   {
     ZoneScopedN ("render_impl::begin_cmd");
-    m_runtime_ctx->render_ctx.begin_cmd ();
+    m_runtime_ctx->render_ctx ().begin_cmd ();
   }
-  if (!m_runtime_ctx->render_ctx.has_active_frame ()) {
+  if (!m_runtime_ctx->render_ctx ().has_active_frame ()) {
     return;
   }
 
@@ -464,12 +467,13 @@ core_systems::render_impl (wsl::gfx::render_window &window,
   // Event Browser shows the per-frame commands as one nested subtree.
   // Push the group AFTER begin_cmd but before any work so the group
   // is balanced when end_cmd submits.
-  if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
+  if (m_runtime_ctx->render_ctx ().command_buffer () != nullptr) {
     char label[32];
     std::snprintf (
         label, sizeof (label), "Frame %llu",
-        (unsigned long long)m_runtime_ctx->render_ctx.frame_index ());
-    SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer (), label);
+        (unsigned long long)m_runtime_ctx->render_ctx ().frame_index ());
+    SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx ().command_buffer (),
+                           label);
   }
 
   {
@@ -490,8 +494,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
     // upload) happen here. Wrap them in a debug group so they show
     // up as a labelled region in the Event Browser rather than as
     // bare copy commands.
-    if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
-      SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer (),
+    if (m_runtime_ctx->render_ctx ().command_buffer () != nullptr) {
+      SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx ().command_buffer (),
                              "Prepare GPU Resources");
     }
     for (sys::ecs_system *sys : to_vec ()) {
@@ -518,8 +522,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         sys->render_prepare_gpu_rsc (&registry);
       }
     }
-    if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
-      SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer ());
+    if (m_runtime_ctx->render_ctx ().command_buffer () != nullptr) {
+      SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx ().command_buffer ());
     }
   }
 
@@ -551,8 +555,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
 #ifdef WEASEL_BUILD_EDITOR
       if (m_editor_ctx != nullptr) {
-        if (!m_runtime_ctx->is_running) {
-          main_viewport = m_editor_ctx->game_view_selected_viewport;
+        if (!m_runtime_ctx->is_running ()) {
+          main_viewport = m_editor_ctx->game_view_selected_viewport ();
         }
       }
 #endif
@@ -571,9 +575,10 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         // Shadow and lighting passes (global)
         {
           ZoneScopedN ("render_impl::global_shadow_and_light");
-          if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
-            SDL_PushGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer (),
-                                   "Shadows & Lighting");
+          if (m_runtime_ctx->render_ctx ().command_buffer () != nullptr) {
+            SDL_PushGPUDebugGroup (
+                m_runtime_ctx->render_ctx ().command_buffer (),
+                "Shadows & Lighting");
           }
           renderer->begin_frame (submission.view);
           if (shadow_sys) {
@@ -582,8 +587,9 @@ core_systems::render_impl (wsl::gfx::render_window &window,
           if (lighting_sys) {
             lighting_sys->render_record_draw_cmd (&registry);
           }
-          if (m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
-            SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer ());
+          if (m_runtime_ctx->render_ctx ().command_buffer () != nullptr) {
+            SDL_PopGPUDebugGroup (
+                m_runtime_ctx->render_ctx ().command_buffer ());
           }
         }
 
@@ -612,14 +618,14 @@ core_systems::render_impl (wsl::gfx::render_window &window,
             uint32_t vw, vh;
             bool const is_3d_quad
                 = registry.all_of<comp::transform, comp::world_transform> (e);
-            if (is_3d_quad && sv->world_quad_size.y > 0.0F) {
+            if (is_3d_quad && sv->world_quad_size.y () > 0.0F) {
               // 3D quad: render-target aspect ratio must match world_quad_size
               // so the offscreen texture is not stretched when mapped onto
               // the quad.  Resolution magnitude is taken from virtual_size.
               float const world_aspect
-                  = sv->world_quad_size.x / sv->world_quad_size.y;
+                  = sv->world_quad_size.x () / sv->world_quad_size.y ();
               float const max_virtual
-                  = std::max (sv->virtual_size.x, sv->virtual_size.y);
+                  = std::max (sv->virtual_size.x (), sv->virtual_size.y ());
               if (world_aspect >= 1.0F) {
                 vw = static_cast<uint32_t> (max_virtual);
                 vh = static_cast<uint32_t> (max_virtual / world_aspect);
@@ -629,8 +635,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
               }
             } else {
               // 2D overlay or render_2d_only: use virtual_size directly.
-              vw = static_cast<uint32_t> (sv->virtual_size.x);
-              vh = static_cast<uint32_t> (sv->virtual_size.y);
+              vw = static_cast<uint32_t> (sv->virtual_size.x ());
+              vh = static_cast<uint32_t> (sv->virtual_size.y ());
             }
 
             auto it = rendering_mgr->subviewport_targets.find (e);
@@ -641,7 +647,7 @@ core_systems::render_impl (wsl::gfx::render_window &window,
               }
               rendering_mgr->subviewport_targets[e]
                   = gfx::subviewport_target::create (
-                      &window, &m_runtime_ctx->render_ctx, vw, vh);
+                      &window, &m_runtime_ctx->render_ctx (), vw, vh);
             }
           }
           // Clean up targets for destroyed subviewports
@@ -765,22 +771,22 @@ core_systems::render_impl (wsl::gfx::render_window &window,
               }
 
               const auto &wt = registry.get<comp::world_transform> (e);
-              glm::mat4 m = wt.value;
-              m = glm::scale (m, glm::vec3 (sv->world_quad_size.x,
-                                            sv->world_quad_size.y, 1.0F));
+              glm::mat4 m = wt.value ();
+              m = glm::scale (m, glm::vec3 (sv->world_quad_size.x (),
+                                            sv->world_quad_size.y (), 1.0F));
 
               auto &prim = model->meshes[0].primitives[0];
               SDL_GPUTexture *prev_tex = prim.mat.base_color_tex;
               SDL_GPUSampler *prev_samp = prim.mat.sampler;
               prim.mat.base_color_tex = it->second.color_resolve.get ();
-              prim.mat.sampler = window.linear_sampler.get ();
+              prim.mat.sampler = window.linear_sampler ().get ();
               prim.mat.device = nullptr;
 
               renderer->draw_model (*model, 0, m, sub.view.view_proj);
 
               prim.mat.base_color_tex = prev_tex;
               prim.mat.sampler = prev_samp;
-              prim.mat.device = window.ctx->gpu_device;
+              prim.mat.device = window.ctx ()->gpu_device;
             }
           }
 
@@ -793,10 +799,10 @@ core_systems::render_impl (wsl::gfx::render_window &window,
           // 2D Pass
           if (render_2d_sys) {
             ZoneScopedN ("render_viewport_full::render_2d");
-            auto &r2d_ref
-                = m_runtime_ctx->get_active_rendering_manager ()
-                      ->ensure_renderer_2d (window, m_runtime_ctx->render_ctx,
-                                            &m_runtime_ctx->resource_manager);
+            auto &r2d_ref = m_runtime_ctx->get_active_rendering_manager ()
+                                ->ensure_renderer_2d (
+                                    window, m_runtime_ctx->render_ctx (),
+                                    &m_runtime_ctx->resource_manager ());
             auto *r2d = &r2d_ref;
 
             {
@@ -873,8 +879,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         {
           ZoneScopedN ("render_impl::main_viewport");
           bool const preview_selected_viewport
-              = (m_editor_ctx != nullptr) && !m_runtime_ctx->is_running
-                && m_editor_ctx->game_view_selected_viewport != entt::null;
+              = (m_editor_ctx != nullptr) && !m_runtime_ctx->is_running ()
+                && m_editor_ctx->game_view_selected_viewport () != entt::null;
 
           render_viewport_full (main_viewport, submission,
                                 !preview_selected_viewport, nullptr);
@@ -883,8 +889,8 @@ core_systems::render_impl (wsl::gfx::render_window &window,
         // 3. Draw subviewport 2D overlays inside the main viewport
         if (!child_vps.empty () && rendering_mgr != nullptr) {
           auto &r2d_ref = rendering_mgr->ensure_renderer_2d (
-              window, m_runtime_ctx->render_ctx,
-              &m_runtime_ctx->resource_manager);
+              window, m_runtime_ctx->render_ctx (),
+              &m_runtime_ctx->resource_manager ());
 
           // -- 2D Overlays (drawn after the main 2D pass) --
           // We need an extra 2D pass because the main 2D pass already
@@ -914,9 +920,10 @@ core_systems::render_impl (wsl::gfx::render_window &window,
               gfx::batch_renderer_2d::draw_command cmd{};
               // Use the offscreen resolve texture directly.
               cmd.texture_override = it->second.color_resolve.get ();
-              cmd.position = glm::vec2 (sv->container_position.x,
-                                        sv->container_position.y);
-              cmd.size = glm::vec2 (sv->container_size.x, sv->container_size.y);
+              cmd.position = glm::vec2 (sv->container_position.x (),
+                                        sv->container_position.y ());
+              cmd.size = glm::vec2 (sv->container_size.x (),
+                                    sv->container_size.y ());
               cmd.color = glm::vec4 (1.0F);
               cmd.z_index = 1000; // on top of most sprites
               r2d_ref.submit (cmd);
@@ -954,11 +961,11 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   {
     ZoneScopedN ("render_impl::end_cmd");
-    if (m_runtime_ctx->render_ctx.has_active_frame ()
-        && m_runtime_ctx->render_ctx.command_buffer () != nullptr) {
-      SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx.command_buffer ());
+    if (m_runtime_ctx->render_ctx ().has_active_frame ()
+        && m_runtime_ctx->render_ctx ().command_buffer () != nullptr) {
+      SDL_PopGPUDebugGroup (m_runtime_ctx->render_ctx ().command_buffer ());
     }
-    m_runtime_ctx->render_ctx.end_cmd ();
+    m_runtime_ctx->render_ctx ().end_cmd ();
   }
 }
 

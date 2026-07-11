@@ -30,12 +30,14 @@ struct prefab_instance : world_component
   {
     using namespace entt::literals;
 
-    entt::meta_factory<comp::prefab_instance> ()
-        .type (entt::type_hash<comp::prefab_instance>::value ())
-        .custom<comp::meta_info> (meta_info{
-            "Prefab Instance", "Tracks the source prefab for this entity", "" })
-        .data<&comp::prefab_instance::prefab_id> ("prefab_id"_hs)
-        .data<&comp::prefab_instance::prefab_entity> ("prefab_entity"_hs);
+    auto &&factory
+        = entt::meta_factory<comp::prefab_instance> ()
+              .type (entt::type_hash<comp::prefab_instance>::value ())
+              .custom<comp::meta_info> (
+                  meta_info{ "Prefab Instance",
+                             "Tracks the source prefab for this entity", "" });
+    (factory.data<&comp::prefab_instance::prefab_id>)("prefab_id"_hs);
+    (factory.data<&comp::prefab_instance::prefab_entity>)("prefab_entity"_hs);
   }
 
   template <class Archive>

@@ -94,10 +94,10 @@ rigid_body::allowed_dofs_ui::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rigid_body::allowed_dofs_ui> ()
-      .type (entt::type_hash<rigid_body::allowed_dofs_ui>::value ())
-      .func<&rigid_body::allowed_dofs_ui::custom_inspect> ("custom_inspect"_hs)
-      .data<&rigid_body::allowed_dofs_ui::value> ("value"_hs);
+  auto &&f = entt::meta_factory<rigid_body::allowed_dofs_ui> ().type (
+      entt::type_hash<rigid_body::allowed_dofs_ui>::value ());
+  (f.func<&rigid_body::allowed_dofs_ui::custom_inspect>)("custom_inspect"_hs);
+  (f.data<&rigid_body::allowed_dofs_ui::value>)("value"_hs);
 }
 
 bool
@@ -166,10 +166,10 @@ rigid_body::motion_type_ui::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rigid_body::motion_type_ui> ()
-      .type (entt::type_hash<rigid_body::motion_type_ui>::value ())
-      .func<&rigid_body::motion_type_ui::custom_inspect> ("custom_inspect"_hs)
-      .data<&rigid_body::motion_type_ui::value> ("value"_hs);
+  auto &&f = entt::meta_factory<rigid_body::motion_type_ui> ().type (
+      entt::type_hash<rigid_body::motion_type_ui>::value ());
+  (f.func<&rigid_body::motion_type_ui::custom_inspect>)("custom_inspect"_hs);
+  (f.data<&rigid_body::motion_type_ui::value>)("value"_hs);
 }
 
 bool
@@ -214,11 +214,11 @@ rigid_body::collision_layer_ui::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rigid_body::collision_layer_ui> ()
-      .type (entt::type_hash<rigid_body::collision_layer_ui>::value ())
-      .func<&rigid_body::collision_layer_ui::custom_inspect> (
-          "custom_inspect"_hs)
-      .data<&rigid_body::collision_layer_ui::value> ("value"_hs);
+  auto &&f = entt::meta_factory<rigid_body::collision_layer_ui> ().type (
+      entt::type_hash<rigid_body::collision_layer_ui>::value ());
+  (f.func<
+      &rigid_body::collision_layer_ui::custom_inspect>)("custom_inspect"_hs);
+  (f.data<&rigid_body::collision_layer_ui::value>)("value"_hs);
 }
 
 bool
@@ -240,11 +240,10 @@ rigid_body::collision_mask_ui::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rigid_body::collision_mask_ui> ()
-      .type (entt::type_hash<rigid_body::collision_mask_ui>::value ())
-      .func<&rigid_body::collision_mask_ui::custom_inspect> (
-          "custom_inspect"_hs)
-      .data<&rigid_body::collision_mask_ui::value> ("value"_hs);
+  auto &&f = entt::meta_factory<rigid_body::collision_mask_ui> ().type (
+      entt::type_hash<rigid_body::collision_mask_ui>::value ());
+  (f.func<&rigid_body::collision_mask_ui::custom_inspect>)("custom_inspect"_hs);
+  (f.data<&rigid_body::collision_mask_ui::value>)("value"_hs);
 }
 
 bool
@@ -301,20 +300,25 @@ rigid_body::object_layer () const
 bool
 rigid_body::has_structural_change () const
 {
-  return shape != applied_shape || half_extents.x != applied_half_extents.x
-         || half_extents.y != applied_half_extents.y
-         || half_extents.z != applied_half_extents.z || radius != applied_radius
-         || dynamic != applied_dynamic || motion_type.value != applied_motion
+  return shape != applied_shape
+         || half_extents.x () != applied_half_extents.x ()
+         || half_extents.y () != applied_half_extents.y ()
+         || half_extents.z () != applied_half_extents.z ()
+         || radius != applied_radius || dynamic != applied_dynamic
+         || motion_type.value != applied_motion
          || allowed_dofs.value != applied_dofs;
 }
 
 bool
 rigid_body::has_transform_change () const
 {
-  return position.x != applied_position.x || position.y != applied_position.y
-         || position.z != applied_position.z || rotation.x != applied_rotation.x
-         || rotation.y != applied_rotation.y || rotation.z != applied_rotation.z
-         || rotation.w != applied_rotation.w;
+  return position.x () != applied_position.x ()
+         || position.y () != applied_position.y ()
+         || position.z () != applied_position.z ()
+         || rotation.x () != applied_rotation.x ()
+         || rotation.y () != applied_rotation.y ()
+         || rotation.z () != applied_rotation.z ()
+         || rotation.w () != applied_rotation.w ();
 }
 
 bool
@@ -328,8 +332,8 @@ rigid_body::has_surface_change () const
 bool
 rigid_body::has_scale_change (const math::vec3f &scale) const
 {
-  return scale.x != applied_scale.x || scale.y != applied_scale.y
-         || scale.z != applied_scale.z;
+  return scale.x () != applied_scale.x () || scale.y () != applied_scale.y ()
+         || scale.z () != applied_scale.z ();
 }
 
 rigid_body

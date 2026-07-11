@@ -133,7 +133,7 @@ public:
         || m_light_buf == nullptr) {
       return false;
     }
-    for (uint32_t i = 0; i < kClusterBufSlots; ++i) {
+    for (uint32_t i = 0; i < k_cluster_buf_slots; ++i) {
       if (m_cluster_bufs[i] == nullptr) {
         return false;
       }
@@ -153,7 +153,7 @@ private:
   SDL_GPUComputePipeline *m_cull_pipe = nullptr;
 
   // The cluster buffer is per-frame-in-flight rather than a single
-  // shared buffer. With `kMaxFramesInFlight = 3` in `render_context`
+  // shared buffer. With `k_max_frames_in_flight = 3` in `render_context`
   // there are three slots; the slot index is obtained from
   // `m_ctx->current_frame_slot()` at record time. This avoids a
   // use-after-free on AMDVK/Mesa where, on the first dispatch after
@@ -166,8 +166,8 @@ private:
   // for at least 2 frames, so the first-use race is gone. The light
   // buffer stays single — it's read-only and has the same shape every
   // frame, so it doesn't need to be per-slot.
-  static constexpr uint32_t kClusterBufSlots = 3;
-  SDL_GPUBuffer *m_cluster_bufs[kClusterBufSlots]{};
+  static constexpr uint32_t k_cluster_buf_slots = 3;
+  SDL_GPUBuffer *m_cluster_bufs[k_cluster_buf_slots]{};
   SDL_GPUBuffer *m_light_buf = nullptr;
 
   //! Transfer buffer used to upload point lights each frame.

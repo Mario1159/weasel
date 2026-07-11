@@ -29,7 +29,7 @@ struct subviewport_target
   uint32_t height = 0;
 
   static subviewport_target create (render_window *window, render_context *ctx,
-                                    uint32_t w, uint32_t h);
+                                    uint32_t width, uint32_t height);
   static void destroy (subviewport_target &target);
 };
 

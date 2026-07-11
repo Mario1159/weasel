@@ -21,7 +21,7 @@ world_transform::custom_inspect (const char * /*label*/,
       ImGui::PushID (i);
       for (int j = 0; j < 4; ++j) {
         ImGui::PushID (j);
-        float v = value[i][j];
+        float v = m_value[i][j];
         ImGui::SetNextItemWidth (ImGui::CalcItemWidth () / 4.1F);
         ImGui::InputFloat ("##v", &v, 0.0F, 0.0F, "%.3f",
                            ImGuiInputTextFlags_ReadOnly);
@@ -41,15 +41,19 @@ world_transform::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<comp::world_transform> ()
-      .type (entt::type_hash<comp::world_transform>::value ())
-      .custom<comp::meta_info> (meta_info{
-          "World Transform", "Computed world-space transform (read-only)",
-          "engine://icons/comp_world_transform.svg" })
-      .func<&comp::world_transform::custom_inspect> ("custom_inspect"_hs);
+  {
+    auto &&factory
+        = entt::meta_factory<comp::world_transform> ()
+              .type (entt::type_hash<comp::world_transform>::value ())
+              .custom<comp::meta_info> (
+                  meta_info{ "World Transform",
+                             "Computed world-space transform (read-only)",
+                             "engine://icons/comp_world_transform.svg" });
+    (factory.func<&comp::world_transform::custom_inspect>)("custom_inspect"_hs);
+  }
 
   entt::meta_factory<comp::world_transform> ()
-      .data<&comp::world_transform::value> ("matrix"_hs)
+      .data<&comp::world_transform::m_value> ("matrix"_hs)
       .custom<comp::meta_info> (meta_info{
           "Matrix", "Final world matrix after hierarchy evaluation", "" });
 }

@@ -152,9 +152,9 @@ struct rigid_body : world_component
   void
   sanitize_dimensions ()
   {
-    half_extents.x = std::max (half_extents.x, 1e-3F);
-    half_extents.y = std::max (half_extents.y, 1e-3F);
-    half_extents.z = std::max (half_extents.z, 1e-3F);
+    half_extents.x () = std::max (half_extents.x (), 1e-3F);
+    half_extents.y () = std::max (half_extents.y (), 1e-3F);
+    half_extents.z () = std::max (half_extents.z (), 1e-3F);
     radius = std::max (radius, 1e-3F);
   }
 

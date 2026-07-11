@@ -52,7 +52,7 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
   for (entt::entity const entity : dir_light_view) {
     const comp::world_transform &world
         = dir_light_view.get<comp::world_transform> (entity);
-    glm::mat4 const wm = world.value;
+    glm::mat4 const wm = world.value ();
     caster_direction_world = -glm::normalize (glm::vec3 (wm[2]));
     have_directional_caster = true;
     break;
@@ -101,7 +101,7 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
       continue;
     }
 
-    glm::mat4 const wm = world.value;
+    glm::mat4 const wm = world.value ();
     const glm::vec3 position = glm::vec3 (wm[3]);
     const glm::vec3 direction = -glm::normalize (glm::vec3 (wm[2]));
     const float outer_angle
@@ -152,7 +152,7 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
     }
 
     const glm::vec3 position
-        = glm::vec3 (static_cast<glm::mat4> (world.value)[3]);
+        = glm::vec3 (static_cast<glm::mat4> (world.value ())[3]);
 
     auto &shadow = point_shadows[point_index];
     shadow.light_pos = position;

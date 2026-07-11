@@ -23,9 +23,9 @@ struct model_instance_3d : world_component
   //! Rendering hook is currently a stub (see scene_renderer::draw_command).
   rsc::material_id material_override{};
 
-  float mip_lod_bias = 0.0f;
-  float geometry_lod_bias = 0.0f;
-  float visibility_range = 0.0f;
+  float mip_lod_bias = 0.0F;
+  float geometry_lod_bias = 0.0F;
+  float visibility_range = 0.0F;
 
   static void
   register_meta ()

@@ -36,7 +36,7 @@ struct material_parameter
 
   material_parameter () = default;
   explicit material_parameter (const std::string &n, value_type v)
-      : value (std::move (v)), name (n)
+      : value (v), name (n)
   {
   }
 

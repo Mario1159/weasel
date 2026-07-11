@@ -74,11 +74,12 @@ rsc::project_loader::create (const project &proj) const
     rendering.skybox = { rsc::builtin_skybox_procedural };
 
     const rsc::model_id builtin_cube_id
-        = m_runtime_ctx->resource_manager.register_model ("builtin://cube");
+        = m_runtime_ctx->resource_manager ().register_model ("builtin://cube");
     const rsc::model_id builtin_sphere_id
-        = m_runtime_ctx->resource_manager.register_model ("builtin://sphere");
+        = m_runtime_ctx->resource_manager ().register_model (
+            "builtin://sphere");
     const rsc::cubemap_id builtin_skybox_id
-        = m_runtime_ctx->resource_manager.register_cubemap (
+        = m_runtime_ctx->resource_manager ().register_cubemap (
             "builtin/skybox_procedural");
     temp_scene.add_resource (io::resource_type::model, builtin_cube_id.value);
     temp_scene.add_resource (io::resource_type::model, builtin_sphere_id.value);
@@ -102,7 +103,7 @@ rsc::project_loader::create (const project &proj) const
     auto &cam_transform = reg.emplace<comp::transform> (
         cam_entity, glm::vec3 (0.0F, 0.0F, 5.0F));
     auto &cam_world_transform = reg.emplace<comp::world_transform> (cam_entity);
-    cam_world_transform.value = cam_transform.model ();
+    cam_world_transform.value () = cam_transform.model ();
     reg.emplace<comp::camera> (cam_entity);
     temp_scene.camera = cam_entity;
 

@@ -20,7 +20,7 @@ public:
   GetBroadPhaseLayer (JPH::ObjectLayer in_layer) const override;
 
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
-  virtual const char *
+  const char *
   GetBroadPhaseLayerName (JPH::BroadPhaseLayer inLayer) const override;
 #endif
 

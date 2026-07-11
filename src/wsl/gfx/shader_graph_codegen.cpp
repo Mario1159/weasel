@@ -213,8 +213,8 @@ shader_graph_codegen::eval_node (const graph_node &node) const
   m_visited.insert (node.id);
 
   auto emit_binary = [&] (const char *op) {
-    auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
-    auto *b = m_graph.find_input_link (node.id, node.pins[1].id);
+    const auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
+    const auto *b = m_graph.find_input_link (node.id, node.pins[1].id);
     std::string lhs = a ? eval_pin (a->from_node, a->from_pin) : "0.0";
     std::string rhs = b ? eval_pin (b->from_node, b->from_pin) : "0.0";
     std::string tmp = next_temp ();
@@ -224,7 +224,7 @@ shader_graph_codegen::eval_node (const graph_node &node) const
   };
 
   auto emit_unary = [&] (const char *func) {
-    auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
+    const auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
     std::string lhs = a ? eval_pin (a->from_node, a->from_pin) : "0.0";
     std::string tmp = next_temp ();
     m_main << "    " << type_name (node.pins.back ().type) << " " << tmp
@@ -283,12 +283,12 @@ shader_graph_codegen::eval_node (const graph_node &node) const
   }
 
   case graph_node_kind::texture_sample_2d: {
-    auto *uv_link = m_graph.find_input_link (node.id, node.pins[0].id);
+    const auto *uv_link = m_graph.find_input_link (node.id, node.pins[0].id);
     std::string uv = uv_link ? eval_pin (uv_link->from_node, uv_link->from_pin)
                              : "input.uv";
     // Find the connected texture uniform node
     std::string tex_name = "u_DefaultTex";
-    auto *tex_link = m_graph.find_input_link (node.id, node.pins[1].id);
+    const auto *tex_link = m_graph.find_input_link (node.id, node.pins[1].id);
     if (tex_link) {
       const graph_node *tex_node = m_graph.find_node (tex_link->from_node);
       if (tex_node) {
@@ -314,9 +314,9 @@ shader_graph_codegen::eval_node (const graph_node &node) const
   case graph_node_kind::divide:
     return emit_binary ("/");
   case graph_node_kind::lerp: {
-    auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
-    auto *b = m_graph.find_input_link (node.id, node.pins[1].id);
-    auto *t = m_graph.find_input_link (node.id, node.pins[2].id);
+    const auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
+    const auto *b = m_graph.find_input_link (node.id, node.pins[1].id);
+    const auto *t = m_graph.find_input_link (node.id, node.pins[2].id);
     std::string av = a ? eval_pin (a->from_node, a->from_pin) : "0.0";
     std::string bv = b ? eval_pin (b->from_node, b->from_pin) : "0.0";
     std::string tv = t ? eval_pin (t->from_node, t->from_pin) : "0.0";
@@ -328,7 +328,7 @@ shader_graph_codegen::eval_node (const graph_node &node) const
   case graph_node_kind::clamp:
     return emit_unary ("saturate");
   case graph_node_kind::one_minus: {
-    auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
+    const auto *a = m_graph.find_input_link (node.id, node.pins[0].id);
     std::string v = a ? eval_pin (a->from_node, a->from_pin) : "0.0";
     std::string tmp = next_temp ();
     m_main << "    " << type_name (node.pins.back ().type) << " " << tmp
@@ -348,10 +348,10 @@ shader_graph_codegen::eval_node (const graph_node &node) const
   }
 
   case graph_node_kind::combine_vector: {
-    auto *x = m_graph.find_input_link (node.id, node.pins[0].id);
-    auto *y = m_graph.find_input_link (node.id, node.pins[1].id);
-    auto *z = m_graph.find_input_link (node.id, node.pins[2].id);
-    auto *w = m_graph.find_input_link (node.id, node.pins[3].id);
+    const auto *x = m_graph.find_input_link (node.id, node.pins[0].id);
+    const auto *y = m_graph.find_input_link (node.id, node.pins[1].id);
+    const auto *z = m_graph.find_input_link (node.id, node.pins[2].id);
+    const auto *w = m_graph.find_input_link (node.id, node.pins[3].id);
     std::string sx = x ? eval_pin (x->from_node, x->from_pin) : "0.0";
     std::string sy = y ? eval_pin (y->from_node, y->from_pin) : "0.0";
     std::string sz = z ? eval_pin (z->from_node, z->from_pin) : "0.0";
@@ -372,34 +372,34 @@ shader_graph_codegen::eval_node (const graph_node &node) const
 
     for (const auto &pin : node.pins) {
       if (pin.is_input && pin.name == "Albedo") {
-        auto *link = m_graph.find_input_link (node.id, pin.id);
+        const auto *link = m_graph.find_input_link (node.id, pin.id);
         if (link) {
           albedo = "float4(" + eval_pin (link->from_node, link->from_pin) + ")";
         }
       }
       if (pin.is_input && pin.name == "Emissive") {
-        auto *link = m_graph.find_input_link (node.id, pin.id);
+        const auto *link = m_graph.find_input_link (node.id, pin.id);
         if (link) {
           emissive = "float3(" + eval_pin (link->from_node, link->from_pin)
                      + ".xyz)";
         }
       }
       if (pin.is_input && pin.name == "Metallic") {
-        auto *link = m_graph.find_input_link (node.id, pin.id);
+        const auto *link = m_graph.find_input_link (node.id, pin.id);
         if (link) {
           metallic
               = "float(" + eval_pin (link->from_node, link->from_pin) + ".x)";
         }
       }
       if (pin.is_input && pin.name == "Roughness") {
-        auto *link = m_graph.find_input_link (node.id, pin.id);
+        const auto *link = m_graph.find_input_link (node.id, pin.id);
         if (link) {
           roughness
               = "float(" + eval_pin (link->from_node, link->from_pin) + ".x)";
         }
       }
       if (pin.is_input && pin.name == "Normal") {
-        auto *link = m_graph.find_input_link (node.id, pin.id);
+        const auto *link = m_graph.find_input_link (node.id, pin.id);
         if (link) {
           normal = "float3(" + eval_pin (link->from_node, link->from_pin)
                    + ".xyz)";
@@ -434,15 +434,12 @@ shader_graph_codegen::emit_uniforms () const
 {
   static constexpr std::array<const char *, 6> model_pbr_uniforms
       = { "u_BaseColorFactor", "u_MetallicFactor", "u_RoughnessFactor",
-          "u_EmissiveFactor", "u_MipLodBias", "u_Time" };
+          "u_EmissiveFactor",  "u_MipLodBias",     "u_Time" };
 
   auto is_reserved_name = [&] (const std::string &name) {
-    for (const char *reserved : model_pbr_uniforms) {
-      if (name == reserved) {
-        return true;
-      }
-    }
-    return false;
+    return std::ranges::any_of (model_pbr_uniforms, [&] (const char *reserved) {
+      return name == reserved;
+    });
   };
 
   m_globals << "cbuffer Material : register(b0, space3)\n{\n";
@@ -509,15 +506,15 @@ shader_graph_codegen::emit_helpers () const
 {
   if (uses_model_pbr_inputs ()) {
     m_globals << "\n";
-    m_globals << "float3 ApplyModelMaterialNormal(float3 Ngeom, float4 tangent, "
-                 "float2 uv)\n";
+    m_globals
+        << "float3 ApplyModelMaterialNormal(float3 Ngeom, float4 tangent, "
+           "float2 uv)\n";
     m_globals << "{\n";
     m_globals << "    float3 T = normalize(tangent.xyz);\n";
     m_globals << "    T = normalize(T - Ngeom * dot(Ngeom, T));\n";
     m_globals << "    float3 B = normalize(cross(Ngeom, T) * tangent.w);\n";
     m_globals << "    float3 nTS = UnpackNormal(u_NormalTex.SampleBias("
-              << "u_Samplers["
-              << texture_sampler_slot ("u_NormalTex")
+              << "u_Samplers[" << texture_sampler_slot ("u_NormalTex")
               << "], uv, u_MipLodBias).xyz);\n";
     m_globals << "    float3x3 TBN = float3x3(T, B, Ngeom);\n";
     m_globals << "    return normalize(mul(nTS, TBN));\n";

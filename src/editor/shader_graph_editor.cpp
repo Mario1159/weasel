@@ -139,12 +139,12 @@ public:
     switch (n->kind) {
     case graph_node_kind::uniform_float: {
       auto it = n->properties.find ("default");
-      float val = 0.0f;
+      float val = 0.0F;
       if (it != n->properties.end ()) {
         val = std::stof (it->second);
       }
-      ImGui::SetNextItemWidth (120.0f);
-      if (ImGui::DragFloat ("Value", &val, 0.01f)) {
+      ImGui::SetNextItemWidth (120.0F);
+      if (ImGui::DragFloat ("Value", &val, 0.01F)) {
         if (it != n->properties.end ()) {
           it->second = std::to_string (val);
         }
@@ -157,7 +157,7 @@ public:
       if (it != n->properties.end ()) {
         std::sscanf (it->second.c_str (), "%f,%f,%f", &val.x, &val.y, &val.z);
       }
-      ImGui::SetNextItemWidth (180.0f);
+      ImGui::SetNextItemWidth (180.0F);
       if (ImGui::ColorEdit3 ("Value", glm::value_ptr (val))) {
         if (it != n->properties.end ()) {
           it->second = std::to_string (val.x) + "," + std::to_string (val.y)
@@ -173,7 +173,7 @@ public:
         std::sscanf (it->second.c_str (), "%f,%f,%f,%f", &val.x, &val.y, &val.z,
                      &val.w);
       }
-      ImGui::SetNextItemWidth (180.0f);
+      ImGui::SetNextItemWidth (180.0F);
       if (ImGui::ColorEdit4 ("Value", glm::value_ptr (val))) {
         if (it != n->properties.end ()) {
           it->second = std::to_string (val.x) + "," + std::to_string (val.y)
@@ -194,7 +194,7 @@ public:
         break;
       }
 
-      auto &res_mgr = m_runtime_ctx->resource_manager;
+      auto &res_mgr = m_runtime_ctx->resource_manager ();
       entt::id_type selected_id = entt::null;
       if (auto it = n->properties.find ("image_id");
           it != n->properties.end () && !it->second.empty ()) {
@@ -226,8 +226,7 @@ public:
 
         for (const auto &image_info : res_mgr.list_images ()) {
           bool const is_selected = (image_info.id == selected_id);
-          std::string item
-              = image_info.name + " (" + image_info.path + ")";
+          std::string item = image_info.name + " (" + image_info.path + ")";
           if (ImGui::Selectable (item.c_str (), is_selected)) {
             n->properties["image_id"] = std::to_string (image_info.id);
             res_mgr.load (wsl::rsc::image_id{ image_info.id });
@@ -244,7 +243,7 @@ public:
       for (auto &prop : n->properties) {
         char buf[256];
         std::snprintf (buf, sizeof (buf), "%s", prop.second.c_str ());
-        ImGui::SetNextItemWidth (120.0f);
+        ImGui::SetNextItemWidth (120.0F);
         if (ImGui::InputText (prop.first.c_str (), buf, sizeof (buf))) {
           prop.second = buf;
         }
@@ -337,8 +336,8 @@ shader_graph_editor::build_default_graph ()
   output.id = 1;
   output.name = "Material Output";
   output.kind = wsl::gfx::graph_node_kind::material_output;
-  output.pos_x = 400.0f;
-  output.pos_y = 200.0f;
+  output.pos_x = 400.0F;
+  output.pos_y = 200.0F;
 
   wsl::gfx::graph_pin albedo_pin{};
   albedo_pin.id = 101;
@@ -509,101 +508,101 @@ shader_graph_editor::add_node (wsl::gfx::graph_node_kind kind,
   switch (kind) {
   case graph_node_kind::uv0:
     node.name = "UV0";
-    add_pin (nid * 100 + 0, "UV", graph_pin_type::float2, false);
+    add_pin ((nid * 100) + 0, "UV", graph_pin_type::float2, false);
     break;
   case graph_node_kind::normal:
     node.name = "Geometry Normal";
-    add_pin (nid * 100 + 0, "Normal", graph_pin_type::float3, false);
+    add_pin ((nid * 100) + 0, "Normal", graph_pin_type::float3, false);
     break;
   case graph_node_kind::world_position:
     node.name = "World Position";
-    add_pin (nid * 100 + 0, "Position", graph_pin_type::float3, false);
+    add_pin ((nid * 100) + 0, "Position", graph_pin_type::float3, false);
     break;
   case graph_node_kind::model_pbr_albedo:
     node.name = "Model Albedo";
-    add_pin (nid * 100 + 0, "Albedo", graph_pin_type::float4, false);
+    add_pin ((nid * 100) + 0, "Albedo", graph_pin_type::float4, false);
     break;
   case graph_node_kind::model_pbr_metallic:
     node.name = "Model Metallic";
-    add_pin (nid * 100 + 0, "Metallic", graph_pin_type::float_scalar, false);
+    add_pin ((nid * 100) + 0, "Metallic", graph_pin_type::float_scalar, false);
     break;
   case graph_node_kind::model_pbr_roughness:
     node.name = "Model Roughness";
-    add_pin (nid * 100 + 0, "Roughness", graph_pin_type::float_scalar, false);
+    add_pin ((nid * 100) + 0, "Roughness", graph_pin_type::float_scalar, false);
     break;
   case graph_node_kind::model_pbr_normal:
     node.name = "Model Normal";
-    add_pin (nid * 100 + 0, "Normal", graph_pin_type::float3, false);
+    add_pin ((nid * 100) + 0, "Normal", graph_pin_type::float3, false);
     break;
   case graph_node_kind::model_pbr_emissive:
     node.name = "Model Emissive";
-    add_pin (nid * 100 + 0, "Emissive", graph_pin_type::float3, false);
+    add_pin ((nid * 100) + 0, "Emissive", graph_pin_type::float3, false);
     break;
   case graph_node_kind::texture_sample_2d:
     node.name = "Texture2D Sample";
-    add_pin (nid * 100 + 0, "UV", graph_pin_type::float2, true);
-    add_pin (nid * 100 + 1, "Tex", graph_pin_type::texture2d, true);
-    add_pin (nid * 100 + 2, "RGBA", graph_pin_type::float4, false);
+    add_pin ((nid * 100) + 0, "UV", graph_pin_type::float2, true);
+    add_pin ((nid * 100) + 1, "Tex", graph_pin_type::texture2d, true);
+    add_pin ((nid * 100) + 2, "RGBA", graph_pin_type::float4, false);
     break;
   case graph_node_kind::add:
     node.name = "Add";
-    add_pin (nid * 100 + 0, "A", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 1, "B", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 2, "Out", graph_pin_type::float4, false);
+    add_pin ((nid * 100) + 0, "A", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 1, "B", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 2, "Out", graph_pin_type::float4, false);
     break;
   case graph_node_kind::multiply:
     node.name = "Multiply";
-    add_pin (nid * 100 + 0, "A", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 1, "B", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 2, "Out", graph_pin_type::float4, false);
+    add_pin ((nid * 100) + 0, "A", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 1, "B", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 2, "Out", graph_pin_type::float4, false);
     break;
   case graph_node_kind::lerp:
     node.name = "Lerp";
-    add_pin (nid * 100 + 0, "A", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 1, "B", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 2, "T", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 3, "Out", graph_pin_type::float4, false);
+    add_pin ((nid * 100) + 0, "A", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 1, "B", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 2, "T", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 3, "Out", graph_pin_type::float4, false);
     break;
   case graph_node_kind::split_vector:
     node.name = "Split";
     // Takes a 4-component vector and exposes each channel as a scalar output.
-    add_pin (nid * 100 + 0, "Vector", graph_pin_type::float4, true);
-    add_pin (nid * 100 + 1, "X", graph_pin_type::float_scalar, false);
-    add_pin (nid * 100 + 2, "Y", graph_pin_type::float_scalar, false);
-    add_pin (nid * 100 + 3, "Z", graph_pin_type::float_scalar, false);
-    add_pin (nid * 100 + 4, "W", graph_pin_type::float_scalar, false);
+    add_pin ((nid * 100) + 0, "Vector", graph_pin_type::float4, true);
+    add_pin ((nid * 100) + 1, "X", graph_pin_type::float_scalar, false);
+    add_pin ((nid * 100) + 2, "Y", graph_pin_type::float_scalar, false);
+    add_pin ((nid * 100) + 3, "Z", graph_pin_type::float_scalar, false);
+    add_pin ((nid * 100) + 4, "W", graph_pin_type::float_scalar, false);
     break;
   case graph_node_kind::combine_vector:
     node.name = "Combine";
     // Builds a 4-component vector from up to four scalar inputs.
-    add_pin (nid * 100 + 0, "X", graph_pin_type::float_scalar, true);
-    add_pin (nid * 100 + 1, "Y", graph_pin_type::float_scalar, true);
-    add_pin (nid * 100 + 2, "Z", graph_pin_type::float_scalar, true);
-    add_pin (nid * 100 + 3, "W", graph_pin_type::float_scalar, true);
-    add_pin (nid * 100 + 4, "Vector", graph_pin_type::float4, false);
+    add_pin ((nid * 100) + 0, "X", graph_pin_type::float_scalar, true);
+    add_pin ((nid * 100) + 1, "Y", graph_pin_type::float_scalar, true);
+    add_pin ((nid * 100) + 2, "Z", graph_pin_type::float_scalar, true);
+    add_pin ((nid * 100) + 3, "W", graph_pin_type::float_scalar, true);
+    add_pin ((nid * 100) + 4, "Vector", graph_pin_type::float4, false);
     break;
   case graph_node_kind::uniform_float:
     node.name = "Float";
     node.properties["name"] = "u_Float" + std::to_string (nid);
     node.properties["default"] = "0.0";
-    add_pin (nid * 100 + 0, "Value", graph_pin_type::float_scalar, false);
+    add_pin ((nid * 100) + 0, "Value", graph_pin_type::float_scalar, false);
     break;
   case graph_node_kind::uniform_float3:
     node.name = "Float3";
     node.properties["name"] = "u_Float3_" + std::to_string (nid);
     node.properties["default"] = "1.0,1.0,1.0";
-    add_pin (nid * 100 + 0, "Value", graph_pin_type::float3, false);
+    add_pin ((nid * 100) + 0, "Value", graph_pin_type::float3, false);
     break;
   case graph_node_kind::uniform_float4:
     node.name = "Float4";
     node.properties["name"] = "u_Float4_" + std::to_string (nid);
     node.properties["default"] = "1.0,1.0,1.0,1.0";
-    add_pin (nid * 100 + 0, "Value", graph_pin_type::float4, false);
+    add_pin ((nid * 100) + 0, "Value", graph_pin_type::float4, false);
     break;
   case graph_node_kind::uniform_texture2d:
     node.name = "Texture2D";
     node.properties["name"] = "u_Tex2D_" + std::to_string (nid);
-    add_pin (nid * 100 + 0, "Tex", graph_pin_type::texture2d, false);
+    add_pin ((nid * 100) + 0, "Tex", graph_pin_type::texture2d, false);
     break;
   default:
     return;
@@ -615,8 +614,7 @@ shader_graph_editor::add_node (wsl::gfx::graph_node_kind kind,
 
   auto *nf = static_cast<ImFlow::ImNodeFlow *> (m_nodeflow_handle);
   if (nf) {
-    nf->placeNodeAt<GraphNodeWrapper> (pos, &m_graph, stored_id,
-                                       m_runtime_ctx);
+    nf->placeNodeAt<GraphNodeWrapper> (pos, &m_graph, stored_id, m_runtime_ctx);
   }
 }
 
@@ -702,7 +700,7 @@ shader_graph_editor::compile_and_preview ()
   // Inline the shared PBR module so the generated shader is lit with the
   // exact same engine PBR as the standard cube.frag material.
   {
-    auto &res_mgr = m_runtime_ctx->resource_manager;
+    auto &res_mgr = m_runtime_ctx->resource_manager ();
     std::vector<std::string> pbr_candidates;
     pbr_candidates.push_back (
         res_mgr.resolve_path ("engine://compiled_shaders/pbr_common.slang"));
@@ -794,7 +792,7 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
     return;
   }
 
-  auto &res_mgr = m_runtime_ctx->resource_manager;
+  auto &res_mgr = m_runtime_ctx->resource_manager ();
 
   auto prog_copy = std::make_shared<wsl::gfx::shader_program> (prog);
   m_preview_program_id
@@ -850,7 +848,8 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
         unsigned long long parsed
             = std::strtoull (image_it->second.c_str (), &end_ptr, 10);
         if (end_ptr != image_it->second.c_str () && *end_ptr == '\0') {
-          const wsl::rsc::image_id image_id{ static_cast<entt::id_type> (parsed) };
+          const wsl::rsc::image_id image_id{ static_cast<entt::id_type> (
+              parsed) };
           mat->default_parameters[uniform_name]
               = wsl::gfx::material_parameter (uniform_name, image_id);
           res_mgr.load (image_id);
@@ -882,7 +881,7 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
     return wsl::rsc::material_id{};
   }
 
-  auto &res_mgr = m_runtime_ctx->resource_manager;
+  auto &res_mgr = m_runtime_ctx->resource_manager ();
   auto proj = res_mgr.current_project ();
   if (!proj) {
     wsl::log::editor ()->warn ("Cannot create material: no active project.");
@@ -945,7 +944,8 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
         unsigned long long parsed
             = std::strtoull (image_it->second.c_str (), &end_ptr, 10);
         if (end_ptr != image_it->second.c_str () && *end_ptr == '\0') {
-          const wsl::rsc::image_id image_id{ static_cast<entt::id_type> (parsed) };
+          const wsl::rsc::image_id image_id{ static_cast<entt::id_type> (
+              parsed) };
           mat->default_parameters[uniform_name]
               = wsl::gfx::material_parameter (uniform_name, image_id);
           res_mgr.load (image_id);
@@ -1010,7 +1010,7 @@ shader_graph_editor::draw (const char *title, bool *open)
         auto mat_mtime = std::filesystem::last_write_time (mat_path);
         if (mat_mtime != m_mat_file_mtime) {
           m_mat_file_mtime = mat_mtime;
-          auto &res_mgr = m_runtime_ctx->resource_manager;
+          auto &res_mgr = m_runtime_ctx->resource_manager ();
           auto mid = res_mgr.register_material (mat_path);
           res_mgr.load (mid);
           m_compile_log = "Hot-reloaded material from disk.";

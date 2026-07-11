@@ -232,7 +232,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME ImNodeFlow
     GITHUB_REPOSITORY Fattorino/ImNodeFlow
-    GIT_TAG v1.2.2
+    GIT_TAG master
     DOWNLOAD_ONLY TRUE
 )
 

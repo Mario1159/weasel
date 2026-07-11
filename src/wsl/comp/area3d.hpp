@@ -87,9 +87,9 @@ struct area : world_component
   void
   sanitize_dimensions ()
   {
-    half_extents.x = std::max (half_extents.x, 1e-3F);
-    half_extents.y = std::max (half_extents.y, 1e-3F);
-    half_extents.z = std::max (half_extents.z, 1e-3F);
+    half_extents.x () = std::max (half_extents.x (), 1e-3F);
+    half_extents.y () = std::max (half_extents.y (), 1e-3F);
+    half_extents.z () = std::max (half_extents.z (), 1e-3F);
     radius = std::max (radius, 1e-3F);
   }
 
@@ -144,13 +144,14 @@ struct area : world_component
   void
   serialize (Archive &ar)
   {
-    area def{};
+    area const def{};
     int shape_i = (int)shape;
-    int def_shape_i = (int)def.shape;
+    int const def_shape_i = (int)def.shape;
 
     if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      if (shape_i != def_shape_i)
+      if (shape_i != def_shape_i) {
         ar (cereal::make_nvp ("shape", shape_i));
+      }
       serialize_field_if_diff (ar, "position", position, def.position);
       serialize_field_if_diff (ar, "rotation", rotation, def.rotation);
       serialize_field_if_diff (ar, "half_extents", half_extents,

@@ -51,7 +51,9 @@ jph_to_glm (JPH::RMat44Arg m)
 static inline glm::vec4
 jph_color_to_glm (JPH::ColorArg c)
 {
-  return { c.r / 255.0F, c.g / 255.0F, c.b / 255.0F, c.a / 255.0F };
+  return { static_cast<float> (c.r) / 255.0F, static_cast<float> (c.g) / 255.0F,
+           static_cast<float> (c.b) / 255.0F,
+           static_cast<float> (c.a) / 255.0F };
 }
 
 static inline JPH::Vec3
@@ -128,7 +130,7 @@ physics_debug_renderer::physics_debug_renderer (wsl::gfx::render_window &w,
 
   // --- Depth (shared with main renderer) ---
   pi.target_info.has_depth_stencil_target = true;
-  pi.target_info.depth_stencil_format = m_window->depth_format;
+  pi.target_info.depth_stencil_format = m_window->depth_format();
 
   pi.depth_stencil_state.enable_depth_test = true;
   pi.depth_stencil_state.enable_depth_write = true; // <-- IMPORTANT
@@ -283,11 +285,11 @@ physics_debug_renderer::upload_buffers ()
   uint8_t *dst = (uint8_t *)SDL_MapGPUTransferBuffer (
       m_ctx->gpu_device, m_upload_buffer.get (), false);
 
-  if (line_count != 0u) {
+  if (line_count != 0U) {
     memcpy (dst, m_line_vertices.data (), line_bytes);
   }
 
-  if (tri_count != 0u) {
+  if (tri_count != 0U) {
     memcpy (dst + line_bytes, m_tri_vertices.data (), tri_bytes);
   }
 
@@ -346,7 +348,7 @@ physics_debug_renderer::flush (const glm::mat4 &vp)
   if (m_ctx->main_pass != nullptr) {
     SDL_BindGPUVertexBuffers (m_ctx->main_pass, 0, &vb, 1);
 
-    if ((line_count != 0u) && m_pipeline_lines) {
+    if ((line_count != 0U) && m_pipeline_lines) {
       SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_lines.get ());
       SDL_DrawGPUPrimitives (m_ctx->main_pass, line_count, 1, 0, 0);
     }
@@ -354,7 +356,7 @@ physics_debug_renderer::flush (const glm::mat4 &vp)
     // ------------------------------------------------------------
     // Draw triangles
     // ------------------------------------------------------------
-    if ((tri_count != 0u) && (m_pipeline_tris)) {
+    if ((tri_count != 0U) && (m_pipeline_tris)) {
       vb.offset = line_bytes;
       SDL_BindGPUVertexBuffers (m_ctx->main_pass, 0, &vb, 1);
 

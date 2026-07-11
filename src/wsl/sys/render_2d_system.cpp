@@ -88,7 +88,7 @@ render_2d_system::on_render_record_draw_cmd (entt::registry &registry)
       const auto &sprite = view.get<comp::sprite_2d> (entity);
       const auto &transform = view.get<comp::world_transform> (entity);
 
-      glm::mat4 const m = static_cast<glm::mat4> (transform.value);
+      glm::mat4 const m = static_cast<glm::mat4> (transform.value ());
       glm::vec2 const position (m[3][0], m[3][1]);
       float const scale_x = glm::length (glm::vec3 (m[0]));
       float const scale_y = glm::length (glm::vec3 (m[1]));

@@ -67,28 +67,28 @@ register_repl_types (wsl::comp::singl::runtime_context &rtc)
 
   wsl::comp::for_each_type<wsl::comp::component_types>::apply (
       [&rtc]<typename T> () {
-        rtc.component_registry.register_world_component<T> ();
+        rtc.component_registry ().register_world_component<T> ();
       });
 
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::runtime_context> (
           { "Runtime Context", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::editor_context> (
           { "Editor Context", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::rsc::scene_manager> (
           { "Scene Manager", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::rsc::resource_manager_view> (
           { "Resource Manager", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::ui_manager> (
           { "UI Manager", true, false, true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_singleton_component<wsl::comp::singl::rendering_manager> (
           { "Rendering Manager", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_singleton_component<wsl::comp::singl::physics_manager> (
           { "Physics Manager", true });
 }
@@ -899,10 +899,11 @@ command_executor::set_current_project (std::shared_ptr<wsl::rsc::project> proj)
 void
 command_executor::ensure_runtime_module_loaded (bool allow_cached_metadata)
 {
-  if (!m_current_project || m_rtc.runtime_project_module.has_loaded_module ())
+  if (!m_current_project
+      || m_rtc.runtime_project_module ().has_loaded_module ())
     return;
   if (allow_cached_metadata
-      && m_rtc.runtime_project_module.has_loaded_cached_metadata ()) {
+      && m_rtc.runtime_project_module ().has_loaded_cached_metadata ()) {
     return;
   }
 
@@ -920,19 +921,19 @@ command_executor::ensure_runtime_module_loaded (bool allow_cached_metadata)
     return;
 
   if (allow_cached_metadata
-      && m_rtc.runtime_project_module.load_cached_metadata (
+      && m_rtc.runtime_project_module ().load_cached_metadata (
           *m_current_project)) {
     wsl::log::cli ()->info ("Runtime metadata loaded from cache.");
     return;
   }
 
   wsl::log::cli ()->info ("Compiling and loading runtime module...");
-  if (!m_rtc.runtime_project_module.compile_and_load (*m_current_project)) {
+  if (!m_rtc.runtime_project_module ().compile_and_load (*m_current_project)) {
     m_output << "Warning: runtime module compilation failed.\n"
              << "  Some user-defined types may not be available.\n";
     return;
   }
-  m_rtc.runtime_project_module.finalize_load ();
+  m_rtc.runtime_project_module ().finalize_load ();
   wsl::log::cli ()->info ("Runtime module loaded successfully.");
 }
 
@@ -1016,7 +1017,8 @@ command_executor::execute (const std::string &line)
   // Strip inline comments: remove everything from the first unquoted '#'.
   std::string cleaned;
   cleaned.reserve (line.size ());
-  bool in_sq = false, in_dq = false;
+  bool in_sq = false;
+  bool in_dq = false;
   for (char ch : line) {
     if (ch == '\'' && !in_dq) {
       in_sq = !in_sq;
@@ -1038,35 +1040,63 @@ command_executor::execute (const std::string &line)
     return "";
 
   const std::string &family = tokens[0];
-  if (family == "proj")
+  bool handled = false;
+  if (family == "proj") {
     cmd_proj (tokens);
-  else if (family == "scene")
+    handled = true;
+  }
+  if (!handled && family == "scene") {
     cmd_scene (tokens);
-  else if (family == "ent")
+    handled = true;
+  }
+  if (!handled && family == "ent") {
     cmd_ent (tokens);
-  else if (family == "comp")
+    handled = true;
+  }
+  if (!handled && family == "comp") {
     cmd_comp (tokens);
-  else if (family == "singl")
+    handled = true;
+  }
+  if (!handled && family == "singl") {
     cmd_singl (tokens);
-  else if (family == "sig")
+    handled = true;
+  }
+  if (!handled && family == "sig") {
     cmd_sig (tokens);
-  else if (family == "sys")
+    handled = true;
+  }
+  if (!handled && family == "sys") {
     cmd_sys (tokens);
-  else if (family == "check")
+    handled = true;
+  }
+  if (!handled && family == "check") {
     cmd_check (tokens);
-  else if (family == "rsc")
+    handled = true;
+  }
+  if (!handled && family == "rsc") {
     cmd_rsc (tokens);
-  else if (family == "prefab")
+    handled = true;
+  }
+  if (!handled && family == "prefab") {
     cmd_prefab (tokens);
-  else if (family == "help")
+    handled = true;
+  }
+  if (!handled && family == "help") {
     cmd_help ();
-  else if (family == "exit" || family == "quit")
+    handled = true;
+  }
+  if (!handled && (family == "exit" || family == "quit")) {
     m_output << "exit\n";
-  else if (family == "cls")
+    handled = true;
+  }
+  if (!handled && family == "cls") {
     m_output << "\033[2J\033[1;1H";
-  else
+    handled = true;
+  }
+  if (!handled) {
     m_output << "Unknown command family: " << family
              << ". Type 'help' for usage.\n";
+  }
 
   return m_output.str ();
 }
@@ -1128,7 +1158,7 @@ command_executor::tokenize (const std::string &line)
 wsl::rsc::scene *
 command_executor::get_active_scene ()
 {
-  return m_rtc.scene_manager.get_active ();
+  return m_rtc.scene_manager ().get_active ();
 }
 
 entt::entity
@@ -1235,37 +1265,64 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     }
     const std::string &field = tokens[2];
     const std::string &value = tokens[3];
-    bool found = true;
+    bool found = false;
     if (field == "name") {
       m_current_project->name = value;
-    } else if (field == "author") {
+      found = true;
+    }
+    if (!found && field == "author") {
       m_current_project->author = value;
-    } else if (field == "default_scene_path") {
+      found = true;
+    }
+    if (!found && field == "default_scene_path") {
       m_current_project->default_scene_path = value;
-    } else if (field == "systems_path") {
+      found = true;
+    }
+    if (!found && field == "systems_path") {
       m_current_project->systems_path = value;
-    } else if (field == "components_path") {
+      found = true;
+    }
+    if (!found && field == "components_path") {
       m_current_project->components_path = value;
-    } else if (field == "singletons_path") {
+      found = true;
+    }
+    if (!found && field == "singletons_path") {
       m_current_project->singletons_path = value;
-    } else if (field == "scenes_path") {
+      found = true;
+    }
+    if (!found && field == "scenes_path") {
       m_current_project->scenes_path = value;
-    } else if (field == "models_path") {
+      found = true;
+    }
+    if (!found && field == "models_path") {
       m_current_project->models_path = value;
-    } else if (field == "images_path") {
+      found = true;
+    }
+    if (!found && field == "images_path") {
       m_current_project->images_path = value;
-    } else if (field == "cubemaps_path") {
+      found = true;
+    }
+    if (!found && field == "cubemaps_path") {
       m_current_project->cubemaps_path = value;
-    } else if (field == "audio_path") {
+      found = true;
+    }
+    if (!found && field == "audio_path") {
       m_current_project->audio_path = value;
-    } else if (field == "ui_layouts_path") {
+      found = true;
+    }
+    if (!found && field == "ui_layouts_path") {
       m_current_project->ui_layouts_path = value;
-    } else if (field == "fonts_path") {
+      found = true;
+    }
+    if (!found && field == "fonts_path") {
       m_current_project->fonts_path = value;
-    } else if (field == "shaders_path") {
+      found = true;
+    }
+    if (!found && field == "shaders_path") {
       m_current_project->shaders_path = value;
-    } else {
-      found = false;
+      found = true;
+    }
+    if (!found) {
       m_output
           << "Unknown project field: " << field
           << ". Supported: name, author, default_scene_path, systems_path, "
@@ -1304,7 +1361,7 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       return;
     }
     m_active_scene_source_path.clear ();
-    auto &scene = m_rtc.scene_manager.create_default_scene (tokens[2], true);
+    auto &scene = m_rtc.scene_manager ().create_default_scene (tokens[2], true);
     m_output << "Scene '" << tokens[2] << "' created and set as active.\n";
     auto_save_scene ();
   } else if (action == "load") {
@@ -1358,7 +1415,7 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
         = std::filesystem::path (load_path).stem ().stem ().string ();
 
     try {
-      auto &scene = m_rtc.scene_manager.create_scene (scene_name, true);
+      auto &scene = m_rtc.scene_manager ().create_scene (scene_name, true);
       wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, scene);
       if (serializer.load_json (load_path)) {
         m_output << "Scene loaded from " << load_path << "\n";
@@ -1462,13 +1519,13 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     }
     // Count how many entities have each component type
     m_output << "Components:\n";
-    auto components = m_rtc.component_registry.get_world_components ();
+    auto components = m_rtc.component_registry ().get_world_components ();
     for (const auto *desc : components) {
       if (!desc)
         continue;
       size_t count = 0;
       for (auto [sid, storage] : reg.storage ()) {
-        entt::id_type stable = m_rtc.component_registry.to_stable_id (sid);
+        entt::id_type stable = m_rtc.component_registry ().to_stable_id (sid);
         if (stable == desc->type_id) {
           count = storage.size ();
           break;
@@ -1584,7 +1641,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
 
   if ((action == "ls" || action == "avail") && tokens.size () == 2) {
     ensure_runtime_module_loaded (true);
-    auto components = m_rtc.component_registry.get_world_components ();
+    auto components = m_rtc.component_registry ().get_world_components ();
     m_output << "Registered Components (" << components.size () << "):\n";
     for (const auto *component : components) {
       if (component == nullptr) {
@@ -1673,7 +1730,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     }
     ensure_runtime_module_loaded (true);
     const auto *descriptor
-        = m_rtc.component_registry.find_world_component (tokens[2]);
+        = m_rtc.component_registry ().find_world_component (tokens[2]);
     if (!descriptor) {
       m_output << "Unknown component: " << tokens[2] << "\n";
       return;
@@ -1710,13 +1767,13 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     for (auto [id, storage] : scene->get_registry ().storage ()) {
       if (storage.contains (e)) {
         if (const auto *descriptor
-            = m_rtc.component_registry.find_world_component (id)) {
+            = m_rtc.component_registry ().find_world_component (id)) {
           write_registered_entry (m_output, *descriptor);
           // Show property values via reflection
           entt::meta_type meta = entt::resolve (descriptor->type_id);
           if (meta && storage.value (e)) {
             format_component_properties (m_output, meta, storage.value (e),
-                                         "    ", &m_rtc.resource_manager);
+                                         "    ", &m_rtc.resource_manager ());
           }
         } else {
           m_output << " - Unknown Component (Hash: " << id << ")\n";
@@ -1728,7 +1785,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
       return;
     ensure_runtime_module_loaded ();
     const auto *descriptor
-        = m_rtc.component_registry.find_world_component (tokens[3]);
+        = m_rtc.component_registry ().find_world_component (tokens[3]);
     if (descriptor && descriptor->emplace_default) {
       if (descriptor->emplace_default (scene->get_registry (), e)) {
         m_output << "Added " << tokens[3] << " to " << tokens[2] << "\n";
@@ -1745,7 +1802,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
       return;
     ensure_runtime_module_loaded ();
     const auto *descriptor
-        = m_rtc.component_registry.find_world_component (tokens[3]);
+        = m_rtc.component_registry ().find_world_component (tokens[3]);
     if (descriptor && descriptor->remove) {
       if (descriptor->remove (scene->get_registry (), e)) {
         m_output << "Removed " << tokens[3] << " from " << tokens[2] << "\n";
@@ -1765,7 +1822,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
 
     ensure_runtime_module_loaded ();
     const auto *descriptor
-        = m_rtc.component_registry.find_world_component (tokens[3]);
+        = m_rtc.component_registry ().find_world_component (tokens[3]);
     if (!descriptor) {
       m_output << "Unknown component type: " << tokens[3] << "\n";
       return;
@@ -1794,7 +1851,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     void *comp_ptr = nullptr;
     for (auto [sid, storage] : registry.storage ()) {
       if (storage.contains (e)) {
-        entt::id_type stable = m_rtc.component_registry.to_stable_id (sid);
+        entt::id_type stable = m_rtc.component_registry ().to_stable_id (sid);
         if (stable == descriptor->type_id) {
           comp_ptr = storage.value (e);
           break;
@@ -1811,7 +1868,8 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     // Split property path on '.' for nested traversal
     std::string prop_path = tokens[4];
     std::vector<std::string> segments;
-    size_t start = 0, dot;
+    size_t start = 0;
+    size_t dot;
     while ((dot = prop_path.find ('.', start)) != std::string::npos) {
       segments.push_back (prop_path.substr (start, dot - start));
       start = dot + 1;
@@ -1881,7 +1939,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
 
     std::string set_msg;
     if (set_component_property (parent_val, prop_data, tokens[5], set_msg,
-                                &m_rtc.resource_manager)) {
+                                &m_rtc.resource_manager ())) {
       // Write the modified innermost parent back to wherever cur points
       std::memcpy (cur, parent_buf, parent_sz);
 
@@ -1934,7 +1992,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
   // ── singl ls ──
   if (action == "ls") {
     ensure_runtime_module_loaded (true);
-    auto singletons = m_rtc.singleton_registry.get_singleton_components ();
+    auto singletons = m_rtc.singleton_registry ().get_singleton_components ();
     auto *scene = get_active_scene ();
     m_output << "Singleton Components (" << singletons.size () << "):\n";
     for (const auto *s : singletons) {
@@ -1958,7 +2016,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
           entt::meta_type meta = entt::resolve (s->type_id);
           if (meta)
             format_component_properties (m_output, meta, ptr, "    ",
-                                         &m_rtc.resource_manager);
+                                         &m_rtc.resource_manager ());
         }
       }
     }
@@ -1973,7 +2031,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     }
     ensure_runtime_module_loaded (true);
     const auto *descriptor
-        = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
+        = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
     if (!descriptor) {
       m_output << "Unknown singleton: " << tokens[2] << "\n";
       return;
@@ -2001,7 +2059,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     }
     ensure_runtime_module_loaded ();
     const auto *desc
-        = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
+        = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
     if (!desc) {
       m_output << "Unknown singleton component: " << tokens[2] << "\n";
       return;
@@ -2105,7 +2163,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     }
     ensure_runtime_module_loaded ();
     const auto *desc
-        = m_rtc.singleton_registry.find_singleton_component (tokens[2]);
+        = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
     if (!desc) {
       m_output << "Unknown singleton component: " << tokens[2] << "\n";
       return;
@@ -2128,7 +2186,8 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
 
     std::string prop_path = tokens[3];
     std::vector<std::string> segments;
-    size_t start = 0, dot;
+    size_t start = 0;
+    size_t dot;
     while ((dot = prop_path.find ('.', start)) != std::string::npos) {
       segments.push_back (prop_path.substr (start, dot - start));
       start = dot + 1;
@@ -2188,7 +2247,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
 
     std::string set_msg;
     if (set_component_property (parent_val, prop_data, tokens[4], set_msg,
-                                &m_rtc.resource_manager)) {
+                                &m_rtc.resource_manager ())) {
       std::memcpy (cur, parent_buf, parent_sz);
 
       void *modified = parent_buf;
@@ -2240,11 +2299,11 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
   const std::string &sub = tokens[1];
 
   if (sub == "ls") {
-    if (m_rtc.signal_db.entries.empty ()) {
+    if (m_rtc.signal_db ().entries.empty ()) {
       m_output << "No signals declared.\n";
       return;
     }
-    for (const auto &kv : m_rtc.signal_db.entries) {
+    for (const auto &kv : m_rtc.signal_db ().entries) {
       const auto &entry = kv.second;
       m_output << entry.type_name << " (owner=" << entry.owner_system_type_name
                << ") listeners=" << entry.listener_count
@@ -2254,11 +2313,11 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
   }
 
   if (sub == "handlers") {
-    if (m_rtc.signal_db.connectable_handlers.empty ()) {
+    if (m_rtc.signal_db ().connectable_handlers.empty ()) {
       m_output << "No connectable handlers declared.\n";
       return;
     }
-    for (const auto &h : m_rtc.signal_db.connectable_handlers) {
+    for (const auto &h : m_rtc.signal_db ().connectable_handlers) {
       m_output << h.signal_type_name << " -> " << h.system_type_name
                << "::" << h.handler_name << "\n";
     }
@@ -2266,20 +2325,20 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
   }
 
   if (sub == "connections") {
-    auto conns = m_rtc.signal_hub.get_all_connections ();
+    auto conns = m_rtc.signal_hub ().get_all_connections ();
     if (conns.empty ()) {
       m_output << "No signal connections.\n";
       return;
     }
     for (const auto &c : conns) {
       std::string signal_name = std::to_string (c.signal_type_id);
-      auto it = m_rtc.signal_db.entries.find (c.signal_type_id);
-      if (it != m_rtc.signal_db.entries.end ())
+      auto it = m_rtc.signal_db ().entries.find (c.signal_type_id);
+      if (it != m_rtc.signal_db ().entries.end ())
         signal_name = it->second.type_name;
 
       std::string system_name = "<unknown>";
       if (auto sd
-          = m_rtc.system_factory_registry.find_system (c.system_type_id))
+          = m_rtc.system_factory_registry ().find_system (c.system_type_id))
         system_name = sd->display_name;
 
       m_output << signal_name << " -> " << system_name << "::" << c.handler_name
@@ -2303,7 +2362,7 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
 
     // Resolve signal type id by full or simple name
     entt::id_type signal_id = 0;
-    for (const auto &kv : m_rtc.signal_db.entries) {
+    for (const auto &kv : m_rtc.signal_db ().entries) {
       const auto &entry = kv.second;
       if (entry.type_name == signal_arg) {
         signal_id = kv.first;
@@ -2326,11 +2385,12 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
 
     // Resolve system type id by display name or type name
     entt::id_type system_id = 0;
-    if (auto sd = m_rtc.system_factory_registry.find_system (system_arg)) {
+    if (auto sd = m_rtc.system_factory_registry ().find_system (system_arg)) {
       system_id = sd->type_id;
     } else {
       // try match by type name
-      if (auto sd2 = m_rtc.system_factory_registry.find_system (system_arg)) {
+      if (auto sd2
+          = m_rtc.system_factory_registry ().find_system (system_arg)) {
         system_id = sd2->type_id;
       }
     }
@@ -2358,12 +2418,12 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
 
     bool ok = false;
     if (sub == "connect") {
-      ok = m_rtc.signal_hub.connect (signal_id, system_id, handler_arg, src,
-                                     tgt);
+      ok = m_rtc.signal_hub ().connect (signal_id, system_id, handler_arg, src,
+                                        tgt);
       m_output << (ok ? "Connected." : "Failed to connect.") << "\n";
     } else {
-      ok = m_rtc.signal_hub.disconnect (signal_id, system_id, handler_arg, src,
-                                        tgt);
+      ok = m_rtc.signal_hub ().disconnect (signal_id, system_id, handler_arg,
+                                           src, tgt);
       m_output << (ok ? "Disconnected." : "Failed to disconnect.") << "\n";
     }
     return;
@@ -2389,14 +2449,14 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
 
     // Collect core systems (always present in every scene).
     std::vector<std::string> core_names;
-    if (m_rtc.core_systems) {
-      for (sys::ecs_system *sys : m_rtc.core_systems->to_vec ()) {
+    if (m_rtc.core_systems ()) {
+      for (sys::ecs_system *sys : m_rtc.core_systems ()->to_vec ()) {
         if (sys)
           core_names.push_back (sys->get_name ());
       }
     } else {
       // Headless mode: list core system display names from the factory.
-      auto all = m_rtc.system_factory_registry.get_systems ();
+      auto all = m_rtc.system_factory_registry ().get_systems ();
       for (const auto *desc : all) {
         if (desc && !desc->runtime_registered)
           core_names.push_back (desc->display_name);
@@ -2425,7 +2485,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
     }
   } else if (tokens[1] == "avail") {
     ensure_runtime_module_loaded (true);
-    auto systems = m_rtc.system_factory_registry.get_systems ();
+    auto systems = m_rtc.system_factory_registry ().get_systems ();
 
     std::vector<const reg::system_factory_registry::system_descriptor *>
         user_systems;
@@ -2534,7 +2594,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
-    auto *desc = m_rtc.system_factory_registry.find_system (sys_name);
+    auto *desc = m_rtc.system_factory_registry ().find_system (sys_name);
     if (desc == nullptr) {
       m_output << "Unknown system: " << sys_name << "\n";
     } else if (!desc->runtime_registered) {
@@ -2543,7 +2603,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
                << "  Use `sys add` only for custom systems created via `sys "
                   "create`.\n";
     } else {
-      auto sys = m_rtc.system_factory_registry.create (sys_name, *scene);
+      auto sys = m_rtc.system_factory_registry ().create (sys_name, *scene);
       if (sys) {
         scene->add_system_instance (std::move (sys));
         m_output << "Added system '" << sys_name << "' to active scene.\n";
@@ -2666,7 +2726,7 @@ resource_state_str (wsl::rsc::shader_state s)
 void
 command_executor::cmd_rsc (const std::vector<std::string> &tokens)
 {
-  auto &mgr = m_rtc.resource_manager;
+  auto &mgr = m_rtc.resource_manager ();
 
   auto list_type = [&] (std::string_view label, auto &&list_fn) {
     auto items = list_fn ();
@@ -3209,7 +3269,7 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
     std::error_code ec;
     std::filesystem::create_directories (
         std::filesystem::path (path).parent_path (), ec);
-    if (m_rtc.resource_manager.save_scene (*scene, path, true)) {
+    if (m_rtc.resource_manager ().save_scene (*scene, path, true)) {
       m_output << "Prefab saved to " << path << "\n";
     } else {
       m_output << "Failed to save prefab.\n";
@@ -3255,7 +3315,7 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
     std::string scene_name
         = std::filesystem::path (load_path).stem ().stem ().string ();
     try {
-      auto &scene = m_rtc.scene_manager.create_scene (scene_name, true);
+      auto &scene = m_rtc.scene_manager ().create_scene (scene_name, true);
       wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, scene);
       if (serializer.load_json (load_path)) {
         m_output << "Prefab loaded from " << load_path << "\n";
@@ -3284,7 +3344,7 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
-    auto &mgr = m_rtc.resource_manager;
+    auto &mgr = m_rtc.resource_manager ();
     const std::string &name_or_path = tokens[2];
 
     std::optional<wsl::rsc::scene_id> prefab_id;

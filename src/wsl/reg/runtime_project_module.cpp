@@ -231,9 +231,9 @@ write_runtime_meta_context_sync (std::ostream &output)
 void
 clear_runtime_registries (comp::singl::runtime_context &runtime_ctx)
 {
-  runtime_ctx.component_registry.clear_runtime_components ();
-  runtime_ctx.singleton_registry.clear_runtime_singletons (runtime_ctx.world);
-  runtime_ctx.system_factory_registry.clear_runtime_systems ();
+  runtime_ctx.component_registry().clear_runtime_components ();
+  runtime_ctx.singleton_registry().clear_runtime_singletons (runtime_ctx.world());
+  runtime_ctx.system_factory_registry().clear_runtime_systems ();
 }
 
 void
@@ -478,7 +478,7 @@ runtime_project_module::write_registration_cache () const
   cache.source_hash = m_source_hash;
 
   for (const component_registry::descriptor *desc :
-       m_runtime_ctx->component_registry.get_world_components (
+       m_runtime_ctx->component_registry().get_world_components (
            world_component_order::type_id)) {
     if (desc != nullptr && desc->runtime_registered) {
       cache.components.push_back (make_cached_registration (*desc));
@@ -486,7 +486,7 @@ runtime_project_module::write_registration_cache () const
   }
 
   for (const singleton_registry::descriptor *desc :
-       m_runtime_ctx->singleton_registry.get_singleton_components (
+       m_runtime_ctx->singleton_registry().get_singleton_components (
            singleton_component_order::type_id)) {
     if (desc != nullptr && desc->runtime_registered) {
       cache.singletons.push_back (make_cached_registration (*desc));
@@ -494,7 +494,7 @@ runtime_project_module::write_registration_cache () const
   }
 
   for (const system_factory_registry::system_descriptor *desc :
-       m_runtime_ctx->system_factory_registry.get_systems (
+       m_runtime_ctx->system_factory_registry().get_systems (
            system_order::type_id)) {
     if (desc != nullptr && desc->runtime_registered) {
       cache.systems.push_back (make_cached_registration (*desc));
@@ -578,20 +578,20 @@ runtime_project_module::apply_registration_cache (
   clear_runtime_registries (*m_runtime_ctx);
 
   for (const cached_registration &entry : cache.components) {
-    m_runtime_ctx->component_registry.register_cached_runtime_world_component (
+    m_runtime_ctx->component_registry().register_cached_runtime_world_component (
         static_cast<entt::id_type> (entry.type_id), entry.type_name,
         entry.display_name);
   }
 
   for (const cached_registration &entry : cache.singletons) {
-    m_runtime_ctx->singleton_registry
+    m_runtime_ctx->singleton_registry()
         .register_cached_runtime_singleton_component (
             static_cast<entt::id_type> (entry.type_id), entry.type_name,
             entry.display_name);
   }
 
   for (const cached_registration &entry : cache.systems) {
-    m_runtime_ctx->system_factory_registry.register_cached_runtime_system (
+    m_runtime_ctx->system_factory_registry().register_cached_runtime_system (
         static_cast<entt::id_type> (entry.type_id), entry.type_name,
         entry.display_name);
   }
@@ -840,9 +840,9 @@ runtime_project_module::finalize_load ()
   runtime_registrar::set_active_runtime_context (m_runtime_ctx);
 
   runtime_module_registration_context ctx{
-    m_runtime_ctx->component_registry,
-    m_runtime_ctx->singleton_registry,
-    m_runtime_ctx->system_factory_registry,
+    m_runtime_ctx->component_registry(),
+    m_runtime_ctx->singleton_registry(),
+    m_runtime_ctx->system_factory_registry(),
   };
 
   wsl::log::cmake ()->debug (

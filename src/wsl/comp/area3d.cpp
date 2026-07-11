@@ -35,19 +35,23 @@ area::sync_applied_cache ()
 bool
 area::has_structural_change () const
 {
-  return shape != applied_shape || half_extents.x != applied_half_extents.x
-         || half_extents.y != applied_half_extents.y
-         || half_extents.z != applied_half_extents.z
+  return shape != applied_shape
+         || half_extents.x () != applied_half_extents.x ()
+         || half_extents.y () != applied_half_extents.y ()
+         || half_extents.z () != applied_half_extents.z ()
          || radius != applied_radius;
 }
 
 bool
 area::has_transform_change () const
 {
-  return position.x != applied_position.x || position.y != applied_position.y
-         || position.z != applied_position.z || rotation.x != applied_rotation.x
-         || rotation.y != applied_rotation.y || rotation.z != applied_rotation.z
-         || rotation.w != applied_rotation.w;
+  return position.x () != applied_position.x ()
+         || position.y () != applied_position.y ()
+         || position.z () != applied_position.z ()
+         || rotation.x () != applied_rotation.x ()
+         || rotation.y () != applied_rotation.y ()
+         || rotation.z () != applied_rotation.z ()
+         || rotation.w () != applied_rotation.w ();
 }
 
 void

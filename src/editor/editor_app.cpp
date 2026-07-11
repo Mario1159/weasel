@@ -26,7 +26,7 @@ std::string
 editor_app::execute_command (const std::string &command)
 {
   wsl::cli::command_executor executor (*m_runtime_context);
-  auto proj = m_runtime_context->resource_manager.current_project ();
+  auto proj = m_runtime_context->resource_manager ().current_project ();
   if (proj) {
     executor.set_current_project (std::move (proj));
   }
@@ -36,7 +36,7 @@ editor_app::execute_command (const std::string &command)
 void
 editor_app::set_project_path (const std::string &path)
 {
-  m_runtime_context->resource_manager.load_project (path);
+  m_runtime_context->resource_manager ().load_project (path);
 }
 
 std::unique_ptr<wsl::gfx::imgui_renderer_interface>
@@ -77,7 +77,7 @@ editor_app::on_update (double dt)
 
   // Start or restart the editor server when a project becomes loaded
   if (auto current_proj
-      = m_runtime_context->resource_manager.current_project ()) {
+      = m_runtime_context->resource_manager ().current_project ()) {
     std::string proj_root
         = std::filesystem::weakly_canonical (current_proj->root_path).string ();
     if (m_project_path != proj_root) {

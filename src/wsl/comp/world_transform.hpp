@@ -20,7 +20,20 @@ namespace comp
 
 struct world_transform : world_component
 {
-  math::mat44f value{};
+private:
+  math::mat44f m_value;
+
+public:
+  math::mat44f const &
+  value () const
+  {
+    return m_value;
+  }
+  math::mat44f &
+  value ()
+  {
+    return m_value;
+  }
 
   bool custom_inspect (const char *label,
                        comp::singl::runtime_context *runtime);
@@ -32,7 +45,7 @@ struct world_transform : world_component
   serialize (Archive &archive)
   {
     world_transform def{};
-    serialize_field_if_diff (archive, "matrix", value, def.value);
+    serialize_field_if_diff (archive, "matrix", m_value, def.m_value);
   }
 };
 

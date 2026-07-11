@@ -197,7 +197,7 @@ void set_focus_toggle_keys (const RENDERDOC_InputButton *keys, int num);
 // ---------------------------------------------------------------------
 
 //! Maximum supported vector width per the spec.
-inline constexpr uint32_t kMaxAnnotationVectorWidth = 4;
+inline constexpr uint32_t k_max_annotation_vector_width = 4;
 
 /*!
  * \brief Tag a GPU object (texture, buffer, ...) with a key/value pair.
@@ -225,7 +225,7 @@ annotate_object (void *api_object, const char *key, const T &value)
 inline void
 annotate_object (void *api_object, const char *key, const char *value)
 {
-  RDAnnotationHelper helper (value);
+  RDAnnotationHelper const helper (value);
   set_object_annotation_impl (api_object, key, &helper);
 }
 
@@ -235,8 +235,8 @@ annotate_object (void *api_object, const char *key, std::string_view value)
 {
   // RDAnnotationHelper's const char* ctor stores the pointer; we need a
   // null-terminated copy for the lifetime of the call.
-  std::string tmp (value);
-  RDAnnotationHelper helper (tmp.c_str ());
+  std::string const tmp (value);
+  RDAnnotationHelper const helper (tmp.c_str ());
   set_object_annotation_impl (api_object, key, &helper);
 }
 
@@ -270,7 +270,7 @@ inline void
 annotate_command (void *queue_or_command_buffer, const char *key,
                   const char *value)
 {
-  RDAnnotationHelper helper (value);
+  RDAnnotationHelper const helper (value);
   set_command_annotation_impl (queue_or_command_buffer, key, &helper);
 }
 
@@ -279,8 +279,8 @@ inline void
 annotate_command (void *queue_or_command_buffer, const char *key,
                   std::string_view value)
 {
-  std::string tmp (value);
-  RDAnnotationHelper helper (tmp.c_str ());
+  std::string const tmp (value);
+  RDAnnotationHelper const helper (tmp.c_str ());
   set_command_annotation_impl (queue_or_command_buffer, key, &helper);
 }
 

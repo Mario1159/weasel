@@ -4,13 +4,16 @@
 #include "signal_hub_fwd.hpp"
 
 #include <algorithm>
+#include <ranges>
+
 #include <cereal/cereal.hpp>
 
 namespace wsl::reg::sig
 {
 
 /*!
- * \brief Describes a related component type used by signal and iteration metadata.
+ * \brief Describes a related component type used by signal and iteration
+ * metadata.
  */
 struct component_type_debug_entry
 {
@@ -23,7 +26,7 @@ inline std::vector<component_type_debug_entry>
 make_component_type_debug_entries ()
 {
   std::vector<component_type_debug_entry> entries;
-  entries.reserve (sizeof... (Components));
+  entries.reserve (sizeof...(Components));
 
   (entries.push_back (component_type_debug_entry{
        comp::stable_type_id<Components> (),
@@ -38,13 +41,11 @@ contains_component_type (
     const std::vector<component_type_debug_entry> &component_types,
     entt::id_type component_type_id)
 {
-  for (const component_type_debug_entry &entry : component_types) {
-    if (entry.type_id == component_type_id) {
-      return true;
-    }
-  }
-
-  return false;
+  return std::ranges::any_of (
+      component_types,
+      [component_type_id] (const component_type_debug_entry &entry) {
+        return entry.type_id == component_type_id;
+      });
 }
 
 template <typename... Components>
@@ -55,7 +56,7 @@ matches_component_set (entt::registry &registry, entt::entity entity)
     return false;
   }
 
-  if constexpr (sizeof... (Components) == 0) {
+  if constexpr (sizeof...(Components) == 0) {
     return true;
   }
 
@@ -66,7 +67,7 @@ template <typename... Components>
 inline entity_match_predicate_t
 make_entity_match_predicate ()
 {
-  if constexpr (sizeof... (Components) == 0) {
+  if constexpr (sizeof...(Components) == 0) {
     return nullptr;
   }
 
@@ -251,12 +252,12 @@ struct signal_debug_db
     const entt::id_type system_type_id = comp::stable_type_id<OwnerSystem> ();
     const std::string name = handler_name != nullptr ? handler_name : "";
 
-    std::erase_if (system_handlers,
-                   [system_type_id, &name] (
-                       const system_handler_debug_entry &entry) {
-                     return entry.system_type_id == system_type_id
-                            && entry.handler_name == name;
-                   });
+    std::erase_if (
+        system_handlers,
+        [system_type_id, &name] (const system_handler_debug_entry &entry) {
+          return entry.system_type_id == system_type_id
+                 && entry.handler_name == name;
+        });
 
     system_handlers.push_back (
         { system_type_id,
@@ -267,24 +268,24 @@ struct signal_debug_db
   void
   declare_iteration (const char *iteration_name)
   {
-    static_assert (
-        (comp::world_component_type<Components> && ...),
-        "System iteration declarations may only reference "
-        "wsl::comp::world_component types.");
+    static_assert ((comp::world_component_type<Components> && ...),
+                   "System iteration declarations may only reference "
+                   "wsl::comp::world_component types.");
 
     const entt::id_type system_type_id = comp::stable_type_id<OwnerSystem> ();
     const std::string name = iteration_name != nullptr ? iteration_name : "";
 
-    std::erase_if (system_iterations,
-                   [system_type_id, &name] (
-                       const system_iteration_debug_entry &entry) {
-                     return entry.system_type_id == system_type_id
-                            && entry.iteration_name == name;
-                   });
+    std::erase_if (
+        system_iterations,
+        [system_type_id, &name] (const system_iteration_debug_entry &entry) {
+          return entry.system_type_id == system_type_id
+                 && entry.iteration_name == name;
+        });
 
     system_iteration_debug_entry entry;
     entry.system_type_id = system_type_id;
-    entry.system_type_name = std::string (entt::type_name<OwnerSystem> ().value ());
+    entry.system_type_name
+        = std::string (entt::type_name<OwnerSystem> ().value ());
     entry.iteration_name = name;
     entry.component_types = make_component_type_debug_entries<Components...> ();
     entry.entity_matches = make_entity_match_predicate<Components...> ();
@@ -295,10 +296,9 @@ struct signal_debug_db
   void
   declare_connectable_handler (const char *handler_name)
   {
-    static_assert (
-        (comp::world_component_type<Components> && ...),
-        "Connectable handler declarations may only reference "
-        "wsl::comp::world_component types.");
+    static_assert ((comp::world_component_type<Components> && ...),
+                   "Connectable handler declarations may only reference "
+                   "wsl::comp::world_component types.");
 
     const entt::id_type signal_type_id = comp::stable_type_id<Signal> ();
     const entt::id_type system_type_id = comp::stable_type_id<OwnerSystem> ();
@@ -316,7 +316,8 @@ struct signal_debug_db
     entry.signal_type_id = signal_type_id;
     entry.signal_type_name = std::string (entt::type_name<Signal> ().value ());
     entry.system_type_id = system_type_id;
-    entry.system_type_name = std::string (entt::type_name<OwnerSystem> ().value ());
+    entry.system_type_name
+        = std::string (entt::type_name<OwnerSystem> ().value ());
     entry.handler_name = name;
     entry.component_types = make_component_type_debug_entries<Components...> ();
     entry.entity_matches = make_entity_match_predicate<Components...> ();
@@ -337,9 +338,9 @@ struct signal_debug_db
 
   void
   note_connection (entt::id_type signal_type_id, const char *signal_type_name,
-                   entt::id_type system_type_id,
-                   const char *system_type_name, const char *handler_name,
-                   entt::entity source_entity, entt::entity target_entity)
+                   entt::id_type system_type_id, const char *system_type_name,
+                   const char *handler_name, entt::entity source_entity,
+                   entt::entity target_entity)
   {
     connections.push_back (
         { signal_type_id, signal_type_name != nullptr ? signal_type_name : "",
@@ -359,21 +360,20 @@ struct signal_debug_db
   void
   clear_system_declarations (entt::id_type system_type_id)
   {
-    std::erase_if (system_handlers, [system_type_id] (
-                                        const system_handler_debug_entry &entry) {
-      return entry.system_type_id == system_type_id;
-    });
+    std::erase_if (system_handlers,
+                   [system_type_id] (const system_handler_debug_entry &entry) {
+                     return entry.system_type_id == system_type_id;
+                   });
 
     std::erase_if (
-        system_iterations, [system_type_id] (
-                               const system_iteration_debug_entry &entry) {
+        system_iterations,
+        [system_type_id] (const system_iteration_debug_entry &entry) {
           return entry.system_type_id == system_type_id;
         });
 
     std::erase_if (
-        connectable_handlers, [system_type_id] (
-                                  const signal_connectable_handler_debug_entry
-                                      &entry) {
+        connectable_handlers,
+        [system_type_id] (const signal_connectable_handler_debug_entry &entry) {
           return entry.system_type_id == system_type_id;
         });
 
@@ -441,7 +441,7 @@ struct signal_hub
   signal_hub () = default;
 
   signal_hub (entt::dispatcher &dispatcher_ref, signal_debug_db &db_ref)
-    : dispatcher (&dispatcher_ref), db (&db_ref)
+      : dispatcher (&dispatcher_ref), db (&db_ref)
   {
   }
 
@@ -457,11 +457,10 @@ struct signal_hub
   void
   clear_system_declarations (entt::id_type system_type_id)
   {
-    std::erase_if (
-        registered_signal_sources, [system_type_id] (
-                                       const registered_signal_source &entry) {
-          return entry.owner_system_type_id == system_type_id;
-        });
+    std::erase_if (registered_signal_sources,
+                   [system_type_id] (const registered_signal_source &entry) {
+                     return entry.owner_system_type_id == system_type_id;
+                   });
 
     std::erase_if (
         registered_connectable_handlers,
@@ -488,9 +487,9 @@ struct signal_hub
     result.reserve (connected_handlers.size ());
 
     for (const connected_handler &handler : connected_handlers) {
-      result.push_back (
-          { handler.signal_type_id, handler.system_type_id, handler.handler_name,
-            handler.source_entity, handler.target_entity });
+      result.push_back ({ handler.signal_type_id, handler.system_type_id,
+                          handler.handler_name, handler.source_entity,
+                          handler.target_entity });
     }
 
     return result;
@@ -505,7 +504,8 @@ struct signal_hub
     }
 
     for (const signal_connection_debug_entry &connection : db->connections) {
-      if (connection.source_entity == entity || connection.target_entity == entity) {
+      if (connection.source_entity == entity
+          || connection.target_entity == entity) {
         result.push_back (&connection);
       }
     }
@@ -528,11 +528,11 @@ struct signal_hub
       }
     }
 
-    std::sort (result.begin (), result.end (),
-               [] (const signal_debug_entry *lhs,
-                   const signal_debug_entry *rhs) {
-                 return lhs->type_name < rhs->type_name;
-               });
+    std::sort (
+        result.begin (), result.end (),
+        [] (const signal_debug_entry *lhs, const signal_debug_entry *rhs) {
+          return lhs->type_name < rhs->type_name;
+        });
     return result;
   }
 
@@ -563,11 +563,11 @@ struct signal_hub
       }
     }
 
-    std::sort (result.begin (), result.end (),
-               [] (const signal_debug_entry *lhs,
-                   const signal_debug_entry *rhs) {
-                 return lhs->type_name < rhs->type_name;
-               });
+    std::sort (
+        result.begin (), result.end (),
+        [] (const signal_debug_entry *lhs, const signal_debug_entry *rhs) {
+          return lhs->type_name < rhs->type_name;
+        });
     return result;
   }
 
@@ -579,7 +579,8 @@ struct signal_hub
       return result;
     }
 
-    for (const system_iteration_debug_entry &iteration : db->system_iterations) {
+    for (const system_iteration_debug_entry &iteration :
+         db->system_iterations) {
       if (iteration.matches_entity (registry, entity)) {
         result.push_back (&iteration);
       }
@@ -631,10 +632,9 @@ struct signal_hub
   void
   declare_signal (signal_source_entity_fn extract_source_entity = nullptr)
   {
-    static_assert (
-        (comp::world_component_type<Components> && ...),
-        "Signal declarations may only reference "
-        "wsl::comp::world_component types.");
+    static_assert ((comp::world_component_type<Components> && ...),
+                   "Signal declarations may only reference "
+                   "wsl::comp::world_component types.");
 
     const entt::id_type signal_type_id = comp::stable_type_id<Signal> ();
 
@@ -642,11 +642,10 @@ struct signal_hub
       db->template declare_signal<Signal, OwnerSystem, Components...> ();
     }
 
-    std::erase_if (
-        registered_signal_sources, [signal_type_id] (
-                                       const registered_signal_source &entry) {
-          return entry.signal_type_id == signal_type_id;
-        });
+    std::erase_if (registered_signal_sources,
+                   [signal_type_id] (const registered_signal_source &entry) {
+                     return entry.signal_type_id == signal_type_id;
+                   });
 
     registered_signal_source source;
     source.signal_type_id = signal_type_id;
@@ -654,7 +653,8 @@ struct signal_hub
     source.owner_system_type_id = comp::stable_type_id<OwnerSystem> ();
     source.owner_system_type_name
         = std::string (entt::type_name<OwnerSystem> ().value ());
-    source.component_types = make_component_type_debug_entries<Components...> ();
+    source.component_types
+        = make_component_type_debug_entries<Components...> ();
     source.extract_source_entity = extract_source_entity;
     registered_signal_sources.push_back (std::move (source));
   }
@@ -683,10 +683,9 @@ struct signal_hub
   declare_connectable_handler (const char *handler_name,
                                handler_invoke_fn invoke)
   {
-    static_assert (
-        (comp::world_component_type<Components> && ...),
-        "Connectable handler declarations may only reference "
-        "wsl::comp::world_component types.");
+    static_assert ((comp::world_component_type<Components> && ...),
+                   "Connectable handler declarations may only reference "
+                   "wsl::comp::world_component types.");
 
     const entt::id_type signal_type_id = comp::stable_type_id<Signal> ();
     const entt::id_type system_type_id = comp::stable_type_id<OwnerSystem> ();
@@ -697,23 +696,24 @@ struct signal_hub
                                                Components...> (handler_name);
     }
 
-    std::erase_if (
-        registered_connectable_handlers,
-        [signal_type_id, system_type_id, &name] (
-            const registered_connectable_handler &entry) {
-          return entry.signal_type_id == signal_type_id
-                 && entry.system_type_id == system_type_id
-                 && entry.handler_name == name;
-        });
+    std::erase_if (registered_connectable_handlers,
+                   [signal_type_id, system_type_id,
+                    &name] (const registered_connectable_handler &entry) {
+                     return entry.signal_type_id == signal_type_id
+                            && entry.system_type_id == system_type_id
+                            && entry.handler_name == name;
+                   });
 
     registered_connectable_handler handler;
     handler.signal_type_id = signal_type_id;
-    handler.signal_type_name = std::string (entt::type_name<Signal> ().value ());
+    handler.signal_type_name
+        = std::string (entt::type_name<Signal> ().value ());
     handler.system_type_id = system_type_id;
     handler.system_type_name
         = std::string (entt::type_name<OwnerSystem> ().value ());
     handler.handler_name = name;
-    handler.component_types = make_component_type_debug_entries<Components...> ();
+    handler.component_types
+        = make_component_type_debug_entries<Components...> ();
     handler.entity_matches = make_entity_match_predicate<Components...> ();
     handler.invoke = invoke;
     registered_connectable_handlers.push_back (std::move (handler));
@@ -722,13 +722,11 @@ struct signal_hub
   bool
   has_signal_source (entt::id_type signal_type_id) const
   {
-    for (const registered_signal_source &source : registered_signal_sources) {
-      if (source.signal_type_id == signal_type_id) {
-        return true;
-      }
-    }
-
-    return false;
+    return std::ranges::any_of (
+        registered_signal_sources,
+        [signal_type_id] (const registered_signal_source &source) {
+          return source.signal_type_id == signal_type_id;
+        });
   }
 
   bool
@@ -795,12 +793,10 @@ struct signal_hub
     connected_handlers.push_back (connection);
 
     if (db != nullptr) {
-      db->note_connection (signal_type_id,
-                           registered_handler->signal_type_name.c_str (),
-                           system_type_id,
-                           registered_handler->system_type_name.c_str (),
-                           handler_name.c_str (), source_entity,
-                           target_entity);
+      db->note_connection (
+          signal_type_id, registered_handler->signal_type_name.c_str (),
+          system_type_id, registered_handler->system_type_name.c_str (),
+          handler_name.c_str (), source_entity, target_entity);
     }
 
     return true;
@@ -812,16 +808,16 @@ struct signal_hub
               entt::entity target_entity)
   {
     const std::size_t old_size = connected_handlers.size ();
-    std::erase_if (
-        connected_handlers,
-        [signal_type_id, system_type_id, &handler_name, source_entity,
-         target_entity] (const connected_handler &connection) {
-          return connection.signal_type_id == signal_type_id
-                 && connection.system_type_id == system_type_id
-                 && connection.handler_name == handler_name
-                 && connection.source_entity == source_entity
-                 && connection.target_entity == target_entity;
-        });
+    std::erase_if (connected_handlers,
+                   [signal_type_id, system_type_id, &handler_name,
+                    source_entity,
+                    target_entity] (const connected_handler &connection) {
+                     return connection.signal_type_id == signal_type_id
+                            && connection.system_type_id == system_type_id
+                            && connection.handler_name == handler_name
+                            && connection.source_entity == source_entity
+                            && connection.target_entity == target_entity;
+                   });
 
     if (connected_handlers.size () == old_size) {
       return false;
@@ -893,7 +889,8 @@ struct signal_hub
         }
 
         if (connection.entity_matches != nullptr
-            && !connection.entity_matches (*registry, connection.target_entity)) {
+            && !connection.entity_matches (*registry,
+                                           connection.target_entity)) {
           continue;
         }
       }

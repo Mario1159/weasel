@@ -35,7 +35,7 @@ resolve_active_game_camera (rsc::scene &scene)
   if (scene.camera != entt::null
       && registry.all_of<comp::camera, comp::world_transform> (scene.camera)) {
     const auto &camera = registry.get<comp::camera> (scene.camera);
-    if (!camera.only_for_editor) {
+    if (!camera.only_for_editor ()) {
       return scene.camera;
     }
   }
@@ -43,7 +43,7 @@ resolve_active_game_camera (rsc::scene &scene)
   auto view = registry.view<comp::camera, comp::world_transform> ();
   for (const entt::entity entity : view) {
     const auto &camera = view.get<comp::camera> (entity);
-    if (!camera.only_for_editor) {
+    if (!camera.only_for_editor ()) {
       return entity;
     }
   }
@@ -58,14 +58,14 @@ rsc::scene_manager::register_meta ()
 {
   using namespace entt::literals;
 
-  entt::meta_factory<rsc::scene_manager> ()
-      .type (entt::type_hash<rsc::scene_manager>::value ())
-      .custom<comp::meta_info> (
-          comp::meta_info{ "Scene Manager",
+  auto &&factory = entt::meta_factory<rsc::scene_manager> ()
+                       .type (entt::type_hash<rsc::scene_manager>::value ())
+                       .custom<comp::meta_info> (comp::meta_info{
+                           "Scene Manager",
                            "Controls scene creation and active scene "
                            "selection for the current runtime.",
-                           "" })
-      .func<&rsc::scene_manager::custom_inspect> ("custom_inspect"_hs);
+                           "" });
+  (factory.func<&rsc::scene_manager::custom_inspect>)("custom_inspect"_hs);
 }
 
 void
@@ -83,7 +83,7 @@ rsc::scene_manager::set_active (scene *scene_ptr)
 
   if (m_active_scene != nullptr) {
     if (auto *runtime_ctx = m_main_world.get_runtime_context ()) {
-      m_active_scene->m_running = runtime_ctx->is_running;
+      m_active_scene->m_running = runtime_ctx->is_running ();
     }
     m_active_scene->init ();
 
@@ -100,15 +100,15 @@ rsc::scene_manager::set_active (scene *scene_ptr)
 
       if (ctx.contains<comp::singl::ui_manager *> ()) {
         auto &ui = *ctx.get<comp::singl::ui_manager *> ();
-        ui.needs_reload = true;
+        ui.needs_reload () = true;
         ui.prepare_scene (registry);
       }
     }
   }
 
   m_main_world.get_runtime_context ()
-      ->dispatcher.trigger<wsl::event::scene_changed> (
-          { old_scene, m_active_scene });
+      ->dispatcher ()
+      .trigger<wsl::event::scene_changed> ({ old_scene, m_active_scene });
 }
 
 rsc::scene &
@@ -136,11 +136,11 @@ rsc::scene_manager::create_default_scene (const std::string &name,
 
   // Register built-in resources and add to scene load list
   const model_id builtin_cube_id
-      = runtime_ctx->resource_manager.register_model ("builtin://cube");
+      = runtime_ctx->resource_manager ().register_model ("builtin://cube");
   const model_id builtin_sphere_id
-      = runtime_ctx->resource_manager.register_model ("builtin://sphere");
+      = runtime_ctx->resource_manager ().register_model ("builtin://sphere");
   const cubemap_id builtin_skybox_id
-      = runtime_ctx->resource_manager.register_cubemap (
+      = runtime_ctx->resource_manager ().register_cubemap (
           "builtin/skybox_procedural");
   new_scene.add_resource (io::resource_type::model, builtin_cube_id.value);
   new_scene.add_resource (io::resource_type::model, builtin_sphere_id.value);
@@ -163,7 +163,7 @@ rsc::scene_manager::create_default_scene (const std::string &name,
   auto &cam_transform
       = reg.emplace<comp::transform> (cam_entity, glm::vec3 (0.0F, 0.0F, 5.0F));
   auto &cam_world_transform = reg.emplace<comp::world_transform> (cam_entity);
-  cam_world_transform.value = cam_transform.model ();
+  cam_world_transform.value () = cam_transform.model ();
   reg.emplace<comp::camera> (cam_entity);
   new_scene.camera = cam_entity;
 

@@ -2,7 +2,6 @@
 #include "wsl/log/log.hpp"
 
 #include <SDL3/SDL_filesystem.h>
-#include <filesystem>
 
 #include "comp/area3d.hpp"
 #include "comp/camera.hpp"
@@ -34,11 +33,15 @@
 #include <CLI/CLI.hpp>
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <filesystem>
-#include <iostream>
 #include <memory>
+#include <optional>
 #include <sstream>
+#include <stdexcept>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace wsl::cli
@@ -70,28 +73,28 @@ register_all (wsl::comp::singl::runtime_context &rtc)
 
   wsl::comp::for_each_type<wsl::comp::component_types>::apply (
       [&rtc]<typename T> () {
-        rtc.component_registry.register_world_component<T> ();
+        rtc.component_registry ().register_world_component<T> ();
       });
 
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::runtime_context> (
           { "Runtime Context", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::editor_context> (
           { "Editor Context", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::rsc::scene_manager> (
           { "Scene Manager", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::rsc::resource_manager_view> (
           { "Resource Manager", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::ui_manager> (
           { "UI Manager", true, false, true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_singleton_component<wsl::comp::singl::rendering_manager> (
           { "Rendering Manager", true });
-  rtc.singleton_registry
+  rtc.singleton_registry ()
       .register_singleton_component<wsl::comp::singl::physics_manager> (
           { "Physics Manager", true });
 }
@@ -101,8 +104,8 @@ quote_repl_arg (std::string_view arg)
 {
   const bool needs_quotes
       = arg.empty ()
-        || std::any_of (arg.begin (), arg.end (), [] (unsigned char ch) {
-             return std::isspace (ch) || ch == '"' || ch == '\'';
+        || std::any_of (arg.begin (), arg.end (), [] (unsigned char c) {
+             return std::isspace (c) || c == '"' || c == '\'';
            });
   if (!needs_quotes) {
     return std::string (arg);
@@ -111,11 +114,11 @@ quote_repl_arg (std::string_view arg)
   std::string out;
   out.reserve (arg.size () + 2);
   out.push_back ('"');
-  for (char ch : arg) {
-    if (ch == '"' || ch == '\\') {
+  for (char chr : arg) {
+    if (chr == '"' || chr == '\\') {
       out.push_back ('\\');
     }
-    out.push_back (ch);
+    out.push_back (chr);
   }
   out.push_back ('"');
   return out;
@@ -163,7 +166,8 @@ cli_handler::parse (int argc, char **argv)
   auto *create_project
       = app.add_subcommand ("create-project", "Create a new project");
   create_project->alias ("--create-project");
-  std::string cp_path, cp_name;
+  std::string cp_path;
+  std::string cp_name;
   bool no_subdir = false;
   create_project->add_option ("path", cp_path, "Project parent path");
   create_project->add_option ("name", cp_name, "Project name");
@@ -173,7 +177,8 @@ cli_handler::parse (int argc, char **argv)
   auto *create_scene
       = app.add_subcommand ("create-scene", "Create a new scene");
   create_scene->alias ("--create-scene");
-  std::string cs_path, cs_name;
+  std::string cs_path;
+  std::string cs_name;
   std::vector<std::string> cs_systems;
   create_scene->add_option ("path", cs_path, "Scene path")->required ();
   create_scene->add_option ("name", cs_name, "Scene name")->required ();
@@ -189,7 +194,8 @@ cli_handler::parse (int argc, char **argv)
   auto *validate_scene
       = app.add_subcommand ("validate-scene", "Validate a scene");
   validate_scene->alias ("--validate-scene");
-  std::string vs_scene_path, vs_proj_path;
+  std::string vs_scene_path;
+  std::string vs_proj_path;
   validate_scene
       ->add_option ("scene_path", vs_scene_path, "Path to scene.wscn.json")
       ->required ();
@@ -198,7 +204,8 @@ cli_handler::parse (int argc, char **argv)
 
   auto *proj_cmd = app.add_subcommand ("proj", "Manage project configuration");
   auto *proj_new = proj_cmd->add_subcommand ("new", "Create a project");
-  std::string proj_new_path, proj_new_name;
+  std::string proj_new_path;
+  std::string proj_new_name;
   proj_new->add_option ("path", proj_new_path, "Project path")->required ();
   proj_new->add_option ("name", proj_new_name, "Project name")->required ();
 
@@ -216,7 +223,8 @@ cli_handler::parse (int argc, char **argv)
       = proj_cmd->add_subcommand ("save", "Save the loaded project");
   auto *proj_set
       = proj_cmd->add_subcommand ("set", "Set a project field value");
-  std::string proj_set_field, proj_set_value;
+  std::string proj_set_field;
+  std::string proj_set_value;
   proj_set
       ->add_option ("field", proj_set_field,
                     "Field name (e.g. name, author, default_scene_path)")
@@ -268,7 +276,8 @@ cli_handler::parse (int argc, char **argv)
 
   auto *ent_ren
       = ent_cmd->add_subcommand ("ren", "Rename an entity in the active scene");
-  std::string ent_ren_id, ent_ren_name;
+  std::string ent_ren_id;
+  std::string ent_ren_name;
   ent_ren->add_option ("id", ent_ren_id, "Entity id")->required ();
   ent_ren->add_option ("new_name", ent_ren_name, "New entity name")
       ->required ();
@@ -289,7 +298,8 @@ cli_handler::parse (int argc, char **argv)
 
   auto *comp_add
       = comp_cmd->add_subcommand ("add", "Add a component to an entity");
-  std::string comp_add_entity_id, comp_add_type;
+  std::string comp_add_entity_id;
+  std::string comp_add_type;
   comp_add->add_option ("entity_id", comp_add_entity_id, "Entity id")
       ->required ();
   comp_add->add_option ("type", comp_add_type, "Component type name")
@@ -297,14 +307,18 @@ cli_handler::parse (int argc, char **argv)
 
   auto *comp_rm
       = comp_cmd->add_subcommand ("rm", "Remove a component from an entity");
-  std::string comp_rm_entity_id, comp_rm_type;
+  std::string comp_rm_entity_id;
+  std::string comp_rm_type;
   comp_rm->add_option ("entity_id", comp_rm_entity_id, "Entity id")
       ->required ();
   comp_rm->add_option ("type", comp_rm_type, "Component type name")
       ->required ();
 
   auto *comp_set = comp_cmd->add_subcommand ("set", "Set a component property");
-  std::string comp_set_entity_id, comp_set_type, comp_set_prop, comp_set_val;
+  std::string comp_set_entity_id;
+  std::string comp_set_type;
+  std::string comp_set_prop;
+  std::string comp_set_val;
   comp_set->add_option ("entity_id", comp_set_entity_id, "Entity id")
       ->required ();
   comp_set->add_option ("type", comp_set_type, "Component type name")
@@ -343,7 +357,9 @@ cli_handler::parse (int argc, char **argv)
                           "Also generate a .cpp source file");
   auto *singl_set
       = singl_cmd->add_subcommand ("set", "Set a singleton component property");
-  std::string singl_set_name, singl_set_prop, singl_set_val;
+  std::string singl_set_name;
+  std::string singl_set_prop;
+  std::string singl_set_val;
   singl_set->add_option ("name", singl_set_name, "Singleton name")->required ();
   singl_set->add_option ("property", singl_set_prop, "Property path")
       ->required ();
@@ -384,7 +400,8 @@ cli_handler::parse (int argc, char **argv)
 
   auto *rsc_add = rsc_cmd->add_subcommand (
       "add", "Register a resource (and optionally load it with --load)");
-  std::string rsc_add_type, rsc_add_path;
+  std::string rsc_add_type;
+  std::string rsc_add_path;
   bool rsc_add_load = false;
   rsc_add->add_option ("type", rsc_add_type, "Resource type")->required ();
   rsc_add->add_option ("path", rsc_add_path, "Path to the resource file")
@@ -394,21 +411,24 @@ cli_handler::parse (int argc, char **argv)
 
   auto *rsc_rm = rsc_cmd->add_subcommand (
       "rm", "Remove a registered resource by name or path");
-  std::string rsc_rm_type, rsc_rm_name;
+  std::string rsc_rm_type;
+  std::string rsc_rm_name;
   rsc_rm->add_option ("type", rsc_rm_type, "Resource type")->required ();
   rsc_rm->add_option ("name", rsc_rm_name, "Resource name or path")
       ->required ();
 
   auto *rsc_load = rsc_cmd->add_subcommand (
       "load", "Load an already-registered resource by name or path");
-  std::string rsc_load_type, rsc_load_name;
+  std::string rsc_load_type;
+  std::string rsc_load_name;
   rsc_load->add_option ("type", rsc_load_type, "Resource type")->required ();
   rsc_load->add_option ("name", rsc_load_name, "Resource name or path")
       ->required ();
 
   auto *rsc_unload = rsc_cmd->add_subcommand (
       "unload", "Unload a registered resource by name or path");
-  std::string rsc_unload_type, rsc_unload_name;
+  std::string rsc_unload_type;
+  std::string rsc_unload_name;
   rsc_unload->add_option ("type", rsc_unload_type, "Resource type")
       ->required ();
   rsc_unload->add_option ("name", rsc_unload_name, "Resource name or path")
@@ -416,7 +436,8 @@ cli_handler::parse (int argc, char **argv)
 
   auto *rsc_info = rsc_cmd->add_subcommand (
       "info", "Display metadata for a registered resource");
-  std::string rsc_info_type, rsc_info_name;
+  std::string rsc_info_type;
+  std::string rsc_info_name;
   rsc_info->add_option ("type", rsc_info_type, "Resource type")->required ();
   rsc_info->add_option ("name", rsc_info_name, "Resource name or path")
       ->required ();
@@ -436,7 +457,8 @@ cli_handler::parse (int argc, char **argv)
       ->required ();
   auto *prefab_instantiate = prefab_cmd->add_subcommand (
       "instantiate", "Instantiate a prefab into the active scene");
-  std::string prefab_instantiate_name, prefab_instantiate_parent;
+  std::string prefab_instantiate_name;
+  std::string prefab_instantiate_parent;
   prefab_instantiate
       ->add_option ("name", prefab_instantiate_name, "Prefab name or path")
       ->required ();
@@ -562,16 +584,16 @@ cli_handler::parse (int argc, char **argv)
         cam_entity, glm::vec3 (0.0F, 0.0F, 5.0F));
     auto &cam_world_transform
         = reg.emplace<wsl::comp::world_transform> (cam_entity);
-    cam_world_transform.value = cam_transform.model ();
+    cam_world_transform.value () = cam_transform.model ();
     reg.emplace<wsl::comp::camera> (cam_entity);
     scene.camera = cam_entity;
 
     for (const auto &sys_name : cs_systems) {
-      rtc.system_factory_registry.register_system (
+      rtc.system_factory_registry ().register_system (
           sys_name.c_str (), [sys_name] (wsl::rsc::scene &) {
             return std::make_unique<dummy_system> (sys_name);
           });
-      if (auto sys = rtc.system_factory_registry.create (sys_name, scene)) {
+      if (auto sys = rtc.system_factory_registry ().create (sys_name, scene)) {
         scene.add_system_instance (std::move (sys), false);
       }
     }
@@ -622,12 +644,13 @@ cli_handler::parse (int argc, char **argv)
             || std::filesystem::exists (project_root / proj->components_path)
             || std::filesystem::exists (project_root / proj->singletons_path);
       if (has_runtime_code) {
-        if (!rtc.runtime_project_module.compile_and_load (*proj)) {
-          wsl::log::cli ()->error ("Runtime module validation failed: {}",
-                                   rtc.runtime_project_module.last_status ());
+        if (!rtc.runtime_project_module ().compile_and_load (*proj)) {
+          wsl::log::cli ()->error (
+              "Runtime module validation failed: {}",
+              rtc.runtime_project_module ().last_status ());
           return { true, 1, std::nullopt };
         }
-        rtc.runtime_project_module.finalize_load ();
+        rtc.runtime_project_module ().finalize_load ();
       }
 
       wsl::rsc::scene scene{ &rtc, nullptr, "ValidationScene" };
@@ -648,30 +671,40 @@ cli_handler::parse (int argc, char **argv)
   if (*proj_new) {
     repl_command
         = build_repl_command ({ "proj", "new", proj_new_path, proj_new_name });
-  } else if (*proj_load) {
+  }
+  if (!repl_command && *proj_load) {
     repl_command = build_repl_command ({ "proj", "load", proj_load_path });
-  } else if (*proj_info) {
+  }
+  if (!repl_command && *proj_info) {
     repl_command = build_repl_command ({ "proj", "info" });
-  } else if (*proj_save) {
+  }
+  if (!repl_command && *proj_save) {
     repl_command = build_repl_command ({ "proj", "save" });
-  } else if (*proj_set) {
+  }
+  if (!repl_command && *proj_set) {
     repl_command = build_repl_command (
         { "proj", "set", proj_set_field, proj_set_value });
-  } else if (*scene_new) {
+  }
+  if (!repl_command && *scene_new) {
     repl_command = build_repl_command ({ "scene", "new", scene_new_name });
-  } else if (*scene_load) {
+  }
+  if (!repl_command && *scene_load) {
     repl_command = build_repl_command ({ "scene", "load", scene_load_path });
-  } else if (*scene_save) {
+  }
+  if (!repl_command && *scene_save) {
     std::vector<std::string> args{ "scene", "save" };
     if (!scene_save_path.empty ()) {
       args.push_back (scene_save_path);
     }
     repl_command = build_repl_command (args);
-  } else if (*scene_ls) {
+  }
+  if (!repl_command && *scene_ls) {
     repl_command = build_repl_command ({ "scene", "ls" });
-  } else if (*scene_status) {
+  }
+  if (!repl_command && *scene_status) {
     repl_command = build_repl_command ({ "scene", "status" });
-  } else if (*ent_new) {
+  }
+  if (!repl_command && *ent_new) {
     std::vector<std::string> args{ "ent", "new" };
     if (ent_new_empty) {
       args.push_back ("--empty");
@@ -680,107 +713,137 @@ cli_handler::parse (int argc, char **argv)
       args.push_back (ent_new_name);
     }
     repl_command = build_repl_command (args);
-  } else if (*ent_ls) {
+  }
+  if (!repl_command && *ent_ls) {
     repl_command = build_repl_command ({ "ent", "ls" });
-  } else if (*ent_rm) {
+  }
+  if (!repl_command && *ent_rm) {
     repl_command = build_repl_command ({ "ent", "rm", ent_rm_id });
-  } else if (*ent_ren) {
+  }
+  if (!repl_command && *ent_ren) {
     repl_command
         = build_repl_command ({ "ent", "ren", ent_ren_id, ent_ren_name });
-  } else if (*ent_inspect) {
+  }
+  if (!repl_command && *ent_inspect) {
     repl_command = build_repl_command ({ "ent", "inspect", ent_inspect_id });
-  } else if (*comp_ls) {
+  }
+  if (!repl_command && *comp_ls) {
     std::vector<std::string> args{ "comp", "ls" };
     if (!comp_ls_entity_id.empty ()) {
       args.push_back (comp_ls_entity_id);
     }
     repl_command = build_repl_command (args);
-  } else if (*comp_avail) {
+  }
+  if (!repl_command && *comp_avail) {
     repl_command = build_repl_command ({ "comp", "avail" });
-  } else if (*comp_add) {
+  }
+  if (!repl_command && *comp_add) {
     repl_command = build_repl_command (
         { "comp", "add", comp_add_entity_id, comp_add_type });
-  } else if (*comp_rm) {
+  }
+  if (!repl_command && *comp_rm) {
     repl_command = build_repl_command (
         { "comp", "rm", comp_rm_entity_id, comp_rm_type });
-  } else if (*comp_set) {
+  }
+  if (!repl_command && *comp_set) {
     repl_command
         = build_repl_command ({ "comp", "set", comp_set_entity_id,
                                 comp_set_type, comp_set_prop, comp_set_val });
-  } else if (*comp_create) {
+  }
+  if (!repl_command && *comp_create) {
     std::vector<std::string> args{ "comp", "create", comp_create_name };
     if (comp_create_source) {
       args.push_back ("--source");
     }
     repl_command = build_repl_command (args);
-  } else if (*singl_ls) {
+  }
+  if (!repl_command && *singl_ls) {
     repl_command = build_repl_command ({ "singl", "ls" });
-  } else if (*singl_add) {
+  }
+  if (!repl_command && *singl_add) {
     repl_command = build_repl_command ({ "singl", "add", singl_add_name });
-  } else if (*singl_create) {
+  }
+  if (!repl_command && *singl_create) {
     std::vector<std::string> args{ "singl", "create", singl_create_name };
     if (singl_create_source) {
       args.push_back ("--source");
     }
     repl_command = build_repl_command (args);
-  } else if (*singl_set) {
+  }
+  if (!repl_command && *singl_set) {
     repl_command = build_repl_command (
         { "singl", "set", singl_set_name, singl_set_prop, singl_set_val });
-  } else if (*sys_ls) {
+  }
+  if (!repl_command && *sys_ls) {
     repl_command = build_repl_command ({ "sys", "ls" });
-  } else if (*sys_avail) {
+  }
+  if (!repl_command && *sys_avail) {
     repl_command = build_repl_command ({ "sys", "avail" });
-  } else if (*sys_add) {
+  }
+  if (!repl_command && *sys_add) {
     repl_command = build_repl_command ({ "sys", "add", sys_add_name });
-  } else if (*sys_create) {
+  }
+  if (!repl_command && *sys_create) {
     std::vector<std::string> args{ "sys", "create", sys_create_name };
     if (sys_create_source) {
       args.push_back ("--source");
     }
     repl_command = build_repl_command (args);
-  } else if (*sig_cmd) {
+  }
+  if (!repl_command && *sig_cmd) {
     // Build a repl command that forwards all remaining args to the REPL 'sig'
     // handler
     std::vector<std::string> args;
     args.push_back ("sig");
-    for (const auto &s : app.remaining ())
-      args.push_back (s);
+    for (const auto &remaining_str : app.remaining ()) {
+      args.push_back (remaining_str);
+    }
     repl_command = build_repl_command (args);
-  } else if (*rsc_ls) {
+  }
+  if (!repl_command && *rsc_ls) {
     std::vector<std::string> args{ "rsc", "ls" };
     if (!rsc_ls_type.empty ()) {
       args.push_back (rsc_ls_type);
     }
     repl_command = build_repl_command (args);
-  } else if (*rsc_add) {
+  }
+  if (!repl_command && *rsc_add) {
     std::vector<std::string> args{ "rsc", "add", rsc_add_type, rsc_add_path };
     if (rsc_add_load) {
       args.push_back ("--load");
     }
     repl_command = build_repl_command (args);
-  } else if (*rsc_rm) {
+  }
+  if (!repl_command && *rsc_rm) {
     repl_command
         = build_repl_command ({ "rsc", "rm", rsc_rm_type, rsc_rm_name });
-  } else if (*rsc_load) {
+  }
+  if (!repl_command && *rsc_load) {
     repl_command
         = build_repl_command ({ "rsc", "load", rsc_load_type, rsc_load_name });
-  } else if (*rsc_unload) {
+  }
+  if (!repl_command && *rsc_unload) {
     repl_command = build_repl_command (
         { "rsc", "unload", rsc_unload_type, rsc_unload_name });
-  } else if (*rsc_info) {
+  }
+  if (!repl_command && *rsc_info) {
     repl_command
         = build_repl_command ({ "rsc", "info", rsc_info_type, rsc_info_name });
-  } else if (*prefab_ls) {
+  }
+  if (!repl_command && *prefab_ls) {
     repl_command = build_repl_command ({ "prefab", "ls" });
-  } else if (*prefab_save) {
+  }
+  if (!repl_command && *prefab_save) {
     std::vector<std::string> args{ "prefab", "save" };
     if (!prefab_save_path.empty ()) {
       args.push_back (prefab_save_path);
     }
     repl_command = build_repl_command (args);
-  } else if (*prefab_load) {
+  }
+  if (!repl_command && *prefab_load) {
     repl_command = build_repl_command ({ "prefab", "load", prefab_load_path });
-  } else if (*prefab_instantiate) {
+  }
+  if (!repl_command && *prefab_instantiate) {
     std::vector<std::string> args{ "prefab", "instantiate",
                                    prefab_instantiate_name };
     if (!prefab_instantiate_parent.empty ()) {
@@ -829,11 +892,11 @@ cli_handler::default_engine_resource_path ()
 {
   const char *base_path = SDL_GetBasePath ();
   if (base_path != nullptr) {
-    std::filesystem::path exe_dir (base_path);
-
-    std::filesystem::path share_dir = exe_dir / ".." / "share" / "weasel";
-    if (std::filesystem::exists (share_dir / "compiled_shaders"))
+    std::filesystem::path const exe_dir (base_path);
+    std::filesystem::path const share_dir = exe_dir / ".." / "share" / "weasel";
+    if (std::filesystem::exists (share_dir / "compiled_shaders")) {
       return share_dir.string ();
+    }
   }
 
 #ifdef WEASEL_BUILD_DIR
