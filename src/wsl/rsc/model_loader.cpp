@@ -49,7 +49,7 @@
 #include <variant>
 #include <vector>
 
-#include "../math/mikktspace_header"
+#include "../math/mikktspace.hpp"
 
 // ---- Tangent generation (MikkTSpace) for any primitive type that has:
 // prim.indices (vector<uint32_t>)
@@ -86,67 +86,37 @@ model_loader::generate_tangents_mikktspace_any (Prim &prim) const
     return;
   }
 
-  struct mikkt_ctx
-  {
-    Prim *p;
-  } ctx_data{ &prim };
+  const auto num_verts = static_cast<uint32_t> (prim.vertices.size ());
 
-  SMikkTSpaceInterface iface{};
-  iface.m_getNumFaces = [] (const SMikkTSpaceContext *c) -> int {
-    auto *p = static_cast<const mikkt_ctx *> (c->m_p_user_data)->p;
-    return int (p->indices.size () / 3);
-  };
+  std::vector<wsl::math::vec3f> positions (num_verts);
+  std::vector<wsl::math::vec3f> normals (num_verts);
+  std::vector<wsl::math::vec2f> texcoords (num_verts);
 
-  iface.m_getNumVerticesOfFace
-      = [] (const SMikkTSpaceContext *, int) -> int { return 3; };
+  for (uint32_t i = 0; i < num_verts; ++i) {
+    const auto &v = prim.vertices[i];
+    positions[i] = wsl::math::vec3f (v.pos.x, v.pos.y, v.pos.z);
+    normals[i] = wsl::math::vec3f (v.normal.x, v.normal.y, v.normal.z);
+    texcoords[i] = wsl::math::vec2f (v.uv.x, v.uv.y);
+  }
 
-  iface.m_getPosition
-      = [] (const SMikkTSpaceContext *c, float out_pos[3], int face, int vert) {
-          auto *p = static_cast<const mikkt_ctx *> (c->m_p_user_data)->p;
-          uint32_t const idx = p->indices[(face * 3) + vert];
-          const auto &v = p->vertices[idx];
-          out_pos[0] = v.pos.x;
-          out_pos[1] = v.pos.y;
-          out_pos[2] = v.pos.z;
-        };
+  std::vector<uint32_t> tri_indices (prim.indices.begin (),
+                                     prim.indices.end ());
 
-  iface.m_getNormal
-      = [] (const SMikkTSpaceContext *c, float out_n[3], int face, int vert) {
-          auto *p = static_cast<const mikkt_ctx *> (c->m_p_user_data)->p;
-          uint32_t const idx = p->indices[(face * 3) + vert];
-          const auto &v = p->vertices[idx];
-          out_n[0] = v.normal.x;
-          out_n[1] = v.normal.y;
-          out_n[2] = v.normal.z;
-        };
+  std::vector<wsl::math::vec4f> tangents;
 
-  iface.m_getTexCoord
-      = [] (const SMikkTSpaceContext *c, float out_uv[2], int face, int vert) {
-          auto *p = static_cast<const mikkt_ctx *> (c->m_p_user_data)->p;
-          uint32_t const idx = p->indices[(face * 3) + vert];
-          const auto &v = p->vertices[idx];
-          out_uv[0] = v.uv.x;
-          out_uv[1] = v.uv.y;
-        };
-
-  iface.m_setTSpaceBasic
-      = [] (const SMikkTSpaceContext *c, const float tangent[3], float sign,
-            int face, int vert) {
-          auto *p = static_cast<const mikkt_ctx *> (c->m_p_user_data)->p;
-          uint32_t const idx = p->indices[(face * 3) + vert];
-          auto &v = p->vertices[idx];
-          v.tangent = glm::vec4 (tangent[0], tangent[1], tangent[2], sign);
-        };
-
-  SMikkTSpaceContext mctx{};
-  mctx.m_p_interface = &iface;
-  mctx.m_p_user_data = &ctx_data;
-
-  const bool ok = gen_tang_space_default (&mctx) != 0;
+  wsl::math::mikktspace_generator gen;
+  const bool ok = gen.gen_tang_space_default (positions, normals, texcoords,
+                                              tri_indices, tangents);
   if (!ok) {
     for (auto &v : prim.vertices) {
       v.tangent = glm::vec4 (1, 0, 0, 1);
     }
+    return;
+  }
+
+  for (uint32_t i = 0; i < num_verts; ++i) {
+    prim.vertices[i].tangent = glm::vec4 (tangents[i].x (), tangents[i].y (),
+                                          tangents[i].z (), tangents[i].w ());
   }
 }
 
