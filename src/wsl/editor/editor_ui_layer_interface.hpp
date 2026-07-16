@@ -1,9 +1,13 @@
 #pragma once
 
-#include <SDL3/SDL.h>
 #include <entt/entity/fwd.hpp>
 #include <functional>
 #include <string>
+
+namespace wsl
+{
+class engine_event;
+}
 
 namespace wsl::comp::singl
 {
@@ -20,9 +24,9 @@ public:
   virtual ~editor_ui_layer_interface () = default;
 
   virtual void initialize () = 0;
-  virtual void
-  set_console_command_handler (std::function<std::string (const std::string &)> handler) = 0;
-  virtual void handle_event (const SDL_Event &e) = 0;
+  virtual void set_console_command_handler (
+      std::function<std::string (const std::string &)> handler) = 0;
+  virtual void handle_event (const wsl::engine_event &e) = 0;
   virtual void build_draw_data (entt::registry &reg) = 0;
   virtual void prepare_gpu_resources () = 0;
   virtual void record_draw_commands () = 0;

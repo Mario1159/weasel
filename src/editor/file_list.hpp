@@ -6,9 +6,18 @@
 #include <imgui.h>
 #include <imsearch.h>
 
-namespace wsl::comp::singl { class runtime_context; }
-namespace wsl::rsc { class resource_manager; }
-namespace editor { class text_editor; }
+namespace wsl::comp::singl
+{
+class runtime_context;
+}
+namespace wsl::rsc
+{
+class resource_manager;
+}
+namespace editor
+{
+class text_editor;
+}
 
 namespace editor
 {
@@ -24,9 +33,9 @@ public:
     std::string path;  // absolute/normalized path
   };
 
-  void draw (const char *title, bool *p_open, wsl::rsc::resource_manager *resources,
-             editor::text_editor *editor, bool *show_editor,
-             wsl::comp::singl::runtime_context *runtime_ctx);
+  void draw (const char *title, bool *p_open,
+             wsl::rsc::resource_manager *resources, editor::text_editor *editor,
+             bool *show_editor, wsl::comp::singl::runtime_context *runtime_ctx);
 
   // Call every frame; it will refresh when the active project changes.
 
@@ -35,6 +44,9 @@ public:
     component,
     system,
     singleton,
+    das_component,
+    das_singleton,
+    das_system,
   };
 
   void refresh_if_needed (wsl::rsc::resource_manager *resources);
@@ -43,9 +55,10 @@ public:
                           editor::text_editor *editor, bool *show_editor);
   static void gather_cpp_hpp (const std::filesystem::path &base,
                               std::vector<entry> &out);
-  static void gather_files_with_extensions (
-      const std::filesystem::path &base, const std::vector<std::string> &exts,
-      std::vector<entry> &out);
+  static void
+  gather_files_with_extensions (const std::filesystem::path &base,
+                                const std::vector<std::string> &exts,
+                                std::vector<entry> &out);
 
   // UI state
   int selected_comp = -1;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "comp/singl/runtime_context.hpp"
+#include "wsl/event.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
@@ -29,7 +30,7 @@ protected:
   std::unique_ptr<wsl::comp::singl::runtime_context> m_runtime_context;
 
   virtual void on_init () = 0;
-  virtual void on_event (SDL_Event & /*unused*/) {};
+  virtual void on_event (const wsl::engine_event & /*unused*/) {};
   virtual void on_update (double /*unused*/) {};
   virtual void on_render ();
 

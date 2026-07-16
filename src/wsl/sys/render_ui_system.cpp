@@ -168,9 +168,10 @@ render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
 }
 
 void
-render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
+render_ui_system::on_event (registry_handle reg, const engine_event &ev)
 {
 
+  auto &registry = *reg;
   auto &ctx = registry.ctx ();
   if (!ctx.template contains<comp::singl::runtime_context *> ()
       || !ctx.template contains<comp::singl::ui_manager *> ()) {
@@ -186,7 +187,7 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
 
   if ((runtime_ctx.editor_ctx () != nullptr)
       && !runtime_ctx.editor_ctx ()->game_fullscreen ()) {
-    SDL_Event adjusted_ev = ev;
+    SDL_Event adjusted_ev = ev.sdl ();
     bool process = true;
 
     auto &ed = *runtime_ctx.editor_ctx ();
@@ -203,11 +204,11 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
 
       ImVec2 const mouse_pos = ImGui::GetMousePos ();
 
-      if (ev.type == SDL_EVENT_MOUSE_MOTION) {
+      if (ev.type () == SDL_EVENT_MOUSE_MOTION) {
         adjusted_ev.motion.x = (mouse_pos.x - img_x) * scale_x;
         adjusted_ev.motion.y = (mouse_pos.y - img_y) * scale_y;
-      } else if (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN
-                 || ev.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+      } else if (ev.type () == SDL_EVENT_MOUSE_BUTTON_DOWN
+                 || ev.type () == SDL_EVENT_MOUSE_BUTTON_UP) {
         adjusted_ev.button.x = (mouse_pos.x - img_x) * scale_x;
         adjusted_ev.button.y = (mouse_pos.y - img_y) * scale_y;
 
@@ -225,7 +226,7 @@ render_ui_system::on_event (entt::registry &registry, const SDL_Event &ev)
     }
   } else {
     RmlSDL::InputEventHandler (ui.context (), runtime_ctx.window ().handler (),
-                               ev);
+                               ev.sdl ());
   }
 }
 

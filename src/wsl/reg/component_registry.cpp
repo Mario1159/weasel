@@ -1,6 +1,7 @@
 #include "component_registry.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <entt/core/fwd.hpp>
 #include <entt/meta/factory.hpp>
 #include <string>
@@ -15,7 +16,8 @@ namespace reg
 void
 component_registry::register_cached_runtime_world_component (
     entt::id_type type_id, std::string_view type_name,
-    std::string_view display_name)
+    std::string_view display_name, int struct_size,
+    std::vector<descriptor::das_field> fields)
 {
   descriptor desc{};
   desc.type_id = type_id;
@@ -24,10 +26,90 @@ component_registry::register_cached_runtime_world_component (
                           ? comp::humanize_identifier (type_name)
                           : std::string (display_name);
   desc.runtime_registered = true;
+  desc.can_add_default = true;
+  desc.is_das_component = true;
+  desc.das_struct_size = struct_size;
+  desc.das_fields = std::move (fields);
 
   m_type_name_to_stable[desc.type_name] = type_id;
   m_display_name_to_stable[desc.display_name] = type_id;
   m_descriptors[type_id] = std::move (desc);
+}
+
+bool
+component_registry::das_component_contains (entt::id_type type_id,
+                                            entt::entity entity) const
+{
+  auto it = m_das_component_state.find (type_id);
+  if (it == m_das_component_state.end ()) {
+    return false;
+  }
+  return it->second.count (entity) != 0;
+}
+
+bool
+component_registry::das_component_add (entt::id_type type_id,
+                                       entt::entity entity)
+{
+  if (das_component_contains (type_id, entity)) {
+    return false;
+  }
+  m_das_component_state[type_id].insert (entity);
+
+  // Allocate zero-initialized storage for the component data.
+  const auto *desc = find_world_component (type_id);
+  int size = (desc && desc->das_struct_size > 0) ? desc->das_struct_size : 64;
+  m_das_component_data[type_id][entity].assign (static_cast<std::size_t> (size),
+                                                0);
+  return true;
+}
+
+bool
+component_registry::das_component_remove (entt::id_type type_id,
+                                          entt::entity entity)
+{
+  auto it = m_das_component_state.find (type_id);
+  if (it == m_das_component_state.end ()) {
+    return false;
+  }
+  bool removed = it->second.erase (entity) > 0;
+  if (removed) {
+    auto data_it = m_das_component_data.find (type_id);
+    if (data_it != m_das_component_data.end ()) {
+      data_it->second.erase (entity);
+    }
+  }
+  return removed;
+}
+
+uint8_t *
+component_registry::das_component_data (entt::id_type type_id,
+                                        entt::entity entity)
+{
+  auto data_it = m_das_component_data.find (type_id);
+  if (data_it == m_das_component_data.end ()) {
+    return nullptr;
+  }
+  auto ent_it = data_it->second.find (entity);
+  if (ent_it == data_it->second.end ()) {
+    return nullptr;
+  }
+  return ent_it->second.data ();
+}
+
+const uint8_t *
+component_registry::das_component_data (entt::id_type type_id,
+                                        entt::entity entity) const
+{
+  auto data_it = m_das_component_data.find (type_id);
+  if (data_it == m_das_component_data.end ()) {
+    return nullptr;
+  }
+  auto ent_it = data_it->second.find (entity);
+  if (ent_it == data_it->second.end ()) {
+    return nullptr;
+  }
+  return ent_it->second.data ();
 }
 
 const component_registry::descriptor *
@@ -149,7 +231,7 @@ component_registry::copy_world_component (entt::registry &src_registry,
                                           entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
-  if ((desc == nullptr) || (desc->copy == nullptr)) {
+  if ((desc == nullptr) || desc->is_das_component || (desc->copy == nullptr)) {
     return false;
   }
 
@@ -163,7 +245,8 @@ component_registry::save_world_component_binary (
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
-  if ((desc == nullptr) || (desc->save_binary == nullptr)) {
+  if ((desc == nullptr) || desc->is_das_component
+      || (desc->save_binary == nullptr)) {
     return false;
   }
 
@@ -177,7 +260,8 @@ component_registry::load_world_component_binary (
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
-  if ((desc == nullptr) || (desc->load_binary == nullptr)) {
+  if ((desc == nullptr) || desc->is_das_component
+      || (desc->load_binary == nullptr)) {
     return false;
   }
 
@@ -191,7 +275,8 @@ component_registry::save_world_component_json (
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
-  if ((desc == nullptr) || (desc->save_json == nullptr)) {
+  if ((desc == nullptr) || desc->is_das_component
+      || (desc->save_json == nullptr)) {
     return false;
   }
 
@@ -205,12 +290,129 @@ component_registry::load_world_component_json (
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
-  if ((desc == nullptr) || (desc->load_json == nullptr)) {
+  if ((desc == nullptr) || desc->is_das_component
+      || (desc->load_json == nullptr)) {
     return false;
   }
 
+  wsl::log::sys ()->debug (
+      "load_world_component_json: type_id={} type_name='{}' load_json={}",
+      component_type_id, desc->type_name,
+      reinterpret_cast<const void *> (desc->load_json));
+
   desc->load_json (archive, registry);
   return true;
+}
+
+namespace
+{
+
+std::string
+bytes_to_hex (const std::vector<uint8_t> &bytes)
+{
+  static constexpr char hex_chars[] = "0123456789abcdef";
+  std::string result;
+  result.reserve (bytes.size () * 2);
+  for (uint8_t b : bytes) {
+    result.push_back (hex_chars[b >> 4]);
+    result.push_back (hex_chars[b & 0x0F]);
+  }
+  return result;
+}
+
+std::vector<uint8_t>
+hex_to_bytes (const std::string &hex)
+{
+  std::vector<uint8_t> result;
+  result.reserve (hex.size () / 2);
+  for (std::size_t i = 0; i + 1 < hex.size (); i += 2) {
+    auto hi = static_cast<uint8_t> (hex[i]);
+    auto lo = static_cast<uint8_t> (hex[i + 1]);
+    auto nibble = [] (uint8_t c) -> uint8_t {
+      if (c >= '0' && c <= '9')
+        return static_cast<uint8_t> (c - '0');
+      if (c >= 'a' && c <= 'f')
+        return static_cast<uint8_t> (c - 'a' + 10);
+      if (c >= 'A' && c <= 'F')
+        return static_cast<uint8_t> (c - 'A' + 10);
+      return 0;
+    };
+    result.push_back (static_cast<uint8_t> ((nibble (hi) << 4) | nibble (lo)));
+  }
+  return result;
+}
+
+} // namespace
+
+void
+component_registry::save_das_components_json (
+    cereal::JSONOutputArchive &archive) const
+{
+  // Build a flat list of all das component entries.
+  struct das_entry
+  {
+    uint32_t type_id;
+    uint32_t entity;
+    std::string data_hex;
+  };
+  std::vector<das_entry> entries;
+
+  for (const auto &[type_id, entity_map] : m_das_component_data) {
+    for (const auto &[entity, data] : entity_map) {
+      entries.push_back ({ static_cast<uint32_t> (type_id),
+                           static_cast<uint32_t> (entt::to_integral (entity)),
+                           bytes_to_hex (data) });
+    }
+  }
+
+  std::size_t count = entries.size ();
+  archive (cereal::make_nvp ("das_component_count", count));
+
+  for (std::size_t i = 0; i < count; ++i) {
+    archive (cereal::make_nvp ("das_type_id", entries[i].type_id));
+    archive (cereal::make_nvp ("das_entity", entries[i].entity));
+    archive (cereal::make_nvp ("das_data", entries[i].data_hex));
+  }
+}
+
+void
+component_registry::load_das_components_json (cereal::JSONInputArchive &archive)
+{
+  std::size_t count = 0;
+  archive (cereal::make_nvp ("das_component_count", count));
+
+  for (std::size_t i = 0; i < count; ++i) {
+    uint32_t type_id = 0;
+    uint32_t entity_raw = 0;
+    std::string data_hex;
+
+    archive (cereal::make_nvp ("das_type_id", type_id));
+    archive (cereal::make_nvp ("das_entity", entity_raw));
+    archive (cereal::make_nvp ("das_data", data_hex));
+
+    auto tid = static_cast<entt::id_type> (type_id);
+    auto entity = static_cast<entt::entity> (entity_raw);
+
+    // Ensure the component type and entity exist.
+    if (!contains_world_component (tid)) {
+      register_cached_runtime_world_component (tid, "unknown", "unknown");
+    }
+    if (!das_component_contains (tid, entity)) {
+      das_component_add (tid, entity);
+    }
+
+    // Overwrite with saved data.
+    std::vector<uint8_t> data = hex_to_bytes (data_hex);
+    uint8_t *dest = das_component_data (tid, entity);
+    if (dest) {
+      const descriptor *desc = find_world_component (tid);
+      std::size_t copy_size
+          = desc ? static_cast<std::size_t> (desc->das_struct_size)
+                 : data.size ();
+      copy_size = std::min (copy_size, data.size ());
+      std::memcpy (dest, data.data (), copy_size);
+    }
+  }
 }
 
 void
@@ -242,6 +444,9 @@ component_registry::clear_runtime_world_components ()
       m_display_name_to_stable.erase (it->second.display_name);
     }
     m_descriptors.erase (type_id);
+    // Also clear the das component state and data for this type.
+    m_das_component_state.erase (type_id);
+    m_das_component_data.erase (type_id);
   }
 
   for (entt::id_type const internal_id : runtime_internal_ids) {

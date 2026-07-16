@@ -13,6 +13,11 @@
 namespace wsl
 {
 
+namespace das
+{
+class das_engine;
+}
+
 namespace reg
 {
 
@@ -148,14 +153,25 @@ public:
   void register_system_type (const system_registration_options &options = {});
 
   /*!
-   * \brief Registers cached metadata for a runtime system.
+   * \brief Registers cached metadata for a runtime system (placeholder).
    *
-   * Cached systems use a lightweight placeholder instance so CLI operations can
-   * attach the system name to a scene without loading user C++ code.
+   * Creates a no-op placeholder system for CLI operations.
    */
   void register_cached_runtime_system (entt::id_type type_id,
                                        std::string_view type_name,
                                        std::string_view display_name);
+
+  /*!
+   * \brief Registers a daslang runtime system with live script execution.
+   *
+   * Creates a das_system that delegates lifecycle callbacks to the daslang
+   * script via the engine.
+   */
+  void register_cached_runtime_system (entt::id_type type_id,
+                                       std::string_view type_name,
+                                       std::string_view display_name,
+                                       std::string_view script_path,
+                                       das::das_engine &engine);
 
   /*!
    * \brief Registers a system with a custom factory function.

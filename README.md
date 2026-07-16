@@ -1,24 +1,35 @@
 # Weasel Engine
 
-Weasel is a modern, high-performance C++20 game engine built for flexibility and speed. It features a robust Entity Component System (ECS), a custom Vulkan-based renderer via SDL_gpu, and integrated high-fidelity physics.
+Weasel is an ECS 2D & 3D engine for C++ and Daslang. Made for flexibility and high-performance.
 
 ## Core Features
 
-- **Advanced Rendering:** Custom PBR renderer using SDL3's GPU API, supporting HDR, Bloom, SSAO, and real-time shadows.
-- **Entity Component System (ECS):** Powered by `EnTT` for high-performance data-oriented design.
-- **Physics Engine:** Full integration with `Jolt Physics` for stable and scalable simulations.
-- **Dynamic UI:** Rich UI development using `RmlUi` (HTML/CSS) and `ImGui` for developer tools.
-- **Audio System:** Event-driven audio playback using `SDL_mixer`.
-- **Serialization:** Full scene and component serialization via `cereal`.
-- **Developer Tools:** Built-in editor with entity inspectors, resource management, and real-time console.
+- **PBR Rendering:** Custom clustered forward renderer using SDL3's GPU API, supporting HDR, Bloom, SSAO, and real-time shadows.
+- **Shader Graph:** Material building through nodes and slang shaders.
+- **Physics:** Full integration with `Jolt Physics` engine.
+- **UI:** HTML & CSS support for defining UI in scenes through `RML`. 
+- **Audio System:** Basic audio playback support, 3D audio planned.
+- **Developer Tools:** Built-in editor and MCP server.
+
+## Why Another Game Engine?
+
+- Most well-known game engines are not design to fit an ECS architecture from ground-up, Weasel was design so that the user space is
+fabricated strictly around the ECS concepts, understanding these concepts should be the only requirement to understand the Weasel
+Editor UI and the Core Weasel-lib Architecture.
+- Modern engines have non-sensical requirements, Weasel is designed to run on your laptop.
+- No compromises on flexibility and performance. We choose dependencies with well-known good performance. We won't try to reinvent the wheel.
+- The only other C++ & Daslang game engine is Dagor
+- Like it or not, AI tools are here to stay, we try to stay updated and give the user AI-assisted tools to speed their development.
 
 ## Getting Started
+
+Download the pre-built binaries from the Release page or get them through your package manager.
+You can also easily build the engine using CMake:
 
 ### Prerequisites
 
 - **CMake 3.22+**
 - **C++20 Compatible Compiler** (GCC 11+, Clang 13+, MSVC 2022+)
-- **Vulkan SDK** (for shader compilation)
 
 ### Building
 
@@ -27,13 +38,17 @@ cmake -B build -S .
 cmake --build build
 ```
 
-### Running the Example
+### Running the Weasel Editor
 
 ```bash
 ./build/weasel
 ```
 
-## Documentation
+### Get Started Building Applications
+
+Start learning how to use the weasel engine through our `Documentation` pages.
+
+## Local Documentation
 
 API documentation can be generated using Doxygen:
 

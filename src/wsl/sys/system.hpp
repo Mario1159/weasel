@@ -2,10 +2,11 @@
 
 #include "../reg/sig/signal_hub.hpp"
 #include "../comp/component_meta.hpp"
+#include "wsl/event.hpp"
 #include "wsl/log/log.hpp"
+#include "wsl/reg/registry_handle.hpp"
 
 #include "entt/entity/fwd.hpp"
-#include <SDL3/SDL_events.h>
 #include <entt/entt.hpp>
 #include <functional>
 #include <string>
@@ -70,7 +71,7 @@ public:
   {
   }
   virtual void
-  on_event (entt::registry &, const SDL_Event &)
+  on_event (registry_handle, const engine_event &)
   {
   }
 
@@ -209,13 +210,13 @@ public:
   }
 
   void
-  event_handler (entt::registry *registry, const SDL_Event &event)
+  event_handler (registry_handle reg, const engine_event &ev)
   {
     ZoneScopedN ("sys::event_handler");
     ZoneText (m_name.data (), m_name.size ());
 
-    if (m_active && (registry != nullptr)) {
-      on_event (*registry, event);
+    if (m_active && reg.valid ()) {
+      on_event (reg, ev);
     }
   }
 

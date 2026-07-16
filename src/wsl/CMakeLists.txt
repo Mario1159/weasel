@@ -69,8 +69,8 @@ target_link_libraries(wsl PUBLIC
     slang::slang
 )
 
-if(TARGET weasel_clang_repl)
-    target_link_libraries(wsl PUBLIC weasel_clang_repl)
+if(TARGET weasel_daslang)
+    target_link_libraries(wsl PUBLIC weasel_daslang)
 endif()
 
 target_link_libraries(wsl PRIVATE
@@ -137,8 +137,4 @@ if(MSVC)
     target_compile_options(wsl PRIVATE /W4 /permissive-)
 else()
     target_compile_options(wsl PRIVATE -Wall -Wextra -Wpedantic -rdynamic)
-endif()
-
-if(WEASEL_ENABLE_INTERPRETER AND TARGET weasel_clang_repl)
-    add_dependencies(wsl weasel_clang_repl)
 endif()

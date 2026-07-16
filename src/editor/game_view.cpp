@@ -15,6 +15,7 @@
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/world_transform.hpp"
+#include "wsl/ray.hpp"
 
 #include <ImGuizmo.h>
 #include "imviewguizmo.hpp"
@@ -42,12 +43,6 @@
 namespace editor
 {
 
-struct pick_ray
-{
-  glm::vec3 origin;
-  glm::vec3 dir;
-};
-
 static void
 draw_hsplitter (const char *id, float &top_height, float thickness = 6.0F)
 {
@@ -73,7 +68,7 @@ draw_hsplitter (const char *id, float &top_height, float thickness = 6.0F)
   ImGui::GetWindowDrawList ()->AddRectFilled (min, max, col);
 }
 
-static pick_ray
+static wsl::pick_ray
 make_mouse_ray (const ImVec2 &mouse_pos, const ImVec2 &img_min,
                 const ImVec2 &img_size,
                 const wsl::comp::singl::editor_context::resolved_camera &rc)
@@ -92,7 +87,7 @@ make_mouse_ray (const ImVec2 &mouse_pos, const ImVec2 &img_min,
   glm::vec4 far_world4 = inv_vp * far_clip;
   far_world4 /= far_world4.w;
 
-  pick_ray ray;
+  wsl::pick_ray ray;
   ray.origin = rc.world_pos ();
   ray.dir = glm::normalize (glm::vec3 (far_world4) - ray.origin);
   return ray;
@@ -178,7 +173,7 @@ pick_entity_from_game_view (
       = registry
             .view<wsl::comp::world_transform, wsl::comp::model_instance_3d> ();
 
-  pick_ray const ray = make_mouse_ray (mouse_pos, img_min, img_size, rc);
+  wsl::pick_ray const ray = make_mouse_ray (mouse_pos, img_min, img_size, rc);
 
   entt::entity best = entt::null;
   float best_t = std::numeric_limits<float>::max ();

@@ -2,6 +2,8 @@
 #include "sig/signal_hub.hpp"
 #include "../rsc/scene.hpp"
 #include "../sys/system.hpp"
+#include "../das/das_system.hpp"
+#include "../das/das_engine.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -19,7 +21,7 @@ namespace reg
 namespace
 {
 
-class cached_runtime_system : public sys::ecs_system_t<cached_runtime_system>
+class placeholder_system : public sys::ecs_system_t<placeholder_system>
 {
 public:
   using ecs_system_t::ecs_system_t;
@@ -55,7 +57,32 @@ system_factory_registry::register_cached_runtime_system (
                           : std::string (display_name);
   desc.runtime_registered = true;
   desc.factory = [display_name = desc.display_name] (rsc::scene &) {
-    return std::make_unique<cached_runtime_system> (display_name);
+    return std::make_unique<placeholder_system> (display_name);
+  };
+
+  m_type_to_name[desc.type_id] = desc.display_name;
+  m_type_name_to_display_name[desc.type_name] = desc.display_name;
+  m_factories[desc.display_name] = std::move (desc);
+}
+
+void
+system_factory_registry::register_cached_runtime_system (
+    entt::id_type type_id, std::string_view type_name,
+    std::string_view display_name, std::string_view script_path,
+    das::das_engine &engine)
+{
+  system_descriptor desc{};
+  desc.type_id = type_id;
+  desc.type_name = std::string (type_name);
+  desc.display_name = display_name.empty ()
+                          ? comp::humanize_identifier (type_name)
+                          : std::string (display_name);
+  desc.runtime_registered = true;
+  desc.factory = [display_name = desc.display_name,
+                  script_path = std::string (script_path), type_id,
+                  &engine] (rsc::scene &) {
+    return std::make_unique<das::das_system> (display_name, script_path, engine,
+                                              type_id);
   };
 
   m_type_to_name[desc.type_id] = desc.display_name;

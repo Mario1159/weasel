@@ -55,10 +55,10 @@ public:
   void update (double dt);
 
   /*!
-   * \brief Forwards an SDL event to the active scene.
-   * \param event SDL event to dispatch.
+   * \brief Forwards an engine event to the active scene.
+   * \param event Event to dispatch.
    */
-  void handle_events (const SDL_Event &event);
+  void handle_events (const wsl::engine_event &event);
   bool custom_inspect (const char *label,
                        comp::singl::runtime_context *runtime_ctx);
 

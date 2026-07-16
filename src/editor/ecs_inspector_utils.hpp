@@ -94,40 +94,6 @@ meta_type_debug_name (const entt::meta_type &type)
   return "<unnamed>";
 }
 
-static inline void
-draw_labeled_name (const entt::meta_type &type)
-{
-  const std::optional<wsl::comp::meta_info> info
-      = wsl::comp::get_meta_info (type);
-  const std::string real_name = meta_type_debug_name (type);
-
-  if (info && !info->display_name.empty ()) {
-    ImGui::TextUnformatted (info->display_name.c_str ());
-    ImGui::SameLine ();
-    ImGui::TextDisabled (" (%s)", real_name.c_str ());
-  } else {
-    ImGui::TextUnformatted (real_name.c_str ());
-  }
-}
-
-static inline void
-draw_labeled_name (const entt::meta_data &data)
-{
-  const std::optional<wsl::comp::meta_info> info
-      = wsl::comp::get_meta_info (data);
-  const std::string real_name = meta_type_debug_name (data.type ());
-
-  if (info && !info->display_name.empty ()) {
-    ImGui::TextUnformatted (info->display_name.c_str ());
-    if (real_name != "<unnamed>") {
-      ImGui::SameLine ();
-      ImGui::TextDisabled (" (%s)", real_name.c_str ());
-    }
-  } else {
-    ImGui::TextUnformatted (real_name.c_str ());
-  }
-}
-
 static inline std::string
 get_description (const entt::meta_type &type)
 {

@@ -2,6 +2,9 @@
 
 #include "comp/component_meta.hpp"
 #include "comp/singl/ui_manager.hpp"
+#include "wsl/das/das_engine.hpp"
+
+#include <cstring>
 #include "gfx/image.hpp"
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_manager.hpp"
@@ -77,12 +80,8 @@ get_singleton_inspector_registry (
   return fallback_registry;
 }
 
-#define runtime_ctx m_runtime_ctx
-
 enum class editor_trait : uint16_t
 {
-  none = 0,
-  read_only = 1 << 0,
   hidden = 1 << 1
 };
 
@@ -91,6 +90,118 @@ operator& (editor_trait a, editor_trait b) noexcept
 {
   return static_cast<editor_trait> (static_cast<uint16_t> (a)
                                     & static_cast<uint16_t> (b));
+}
+
+static bool
+draw_field_value (const char *label, void *data,
+                  wsl::das::das_engine::field_type_kind kind, int size)
+{
+  switch (kind) {
+  case wsl::das::das_engine::field_type_kind::integer: {
+    int v = 0;
+    std::memcpy (&v, data, static_cast<std::size_t> (size));
+    if (ImGui::DragInt (label, &v, 0.1f)) {
+      std::memcpy (data, &v, static_cast<std::size_t> (size));
+      return true;
+    }
+    return false;
+  }
+  case wsl::das::das_engine::field_type_kind::unsigned_integer: {
+    int v = 0;
+    std::memcpy (&v, data, static_cast<std::size_t> (size));
+    if (ImGui::DragInt (label, &v, 0.1f, 0)) {
+      std::memcpy (data, &v, static_cast<std::size_t> (size));
+      return true;
+    }
+    return false;
+  }
+  case wsl::das::das_engine::field_type_kind::floating: {
+    float v = 0.0f;
+    std::memcpy (&v, data, static_cast<std::size_t> (size));
+    if (ImGui::DragFloat (label, &v, 0.1f)) {
+      std::memcpy (data, &v, static_cast<std::size_t> (size));
+      return true;
+    }
+    return false;
+  }
+  case wsl::das::das_engine::field_type_kind::boolean: {
+    bool v = false;
+    std::memcpy (&v, data, sizeof (bool));
+    if (ImGui::Checkbox (label, &v)) {
+      std::memcpy (data, &v, sizeof (bool));
+      return true;
+    }
+    return false;
+  }
+  default:
+    ImGui::TextUnformatted (label);
+    return false;
+  }
+}
+
+struct component_header_result
+{
+  bool expanded = false;
+  bool remove_requested = false;
+};
+
+static component_header_result
+draw_component_header (entt::id_type type_id, const char *display_name,
+                       const char *type_name, const std::string &icon,
+                       const std::string &description,
+                       wsl::comp::singl::editor_context *editor_ctx)
+{
+  component_header_result result;
+
+  ImGuiTreeNodeFlags const flags
+      = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap
+        | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+  result.expanded = ImGui::TreeNodeEx ((void *)(intptr_t)type_id, flags, " ");
+  ImGui::SameLine ();
+
+  if (!icon.empty ()) {
+    auto *editor_res = &editor_ctx->editor_resources ();
+    auto img_id = editor_res->register_image (icon);
+
+    if (editor_res->state (img_id) == wsl::rsc::image_state::not_loaded) {
+      editor_res->load (img_id);
+    }
+
+    auto handle = editor_res->get (img_id);
+    if (handle && editor_res->state (img_id) == wsl::rsc::image_state::loaded) {
+      wsl::gfx::image const *img = handle.handle ().get ();
+      if ((img != nullptr) && (img->texture.get () != nullptr)) {
+        ImGui::Image ((ImTextureID)img->texture.get (), ImVec2 (16, 16));
+        ImGui::SameLine (0.0F, 6.0F);
+      }
+    }
+  }
+
+  ImGui::TextUnformatted (display_name);
+
+  if (type_name != nullptr && type_name[0] != '\0') {
+    ImGui::SameLine ();
+    ImGui::TextDisabled ("%s", type_name);
+  }
+
+  if (!description.empty () && ImGui::IsItemHovered ()) {
+    ImGui::SetTooltip ("%s", description.c_str ());
+  }
+
+  ImGui::SameLine ();
+  ImGui::SetCursorPosX (ImGui::GetWindowContentRegionMax ().x
+                        - ImGui::CalcTextSize ("x").x
+                        - (ImGui::GetStyle ().FramePadding.x * 2) - 10);
+
+  if (ImGui::SmallButton ("x")) {
+    result.remove_requested = true;
+  }
+  if (ImGui::IsItemHovered ()) {
+    ImGui::SetTooltip ("Remove component");
+  }
+
+  return result;
 }
 
 inspector::inspector (wsl::comp::singl::runtime_context *runtime_ctx,
@@ -141,8 +252,8 @@ inspector::draw ()
   } else {
     switch (m_selection.kind) {
     case selection_kind::entity:
-      if ((runtime_ctx->scene_manager ().get_active () != nullptr)
-          && runtime_ctx->scene_manager ()
+      if ((m_runtime_ctx->scene_manager ().get_active () != nullptr)
+          && m_runtime_ctx->scene_manager ()
                  .get_active ()
                  ->get_registry ()
                  .valid (m_selection.selected_entity)) {
@@ -187,14 +298,14 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
   ImGui::Separator ();
 
   entt::registry *registry = nullptr;
-  if (wsl::rsc::scene *scene = runtime_ctx->scene_manager ().get_active ()) {
+  if (wsl::rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ()) {
     registry = &scene->get_registry ();
   }
 
   bool init_on_startup = system->is_init_on_startup ();
   if (ImGui::Checkbox ("Init On Startup", &init_on_startup)) {
     system->set_init_on_startup (init_on_startup, registry,
-                                 runtime_ctx->is_running ());
+                                 m_runtime_ctx->is_running ());
   }
 
   bool editor_active = system->is_editor_active ();
@@ -217,7 +328,7 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
   ImGui::TextUnformatted ("Iterations");
   ImGui::PopFont ();
 
-  auto &db = runtime_ctx->signal_db ();
+  auto &db = m_runtime_ctx->signal_db ();
   const entt::id_type sys_tid = system->get_type_id ();
 
   bool any = false;
@@ -254,11 +365,12 @@ void
 inspector::draw_singleton_inspector (entt::id_type type)
 {
   entt::registry &registry = get_singleton_inspector_registry (
-      *runtime_ctx, *m_editor_ctx, m_no_scene_registry);
-  const bool has_scene = runtime_ctx->scene_manager ().get_active () != nullptr;
+      *m_runtime_ctx, *m_editor_ctx, m_no_scene_registry);
+  const bool has_scene
+      = m_runtime_ctx->scene_manager ().get_active () != nullptr;
 
   const wsl::reg::singleton_registry::descriptor *desc
-      = runtime_ctx->singleton_registry ().find (type);
+      = m_runtime_ctx->singleton_registry ().find (type);
   entt::meta_type const meta = entt::resolve (type);
 
   if (desc == nullptr) {
@@ -317,7 +429,7 @@ inspector::draw_singleton_inspector (entt::id_type type)
 void
 inspector::draw_entity_inspector (entt::entity entity)
 {
-  auto &scene_mgr = runtime_ctx->scene_manager ();
+  auto &scene_mgr = m_runtime_ctx->scene_manager ();
   auto &scene = *scene_mgr.get_active ();
   entt::registry &reg = scene.get_registry ();
 
@@ -329,7 +441,7 @@ inspector::draw_entity_inspector (entt::entity entity)
   if (m_is_prefab_instance) {
     auto &pi = reg.get<wsl::comp::prefab_instance> (entity);
     if (auto prefab_scene
-        = runtime_ctx->resource_manager ().get (pi.prefab_id)) {
+        = m_runtime_ctx->resource_manager ().get (pi.prefab_id)) {
       m_prefab_registry = &prefab_scene->get_registry ();
       m_prefab_entity = pi.prefab_entity;
     }
@@ -361,8 +473,9 @@ inspector::draw_entity_inspector (entt::entity entity)
     }
 
     entt::id_type const type_id
-        = runtime_ctx->component_registry ().to_stable_id (internal_id);
-    const auto *descriptor = runtime_ctx->component_registry ().find (type_id);
+        = m_runtime_ctx->component_registry ().to_stable_id (internal_id);
+    const auto *descriptor
+        = m_runtime_ctx->component_registry ().find (type_id);
     std::string const display_name
         = (descriptor != nullptr) ? descriptor->display_name : "Unknown";
 
@@ -388,55 +501,15 @@ inspector::draw_entity_inspector (entt::entity entity)
 
     ImGui::PushID (static_cast<int> (type_id));
 
-    ImGuiTreeNodeFlags const flags
-        = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap
-          | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth;
-
-    bool const expanded
-        = ImGui::TreeNodeEx ((void *)(intptr_t)type_id, flags, " ");
-    ImGui::SameLine ();
-
-    // Draw Icon if any
     std::string const icon = get_icon_path (meta);
-    if (!icon.empty ()) {
-      auto *editor_res = &m_editor_ctx->editor_resources ();
-      auto img_id = editor_res->register_image (icon);
-
-      if (editor_res->state (img_id) == wsl::rsc::image_state::not_loaded) {
-        editor_res->load (img_id);
-      }
-
-      auto handle = editor_res->get (img_id);
-      if (handle
-          && editor_res->state (img_id) == wsl::rsc::image_state::loaded) {
-        wsl::gfx::image const *img = handle.handle ().get ();
-        if ((img != nullptr) && (img->texture.get () != nullptr)) {
-          ImGui::Image ((ImTextureID)img->texture.get (), ImVec2 (16, 16));
-          ImGui::SameLine (0.0F, 6.0F);
-        }
-      }
-    }
-
-    ImGui::TextUnformatted (display_name.c_str ());
-
     const std::string comp_desc = get_description (meta);
-    if (!comp_desc.empty () && ImGui::IsItemHovered ()) {
-      ImGui::SetTooltip ("%s", comp_desc.c_str ());
-    }
-
-    ImGui::SameLine ();
-    ImGui::SetCursorPosX (ImGui::GetWindowContentRegionMax ().x
-                          - ImGui::CalcTextSize ("x").x
-                          - (ImGui::GetStyle ().FramePadding.x * 2) - 10);
-
-    if (ImGui::SmallButton ("x")) {
+    auto hdr = draw_component_header (type_id, display_name.c_str (), nullptr,
+                                      icon, comp_desc, m_editor_ctx);
+    if (hdr.remove_requested) {
       component_to_remove = type_id;
     }
-    if (ImGui::IsItemHovered ()) {
-      ImGui::SetTooltip ("Remove component");
-    }
 
-    if (expanded) {
+    if (hdr.expanded) {
       if (component_to_remove != type_id) {
         void *ptr = storage.value (entity);
         if (ptr != nullptr) {
@@ -488,6 +561,74 @@ inspector::draw_entity_inspector (entt::entity entity)
   if (component_to_remove != entt::null) {
     if (auto *storage = reg.storage (component_to_remove)) {
       storage->remove (entity);
+    } else {
+      auto &comp_reg = m_runtime_ctx->component_registry ();
+      if (const auto *desc = comp_reg.find (component_to_remove);
+          desc != nullptr && desc->is_das_component) {
+        comp_reg.das_component_remove (component_to_remove, entity);
+      }
+    }
+  }
+
+  // Draw das components attached to this entity
+  {
+    auto &comp_reg = m_runtime_ctx->component_registry ();
+    auto ordered = comp_reg.ordered ();
+    for (const auto *desc : ordered) {
+      if (desc == nullptr || !desc->is_das_component) {
+        continue;
+      }
+      if (!comp_reg.das_component_contains (desc->type_id, entity)) {
+        continue;
+      }
+
+      ImGui::PushID (static_cast<int> (desc->type_id));
+
+      auto hdr = draw_component_header (
+          desc->type_id, desc->display_name.c_str (), desc->type_name.c_str (),
+          "", "", m_editor_ctx);
+      if (hdr.remove_requested) {
+        component_to_remove = desc->type_id;
+      }
+
+      if (hdr.expanded) {
+        if (component_to_remove != desc->type_id) {
+          uint8_t *data = comp_reg.das_component_data (desc->type_id, entity);
+
+          for (std::size_t fi = 0; fi < desc->das_fields.size (); ++fi) {
+            const auto &field = desc->das_fields[fi];
+
+            ImGui::PushID (static_cast<int> (fi));
+
+            ImGui::TextUnformatted (field.name.c_str ());
+
+            if (ImGui::IsItemHovered ()) {
+              ImGui::BeginTooltip ();
+              ImGui::Text ("Type: %s", field.type_name.c_str ());
+              ImGui::EndTooltip ();
+            }
+
+            if (data == nullptr) {
+              ImGui::PopID ();
+              continue;
+            }
+
+            auto *field_ptr = data + field.offset;
+
+            ImGui::PushItemWidth (-1.0f);
+            draw_field_value ("##field", field_ptr, field.kind, field.size);
+            ImGui::PopItemWidth ();
+
+            ImGui::PopID ();
+          }
+          if (desc->das_fields.empty ()) {
+            ImGui::TextDisabled ("(no fields)");
+          }
+        }
+        ImGui::TreePop ();
+      }
+
+      ImGui::PopID ();
     }
   }
 
@@ -500,13 +641,13 @@ inspector::draw_hierarchy_component (entt::entity entity)
 {
 
   entt::registry &registry
-      = runtime_ctx->scene_manager ().get_active ()->get_registry ();
+      = m_runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   ImGui::PushID ((int)entt::to_integral (entity));
 
   wsl::comp::hierarchy const &h = registry.get<wsl::comp::hierarchy> (entity);
 
-  wsl::rsc::scene const *scene = runtime_ctx->scene_manager ().get_active ();
+  wsl::rsc::scene const *scene = m_runtime_ctx->scene_manager ().get_active ();
 
   const char *preview = "None";
   if (h.parent != entt::null) {
@@ -552,7 +693,7 @@ inspector::set_parent (entt::entity child, entt::entity new_parent)
 {
 
   entt::registry &registry
-      = runtime_ctx->scene_manager ().get_active ()->get_registry ();
+      = m_runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   wsl::comp::hierarchy &ch = registry.get<wsl::comp::hierarchy> (child);
 
@@ -658,7 +799,7 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
 
   // If the class provides a full custom inspector, let it run.
   if (auto fn = type.func (entt::hashed_string{ "custom_inspect" }); fn) {
-    if (entt::meta_any ret = fn.invoke (object, "##component", runtime_ctx);
+    if (entt::meta_any ret = fn.invoke (object, "##component", m_runtime_ctx);
         ret) {
       (void)ret.allow_cast<bool> ();
       const bool changed = ret.cast<bool> ();
@@ -668,7 +809,7 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
         if (auto on_changed
             = type.func (entt::hashed_string{ "on_inspector_changed" });
             on_changed) {
-          on_changed.invoke (object, runtime_ctx, scale);
+          on_changed.invoke (object, m_runtime_ctx, scale);
         }
       }
       return changed;
@@ -682,7 +823,7 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
         if (auto on_changed
             = type.func (entt::hashed_string{ "on_inspector_changed" });
             on_changed) {
-          on_changed.invoke (object, runtime_ctx, scale);
+          on_changed.invoke (object, m_runtime_ctx, scale);
         }
       }
       return changed;
@@ -807,8 +948,7 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
         && id == entt::hashed_string{ "render_viewport" }) {
       field_changed = draw_render_viewport_field (value);
     } else {
-      field_changed
-          = draw_meta_object ("##value", value, prefab_value, default_value);
+      field_changed = draw_meta_object ("##value", value, prefab_value);
     }
 
     if (field_changed) {
@@ -825,7 +965,7 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
     if (auto on_changed
         = type.func (entt::hashed_string{ "on_inspector_changed" });
         on_changed) {
-      on_changed.invoke (object, runtime_ctx, scale);
+      on_changed.invoke (object, m_runtime_ctx, scale);
     }
   }
 
@@ -835,7 +975,7 @@ inspector::draw_meta_class (entt::meta_any &object, const glm::vec3 &scale,
 bool
 inspector::draw_render_viewport_field (entt::meta_any &object)
 {
-  auto &scene = *runtime_ctx->scene_manager ().get_active ();
+  auto &scene = *m_runtime_ctx->scene_manager ().get_active ();
   auto &registry = scene.get_registry ();
 
   entt::entity current = object.cast<entt::entity> ();
@@ -875,15 +1015,14 @@ inspector::draw_render_viewport_field (entt::meta_any &object)
 
 bool
 inspector::draw_meta_object (const char *label, entt::meta_any &object,
-                             entt::meta_any *prefab_object,
-                             entt::meta_any *default_object)
+                             entt::meta_any *prefab_object)
 {
 
   auto type = object.type ();
 
   if (auto fn = type.func (entt::hashed_string{ "custom_inspect" }); fn) {
     // Try (label, runtime_ctx) first:
-    if (entt::meta_any ret = fn.invoke (object, label, runtime_ctx); ret) {
+    if (entt::meta_any ret = fn.invoke (object, label, m_runtime_ctx); ret) {
       (void)ret.allow_cast<bool> ();
       return ret.cast<bool> ();
     }
@@ -899,31 +1038,31 @@ inspector::draw_meta_object (const char *label, entt::meta_any &object,
 
   // ---- existing logic continues below ----
   if (type == entt::resolve<entt::entity> ()) {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
 
   if (type == entt::resolve<std::string> ()) {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
 
   if (type == entt::resolve<wsl::rsc::model_id> ()) {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
 
   if (type == entt::resolve<wsl::rsc::cubemap_id> ()) {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
 
   if (type == entt::resolve<wsl::rsc::audio_id> ()) {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
 
   if (type == entt::resolve<wsl::rsc::image_id> ()) {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
 
   if (type == entt::resolve<wsl::rsc::material_id> ()) {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
 
   if (type.is_enum ()) {
@@ -935,13 +1074,13 @@ inspector::draw_meta_object (const char *label, entt::meta_any &object,
     return draw_meta_sequence (label, object);
   else if (type.is_class ()) {
     if (ImGui::TreeNode (label)) {
-      bool changed = draw_meta_class (object, { 1.0F, 1.0F, 1.0F },
-                                      prefab_object, default_object);
+      bool changed
+          = draw_meta_class (object, { 1.0F, 1.0F, 1.0F }, prefab_object);
       ImGui::TreePop ();
       return changed;
     }
   } else {
-    return draw_meta_value (label, object, prefab_object, default_object);
+    return draw_meta_value (label, object, prefab_object);
   }
   return false;
 }
@@ -1038,16 +1177,15 @@ inspector::draw_meta_sequence (const char *label, entt::meta_any &object)
 
 bool
 inspector::draw_meta_value (const char *label, entt::meta_any &object,
-                            entt::meta_any *prefab_object,
-                            entt::meta_any * /*default_object*/)
+                            entt::meta_any *prefab_object)
 {
   auto type = object.type ();
 
-  if (!runtime_ctx->scene_manager ().get_active ()) {
+  if (!m_runtime_ctx->scene_manager ().get_active ()) {
     return false;
   }
   entt::registry &registry
-      = runtime_ctx->scene_manager ().get_active ()->get_registry ();
+      = m_runtime_ctx->scene_manager ().get_active ()->get_registry ();
 
   bool changed = false;
 
@@ -1065,7 +1203,7 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
   };
 
   if (type == entt::resolve<entt::entity> ()) {
-    auto &scene = *runtime_ctx->scene_manager ().get_active ();
+    auto &scene = *m_runtime_ctx->scene_manager ().get_active ();
 
     entt::entity const current = object.cast<entt::entity> ();
 
@@ -1103,7 +1241,7 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   }
   if (type == entt::resolve<wsl::rsc::cubemap_id> ()) {
-    wsl::rsc::resource_manager *res_mgr = &runtime_ctx->resource_manager ();
+    wsl::rsc::resource_manager *res_mgr = &m_runtime_ctx->resource_manager ();
 
     auto &current = object.cast<wsl::rsc::cubemap_id &> ();
 
@@ -1148,28 +1286,28 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   } else if (type == entt::resolve<wsl::rsc::model_id> ()) {
     auto &current = object.cast<wsl::rsc::model_id &> ();
-    if (current.custom_inspect (label, runtime_ctx)) {
+    if (current.custom_inspect (label, m_runtime_ctx)) {
       changed = true;
     }
     draw_restore_button ();
     return changed;
   } else if (type == entt::resolve<wsl::rsc::material_id> ()) {
     auto &current = object.cast<wsl::rsc::material_id &> ();
-    if (current.custom_inspect (label, runtime_ctx)) {
+    if (current.custom_inspect (label, m_runtime_ctx)) {
       changed = true;
     }
     draw_restore_button ();
     return changed;
   } else if (type == entt::resolve<wsl::rsc::audio_id> ()) {
     auto &current = object.cast<wsl::rsc::audio_id &> ();
-    if (current.custom_inspect (label, runtime_ctx)) {
+    if (current.custom_inspect (label, m_runtime_ctx)) {
       changed = true;
     }
     draw_restore_button ();
     return changed;
   } else if (type == entt::resolve<wsl::rsc::image_id> ()) {
     auto &current = object.cast<wsl::rsc::image_id &> ();
-    if (current.custom_inspect (label, runtime_ctx)) {
+    if (current.custom_inspect (label, m_runtime_ctx)) {
       changed = true;
     }
     draw_restore_button ();
@@ -1188,7 +1326,9 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   } else if (type == entt::resolve<bool> ()) {
     bool v = object.cast<bool> ();
-    if (ImGui::Checkbox (label, &v)) {
+    if (draw_field_value (label, &v,
+                          wsl::das::das_engine::field_type_kind::boolean,
+                          sizeof (bool))) {
       object = v;
       changed = true;
     }
@@ -1196,7 +1336,9 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   } else if (type == entt::resolve<int> ()) {
     int v = object.cast<int> ();
-    if (ImGui::DragInt (label, &v)) {
+    if (draw_field_value (label, &v,
+                          wsl::das::das_engine::field_type_kind::integer,
+                          sizeof (int))) {
       object = v;
       changed = true;
     }
@@ -1204,19 +1346,19 @@ inspector::draw_meta_value (const char *label, entt::meta_any &object,
     return changed;
   } else if (type == entt::resolve<uint32_t> ()) {
     uint32_t v = object.cast<uint32_t> ();
-
-    // ImGui has no native DragUInt, so use int but clamp
-    int tmp = static_cast<int> (v);
-
-    if (ImGui::DragInt (label, &tmp, 1.0F, 0, INT32_MAX)) {
-      object = static_cast<uint32_t> (tmp);
+    if (draw_field_value (
+            label, &v, wsl::das::das_engine::field_type_kind::unsigned_integer,
+            sizeof (uint32_t))) {
+      object = v;
       changed = true;
     }
     draw_restore_button ();
     return changed;
   } else if (type == entt::resolve<float> ()) {
     float v = object.cast<float> ();
-    if (ImGui::DragFloat (label, &v, 0.1F)) {
+    if (draw_field_value (label, &v,
+                          wsl::das::das_engine::field_type_kind::floating,
+                          sizeof (float))) {
       object = v;
       changed = true;
     }
@@ -1268,10 +1410,15 @@ inspector::draw_add_component_ui (entt::entity entity)
   ImGui::TextUnformatted ("Add Component");
   ImGui::PopFont ();
 
-  auto &reg = runtime_ctx->scene_manager ().get_active ()->get_registry ();
+  auto &reg = m_runtime_ctx->scene_manager ().get_active ()->get_registry ();
+  auto &comp_reg = m_runtime_ctx->component_registry ();
 
-  auto label_for = [] (const entt::meta_type &meta) -> std::string {
-    return wsl::comp::meta_display_name (meta, "<unregistered>");
+  auto label_for = [] (const wsl::reg::component_registry::descriptor &desc,
+                       const entt::meta_type &meta) -> std::string {
+    if (meta) {
+      return wsl::comp::meta_display_name (meta, desc.display_name.c_str ());
+    }
+    return desc.display_name;
   };
 
   const bool has_valid_selection
@@ -1281,27 +1428,28 @@ inspector::draw_add_component_ui (entt::entity entity)
   const char *preview = "Select component";
   std::string preview_storage;
   if (has_valid_selection) {
-    preview_storage = label_for (entt::resolve (selected_type));
-    preview = preview_storage.c_str ();
+    if (const auto *desc = comp_reg.find (selected_type); desc != nullptr) {
+      preview_storage = label_for (*desc, entt::resolve (selected_type));
+      preview = preview_storage.c_str ();
+    }
   }
 
   if (ImGui::BeginCombo ("##add_component", preview)) {
-    for (const auto *desc : runtime_ctx->component_registry ().ordered ()) {
+    for (const auto *desc : comp_reg.ordered ()) {
       if ((desc == nullptr) || !desc->can_add_default) {
         continue;
       }
 
-      entt::meta_type const meta = entt::resolve (desc->type_id);
-      if (!meta || !meta.is_class ()) {
-        continue;
-      }
-
-      if ((desc->contains != nullptr) && desc->contains (reg, entity)) {
+      if (desc->is_das_component) {
+        if (comp_reg.das_component_contains (desc->type_id, entity)) {
+          continue;
+        }
+      } else if ((desc->contains != nullptr) && desc->contains (reg, entity)) {
         continue;
       }
 
       const bool selected = (selected_type == desc->type_id);
-      const std::string name = label_for (meta);
+      const std::string name = label_for (*desc, entt::resolve (desc->type_id));
       if (ImGui::Selectable (name.c_str (), selected)) {
         selected_type = desc->type_id;
       }
@@ -1315,10 +1463,12 @@ inspector::draw_add_component_ui (entt::entity entity)
 
   if (selected_type != entt::null) {
     if (ImGui::Button ("Add")) {
-      if (const auto *desc
-          = runtime_ctx->component_registry ().find (selected_type);
-          (desc != nullptr) && (desc->emplace_default != nullptr)) {
-        desc->emplace_default (reg, entity);
+      if (const auto *desc = comp_reg.find (selected_type); desc != nullptr) {
+        if (desc->is_das_component) {
+          comp_reg.das_component_add (selected_type, entity);
+        } else if (desc->emplace_default != nullptr) {
+          desc->emplace_default (reg, entity);
+        }
       }
 
       selected_type = entt::null;
@@ -1357,7 +1507,5 @@ inspector::draw_singleton_header (
 
   ImGui::Separator ();
 }
-
-#undef runtime_ctx
 
 } // namespace editor

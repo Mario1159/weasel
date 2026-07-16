@@ -1,5 +1,6 @@
 #include "cli_handler.hpp"
 #include "wsl/log/log.hpp"
+#include "wsl/das/das_engine.hpp"
 
 #include <SDL3/SDL_filesystem.h>
 
@@ -644,6 +645,7 @@ cli_handler::parse (int argc, char **argv)
             || std::filesystem::exists (project_root / proj->components_path)
             || std::filesystem::exists (project_root / proj->singletons_path);
       if (has_runtime_code) {
+        wsl::das::das_engine::initialize_global ();
         if (!rtc.runtime_project_module ().compile_and_load (*proj)) {
           wsl::log::cli ()->error (
               "Runtime module validation failed: {}",

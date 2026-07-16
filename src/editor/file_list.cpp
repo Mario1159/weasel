@@ -281,6 +281,52 @@ make_system_source_template (const std::string &header_name,
   return output.str ();
 }
 
+std::string
+make_das_component_template (const std::string &display_name)
+{
+  std::ostringstream output;
+  output << "options gen2\n\n";
+  output << "// " << display_name << " - World Component (daslang)\n";
+  output << "// This component is automatically registered with the ECS.\n";
+  output << "// Place files in the project's components/ directory.\n\n";
+  output << "struct " << display_name << " {\n";
+  output << "    // Add your fields here\n";
+  output << "    health : float = 100.0\n";
+  output << "    speed : float = 5.0\n";
+  output << "}\n";
+  return output.str ();
+}
+
+std::string
+make_das_singleton_template (const std::string &display_name)
+{
+  std::ostringstream output;
+  output << "options gen2\n\n";
+  output << "// " << display_name << " - Singleton Component (daslang)\n";
+  output << "// This singleton is automatically registered with the ECS.\n";
+  output << "// Place files in the project's singletons/ directory.\n\n";
+  output << "struct " << display_name << " {\n";
+  output << "    // Add your global state fields here\n";
+  output << "    paused : bool = false\n";
+  output << "    time_scale : float = 1.0\n";
+  output << "}\n";
+  return output.str ();
+}
+
+std::string
+make_das_system_template (const std::string &display_name)
+{
+  std::ostringstream output;
+  output << "options gen2\n\n";
+  output << "// " << display_name << " - System (daslang)\n";
+  output << "// This system is automatically registered with the ECS.\n";
+  output << "// Place files in the project's systems/ directory.\n\n";
+  output << "// TODO: implement system logic here\n";
+  output
+      << "// The system will be called each frame during the update phase.\n";
+  return output.str ();
+}
+
 bool
 select_entry_by_path (const std::vector<file_list::entry> &entries,
                       const std::string &path, int &out_idx)
@@ -401,6 +447,23 @@ file_list::refresh_if_needed (wsl::rsc::resource_manager *resources)
   gather_cpp_hpp (comp, component_files);
   gather_cpp_hpp (singl, singleton_files);
   gather_cpp_hpp (sys, system_files);
+
+  // Also gather daslang files into the same lists
+  std::vector<entry> das_comp, das_singl, das_sys;
+  gather_files_with_extensions (comp, { ".das" }, das_comp);
+  gather_files_with_extensions (singl, { ".das" }, das_singl);
+  gather_files_with_extensions (sys, { ".das" }, das_sys);
+  component_files.insert (component_files.end (), das_comp.begin (),
+                          das_comp.end ());
+  singleton_files.insert (singleton_files.end (), das_singl.begin (),
+                          das_singl.end ());
+  system_files.insert (system_files.end (), das_sys.begin (), das_sys.end ());
+  // Re-sort after merging
+  auto by_label
+      = [] (const entry &a, const entry &b) { return a.label < b.label; };
+  std::sort (component_files.begin (), component_files.end (), by_label);
+  std::sort (singleton_files.begin (), singleton_files.end (), by_label);
+  std::sort (system_files.begin (), system_files.end (), by_label);
   gather_files_with_extensions (ui, { ".rml", ".rcss" }, ui_layout_files);
   gather_files_with_extensions (
       shaders, { ".hlsl", ".spv", ".dxil", ".metal", ".vert", ".frag" },
@@ -470,16 +533,28 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
   auto proj = (resources != nullptr) ? resources->current_project () : nullptr;
   const bool is_system = pending_create_kind == create_kind::system;
   const bool is_singleton = pending_create_kind == create_kind::singleton;
+  const bool is_das = pending_create_kind == create_kind::das_component
+                      || pending_create_kind == create_kind::das_singleton
+                      || pending_create_kind == create_kind::das_system;
+  const bool das_is_system = pending_create_kind == create_kind::das_system;
+  const bool das_is_singleton
+      = pending_create_kind == create_kind::das_singleton;
   const char *kind_label
-      = is_system ? "system" : (is_singleton ? "singleton" : "component");
+      = is_das ? (das_is_system      ? "daslang system"
+                  : das_is_singleton ? "daslang singleton"
+                                     : "daslang component")
+               : (is_system ? "system"
+                            : (is_singleton ? "singleton" : "component"));
+  const char *mode_label
+      = is_das ? "daslang"
+               : (create_header_only ? "Header Only" : "Header and Source");
 
   if (!ImGui::BeginPopupModal ("Create Runtime Script", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
     return;
   }
 
-  ImGui::Text ("Create a new runtime %s (%s).", kind_label,
-               create_header_only ? "Header Only" : "Header and Source");
+  ImGui::Text ("Create a new runtime %s (%s).", kind_label, mode_label);
   if (proj) {
     const std::filesystem::path base_dir
         = std::filesystem::path (proj->root_path)
@@ -525,7 +600,9 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
         create_error = "Enter a valid name using letters or numbers.";
       } else {
         std::vector<std::string> tokens = raw_tokens;
-        if (is_system && tokens.back () != "system") {
+        const bool need_system_suffix
+            = (is_system || das_is_system) && tokens.back () != "system";
+        if (need_system_suffix) {
           tokens.push_back ("system");
         }
 
@@ -540,70 +617,112 @@ file_list::draw_create_popup (wsl::rsc::resource_manager *resources,
         } else {
           const std::filesystem::path base_dir
               = std::filesystem::path (proj->root_path)
-                / (is_system ? proj->systems_path
-                             : (is_singleton ? proj->singletons_path
-                                             : proj->components_path));
-          const std::filesystem::path header_path
-              = base_dir / (file_stem + ".hpp");
-          const std::filesystem::path source_path
-              = base_dir / (file_stem + ".cpp");
+                / (is_system || das_is_system
+                       ? proj->systems_path
+                       : (is_singleton || das_is_singleton
+                              ? proj->singletons_path
+                              : proj->components_path));
 
           std::error_code ec;
           std::filesystem::create_directories (base_dir, ec);
           if (ec) {
             create_error = "Could not create the target folder.";
-          } else if (std::filesystem::exists (header_path)
-                     || (!create_header_only
-                         && std::filesystem::exists (source_path))) {
-            create_error = "A file with that name already exists in "
-                           "the project.";
+          } else if (is_das) {
+            // daslang: write a single .das file
+            const std::filesystem::path das_path
+                = base_dir / (file_stem + ".das");
+
+            if (std::filesystem::exists (das_path)) {
+              create_error = "A file with that name already exists in "
+                             "the project.";
+            } else {
+              std::string das_text;
+              if (das_is_system) {
+                das_text = make_das_system_template (display_name);
+              } else if (das_is_singleton) {
+                das_text = make_das_singleton_template (display_name);
+              } else {
+                das_text = make_das_component_template (display_name);
+              }
+
+              if (!write_text_file (das_path, das_text)) {
+                create_error = "Could not write the new source file.";
+              } else {
+                const std::string canonical
+                    = std::filesystem::weakly_canonical (das_path).string ();
+                pending_open_path = canonical;
+                needs_refresh = true;
+
+                if (show_editor != nullptr) {
+                  *show_editor = true;
+                }
+                if (editor != nullptr) {
+                  editor->open_file (canonical.c_str ());
+                }
+
+                create_error.clear ();
+                ImGui::CloseCurrentPopup ();
+              }
+            }
           } else {
-            const std::string header_name = header_path.filename ().string ();
-            std::string header_text;
-            if (is_system) {
-              header_text = make_system_header_template (
-                  class_name, display_name, create_header_only);
-            } else if (is_singleton) {
-              header_text = make_singleton_header_template (
-                  class_name, display_name, create_header_only);
+            // C++: write header and optionally source
+            const std::filesystem::path header_path
+                = base_dir / (file_stem + ".hpp");
+            const std::filesystem::path source_path
+                = base_dir / (file_stem + ".cpp");
+
+            if (std::filesystem::exists (header_path)
+                || (!create_header_only
+                    && std::filesystem::exists (source_path))) {
+              create_error = "A file with that name already exists in "
+                             "the project.";
             } else {
-              header_text = make_component_header_template (
-                  class_name, display_name, create_header_only);
-            }
-
-            const std::string source_text
-                = is_system
-                      ? make_system_source_template (header_name, class_name,
-                                                     display_name)
-                      : (is_singleton
-                             ? make_component_source_template (
-                                   header_name, class_name, display_name, true)
-                             : make_component_source_template (
-                                   header_name, class_name, display_name,
-                                   false));
-
-            bool success = write_text_file (header_path, header_text);
-            if (success && !create_header_only) {
-              success = write_text_file (source_path, source_text);
-            }
-
-            if (!success) {
-              create_error = "Could not write the new source files.";
-            } else {
-              const std::string canonical_header
-                  = std::filesystem::weakly_canonical (header_path).string ();
-              pending_open_path = canonical_header;
-              needs_refresh = true;
-
-              if (show_editor != nullptr) {
-                *show_editor = true;
-              }
-              if (editor != nullptr) {
-                editor->open_file (canonical_header.c_str ());
+              const std::string header_name = header_path.filename ().string ();
+              std::string header_text;
+              if (is_system) {
+                header_text = make_system_header_template (
+                    class_name, display_name, create_header_only);
+              } else if (is_singleton) {
+                header_text = make_singleton_header_template (
+                    class_name, display_name, create_header_only);
+              } else {
+                header_text = make_component_header_template (
+                    class_name, display_name, create_header_only);
               }
 
-              create_error.clear ();
-              ImGui::CloseCurrentPopup ();
+              const std::string source_text
+                  = is_system ? make_system_source_template (
+                                    header_name, class_name, display_name)
+                              : (is_singleton ? make_component_source_template (
+                                                    header_name, class_name,
+                                                    display_name, true)
+                                              : make_component_source_template (
+                                                    header_name, class_name,
+                                                    display_name, false));
+
+              bool success = write_text_file (header_path, header_text);
+              if (success && !create_header_only) {
+                success = write_text_file (source_path, source_text);
+              }
+
+              if (!success) {
+                create_error = "Could not write the new source files.";
+              } else {
+                const std::string canonical_header
+                    = std::filesystem::weakly_canonical (header_path).string ();
+                pending_open_path = canonical_header;
+                needs_refresh = true;
+
+                if (show_editor != nullptr) {
+                  *show_editor = true;
+                }
+                if (editor != nullptr) {
+                  editor->open_file (canonical_header.c_str ());
+                }
+
+                create_error.clear ();
+                ImGui::CloseCurrentPopup ();
+              }
             }
           }
         }
@@ -690,28 +809,43 @@ file_list::draw (const char *title, bool *p_open,
 
     if (ImGui::BeginPopup ("UnifiedCreatePopup")) {
       if (ImGui::BeginMenu ("World Component")) {
-        if (ImGui::MenuItem ("Header Only")) {
+        if (ImGui::MenuItem ("daslang (.das)")) {
+          queue_create_popup (create_kind::das_component, false);
+        }
+        if (ImGui::Separator (); false) {
+        }
+        if (ImGui::MenuItem ("C++ Header Only")) {
           queue_create_popup (create_kind::component, true);
         }
-        if (ImGui::MenuItem ("Header and Source")) {
+        if (ImGui::MenuItem ("C++ Header and Source")) {
           queue_create_popup (create_kind::component, false);
         }
         ImGui::EndMenu ();
       }
       if (ImGui::BeginMenu ("Singleton Component")) {
-        if (ImGui::MenuItem ("Header Only")) {
+        if (ImGui::MenuItem ("daslang (.das)")) {
+          queue_create_popup (create_kind::das_singleton, false);
+        }
+        if (ImGui::Separator (); false) {
+        }
+        if (ImGui::MenuItem ("C++ Header Only")) {
           queue_create_popup (create_kind::singleton, true);
         }
-        if (ImGui::MenuItem ("Header and Source")) {
+        if (ImGui::MenuItem ("C++ Header and Source")) {
           queue_create_popup (create_kind::singleton, false);
         }
         ImGui::EndMenu ();
       }
       if (ImGui::BeginMenu ("System")) {
-        if (ImGui::MenuItem ("Header Only")) {
+        if (ImGui::MenuItem ("daslang (.das)")) {
+          queue_create_popup (create_kind::das_system, false);
+        }
+        if (ImGui::Separator (); false) {
+        }
+        if (ImGui::MenuItem ("C++ Header Only")) {
           queue_create_popup (create_kind::system, true);
         }
-        if (ImGui::MenuItem ("Header and Source")) {
+        if (ImGui::MenuItem ("C++ Header and Source")) {
           queue_create_popup (create_kind::system, false);
         }
         ImGui::EndMenu ();

@@ -221,7 +221,7 @@ rsc::scene_manager::update (double dt)
 }
 
 void
-rsc::scene_manager::handle_events (const SDL_Event &event)
+rsc::scene_manager::handle_events (const wsl::engine_event &event)
 {
   if (m_active_scene != nullptr) {
     m_active_scene->handle_events (event);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../comp/component_meta.hpp"
+#include "../das/das_engine.hpp"
 
 #include "detail/registry_helpers.hpp"
 #include "wsl/log/log.hpp"
@@ -13,6 +14,7 @@
 
 #include <memory>
 #include <optional>
+#include <unordered_set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -74,6 +76,20 @@ public:
     bool runtime_registered = false;
     //! Whether the component can be default-constructed and added to an entity.
     bool can_add_default = false;
+    //! Whether this is a daslang component (no C++ backing type).
+    bool is_das_component = false;
+    //! Fields for daslang components.
+    struct das_field
+    {
+      std::string name;
+      std::string type_name;
+      int offset = 0;
+      int size = 0;
+      wsl::das::das_engine::field_type_kind kind
+          = wsl::das::das_engine::field_type_kind::unsupported;
+    };
+    int das_struct_size = 0;
+    std::vector<das_field> das_fields;
     //! Checks if the component exists on the given entity.
     bool (*contains) (entt::registry &, entt::entity) = nullptr;
     //! Emplaces a default instance of the component on the given entity.
@@ -114,9 +130,10 @@ public:
    * Cached descriptors are only suitable for discovery and name lookup. They do
    * not provide construction, reflection, copy, or serialization callbacks.
    */
-  void register_cached_runtime_world_component (entt::id_type type_id,
-                                                std::string_view type_name,
-                                                std::string_view display_name);
+  void register_cached_runtime_world_component (
+      entt::id_type type_id, std::string_view type_name,
+      std::string_view display_name, int struct_size = 0,
+      std::vector<descriptor::das_field> fields = {});
 
   /*!
    * \brief Finds a registered world component by stable or internal type ID.
@@ -202,6 +219,52 @@ public:
   bool load_world_component_json (cereal::JSONInputArchive &archive,
                                   entt::registry &registry,
                                   entt::id_type component_type_id) const;
+
+  /*!
+   * \brief Saves all das component data to a JSON archive.
+   *
+   * Each das component is serialized as a JSON array of objects with fields:
+   * type_id (uint), entity (uint), data (hex string).
+   */
+  void save_das_components_json (cereal::JSONOutputArchive &archive) const;
+
+  /*!
+   * \brief Loads das component data from a JSON archive.
+   *
+   * Expects the same format produced by save_das_components_json.
+   */
+  void load_das_components_json (cereal::JSONInputArchive &archive);
+
+  // ── Das component tracking ──
+
+  /*!
+   * \brief Checks if a das component is present on an entity.
+   */
+  bool das_component_contains (entt::id_type type_id,
+                               entt::entity entity) const;
+
+  /*!
+   * \brief Adds a das component marker to an entity.
+   */
+  bool das_component_add (entt::id_type type_id, entt::entity entity);
+
+  /*!
+   * \brief Removes the das component marker from an entity.
+   */
+  bool das_component_remove (entt::id_type type_id, entt::entity entity);
+
+  /*!
+   * \brief Returns a mutable pointer to the raw byte storage for a das
+   * component on an entity. Allocates storage if not yet present.
+   */
+  uint8_t *das_component_data (entt::id_type type_id, entt::entity entity);
+
+  /*!
+   * \brief Returns a const pointer to the raw byte storage for a das
+   * component on an entity, or nullptr if not present.
+   */
+  const uint8_t *das_component_data (entt::id_type type_id,
+                                     entt::entity entity) const;
 
   /*!
    * \brief Clears descriptors that belong to runtime project code.
@@ -404,6 +467,15 @@ private:
   std::unordered_map<entt::id_type, entt::id_type> m_internal_to_stable;
   std::unordered_map<std::string, entt::id_type> m_type_name_to_stable;
   std::unordered_map<std::string, entt::id_type> m_display_name_to_stable;
+
+  // Das component tracking: type_id -> set of entities that have it.
+  std::unordered_map<entt::id_type, std::unordered_set<entt::entity>>
+      m_das_component_state;
+
+  // Das component data storage: type_id -> entity -> raw bytes.
+  std::unordered_map<entt::id_type,
+                     std::unordered_map<entt::entity, std::vector<uint8_t>>>
+      m_das_component_data;
 };
 
 template <comp::world_component_type T>

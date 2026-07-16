@@ -27,11 +27,13 @@ public:
 protected:
   /// Create the ImGui renderer backend.
   virtual std::unique_ptr<gfx::imgui_renderer_interface>
-  create_imgui_renderer (gfx::render_window &window, gfx::render_context *ctx) = 0;
+  create_imgui_renderer (gfx::render_window &window, gfx::render_context *ctx)
+      = 0;
 
   /// Create the physics debug renderer backend.
   virtual std::unique_ptr<debug::debug_renderer_interface>
-  create_debug_renderer (gfx::render_window &window, gfx::render_context *ctx) = 0;
+  create_debug_renderer (gfx::render_window &window, gfx::render_context *ctx)
+      = 0;
 
   /// Create the editor UI layer.
   virtual std::unique_ptr<editor::editor_ui_layer_interface>
@@ -40,12 +42,20 @@ protected:
 
   // Lifecycle overrides
   void on_init () override;
-  void on_event (SDL_Event &e) override;
+  void on_event (const wsl::engine_event &e) override;
   void on_update (double dt) override;
   void on_render () override;
 
-  comp::singl::editor_context *editor_ctx () const { return m_editor_ctx.get (); }
-  editor::editor_ui_layer_interface *ui_layer () const { return m_ui_layer.get (); }
+  comp::singl::editor_context *
+  editor_ctx () const
+  {
+    return m_editor_ctx.get ();
+  }
+  editor::editor_ui_layer_interface *
+  ui_layer () const
+  {
+    return m_ui_layer.get ();
+  }
 
   // Must be called from the derived class constructor after base construction.
   void init_editor_subsystems ();

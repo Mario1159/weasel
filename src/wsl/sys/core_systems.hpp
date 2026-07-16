@@ -10,7 +10,8 @@
 #include "skybox_system.hpp"
 #include "transform_system.hpp"
 
-#include <SDL3/SDL_events.h>
+#include "wsl/event.hpp"
+#include "wsl/reg/registry_handle.hpp"
 #include <entt/entt.hpp>
 #include <functional>
 #include <memory>
@@ -54,7 +55,7 @@ public:
   void set_editor_ctx (comp::singl::editor_context *editor_ctx);
   void sync_activation ();
   void update (double dt);
-  void event_handler (const SDL_Event &e);
+  void event_handler (const engine_event &e);
   void render (wsl::gfx::render_window &window,
                const render_callbacks &callbacks = {});
 

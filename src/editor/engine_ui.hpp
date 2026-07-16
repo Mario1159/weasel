@@ -4,10 +4,8 @@
 #include "wsl/reg/sig/signal_hub.hpp"
 #include "wsl/editor/editor_ui_layer_interface.hpp"
 
-#include <SDL3/SDL.h>
 #include <entt/entity/fwd.hpp>
 #include <imgui.h>
-
 
 namespace wsl::comp::singl
 {
@@ -31,8 +29,9 @@ public:
 
   static void register_signals (wsl::reg::sig::signal_hub &hub);
   void initialize () override;
-  void set_console_command_handler (std::function<std::string (const std::string &)> handler) override;
-  void handle_event (const SDL_Event &event) override;
+  void set_console_command_handler (
+      std::function<std::string (const std::string &)> handler) override;
+  void handle_event (const wsl::engine_event &event) override;
   void build_draw_data (entt::registry &registry) override;
   void prepare_gpu_resources () override;
   void record_draw_commands () override;

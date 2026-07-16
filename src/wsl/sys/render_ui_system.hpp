@@ -1,12 +1,12 @@
 #pragma once
 
 #include <RmlUi/Core.h>
-#include <SDL3/SDL.h>
 #include <entt/entt.hpp>
 
 #include "entt/entity/fwd.hpp"
 #include "system.hpp"
-
+#include "wsl/event.hpp"
+#include "wsl/reg/registry_handle.hpp"
 
 namespace wsl
 {
@@ -28,7 +28,7 @@ public:
   void on_update (entt::registry &registry, double dt) override;
   void on_render_build_draw_data (entt::registry &registry) override;
   void on_render_record_draw_cmd (entt::registry &registry) override;
-  void on_event (entt::registry &registry, const SDL_Event &ev) override;
+  void on_event (registry_handle registry, const engine_event &ev) override;
 };
 
 } // namespace sys

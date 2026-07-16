@@ -10,7 +10,6 @@
 #include "sys/skybox_system.hpp"
 #include "sys/system.hpp"
 #include "sys/transform_system.hpp"
-#include <SDL3/SDL_events.h>
 #include <algorithm>
 #include <entt/entity/fwd.hpp>
 
@@ -303,7 +302,7 @@ core_systems::update (double dt)
 }
 
 void
-core_systems::event_handler (const SDL_Event &e)
+core_systems::event_handler (const engine_event &e)
 {
   ZoneScopedN ("core_systems::event_handler");
 
@@ -313,17 +312,19 @@ core_systems::event_handler (const SDL_Event &e)
   entt::registry &registry
       = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
 
+  registry_handle reg (registry);
+
   for (sys::ecs_system *sys : to_vec ()) {
     if (sys == nullptr) {
       continue;
     }
 
-    sys->event_handler (&registry, e);
+    sys->event_handler (reg, e);
   }
 
   if (scene != nullptr) {
     for (auto &sys : scene->systems) {
-      sys->event_handler (&registry, e);
+      sys->event_handler (reg, e);
     }
   }
 }

@@ -164,6 +164,11 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
     }
   }
 
+  // Save das component data (after regular components, before singletons).
+  if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
+    runtime_ctx->component_registry ().save_das_components_json (archive);
+  }
+
   for (const reg::singleton_registry::descriptor *desc :
        runtime_ctx->singleton_registry ().get_singleton_components (
            reg::singleton_component_order::type_id)) {
@@ -265,6 +270,17 @@ scene_snapshot_serializer::load_scene (Archive &archive)
       }
       /* JSON: missing component data is expected for empty/new scenes.
          Leave the storage at its default (empty) state silently. */
+    }
+  }
+
+  // Load das component data (after regular components, before singletons).
+  if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+    wsl::log::rsc ()->trace ("Loading das components");
+    try {
+      runtime_ctx->component_registry ().load_das_components_json (archive);
+    } catch (const std::exception &) {
+      /* Missing das component data is expected for scenes saved before
+         das component persistence was added. */
     }
   }
 

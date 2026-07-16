@@ -1,5 +1,6 @@
 #include "repl_handler.hpp"
 #include "wsl/log/log.hpp"
+#include "wsl/das/das_engine.hpp"
 #include <cstdint>
 
 #include "comp/area3d.hpp"
@@ -928,6 +929,7 @@ command_executor::ensure_runtime_module_loaded (bool allow_cached_metadata)
   }
 
   wsl::log::cli ()->info ("Compiling and loading runtime module...");
+  wsl::das::das_engine::initialize_global ();
   if (!m_rtc.runtime_project_module ().compile_and_load (*m_current_project)) {
     m_output << "Warning: runtime module compilation failed.\n"
              << "  Some user-defined types may not be available.\n";

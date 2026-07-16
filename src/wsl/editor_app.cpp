@@ -2,6 +2,7 @@
 
 #include "comp/singl/editor_context.hpp"
 #include "comp/singl/runtime_context.hpp"
+#include "das/das_engine.hpp"
 #include "sys/core_systems.hpp"
 #include <spdlog/spdlog.h>
 
@@ -41,11 +42,14 @@ editor_app::init_editor_subsystems ()
 void
 editor_app::on_init ()
 {
+  // One-time daScript global initialization on the main thread.
+  das::das_engine::initialize_global ();
+
   m_ui_layer->initialize ();
 }
 
 void
-editor_app::on_event (SDL_Event &e)
+editor_app::on_event (const wsl::engine_event &e)
 {
   m_ui_layer->handle_event (e);
 }

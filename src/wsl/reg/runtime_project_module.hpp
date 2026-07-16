@@ -1,16 +1,12 @@
 #pragma once
 
+#include "../das/das_engine.hpp"
 #include <filesystem>
 #include <cstdint>
 #include <future>
 #include <memory>
 #include <string>
 #include <vector>
-
-namespace clang
-{
-class Interpreter;
-}
 
 namespace wsl
 {
@@ -27,15 +23,19 @@ struct project;
 
 namespace reg
 {
+
+class dynamic_library;
+
 /*!
- * \brief Runtime module loading, code interpretation, and registration helpers.
+ * \brief Runtime module loading, code compilation, and registration helpers.
  *
  * The \c runtime sub-namespace provides:
- * - \c runtime_project_module: builds and interprets user-authored
- *   runtime code (headers + sources) via Clang-Repl.
+ * - \c runtime_project_module: builds and loads user-authored
+ *   runtime code (headers + sources) by compiling to shared libraries,
+ *   and executes daslang files.
  * - \c runtime_registrar (and its alias \c runtime_detail): helper
  *   functions and macro support for registering components, singletons,
- *   and systems from interpreted/compiled runtime code.
+ *   and systems from compiled runtime code.
  * - \c runtime_module_registration_context: bundles the three
  *   registration contexts (\c component_registry, \c singleton_registry,
  *   \c system_factory_registry) passed to runtime registration callbacks.
@@ -48,7 +48,8 @@ namespace runtime
  *
  * A runtime project module discovers project headers and source files,
  * generates a translation unit that wires up registration hooks, and then
- * interprets that code using Clang-Repl.
+ * compiles it to a shared library (.so/.dylib/.dll) for loading.
+ * It also discovers and executes daslang (.das) files.
  */
 class runtime_project_module
 {
@@ -83,6 +84,7 @@ public:
   bool poll_async_reload ();
 
   /*! \brief Reports whether an async reload is currently in progress.
+   *
    * \return \c true if compilation is still running in the background.
    */
   bool is_reloading () const;
@@ -98,7 +100,7 @@ public:
   /*!
    * \brief Finalizes the loading process on the main thread.
    *
-   * This clears the registries and applies the interpreted registrations.
+   * This clears the registries and applies the registrations.
    */
   void finalize_load ();
 
@@ -136,11 +138,31 @@ public:
     return m_metadata_cache_loaded;
   }
 
+  /*!
+   * \brief Returns the daslang engine instance.
+   *
+   * The engine is created on first use. Returns nullptr if daslang
+   * is not enabled.
+   */
+  wsl::das::das_engine *get_das_engine ();
+
+  struct cached_das_field
+  {
+    std::string name;
+    std::string type_name;
+    int offset = 0;
+    int size = 0;
+    int kind = 0;
+  };
+
   struct cached_registration
   {
     std::uint64_t type_id = 0;
     std::string type_name;
     std::string display_name;
+    bool is_das_component = false;
+    int das_struct_size = 0;
+    std::vector<cached_das_field> das_fields;
   };
 
   struct registration_cache
@@ -155,10 +177,30 @@ private:
   struct source_set
   {
     std::vector<std::filesystem::path> headers;
-    std::vector<std::filesystem::path> sources;
+    std::vector<std::filesystem::path> cpp_sources;
+    std::vector<std::filesystem::path> das_sources;
+  };
+
+  struct das_registration
+  {
+    enum kind_t
+    {
+      component,
+      singleton,
+      system
+    };
+    kind_t kind;
+    std::string type_name;
+    std::string display_name;
+    std::uint64_t type_id;
+    int struct_size = 0;
+    std::string script_path;
+    std::vector<wsl::das::das_engine::field_info> fields;
   };
 
   static void gather_files (const std::filesystem::path &base, source_set &out);
+
+  static bool is_das_file (const std::filesystem::path &path);
 
   static std::size_t compute_source_hash (const source_set &sources);
 
@@ -173,12 +215,11 @@ private:
 
   void apply_registration_cache (const registration_cache &cache);
 
+  void load_das_registrations_from_cache (const registration_cache &cache);
+
   static bool
   write_generated_translation_unit (const std::filesystem::path &generated_path,
                                     const source_set &sources);
-
-  bool initialize_interpreter ();
-  bool interpret (const std::filesystem::path &generated_path);
 
   // ── Shared library cache ──
   static std::filesystem::path
@@ -205,9 +246,9 @@ private:
   bool m_metadata_cache_loaded = false;
   std::size_t m_source_hash = 0;
 
-  std::vector<std::string> m_interpreter_args_storage;
-  std::vector<const char *> m_interpreter_args;
-  std::unique_ptr<clang::Interpreter> m_interpreter;
+  std::unique_ptr<dynamic_library> m_loaded_library;
+  std::unique_ptr<wsl::das::das_engine> m_das_engine;
+  std::vector<das_registration> m_das_registrations;
 
   std::future<bool> m_async_reload_future;
 };

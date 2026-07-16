@@ -66,10 +66,10 @@ tracy_runtime_snapshot (uint64_t &frame_index, double &fps, bool &is_running,
     in_play_session = false;
     return;
   }
-  frame_index = s_tracy_rt->render_ctx().frame_index ();
+  frame_index = s_tracy_rt->render_ctx ().frame_index ();
   fps = s_smoothed_fps;
-  is_running = s_tracy_rt->is_running();
-  in_play_session = s_tracy_rt->in_play_session();
+  is_running = s_tracy_rt->is_running ();
+  in_play_session = s_tracy_rt->in_play_session ();
 }
 
 } // namespace
@@ -105,7 +105,7 @@ app::app (const std::string &name, int width, int height,
   s_tracy_rt = m_runtime_context.get ();
   wsl::sys::tracy_telemetry_init (tracy_runtime_snapshot);
 
-  if (m_runtime_context->render_ctx().gpu_device == nullptr) {
+  if (m_runtime_context->render_ctx ().gpu_device == nullptr) {
     wsl::log::core ()->critical (
         "CRITICAL: GPU device could not be initialized. "
         "Application will likely crash.");
@@ -134,37 +134,39 @@ app::app (const std::string &name, int width, int height,
 
   wsl::comp::for_each_type<wsl::comp::component_types>::apply (
       [this]<typename T> () {
-        m_runtime_context->component_registry().register_world_component<T> ();
+        m_runtime_context->component_registry ().register_world_component<T> ();
       });
 
   wsl::comp::singl::runtime_context::register_meta ();
   wsl::comp::singl::ui_manager::register_meta ();
 
-  m_runtime_context->singleton_registry()
+  m_runtime_context->singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::runtime_context> (
           { "Runtime Context", true });
-  m_runtime_context->singleton_registry()
+  m_runtime_context->singleton_registry ()
       .register_bound_singleton_component<wsl::rsc::scene_manager> (
           { "Scene Manager", true });
-  m_runtime_context->singleton_registry()
+  m_runtime_context->singleton_registry ()
       .register_bound_singleton_component<wsl::rsc::resource_manager_view> (
           { "Resource Manager", true });
-  m_runtime_context->singleton_registry()
+  m_runtime_context->singleton_registry ()
       .register_bound_singleton_component<wsl::comp::singl::ui_manager> (
           { "UI Manager", true, false, true });
-  m_runtime_context->singleton_registry()
+  m_runtime_context->singleton_registry ()
       .register_singleton_component<wsl::comp::singl::rendering_manager> (
           { "Rendering Manager", true });
-  m_runtime_context->singleton_registry()
+  m_runtime_context->singleton_registry ()
       .register_singleton_component<wsl::comp::singl::physics_manager> (
           { "Physics Manager", true });
 
   wsl::log::core ()->info (
       "App initialized ({} world components, {} singletons, {} engine systems)",
-      m_runtime_context->component_registry().get_world_components ().size (),
-      m_runtime_context->singleton_registry().get_singleton_components ().size (),
-      m_runtime_context->core_systems()
-          ? m_runtime_context->core_systems()->to_vec ().size ()
+      m_runtime_context->component_registry ().get_world_components ().size (),
+      m_runtime_context->singleton_registry ()
+          .get_singleton_components ()
+          .size (),
+      m_runtime_context->core_systems ()
+          ? m_runtime_context->core_systems ()->to_vec ().size ()
           : 0);
 }
 
@@ -184,34 +186,34 @@ void
 app::set_project_path (const std::string &path)
 {
   wsl::log::core ()->trace ("Loading project from {}", path);
-  m_runtime_context->resource_manager().load_project (path);
+  m_runtime_context->resource_manager ().load_project (path);
 }
 
 void
 app::set_engine_resource_path (const std::string &path)
 {
-  m_runtime_context->resource_manager().set_engine_resource_path (path);
+  m_runtime_context->resource_manager ().set_engine_resource_path (path);
 }
 
 void
 app::on_render ()
 {
-  if (m_runtime_context->core_systems()) {
-    m_runtime_context->core_systems()->render (m_runtime_context->window());
+  if (m_runtime_context->core_systems ()) {
+    m_runtime_context->core_systems ()->render (m_runtime_context->window ());
   }
 }
 
 int
 app::run ()
 {
-  if (m_runtime_context->render_ctx().gpu_device == nullptr) {
+  if (m_runtime_context->render_ctx ().gpu_device == nullptr) {
     return -1;
   }
 
   wsl::log::core ()->trace ("Entering main loop");
   on_init ();
 
-  if (m_runtime_context->editor_ctx() == nullptr) {
+  if (m_runtime_context->editor_ctx () == nullptr) {
     m_runtime_context->set_running (true);
   }
 
@@ -235,23 +237,24 @@ app::run ()
 
     SDL_Event e;
     while (SDL_PollEvent (&e) != 0) {
-      if (e.type == SDL_EVENT_QUIT) {
+      wsl::engine_event we (e);
+      if (we.kind () == event_kind::quit) {
         quit = true;
       }
-      if (e.type == SDL_EVENT_WINDOW_RESIZED
+      if (we.kind () == event_kind::window
           && e.window.windowID
-                 == SDL_GetWindowID (m_runtime_context->window().handler())) {
-        m_runtime_context->window().on_resize ();
+                 == SDL_GetWindowID (m_runtime_context->window ().handler ())) {
+        m_runtime_context->window ().on_resize ();
       }
-      m_runtime_context->scene_manager().handle_events (e);
-      on_event (e);
+      m_runtime_context->scene_manager ().handle_events (we);
+      on_event (we);
     }
 
     // "Update" sub-frame: physics, ECS systems, etc. Closes before
     // "Render" starts. The two are side-by-side rows in Tracy's
     // Frame view; their gap equals the main frame time.
     wsl::sys::tracy_telemetry_secondary_frame_begin ("Update");
-    m_runtime_context->core_systems()->update (dt);
+    m_runtime_context->core_systems ()->update (dt);
     on_update (dt);
     wsl::sys::tracy_telemetry_secondary_frame_end ("Update");
 
@@ -263,7 +266,7 @@ app::run ()
     // between consecutive FrameMark calls. The label is shown in
     // the Frame view alongside the per-frame zone stack.
     wsl::sys::tracy_telemetry_frame_mark (
-        m_runtime_context->render_ctx().frame_index ());
+        m_runtime_context->render_ctx ().frame_index ());
   }
 
   wsl::log::core ()->debug ("Exiting main loop");

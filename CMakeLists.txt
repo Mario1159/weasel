@@ -109,7 +109,7 @@ else()
 endif()
 
 include(cmake/CPM.cmake)
-include(cmake/ClangRepl.cmake)
+include(cmake/Daslang.cmake)
 
 # SDL_STATIC_PIC=ON forces the static archive to be compiled with
 # -fPIC. Required because wsl/editor are .so targets that link
@@ -673,9 +673,11 @@ if(NOT doctest_POPULATED)
   FetchContent_Populate(doctest)
 endif()
 
-# Create an interface target for doctest headers
-add_library(doctest INTERFACE)
-target_include_directories(doctest INTERFACE ${doctest_SOURCE_DIR})
+# Create an interface target for doctest headers (if not already defined by daslang)
+if(NOT TARGET doctest)
+  add_library(doctest INTERFACE)
+  target_include_directories(doctest INTERFACE ${doctest_SOURCE_DIR})
+endif()
 
 # Add doctest-based tests for the CLI handler
 add_executable(weasel_cli_tests

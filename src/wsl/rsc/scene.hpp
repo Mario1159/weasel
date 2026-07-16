@@ -9,7 +9,6 @@
 #include "resource_ref.hpp"
 #include "../sys/system.hpp"
 
-
 namespace wsl
 {
 
@@ -26,10 +25,12 @@ namespace rsc
 {
 
 /*!
- * \brief Represents a collection of entities and systems that form a unit of gameplay or world space.
+ * \brief Represents a collection of entities and systems that form a unit of
+ * gameplay or world space.
  *
- * The scene manages an EnTT registry and a list of systems that operate on that registry.
- * It also handles entity naming, resource tracking for asynchronous loading, and entity copying.
+ * The scene manages an EnTT registry and a list of systems that operate on that
+ * registry. It also handles entity naming, resource tracking for asynchronous
+ * loading, and entity copying.
  */
 class scene
 {
@@ -71,7 +72,8 @@ public:
   /*!
    * \brief Adds a system instance to the scene.
    * \param sys Unique pointer to the system instance.
-   * \param initialize_if_running Whether to initialize the system if the scene is already running.
+   * \param initialize_if_running Whether to initialize the system if the scene
+   * is already running.
    * \return Reference to the added system.
    */
   sys::ecs_system &add_system_instance (std::unique_ptr<sys::ecs_system> sys,
@@ -92,8 +94,8 @@ public:
   /*! \brief Updates all active systems in the scene. */
   void update (double dt);
 
-  /*! \brief Forwards an SDL event to all active systems in the scene. */
-  void handle_events (const SDL_Event &e);
+  /*! \brief Forwards an engine event to all active systems in the scene. */
+  void handle_events (const wsl::engine_event &e);
 
   /*! \brief Shuts down all systems and clears the registry. */
   void stop_and_clear ();
@@ -137,7 +139,8 @@ public:
    * \param src_scene The source scene.
    * \param src_entity The source entity to copy.
    * \param dst_parent Optional parent entity in this scene.
-   * \param is_instantiating_prefab Whether the copy is part of a prefab instantiation.
+   * \param is_instantiating_prefab Whether the copy is part of a prefab
+   * instantiation.
    * \param prefab_id The ID of the prefab if applicable.
    * \return The newly created entity in this scene.
    */

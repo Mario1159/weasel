@@ -41,13 +41,11 @@ private:
                         entt::meta_any *default_object = nullptr);
   bool draw_render_viewport_field (entt::meta_any &object);
   bool draw_meta_object (const char *label, entt::meta_any &object,
-                         entt::meta_any *prefab_object = nullptr,
-                         entt::meta_any *default_object = nullptr);
+                         entt::meta_any *prefab_object = nullptr);
   static bool draw_meta_enum (const char *label, entt::meta_any &object);
   bool draw_meta_sequence (const char *label, entt::meta_any &object);
   bool draw_meta_value (const char *label, entt::meta_any &object,
-                        entt::meta_any *prefab_object = nullptr,
-                        entt::meta_any *default_object = nullptr);
+                        entt::meta_any *prefab_object = nullptr);
 
   static bool is_hidden (const entt::meta_data &data);
   void draw_add_component_ui (entt::entity entity);
