@@ -765,6 +765,21 @@ editor::root::draw_build_settings_popup ()
     ImGui::Separator ();
     ImGui::Spacing ();
 
+    ImGui::TextUnformatted ("Daslang Runtime Mode");
+    ImGui::SetNextItemWidth (400.0F);
+    const char *runtime_mode_names[] = { "Interpretation", "JIT", "AOT" };
+    int mode_index = static_cast<int> (m_editor_ctx->get_das_compile_mode ());
+    if (ImGui::Combo ("##das_runtime_mode", &mode_index, runtime_mode_names,
+                      IM_ARRAYSIZE (runtime_mode_names))) {
+      m_editor_ctx->set_das_compile_mode (
+          static_cast<wsl::comp::singl::editor_context::das_compile_mode> (
+              mode_index));
+    }
+
+    ImGui::Spacing ();
+    ImGui::Separator ();
+    ImGui::Spacing ();
+
     if (ImGui::Button ("Close")) {
       ImGui::CloseCurrentPopup ();
       m_show_build_settings = false;

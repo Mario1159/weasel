@@ -12,8 +12,10 @@
 #include "wsl/comp/component_meta.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/event.hpp"
+#include "wsl/log/log.hpp"
 #include "wsl/ray.hpp"
 #include "wsl/rsc/scene.hpp"
+#include "wsl/reg/component_registry.hpp"
 
 #include <SDL3/SDL_mouse.h>
 #include <cstring>
@@ -25,6 +27,8 @@ namespace
 {
 
 entt::registry *g_registry = nullptr;
+const engine_event *g_current_event = nullptr;
+double g_delta_time = 0.0;
 
 entt::registry *
 get_registry ()
@@ -39,7 +43,7 @@ wsl_entity_create ()
 {
   auto *reg = get_registry ();
   if (!reg) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
   return static_cast<uint32_t> (reg->create ());
 }
@@ -70,16 +74,16 @@ wsl_entity_valid (uint32_t entity)
 bool
 wsl_entity_is_null (uint32_t entity)
 {
-  return entity == 0xFFFFFFFFu;
+  return entity == NULL_ENTITY_ID;
 }
 
 uint32_t
 wsl_null_entity ()
 {
-  return 0xFFFFFFFFu;
+  return NULL_ENTITY_ID;
 }
 
-// ── Generic component queries (work with type-erased storage) ──
+// ── Generic component queries ──
 
 bool
 wsl_has_component (uint32_t type_id, uint32_t entity)
@@ -92,12 +96,23 @@ wsl_has_component (uint32_t type_id, uint32_t entity)
   if (!reg->valid (e)) {
     return false;
   }
+  // Check entt storage first (C++ components)
   auto *storage = reg->storage (type_id);
-  return storage && storage->contains (e);
+  if (storage && storage->contains (e)) {
+    return true;
+  }
+  // Check das component storage
+  if (reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+    if (runtime_ctx) {
+      return runtime_ctx->component_registry ().das_component_contains (type_id,
+                                                                        e);
+    }
+  }
+  return false;
 }
 
-// ── Per-component add/remove (required because entt's type-erased
-//    basic_sparse_set does not expose emplace/remove) ──
+// ── Per-component add/remove ──
 
 bool
 wsl_add_transform (uint32_t entity)
@@ -363,20 +378,20 @@ wsl_find_entity_by_name (const char *name)
 {
   auto *reg = get_registry ();
   if (!reg || !name) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
 
   if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
   auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
   if (!runtime_ctx) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
 
   auto *scene = runtime_ctx->scene_manager ().get_active ();
   if (!scene) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
 
   for (const auto &[entity, entity_name] : scene->get_entity_names ()) {
@@ -384,7 +399,7 @@ wsl_find_entity_by_name (const char *name)
       return static_cast<uint32_t> (entity);
     }
   }
-  return 0xFFFFFFFFu;
+  return NULL_ENTITY_ID;
 }
 
 uint32_t
@@ -392,20 +407,20 @@ wsl_get_active_camera ()
 {
   auto *reg = get_registry ();
   if (!reg) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
 
   if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
   auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
   if (!runtime_ctx) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
 
   auto *scene = runtime_ctx->scene_manager ().get_active ();
   if (!scene) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
 
   return static_cast<uint32_t> (scene->camera);
@@ -463,8 +478,6 @@ wsl_type_id_world_transform ()
 }
 
 // ── Event query functions ──
-
-static const engine_event *g_current_event = nullptr;
 
 uint32_t
 wsl_get_event_kind ()
@@ -639,9 +652,162 @@ uint32_t
 wsl_get_entity_at (uint32_t index)
 {
   if (index >= g_entity_count) {
-    return 0xFFFFFFFFu;
+    return NULL_ENTITY_ID;
   }
   return g_entity_buffer[index];
+}
+
+// ── Component type lookup ──
+
+uint32_t
+wsl_get_component_type_id (const char *display_name)
+{
+  auto *reg = get_registry ();
+  if (!reg || !display_name) {
+    return 0;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return 0;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return 0;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *desc = comp_reg.find_world_component (display_name);
+  if (!desc) {
+    return 0;
+  }
+  return static_cast<uint32_t> (desc->type_id);
+}
+
+// ── Entity iteration by component ──
+
+void
+wsl_refresh_entities_with_component (uint32_t type_id)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    g_entity_count = 0;
+    return;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    g_entity_count = 0;
+    return;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    g_entity_count = 0;
+    return;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *desc = comp_reg.find_world_component (type_id);
+  if (!desc) {
+    g_entity_count = 0;
+    return;
+  }
+  g_entity_count = 0;
+  for (auto e : reg->view<comp::transform> ()) {
+    bool has = false;
+    if (desc->is_das_component) {
+      has = comp_reg.das_component_contains (type_id, e);
+    } else if (desc->contains) {
+      has = desc->contains (*reg, e);
+    }
+    if (has) {
+      if (g_entity_count >= 512) {
+        break;
+      }
+      g_entity_buffer[g_entity_count++] = static_cast<uint32_t> (e);
+    }
+  }
+}
+
+// ── Component field access ──
+
+float
+wsl_get_component_field_f (uint32_t entity, uint32_t type_id, int offset)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return 0.0f;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return 0.0f;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *desc = comp_reg.find_world_component (type_id);
+  if (!desc) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  bool has = false;
+  if (desc->is_das_component) {
+    has = comp_reg.das_component_contains (type_id, e);
+  } else if (desc->contains) {
+    has = desc->contains (*reg, e);
+  }
+  if (!has) {
+    return 0.0f;
+  }
+  const uint8_t *data = comp_reg.das_component_data (type_id, e);
+  if (!data) {
+    return 0.0f;
+  }
+  if (offset < 0
+      || static_cast<uint32_t> (offset) + sizeof (float)
+             > static_cast<uint32_t> (desc->das_struct_size)) {
+    return 0.0f;
+  }
+  float value = 0.0f;
+  std::memcpy (&value, data + offset, sizeof (float));
+  return value;
+}
+
+void
+wsl_set_component_field_f (uint32_t entity, uint32_t type_id, int offset,
+                           float value)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *desc = comp_reg.find_world_component (type_id);
+  if (!desc) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  bool has = false;
+  if (desc->is_das_component) {
+    has = comp_reg.das_component_contains (type_id, e);
+  } else if (desc->contains) {
+    has = desc->contains (*reg, e);
+  }
+  if (!has) {
+    return;
+  }
+  uint8_t *data = comp_reg.das_component_data (type_id, e);
+  if (!data) {
+    return;
+  }
+  if (offset < 0
+      || static_cast<uint32_t> (offset) + sizeof (float)
+             > static_cast<uint32_t> (desc->das_struct_size)) {
+    return;
+  }
+  std::memcpy (data + offset, &value, sizeof (float));
 }
 
 // ── Raycasting (global-state) ──
@@ -753,6 +919,31 @@ public:
     ::das::ModuleLibrary lib (this);
     lib.addBuiltInModule ();
 
+    addExtern<DAS_BIND_FUN (wsl_get_delta_time)> (
+        *this, lib, "get_delta_time", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_delta_time");
+
+    // Logging
+    addExtern<DAS_BIND_FUN (wsl_log_info)> (*this, lib, "log_info",
+                                            ::das::SideEffects::modifyExternal,
+                                            "wsl::das::wsl_log_info")
+        ->arg ("msg");
+
+    addExtern<DAS_BIND_FUN (wsl_log_debug)> (*this, lib, "log_debug",
+                                             ::das::SideEffects::modifyExternal,
+                                             "wsl::das::wsl_log_debug")
+        ->arg ("msg");
+
+    addExtern<DAS_BIND_FUN (wsl_log_warn)> (*this, lib, "log_warn",
+                                            ::das::SideEffects::modifyExternal,
+                                            "wsl::das::wsl_log_warn")
+        ->arg ("msg");
+
+    addExtern<DAS_BIND_FUN (wsl_log_error)> (*this, lib, "log_error",
+                                             ::das::SideEffects::modifyExternal,
+                                             "wsl::das::wsl_log_error")
+        ->arg ("msg");
+
     // Entity operations
     addExtern<DAS_BIND_FUN (wsl_entity_create)> (
         *this, lib, "entity_create", ::das::SideEffects::modifyExternal,
@@ -825,7 +1016,7 @@ public:
         "wsl::das::wsl_remove_world_transform")
         ->arg ("entity");
 
-    // Transform operations (global-state: call getter, then read with _x/_y/_z)
+    // Transform operations
     addExtern<DAS_BIND_FUN (wsl_get_position)> (
         *this, lib, "get_position", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_get_position")
@@ -970,6 +1161,30 @@ public:
         "wsl::das::wsl_get_entity_at")
         ->arg ("index");
 
+    // Component type lookup
+    addExtern<DAS_BIND_FUN (wsl_get_component_type_id)> (
+        *this, lib, "get_component_type_id", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_component_type_id")
+        ->arg ("display_name");
+
+    // Entity iteration by component
+    addExtern<DAS_BIND_FUN (wsl_refresh_entities_with_component)> (
+        *this, lib, "refresh_entities_with_component",
+        ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_refresh_entities_with_component")
+        ->arg ("type_id");
+
+    // Component field access
+    addExtern<DAS_BIND_FUN (wsl_get_component_field_f)> (
+        *this, lib, "get_component_field_f", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_component_field_f")
+        ->args ({ "entity", "type_id", "offset" });
+
+    addExtern<DAS_BIND_FUN (wsl_set_component_field_f)> (
+        *this, lib, "set_component_field_f", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_component_field_f")
+        ->args ({ "entity", "type_id", "offset", "value" });
+
     // Raycasting
     addExtern<DAS_BIND_FUN (wsl_make_pick_ray)> (
         *this, lib, "make_pick_ray", ::das::SideEffects::modifyExternal,
@@ -1040,10 +1255,25 @@ public:
 
 } // anonymous namespace
 
+static ::das::Module *g_weasel_api = nullptr;
+
 void
 register_wsl_api_module (::das::ModuleGroup &module_group)
 {
-  module_group.addModule (new Module_WeaselApi ());
+  g_weasel_api = new Module_WeaselApi ();
+  module_group.addModule (g_weasel_api);
+}
+
+::das::Module *
+get_wsl_api_module ()
+{
+  return g_weasel_api;
+}
+
+::das::Module *
+create_worker_weasel_api_module ()
+{
+  return new Module_WeaselApi ();
 }
 
 void
@@ -1056,6 +1286,42 @@ void
 wsl_api_set_current_event (const engine_event *ev)
 {
   g_current_event = ev;
+}
+
+void
+wsl_api_set_delta_time (double dt)
+{
+  g_delta_time = dt;
+}
+
+float
+wsl_get_delta_time ()
+{
+  return static_cast<float> (g_delta_time);
+}
+
+void
+wsl_log_info (const char *msg)
+{
+  wsl::log::sys ()->info ("{}", msg ? msg : "");
+}
+
+void
+wsl_log_debug (const char *msg)
+{
+  wsl::log::sys ()->debug ("{}", msg ? msg : "");
+}
+
+void
+wsl_log_warn (const char *msg)
+{
+  wsl::log::sys ()->warn ("{}", msg ? msg : "");
+}
+
+void
+wsl_log_error (const char *msg)
+{
+  wsl::log::sys ()->error ("{}", msg ? msg : "");
 }
 
 } // namespace wsl::das

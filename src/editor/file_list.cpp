@@ -469,6 +469,16 @@ file_list::refresh_if_needed (wsl::rsc::resource_manager *resources)
       shaders, { ".hlsl", ".spv", ".dxil", ".metal", ".vert", ".frag" },
       shader_files);
 
+  // Gather main.cpp from the project's src directory
+  main_files.clear ();
+  const auto main_path = root / "src" / "main.cpp";
+  if (std::filesystem::exists (main_path)
+      && std::filesystem::is_regular_file (main_path)) {
+    main_files.push_back (
+        { .label = "main.cpp",
+          .path = std::filesystem::weakly_canonical (main_path).string () });
+  }
+
   if (!pending_open_path.empty ()) {
     if (select_entry_by_path (component_files, pending_open_path,
                               selected_comp)) {
@@ -497,6 +507,13 @@ file_list::refresh_if_needed (wsl::rsc::resource_manager *resources)
       selected_singleton = -1;
       selected_sys = -1;
       selected_ui = -1;
+    } else if (select_entry_by_path (main_files, pending_open_path,
+                                     selected_main)) {
+      selected_comp = -1;
+      selected_singleton = -1;
+      selected_sys = -1;
+      selected_ui = -1;
+      selected_shader = -1;
     }
     pending_open_path.clear ();
   } else {
@@ -505,6 +522,7 @@ file_list::refresh_if_needed (wsl::rsc::resource_manager *resources)
     selected_sys = -1;
     selected_ui = -1;
     selected_shader = -1;
+    selected_main = -1;
   }
 
   needs_refresh = false;
@@ -867,6 +885,7 @@ file_list::draw (const char *title, bool *p_open,
             selected_singleton = -1;
             selected_ui = -1;
             selected_shader = -1;
+            selected_main = -1;
             selected_idx = i;
             if (show_editor) {
               *show_editor = true;
@@ -878,6 +897,29 @@ file_list::draw (const char *title, bool *p_open,
         });
       }
     };
+
+    // Root-level: main.cpp
+    for (int i = 0; i < (int)main_files.size (); ++i) {
+      ImSearch::SearchableItem (
+          main_files[i].label.c_str (), [&] (const char *) {
+            const bool is_this_selected = (selected_main == i);
+            if (ImGui::Selectable (main_files[i].label.c_str (),
+                                   is_this_selected)) {
+              selected_comp = -1;
+              selected_sys = -1;
+              selected_singleton = -1;
+              selected_ui = -1;
+              selected_shader = -1;
+              selected_main = i;
+              if (show_editor) {
+                *show_editor = true;
+              }
+              if (editor) {
+                editor->open_file (main_files[i].path.c_str ());
+              }
+            }
+          });
+    }
 
     // Category 1: World Components
     if (ImSearch::PushSearchable ("World Components", [] (const char *name) {

@@ -572,6 +572,25 @@ public:
 
   void cancel_editor_camera_anim ();
 
+  // Daslang runtime compilation mode (editor setting)
+  enum class das_compile_mode : int
+  {
+    interpretation = 0,
+    jit,
+    aot,
+  };
+
+  das_compile_mode
+  get_das_compile_mode () const
+  {
+    return m_das_compile_mode;
+  }
+  void
+  set_das_compile_mode (das_compile_mode val)
+  {
+    m_das_compile_mode = val;
+  }
+
 private:
   // Internal: compute a camera rotation so that camera looks at target
   static glm::quat make_look_at_quat (const glm::vec3 &cam_pos,
@@ -701,11 +720,8 @@ private:
 
   camera_anim m_cam_anim;
 
-  template <class Archive>
-  void
-  serialize (Archive & /*unused*/)
-  {
-  }
+private:
+  das_compile_mode m_das_compile_mode = das_compile_mode::interpretation;
 };
 
 } // namespace comp::singl

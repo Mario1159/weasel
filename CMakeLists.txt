@@ -800,6 +800,28 @@ if(_WEASEL_IMPORTED_DEFS)
     INTERFACE_COMPILE_DEFINITIONS \"${_WEASEL_IMPORTED_DEFS}\"")
 endif()
 
+# Collect shared library dependencies that consumers must be able to find
+# at link-time. Static libraries (daScript, imgui, etc.) are embedded in
+# libwsl.so and do not need to be listed here.
+set(_WSL_LINK_LIBS "")
+if(TARGET SDL3::SDL3)
+    get_target_property(_SDL3_loc SDL3::SDL3 IMPORTED_LOCATION)
+    if(_SDL3_loc)
+        list(APPEND _WSL_LINK_LIBS "${_SDL3_loc}")
+    endif()
+endif()
+if(TARGET TracyClient)
+    get_target_property(_TRACY_loc TracyClient IMPORTED_LOCATION)
+    if(_TRACY_loc)
+        list(APPEND _WSL_LINK_LIBS "${_TRACY_loc}")
+    endif()
+endif()
+if(_WSL_LINK_LIBS)
+    list(REMOVE_DUPLICATES _WSL_LINK_LIBS)
+    file(APPEND "${CMAKE_BINARY_DIR}/WeaselTargets.cmake" "
+    INTERFACE_LINK_LIBRARIES \"${_WSL_LINK_LIBS}\"")
+endif()
+
 file(APPEND "${CMAKE_BINARY_DIR}/WeaselTargets.cmake" "
 )
 add_library(wsl ALIAS Weasel::wsl)
@@ -812,6 +834,19 @@ install(FILES "${CMAKE_BINARY_DIR}/WeaselTargets.cmake"
 
 install(FILES WeaselConfig.cmake
     DESTINATION lib/cmake/Weasel
+    COMPONENT Engine
+)
+
+install(FILES cmake/WeaselDasAOT.cmake
+    DESTINATION lib/cmake/Weasel
+    COMPONENT Engine
+)
+
+# Install weasel_api.das declarations for AOT compilation.
+# Downstream projects need this file in their daslib path.
+# Install to share/weasel/ so packaging/linux/Makefile picks it up.
+install(FILES src/wsl/das/modules/weasel_api/weasel_api.das
+    DESTINATION share/weasel/daslib
     COMPONENT Engine
 )
 

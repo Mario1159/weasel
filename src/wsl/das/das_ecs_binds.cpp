@@ -1,32 +1,47 @@
 #include "das_ecs_binds.hpp"
 
+#include "daScript/ast/ast.h"
+#include "daScript/daScriptModule.h"
+
 namespace wsl::das
 {
 
-namespace
+class Module_Ecs : public ::das::Module
 {
+public:
+  Module_Ecs () : Module ("weasel_ecs")
+  {
+    ::das::ModuleLibrary lib (this);
+    lib.addBuiltInModule ();
+  }
 
-entt::registry *g_active_registry = nullptr;
+  virtual ::das::ModuleAotType
+  aotRequire (::das::TextWriter &tw) const override
+  {
+    tw << "#include \"wsl/das/das_ecs_binds.hpp\"\n";
+    return ::das::ModuleAotType::cpp;
+  }
+};
 
-} // anonymous namespace
+static ::das::Module *g_ecs_module = nullptr;
 
 void
-register_ecs_module ()
+register_ecs_module (::das::ModuleGroup &module_group)
 {
-  // TODO: Register daslang module with ECS bindings
-  // This will expose entity creation, component access, etc.
+  g_ecs_module = new Module_Ecs ();
+  module_group.addModule (g_ecs_module);
 }
 
-entt::registry *
-get_active_registry ()
+::das::Module *
+get_ecs_module ()
 {
-  return g_active_registry;
+  return g_ecs_module;
 }
 
-void
-set_active_registry (entt::registry *registry)
+::das::Module *
+create_worker_ecs_module ()
 {
-  g_active_registry = registry;
+  return new Module_Ecs ();
 }
 
 } // namespace wsl::das

@@ -1,0 +1,6 @@
+options gen2
+
+[export]
+def initialize(project_path : string) {
+    register_native_path("weasel_api", "weasel_api", "{project_path}/weasel_api.das")
+}

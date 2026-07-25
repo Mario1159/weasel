@@ -11,20 +11,13 @@ class das_engine;
 /*!
  * \brief A system implementation backed by a daslang script.
  *
- * This class wraps a daslang file and delegates system lifecycle
- * callbacks (on_init, on_update, on_inactive) to the corresponding
- * daslang functions.
+ * Compiles a .das file and delegates lifecycle callbacks to module-level
+ * wrapper functions (on_init, on_update, on_event, on_inactive) which
+ * in turn call class method overrides.
  */
 class das_system : public sys::ecs_system
 {
 public:
-  /*!
-   * \brief Constructs a daslang system.
-   * \param name Display name for the system.
-   * \param script_path Path to the .das script file.
-   * \param engine Reference to the daslang engine.
-   * \param type_id Per-instance type identifier (from registration).
-   */
   das_system (const std::string &name, const std::string &script_path,
               das_engine &engine, entt::id_type type_id);
 

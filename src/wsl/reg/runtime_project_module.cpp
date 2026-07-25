@@ -766,6 +766,10 @@ runtime_project_module::write_generated_translation_unit (
              / "src/wsl/reg/runtime_project_module_api.hpp")
                 .generic_string ()
          << "\"\n";
+  output << "#include \""
+         << (fs::path (WEASEL_SOURCE_DIR) / "src/wsl/user_hooks.hpp")
+                .generic_string ()
+         << "\"\n";
   output << "#include <cstdint>\n\n";
   write_runtime_meta_context_sync (output);
 
@@ -777,6 +781,16 @@ runtime_project_module::write_generated_translation_unit (
   for (const fs::path &source : sources.cpp_sources) {
     output << "#include \"" << source.generic_string () << "\"\n";
   }
+
+  // Provide weak default implementations so linking never fails.
+  // User code can override these by defining them in their .cpp files.
+  output << R"(
+extern "C" {
+__attribute__((weak)) void wsl_on_project_init(wsl::app&) {}
+__attribute__((weak)) void wsl_on_project_update(wsl::app&, double) {}
+__attribute__((weak)) void wsl_on_project_shutdown(wsl::app&) {}
+}
+)";
 
   return true;
 }
@@ -800,6 +814,7 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
   gather_files (project_root / project.components_path, sources);
   gather_files (project_root / project.systems_path, sources);
   gather_files (project_root / project.singletons_path, sources);
+  gather_files (project_root / "src", sources);
 
   const std::size_t current_hash = compute_source_hash (sources);
   registration_cache cache{};
@@ -841,7 +856,8 @@ runtime_project_module::finalize_load ()
     // Convert field_info to descriptor::das_field
     std::vector<wsl::reg::component_registry::descriptor::das_field> fields;
     for (const auto &fi : reg.fields) {
-      fields.push_back ({ fi.name, fi.type_name, fi.offset, fi.size, fi.kind });
+      fields.push_back ({ fi.name, fi.type_name, fi.offset, fi.size, fi.kind,
+                          fi.default_value });
     }
 
     switch (reg.kind) {
@@ -918,7 +934,11 @@ runtime_project_module::unload ()
     m_das_engine.reset ();
   }
 
-  // Now unload the shared library
+  // Now unload the shared library (clear hooks first to avoid dangling
+  // pointers)
+  m_hook_init = nullptr;
+  m_hook_update = nullptr;
+  m_hook_shutdown = nullptr;
   m_loaded_library.reset ();
 
   m_module_loaded = false;
@@ -947,7 +967,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
 
   source_set sources;
   wsl::log::cmake ()->trace (
-      "Gathering files from components, systems and singletons paths...");
+      "Gathering files from components, systems, singletons and src paths...");
   wsl::log::cmake ()->trace (
       "  components_path: {}",
       (project_root / project.components_path).string ());
@@ -956,9 +976,12 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   wsl::log::cmake ()->trace (
       "  singletons_path: {}",
       (project_root / project.singletons_path).string ());
+  wsl::log::cmake ()->trace ("  src_path: {}",
+                             (project_root / "src").string ());
   gather_files (project_root / project.components_path, sources);
   gather_files (project_root / project.systems_path, sources);
   gather_files (project_root / project.singletons_path, sources);
+  gather_files (project_root / "src", sources);
   wsl::log::cmake ()->trace (
       "Gathered {} headers, {} cpp sources, and {} das sources",
       sources.headers.size (), sources.cpp_sources.size (),
@@ -1064,39 +1087,49 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   // Cache miss - compile to shared library
   if (sources.cpp_sources.empty () && sources.das_sources.empty ()) {
     m_last_status = "No source files found to compile.";
-    wsl::log::cmake ()->warn ("{}", m_last_status);
-    return false;
+    wsl::log::cmake ()->debug ("{}", m_last_status);
+    m_module_loaded = true;
+    m_source_hash = current_hash;
+    return true;
   }
 
+  const bool has_native_code
+      = !sources.cpp_sources.empty () || !sources.headers.empty ();
   const fs::path build_dir = project_root / "build" / "weasel_runtime";
-  fs::create_directories (build_dir);
 
-  const fs::path generated_path = build_dir / k_generated_module_file;
+  if (has_native_code) {
+    fs::create_directories (build_dir);
 
-  wsl::log::cmake ()->debug ("Writing generated translation unit to: {}",
-                             generated_path.string ());
-  if (!write_generated_translation_unit (generated_path, sources)) {
-    m_last_status = "Failed to generate the runtime module source file.";
-    wsl::log::cmake ()->error ("{}", m_last_status);
-    return false;
-  }
+    const fs::path generated_path = build_dir / k_generated_module_file;
 
-  const fs::path so_path = shared_library_path (project_root);
-  wsl::log::cmake ()->trace ("Compiling shared library...");
-  if (!compile_to_shared_library (generated_path, so_path)) {
-    m_last_status = "Failed to compile runtime module to shared library.";
-    wsl::log::cmake ()->error ("{}", m_last_status);
-    return false;
-  }
+    wsl::log::cmake ()->debug ("Writing generated translation unit to: {}",
+                               generated_path.string ());
+    if (!write_generated_translation_unit (generated_path, sources)) {
+      m_last_status = "Failed to generate the runtime module source file.";
+      wsl::log::cmake ()->error ("{}", m_last_status);
+      return false;
+    }
 
-  // Write the source hash so try_load_cached_shared_library can find it.
-  write_source_hash (source_hash_path (project_root), current_hash);
+    const fs::path so_path = shared_library_path (project_root);
+    wsl::log::cmake ()->trace ("Compiling shared library...");
+    if (!compile_to_shared_library (generated_path, so_path)) {
+      m_last_status = "Failed to compile runtime module to shared library.";
+      wsl::log::cmake ()->error ("{}", m_last_status);
+      return false;
+    }
 
-  // Load the compiled shared library
-  if (!try_load_cached_shared_library (current_hash)) {
-    m_last_status = "Failed to load compiled shared library.";
-    wsl::log::cmake ()->error ("{}", m_last_status);
-    return false;
+    // Write the source hash so try_load_cached_shared_library can find it.
+    write_source_hash (source_hash_path (project_root), current_hash);
+
+    // Load the compiled shared library
+    if (!try_load_cached_shared_library (current_hash)) {
+      m_last_status = "Failed to load compiled shared library.";
+      wsl::log::cmake ()->error ("{}", m_last_status);
+      return false;
+    }
+  } else {
+    wsl::log::cmake ()->debug (
+        "No native C++ sources found, skipping shared library compilation.");
   }
 
   m_module_loaded = true;
@@ -1127,7 +1160,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
         = fs::weakly_canonical (project_root / project.systems_path).string ();
 
     for (const auto &das_file : sources.das_sources) {
-      wsl::log::cmake ()->trace ("Executing daslang file: {}",
+      wsl::log::cmake ()->debug ("Executing daslang file: {}",
                                  das_file.string ());
       if (!das_engine->execute_file (das_file)) {
         m_last_status = "Failed to execute daslang file: " + das_file.string ()
@@ -1429,7 +1462,34 @@ runtime_project_module::try_load_cached_shared_library (
       runtime_registrar::component_registrations ().size (),
       runtime_registrar::singleton_registrations ().size (),
       runtime_registrar::system_registrations ().size ());
+
+  resolve_user_hooks ();
+
   return true;
+}
+
+void
+runtime_project_module::resolve_user_hooks ()
+{
+  m_hook_init = nullptr;
+  m_hook_update = nullptr;
+  m_hook_shutdown = nullptr;
+
+  if (!m_loaded_library || !m_loaded_library->is_loaded ()) {
+    return;
+  }
+
+  m_hook_init = reinterpret_cast<hook_init_fn> (
+      m_loaded_library->get_symbol ("wsl_on_project_init"));
+  m_hook_update = reinterpret_cast<hook_update_fn> (
+      m_loaded_library->get_symbol ("wsl_on_project_update"));
+  m_hook_shutdown = reinterpret_cast<hook_shutdown_fn> (
+      m_loaded_library->get_symbol ("wsl_on_project_shutdown"));
+
+  wsl::log::cmake ()->debug (
+      "User hooks resolved: init={} update={} shutdown={}",
+      m_hook_init != nullptr, m_hook_update != nullptr,
+      m_hook_shutdown != nullptr);
 }
 
 } // namespace runtime

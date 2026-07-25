@@ -1290,7 +1290,7 @@ rsc::resource_manager::load_project (const std::string &path)
     .assets_job = std::async (
         std::launch::async,
         [this, proj, has_runtime_code] () {
-          if (m_runtime_ctx->editor_ctx () && has_runtime_code
+          if (has_runtime_code
               && !m_runtime_ctx->runtime_project_module ()
                       .has_loaded_module ()) {
             if (!m_runtime_ctx->runtime_project_module ().compile_and_load (

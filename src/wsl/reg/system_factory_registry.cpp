@@ -4,6 +4,7 @@
 #include "../sys/system.hpp"
 #include "../das/das_system.hpp"
 #include "../das/das_engine.hpp"
+#include "../log/log.hpp"
 
 #include <algorithm>
 #include <memory>

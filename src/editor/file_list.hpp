@@ -66,6 +66,7 @@ public:
   int selected_singleton = -1;
   int selected_ui = -1;
   int selected_shader = -1;
+  int selected_main = -1;
 
   bool needs_refresh = true;
   bool create_header_only = false;
@@ -89,6 +90,7 @@ public:
   std::vector<entry> system_files;
   std::vector<entry> ui_layout_files;
   std::vector<entry> shader_files;
+  std::vector<entry> main_files;
 };
 
 } // namespace editor

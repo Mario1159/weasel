@@ -5,8 +5,10 @@
 
 #if WEASEL_HAS_DASLANG
 #include "daScript/ast/dyn_modules.h"
+#include "daScript/ast/ast.h"
 #include "daScript/daScript.h"
 #include "wsl_api_module.hpp"
+#include "das_ecs_binds.hpp"
 #include "../log/log.hpp"
 
 using namespace das;
@@ -21,26 +23,69 @@ initialize_modules_for_engine (TextPrinter &tout,
                                smart_ptr<FsFileAccess> &faccess,
                                ModuleGroup &module_group)
 {
+  // Ensure the thread-local daScriptEnvironment exists.  Module::Module()
+  // accesses daScriptEnvironment::getBound()->modules to insert itself into
+  // the per-thread module list.  If the environment hasn't been bound on
+  // this thread yet, getBound() returns null and the dereference segfaults.
+  // This may be called from a worker thread (async reload), so we must
+  // ensure the environment here rather than relying on the main thread.
+  ::das::daScriptEnvironment::ensure ();
+
   // Set up the daslang source tree path and file access.
   setDasRoot (std::string (WEASEL_BUILD_DIR) + "/_deps/daslang-src");
 
   faccess = smart_ptr<FsFileAccess> (new FsFileAccess);
+
+  // Register all default builtin modules (BuiltIn, Math, Strings, etc.)
+  // into this thread's local ModuleKarma.  ModuleLibrary::addBuiltInModule()
+  // calls Module::require("$") which searches the thread-local module list,
+  // so the "$" module MUST be present before any Module_WeaselApi or
+  // Module_Ecs constructor runs (they create a ModuleLibrary with
+  // addBuiltInModule).
   PULL_ALL_DEFAULT_MODULES;
-  vector<string> empty_modules;
-  require_dynamic_modules (faccess, getDasRoot (), "./", empty_modules, tout);
 
   // Register the Weasel API module (ECS, transforms, scene queries).
   wsl::das::register_wsl_api_module (module_group);
 
-  // Module::Initialize() must be called on the main thread (see
-  // das_engine::initialize_global). On worker threads we only need the
-  // per-thread daScriptEnvironment to exist and have its
-  // g_modulesInitialized flag set so that compileDaScript's assertion
-  // passes. The module list itself is global and already populated.
-  ::das::daScriptEnvironment::ensure ();
-  ::das::daScriptEnvironment::getBound ()->g_modulesInitialized = true;
+  // Register the Weasel ECS module (engine component types).
+  wsl::das::register_ecs_module (module_group);
+
+  // NOTE: We intentionally do NOT call require_dynamic_modules here.
+  // It compiles .das_module files and stores them in thread-local
+  // ModuleKarma.  When the worker thread later compiles user .das files,
+  // the compiled modules may be in an inconsistent state across threads,
+  // causing corruption (hash set corruption in buildAccessFlags, etc.).
+  // Instead, modules like builtin.das are compiled on-demand by
+  // compileDaScript on the worker thread.
 
   return true;
+}
+
+// Ensure the calling thread has a valid daScriptEnvironment with modules
+// and g_modulesInitialized set.  Called from execute_file so that
+// compileDaScript does not crash on worker threads (async reload).
+//
+// This function creates ALL modules (builtin + weasel) on the calling
+// thread's thread-local daScriptEnvironment.  Module::Module() inserts
+// into daScriptEnvironment::getBound()->modules, which is thread-local.
+// If modules were created on a different thread (e.g. main thread during
+// initialize()), they would NOT be visible on this worker thread.
+void
+ensure_thread_das_environment (TextPrinter &tout,
+                               smart_ptr<FsFileAccess> &faccess,
+                               ModuleGroup &module_group)
+{
+  auto *env = ::das::daScriptEnvironment::getBound ();
+  if (env && env->g_modulesInitialized) {
+    return; // Already initialized on this thread.
+  }
+  // Initialize ALL modules on this thread's thread-local environment.
+  // This creates the "$", Math, Strings, etc. builtin modules AND the
+  // weasel_api/weasel_ecs modules on THIS thread, so they are visible
+  // to Module::require() and compileDaScript on this thread.
+  initialize_modules_for_engine (tout, faccess, module_group);
+  env = ::das::daScriptEnvironment::getBound ();
+  env->g_modulesInitialized = true;
 }
 
 } // anonymous namespace
@@ -87,29 +132,73 @@ struct das_engine::impl
   ::das::ModuleGroup module_group;
   ::das::CodeOfPolicies policies;
   std::unordered_map<std::string, ::das::ProgramPtr> compiled_programs;
-  std::unique_ptr<::das::Context> persistent_ctx;
-  // Merged function lookup across all compiled programs.  The context's own
-  // tabMnLookup is replaced by each program->simulate(), so we maintain our
-  // own map that survives multiple simulate() calls.
-  std::unordered_map<std::string, ::das::SimFunction *> fn_lookup;
+  // Per-program context.  Each program gets its own Context because
+  // Context::relocateCode relocates ALL sim nodes (including shared module
+  // nodes).  If two programs that share modules (via `require`) are
+  // simulated into the same Context, the second program's relocateCode
+  // tries to copy already-relocated shared nodes, causing the
+  // prefix->magic==0xdeadc0de assertion failure in SimNode::copyNode.
+  std::unordered_map<std::string, std::unique_ptr<::das::Context>>
+      program_contexts;
+  struct fn_entry
+  {
+    ::das::SimFunction *sf = nullptr;
+    ::das::Context *ctx = nullptr;
+  };
+  // Per-file function lookup.  Each compiled file has its own map of
+  // function name → (SimFunction*, Context*).  This prevents different
+  // systems from overwriting each other's functions (e.g. two files
+  // both defining "on_update").
+  std::unordered_map<std::string, std::unordered_map<std::string, fn_entry>>
+      file_fn_lookup;
+  // Legacy flat lookup — kept for backwards compatibility.  Points to the
+  // last-registered function with each name.  Only used when callers
+  // don't specify a file path.
+  std::unordered_map<std::string, fn_entry> fn_lookup;
 
   impl ()
   {
     policies.aot = true;
     policies.fail_on_no_aot = false;
+    // Keep all functions in compiled programs so the C++ side can call
+    // them at runtime (on_init, on_update, etc.) even if the das code
+    // doesn't reference them from within the script.
+    policies.export_all = true;
+    // compileDaScript asserts that the thread-local daScriptEnvironment
+    // has g_modulesInitialized set. Since compileDaScript may be called
+    // from worker threads (async reload), skip this check — the modules
+    // are globally initialized on the main thread and the ModuleGroup
+    // (passed via compileDaScript) has all required modules.
+    policies.no_init_check = true;
   }
 
   bool
   initialize ()
   {
-    return initialize_modules_for_engine (tout, faccess, module_group);
+    // Module creation is deferred to ensure_thread_das_environment() which
+    // runs on the worker thread.  Module::Module() inserts into the
+    // calling thread's thread-local daScriptEnvironment, so modules created
+    // on the main thread are invisible to the worker thread's Module::require.
+    // We only do minimal global setup here (non-thread-local state).
+    ::das::daScriptEnvironment::ensure ();
+    setDasRoot (std::string (WEASEL_BUILD_DIR) + "/_deps/daslang-src");
+    return true;
   }
 
   bool
   execute_file (const std::string &path, std::string &error)
   {
+    // Ensure thread-local daScriptEnvironment is set up on this thread,
+    // including the module list needed by compileDaScript and Module::require.
+    ensure_thread_das_environment (tout, faccess, module_group);
+
+    wsl::log::cmake ()->debug ("compileDaScript: starting compile of '{}'",
+                               path);
     auto program = compileDaScript (path.c_str (), faccess, tout, module_group,
                                     policies);
+    wsl::log::cmake ()->debug (
+        "compileDaScript: finished compile of '{}' (failed={})", path,
+        program->failed ());
     if (program->failed ()) {
       std::ostringstream oss;
       for (const auto &err : program->errors) {
@@ -120,9 +209,17 @@ struct das_engine::impl
       return false;
     }
 
-    // Run in a temporary context to execute initialization code.
-    ::das::Context ctx (program->getContextStackSize ());
-    if (!program->simulate (ctx, tout)) {
+    // Each program gets its OWN Context.  Context::relocateCode relocates
+    // ALL sim nodes including shared module nodes.  If two programs that
+    // share modules (via `require`) are simulated into the same Context,
+    // the second program's relocateCode tries to copy already-relocated
+    // shared nodes, causing the prefix->magic==0xdeadc0de assertion
+    // failure in SimNode::copyNode.
+    uint32_t needed = program->getContextStackSize ();
+    uint32_t initial = needed > 1024 * 1024 ? needed : 1024 * 1024;
+    auto ctx = std::make_unique<::das::Context> (initial);
+
+    if (!program->simulate (*ctx, tout)) {
       std::ostringstream oss;
       for (const auto &err : program->errors) {
         oss << reportError (err.at, err.what, err.extra, err.fixme, err.cerr)
@@ -132,48 +229,20 @@ struct das_engine::impl
       return false;
     }
 
+    // Merge this program's functions into fn_lookup, each paired with its
+    // owning context.
+    auto *raw_ctx = ctx.get ();
+    program_contexts[path] = std::move (ctx);
     compiled_programs[path] = program;
 
-    // Ensure the persistent context is large enough for all compiled programs.
-    uint32_t needed = program->getContextStackSize ();
-    bool ctx_recreated = false;
-    if (!persistent_ctx || persistent_ctx->stack.size () < needed) {
-      persistent_ctx = std::make_unique<::das::Context> (needed);
-      ctx_recreated = true;
-    }
-
-    // When the context is recreated, re-simulate ALL previously compiled
-    // programs so their functions remain available for runtime calls.
-    if (ctx_recreated) {
-      for (auto &[p_path, p_prog] : compiled_programs) {
-        if (!p_prog->simulate (*persistent_ctx, tout)) {
-          error = "Failed to re-simulate program: " + p_path;
-          return false;
-        }
-      }
-    } else {
-      // Just simulate the current program on the existing context.
-      if (!program->simulate (*persistent_ctx, tout)) {
-        std::ostringstream oss;
-        for (const auto &err : program->errors) {
-          oss << reportError (err.at, err.what, err.extra, err.fixme, err.cerr)
-              << "\n";
-        }
-        error = oss.str ();
-        return false;
-      }
-    }
-
-    // After each program->simulate(), the context's tabMnLookup is replaced
-    // with only that program's functions.  Merge into our persistent fn_lookup
-    // so all previously compiled programs' functions remain findable.
-    if (persistent_ctx->tabMnLookup) {
+    if (raw_ctx->tabMnLookup) {
       wsl::log::cmake ()->debug ("execute_file: tabMnLookup has {} entries",
-                                 persistent_ctx->tabMnLookup->size ());
-      for (auto &kv : *persistent_ctx->tabMnLookup) {
+                                 raw_ctx->tabMnLookup->size ());
+      for (auto &kv : *raw_ctx->tabMnLookup) {
         auto *sf = kv.second;
         if (sf && sf->name) {
-          fn_lookup[sf->name] = sf;
+          file_fn_lookup[path][sf->name] = { sf, raw_ctx };
+          fn_lookup[sf->name] = { sf, raw_ctx };
           wsl::log::cmake ()->debug ("  fn_lookup: '{}'", sf->name);
         }
       }
@@ -189,10 +258,12 @@ struct das_engine::impl
   allocate_instance (const std::string &path, const std::string &struct_name,
                      std::string &error)
   {
-    if (!persistent_ctx) {
-      error = "No persistent context available";
+    auto ctx_it = program_contexts.find (path);
+    if (ctx_it == program_contexts.end ()) {
+      error = "No context available for path: " + path;
       return nullptr;
     }
+    auto &ctx = ctx_it->second;
 
     auto it = compiled_programs.find (path);
     if (it == compiled_programs.end ()) {
@@ -217,10 +288,57 @@ struct das_engine::impl
     }
 
     // Allocate zero-initialized memory on the VM heap.
-    char *ptr
-        = persistent_ctx->allocate (static_cast<uint64_t> (bytes), nullptr);
+    char *ptr = ctx->allocate (static_cast<uint64_t> (bytes), nullptr);
     memset (ptr, 0, static_cast<std::size_t> (bytes));
     return ptr;
+  }
+
+  das_engine::class_instance
+  instantiate_class (const std::string &path, const std::string &class_name,
+                     std::string &error)
+  {
+    auto ctx_it = program_contexts.find (path);
+    if (ctx_it == program_contexts.end ()) {
+      error = "No context available for path: " + path;
+      return {};
+    }
+    auto &ctx = ctx_it->second;
+
+    auto it = compiled_programs.find (path);
+    if (it == compiled_programs.end ()) {
+      error = "Program not found for path: " + path;
+      return {};
+    }
+    auto program = it->second;
+    if (!program || !program->thisModule) {
+      error = "Invalid program";
+      return {};
+    }
+
+    // Find the class in the compiled program
+    auto structs = program->findStructure (class_name.c_str ());
+    if (structs.empty ()) {
+      error = "Class not found: " + class_name;
+      return {};
+    }
+    auto st = structs[0];
+    int bytes = st->getSizeOf ();
+    if (bytes <= 0) {
+      error = "Class has zero size: " + class_name;
+      return {};
+    }
+
+    // Allocate zero-initialized memory on the VM heap
+    char *ptr = ctx->allocate (static_cast<uint64_t> (bytes), nullptr);
+    memset (ptr, 0, static_cast<std::size_t> (bytes));
+
+    das_engine::class_instance result;
+    result.ptr = ptr;
+    result.ctx = ctx.get ();
+    // StructInfo is not yet available — the adapter pattern is deferred.
+    result.info = nullptr;
+
+    return result;
   }
 
   das_engine::field_type_kind
@@ -308,17 +426,27 @@ struct das_engine::impl
       fi.offset = field.offset;
       fi.size = field.type ? field_type_size (field.type) : 0;
       fi.kind = classify_field_type (field.type);
+      // Extract default value from the init expression if available.
+      // After type inference, init is folded to an ExprConst for literal
+      // defaults like `sensitivity : float = 0.1`.
+      if (field.init && fi.size > 0) {
+        auto *expr_const = static_cast<ExprConst *> (field.init);
+        if (expr_const && expr_const->type && !expr_const->type->isRef ()) {
+          fi.default_value.resize (static_cast<std::size_t> (fi.size));
+          memcpy (fi.default_value.data (), &expr_const->value,
+                  static_cast<std::size_t> (fi.size));
+        }
+      }
       result.fields.push_back (std::move (fi));
     }
     return result;
   }
 
   bool
-  call_void_function (const char *func_name, ::das::Context &ctx,
-                      std::string &error)
+  call_void_function (const char *func_name, std::string &error)
   {
     auto it = fn_lookup.find (func_name);
-    if (it == fn_lookup.end () || !it->second) {
+    if (it == fn_lookup.end () || !it->second.sf) {
       error = "Function '";
       error += func_name;
       error += "' not found (fn_lookup size="
@@ -334,34 +462,61 @@ struct das_engine::impl
       return false;
     }
 
-    ctx.evalWithCatch (it->second, nullptr);
+    auto &entry = it->second;
+    entry.ctx->evalWithCatch (entry.sf, nullptr);
     return true;
   }
 
   bool
-  call_int_function (const char *func_name, ::das::Context &ctx, int &out_value,
-                     std::string &error)
+  call_void_function (const std::string &path, const char *func_name,
+                      std::string &error)
+  {
+    auto file_it = file_fn_lookup.find (path);
+    if (file_it == file_fn_lookup.end ()) {
+      error = "No compiled functions for path: " + path;
+      return false;
+    }
+    auto it = file_it->second.find (func_name);
+    if (it == file_it->second.end () || !it->second.sf) {
+      error = "Function '";
+      error += func_name;
+      error += "' not found in file '";
+      error += path;
+      error += "'.";
+      return false;
+    }
+
+    auto &entry = it->second;
+    entry.ctx->evalWithCatch (entry.sf, nullptr);
+    return true;
+  }
+
+  bool
+  call_int_function (const char *func_name, int &out_value, std::string &error)
   {
     auto it = fn_lookup.find (func_name);
-    if (it == fn_lookup.end () || !it->second) {
+    if (it == fn_lookup.end () || !it->second.sf) {
       error = "Function '";
       error += func_name;
       error += "' not found.";
       return false;
     }
 
-    ctx.evalWithCatch (it->second, nullptr);
+    auto &entry = it->second;
+    entry.ctx->evalWithCatch (entry.sf, nullptr);
     return true;
   }
 
   void
   shutdown ()
   {
-    // Release engine-owned daScript resources (programs, context, file access).
-    // Do NOT call Module::Shutdown() here — it was never called per-engine
-    // instance. Module::Initialize/Shutdown is managed globally on the main
-    // thread via initialize_global().
-    persistent_ctx.reset ();
+    // Release engine-owned daScript resources (programs, contexts, file
+    // access). Do NOT call Module::Shutdown() here — it was never called
+    // per-engine instance. Module::Initialize/Shutdown is managed globally on
+    // the main thread via initialize_global().
+    fn_lookup.clear ();
+    file_fn_lookup.clear ();
+    program_contexts.clear ();
     compiled_programs.clear ();
     faccess.reset ();
   }
@@ -467,13 +622,24 @@ das_engine::call_void_function (const char *func_name)
     return false;
   }
 
-  if (!m_impl->persistent_ctx) {
-    m_last_error = "No persistent context available";
+  if (m_impl->fn_lookup.empty ()) {
+    m_last_error = "No functions loaded";
     return false;
   }
 
-  return m_impl->call_void_function (func_name, *m_impl->persistent_ctx,
-                                     m_last_error);
+  return m_impl->call_void_function (func_name, m_last_error);
+}
+
+bool
+das_engine::call_void_function (const std::filesystem::path &path,
+                                const char *func_name)
+{
+  if (!m_initialized) {
+    m_last_error = "Engine not initialized";
+    return false;
+  }
+
+  return m_impl->call_void_function (path.string (), func_name, m_last_error);
 }
 
 bool
@@ -484,15 +650,36 @@ das_engine::call_int_function (const char *func_name, int *out_value)
     return false;
   }
 
-  if (!m_impl->persistent_ctx) {
-    m_last_error = "No persistent context available";
+  if (m_impl->fn_lookup.empty ()) {
+    m_last_error = "No functions loaded";
     return false;
   }
 
   int dummy = 0;
-  return m_impl->call_int_function (func_name, *m_impl->persistent_ctx,
-                                    out_value ? *out_value : dummy,
+  return m_impl->call_int_function (func_name, out_value ? *out_value : dummy,
                                     m_last_error);
+}
+
+das_engine::class_instance
+das_engine::instantiate_class (const std::filesystem::path &path,
+                               const std::string &class_name,
+                               std::string &error)
+{
+  if (!m_initialized) {
+    error = "Engine not initialized";
+    return {};
+  }
+
+  if (m_impl->program_contexts.empty ()) {
+    error = "No compiled programs available";
+    return {};
+  }
+
+  auto result = m_impl->instantiate_class (path.string (), class_name, error);
+  if (!result.ptr) {
+    m_last_error = error;
+  }
+  return result;
 }
 
 void

@@ -36,6 +36,12 @@ if(NOT TARGET wsl)
             elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/build/compiled_shaders")
                 set(Weasel_RESOURCE_PATH "${CMAKE_CURRENT_LIST_DIR}/build")
             endif()
+
+            # Provide the AOT cmake module for downstream projects
+            if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/WeaselDasAOT.cmake")
+                include("${CMAKE_CURRENT_LIST_DIR}/WeaselDasAOT.cmake")
+            endif()
+
             return()
         endif()
     endif()
@@ -48,4 +54,9 @@ if(NOT TARGET wsl)
     else()
         message(FATAL_ERROR "Weasel Engine not found. Set Weasel_DIR to the engine source or install directory.")
     endif()
+endif()
+
+# Provide the AOT cmake module for downstream projects
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/WeaselDasAOT.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/WeaselDasAOT.cmake")
 endif()

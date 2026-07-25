@@ -87,6 +87,7 @@ public:
       int size = 0;
       wsl::das::das_engine::field_type_kind kind
           = wsl::das::das_engine::field_type_kind::unsupported;
+      std::vector<uint8_t> default_value;
     };
     int das_struct_size = 0;
     std::vector<das_field> das_fields;
@@ -234,6 +235,13 @@ public:
    * Expects the same format produced by save_das_components_json.
    */
   void load_das_components_json (cereal::JSONInputArchive &archive);
+
+  //! Saves all das component data to a binary archive (for play/stop
+  //! snapshots).
+  void save_das_components_binary (cereal::BinaryOutputArchive &archive) const;
+
+  //! Loads das component data from a binary archive (for play/stop snapshots).
+  void load_das_components_binary (cereal::BinaryInputArchive &archive);
 
   // ── Das component tracking ──
 

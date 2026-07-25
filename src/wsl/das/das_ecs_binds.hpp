@@ -3,30 +3,25 @@
 #include <entt/entt.hpp>
 #include <string>
 
+namespace das
+{
+class Module;
+class ModuleGroup;
+}
+
 namespace wsl::das
 {
 
 /*!
  * \brief Registers Weasel ECS types with daslang.
  *
- * This function should be called after the daslang engine is initialized
- * to expose ECS types and functions to daslang scripts.
+ * This module registers engine component types (transform, camera, etc.)
+ * as daScript types so they can be used in daslang scripts.
  */
-void register_ecs_module ();
+void register_ecs_module (::das::ModuleGroup &module_group);
 
-/*!
- * \brief Returns the active registry for daslang operations.
- *
- * The registry must be set before calling daslang functions that
- * interact with the ECS.
- */
-entt::registry *get_active_registry ();
+::das::Module *get_ecs_module ();
 
-/*!
- * \brief Sets the active registry for daslang operations.
- *
- * \param registry Pointer to the active registry (can be nullptr to clear).
- */
-void set_active_registry (entt::registry *registry);
+::das::Module *create_worker_ecs_module ();
 
 } // namespace wsl::das

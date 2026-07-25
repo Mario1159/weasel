@@ -6,6 +6,12 @@
 #include <vector>
 #include <unordered_map>
 
+namespace das
+{
+struct StructInfo;
+class Context;
+}
+
 namespace wsl::das
 {
 
@@ -64,6 +70,7 @@ public:
     int offset = 0;
     int size = 0;
     field_type_kind kind = field_type_kind::unsupported;
+    std::vector<uint8_t> default_value;
   };
 
   struct struct_info
@@ -116,12 +123,53 @@ public:
   bool call_void_function (const char *func_name);
 
   /*!
+   * \brief Finds and calls a void function from a specific file by name.
+   *
+   * Uses per-file function lookup so different systems with identically
+   * named functions (e.g. "on_update") each resolve to their own file's
+   * function.
+   *
+   * \param path Path to the compiled .das file.
+   * \param func_name Name of the function to call.
+   * \return \c true if the function was found and called, \c false otherwise.
+   */
+  bool call_void_function (const std::filesystem::path &path,
+                           const char *func_name);
+
+  /*!
    * \brief Finds and calls a function returning int by name with no arguments.
    * \param func_name Name of the function to call.
    * \param out_value Pointer to store the return value (may be nullptr).
    * \return \c true if the function was found and called, \c false otherwise.
    */
   bool call_int_function (const char *func_name, int *out_value = nullptr);
+
+  /*!
+   * \brief Information about an instantiated daslang class.
+   */
+  struct class_instance
+  {
+    void *ptr = nullptr; ///< Pointer to the class instance (VM heap)
+    const ::das::StructInfo *info = nullptr; ///< StructInfo for adapter offsets
+    ::das::Context *ctx = nullptr; ///< Execution context owning the instance
+  };
+
+  /*!
+   * \brief Instantiates a daslang class defined in the given file.
+   *
+   * Finds the class by name, allocates an instance on the VM heap,
+   * and returns the instance info needed for the class adapter pattern.
+   *
+   * Must be called after execute_file for the same path.
+   *
+   * \param path Path to the compiled .das file.
+   * \param class_name Name of the class to instantiate.
+   * \param error Output error message on failure.
+   * \return The class instance info, or a zeroed struct on failure.
+   */
+  class_instance instantiate_class (const std::filesystem::path &path,
+                                    const std::string &class_name,
+                                    std::string &error);
 
   /*!
    * \brief Returns the error message from the last failed operation.

@@ -3,6 +3,7 @@
 #include "comp/singl/editor_context.hpp"
 #include "comp/singl/runtime_context.hpp"
 #include "das/das_engine.hpp"
+#include "reg/runtime_project_module.hpp"
 #include "sys/core_systems.hpp"
 #include <spdlog/spdlog.h>
 
@@ -23,7 +24,14 @@ editor_app::editor_app (const std::string &name, int width, int height,
           { "Editor Context", true });
 }
 
-editor_app::~editor_app () = default;
+editor_app::~editor_app ()
+{
+  // Call user shutdown hook before destroying the engine
+  auto &rpm = m_runtime_context->runtime_project_module ();
+  if (auto shutdown_fn = rpm.get_hook_shutdown ()) {
+    shutdown_fn (*this);
+  }
+}
 
 void
 editor_app::init_editor_subsystems ()
@@ -46,6 +54,12 @@ editor_app::on_init ()
   das::das_engine::initialize_global ();
 
   m_ui_layer->initialize ();
+
+  // Call user init hook
+  auto &rpm = m_runtime_context->runtime_project_module ();
+  if (auto init_fn = rpm.get_hook_init ()) {
+    init_fn (*this);
+  }
 }
 
 void
@@ -66,6 +80,12 @@ editor_app::on_update (double dt)
     m_runtime_context->resource_manager ().load_project (
         *m_editor_ctx->pending_project_load ());
     m_editor_ctx->pending_project_load (std::nullopt);
+  }
+
+  // Call user update hook
+  auto &rpm = m_runtime_context->runtime_project_module ();
+  if (auto update_fn = rpm.get_hook_update ()) {
+    update_fn (*this, dt);
   }
 }
 

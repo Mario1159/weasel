@@ -56,11 +56,22 @@ component_registry::das_component_add (entt::id_type type_id,
   }
   m_das_component_state[type_id].insert (entity);
 
-  // Allocate zero-initialized storage for the component data.
+  // Allocate storage for the component data, applying default values
+  // from the daScript struct definition when available.
   const auto *desc = find_world_component (type_id);
   int size = (desc && desc->das_struct_size > 0) ? desc->das_struct_size : 64;
-  m_das_component_data[type_id][entity].assign (static_cast<std::size_t> (size),
-                                                0);
+  auto &data = m_das_component_data[type_id][entity];
+  data.assign (static_cast<std::size_t> (size), 0);
+
+  if (desc) {
+    for (const auto &f : desc->das_fields) {
+      if (!f.default_value.empty () && f.offset >= 0
+          && f.offset + static_cast<int> (f.default_value.size ()) <= size) {
+        std::memcpy (data.data () + f.offset, f.default_value.data (),
+                     f.default_value.size ());
+      }
+    }
+  }
   return true;
 }
 
@@ -405,6 +416,67 @@ component_registry::load_das_components_json (cereal::JSONInputArchive &archive)
     std::vector<uint8_t> data = hex_to_bytes (data_hex);
     uint8_t *dest = das_component_data (tid, entity);
     if (dest) {
+      const descriptor *desc = find_world_component (tid);
+      std::size_t copy_size
+          = desc ? static_cast<std::size_t> (desc->das_struct_size)
+                 : data.size ();
+      copy_size = std::min (copy_size, data.size ());
+      std::memcpy (dest, data.data (), copy_size);
+    }
+  }
+}
+
+void
+component_registry::save_das_components_binary (
+    cereal::BinaryOutputArchive &archive) const
+{
+  // Count total entries.
+  std::size_t count = 0;
+  for (const auto &[type_id, entity_map] : m_das_component_data) {
+    count += entity_map.size ();
+  }
+  archive (count);
+
+  for (const auto &[type_id, entity_map] : m_das_component_data) {
+    for (const auto &[entity, data] : entity_map) {
+      auto tid = static_cast<uint32_t> (type_id);
+      auto ent = static_cast<uint32_t> (entt::to_integral (entity));
+      auto data_size = static_cast<uint32_t> (data.size ());
+      archive (tid, ent, data_size);
+      archive (cereal::binary_data (data.data (), data.size ()));
+    }
+  }
+}
+
+void
+component_registry::load_das_components_binary (
+    cereal::BinaryInputArchive &archive)
+{
+  std::size_t count = 0;
+  archive (count);
+
+  for (std::size_t i = 0; i < count; ++i) {
+    uint32_t tid_raw = 0;
+    uint32_t ent_raw = 0;
+    uint32_t data_size = 0;
+    archive (tid_raw, ent_raw, data_size);
+
+    auto tid = static_cast<entt::id_type> (tid_raw);
+    auto entity = static_cast<entt::entity> (ent_raw);
+
+    // Ensure the component type and entity exist.
+    if (!contains_world_component (tid)) {
+      register_cached_runtime_world_component (tid, "unknown", "unknown");
+    }
+    if (!das_component_contains (tid, entity)) {
+      das_component_add (tid, entity);
+    }
+
+    // Overwrite with saved data.
+    uint8_t *dest = das_component_data (tid, entity);
+    if (dest && data_size > 0) {
+      std::vector<uint8_t> data (data_size);
+      archive (cereal::binary_data (data.data (), data_size));
       const descriptor *desc = find_world_component (tid);
       std::size_t copy_size
           = desc ? static_cast<std::size_t> (desc->das_struct_size)

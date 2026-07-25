@@ -11,6 +11,8 @@
 namespace wsl
 {
 
+class app;
+
 namespace comp::singl
 {
 class runtime_context;
@@ -146,6 +148,39 @@ public:
    */
   wsl::das::das_engine *get_das_engine ();
 
+  // User C++ hook function pointer types
+  using hook_init_fn = void (*) (wsl::app &);
+  using hook_update_fn = void (*) (wsl::app &, double);
+  using hook_shutdown_fn = void (*) (wsl::app &);
+
+  /*!
+   * \brief Returns the resolved user init hook, or nullptr if not available.
+   */
+  hook_init_fn
+  get_hook_init () const
+  {
+    return m_hook_init;
+  }
+
+  /*!
+   * \brief Returns the resolved user update hook, or nullptr if not available.
+   */
+  hook_update_fn
+  get_hook_update () const
+  {
+    return m_hook_update;
+  }
+
+  /*!
+   * \brief Returns the resolved user shutdown hook, or nullptr if not
+   * available.
+   */
+  hook_shutdown_fn
+  get_hook_shutdown () const
+  {
+    return m_hook_shutdown;
+  }
+
   struct cached_das_field
   {
     std::string name;
@@ -249,6 +284,13 @@ private:
   std::unique_ptr<dynamic_library> m_loaded_library;
   std::unique_ptr<wsl::das::das_engine> m_das_engine;
   std::vector<das_registration> m_das_registrations;
+
+  // User C++ hook function pointers resolved from the loaded shared library
+  hook_init_fn m_hook_init = nullptr;
+  hook_update_fn m_hook_update = nullptr;
+  hook_shutdown_fn m_hook_shutdown = nullptr;
+
+  void resolve_user_hooks ();
 
   std::future<bool> m_async_reload_future;
 };

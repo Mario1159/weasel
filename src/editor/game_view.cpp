@@ -915,6 +915,13 @@ game_view::draw_camera_header (entt::registry &registry,
       draw_icon_button (m_editor_ctx, m_editor_ctx->icon_play (), "Play",
                         &do_play, true, false, btn_size);
       if (do_play) {
+        if (m_editor_ctx->get_das_compile_mode ()
+            != wsl::comp::singl::editor_context::das_compile_mode::
+                interpretation) {
+          wsl::log::core ()->error (
+              "Daslang JIT and AOT modes are not yet implemented. "
+              "Falling back to interpretation mode.");
+        }
         runtime_ctx.set_running (true);
         ImGui::SetWindowFocus ();
       }
@@ -931,6 +938,13 @@ game_view::draw_camera_header (entt::registry &registry,
     draw_icon_button (m_editor_ctx, m_editor_ctx->icon_play (), "Play",
                       &do_play, true, false, btn_size);
     if (do_play) {
+      if (m_editor_ctx->get_das_compile_mode ()
+          != wsl::comp::singl::editor_context::das_compile_mode::
+              interpretation) {
+        wsl::log::core ()->error (
+            "Daslang JIT and AOT modes are not yet implemented. "
+            "Falling back to interpretation mode.");
+      }
       runtime_ctx.set_running (true);
       ImGui::SetWindowFocus ();
     }

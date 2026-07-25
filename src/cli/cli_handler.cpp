@@ -1,6 +1,5 @@
 #include "cli_handler.hpp"
 #include "wsl/log/log.hpp"
-#include "wsl/das/das_engine.hpp"
 
 #include <SDL3/SDL_filesystem.h>
 
@@ -466,10 +465,104 @@ cli_handler::parse (int argc, char **argv)
   prefab_instantiate->add_option ("parent_id", prefab_instantiate_parent,
                                   "Optional parent entity id");
 
+  auto *aot_cmd = app.add_subcommand (
+      "aot", "AOT-compile a .das file using the engine's module environment");
+  std::string aot_input;
+  std::string aot_output;
+  aot_cmd->add_option ("input", aot_input, "Path to .das file")->required ();
+  aot_cmd->add_option ("output", aot_output, "Output .cpp file path")
+      ->required ();
+
   try {
     app.parse (argc, argv);
   } catch (const CLI::ParseError &e) {
     return { true, app.exit (e), std::nullopt };
+  }
+
+  if (*aot_cmd) {
+    // Find daslang binary on PATH
+    std::string daslang_path = "daslang";
+    // Build the daslib path relative to the engine installation
+    std::string daslib_dir;
+    const char *base_path = SDL_GetBasePath ();
+    if (base_path != nullptr) {
+      std::filesystem::path exe_dir (base_path);
+      // Check installed share/weasel/daslib/ first
+      std::filesystem::path daslib_candidate
+          = exe_dir / ".." / "share" / "weasel" / "daslib" / "weasel_api.das";
+      if (std::filesystem::exists (daslib_candidate)) {
+        daslib_dir = (exe_dir / ".." / "share" / "weasel" / "daslib").string ();
+      }
+      // Fallback: check lib/daslang/daslib/
+      if (daslib_dir.empty ()) {
+        daslib_candidate
+            = exe_dir / ".." / "lib" / "daslang" / "daslib" / "weasel_api.das";
+        if (std::filesystem::exists (daslib_candidate)) {
+          daslib_dir
+              = (exe_dir / ".." / "lib" / "daslang" / "daslib").string ();
+        }
+      }
+    }
+    // Fallback: check home daslib
+    if (daslib_dir.empty ()) {
+      std::string home_daslib
+          = std::string (std::getenv ("HOME") ? std::getenv ("HOME") : ".")
+            + "/.local/daslib/weasel_api.das";
+      if (std::filesystem::exists (home_daslib)) {
+        daslib_dir
+            = std::string (std::getenv ("HOME") ? std::getenv ("HOME") : ".")
+              + "/.local/daslib";
+      }
+    }
+
+    if (daslib_dir.empty ()) {
+      wsl::log::cli ()->error ("weasel_api.das not found. Cannot AOT-compile.");
+      return { true, 1, std::nullopt };
+    }
+
+    // daScript -aot mode only resolves modules from the input file's directory.
+    // Create a temp directory with the input file and stubs together.
+    auto input_path = std::filesystem::absolute (aot_input);
+    auto output_path = std::filesystem::absolute (aot_output);
+
+    auto tmp_dir = std::filesystem::temp_directory_path () / "weasel_aot";
+    std::error_code ec;
+    std::filesystem::create_directories (tmp_dir, ec);
+    if (ec) {
+      wsl::log::cli ()->error ("Failed to create temp dir: {}", ec.message ());
+      return { true, 1, std::nullopt };
+    }
+
+    // Copy input file and stubs to temp dir
+    auto tmp_input = tmp_dir / input_path.filename ();
+    auto tmp_stub = tmp_dir / "weasel_api.das";
+    auto stub_src = std::filesystem::path (daslib_dir) / "weasel_api.das";
+    std::filesystem::copy_file (
+        input_path, tmp_input,
+        std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+      wsl::log::cli ()->error ("Failed to copy input file: {}", ec.message ());
+      return { true, 1, std::nullopt };
+    }
+    std::filesystem::copy_file (
+        stub_src, tmp_stub, std::filesystem::copy_options::overwrite_existing,
+        ec);
+    if (ec) {
+      wsl::log::cli ()->error ("Failed to copy weasel_api.das: {}",
+                               ec.message ());
+      return { true, 1, std::nullopt };
+    }
+
+    std::string cmd = daslang_path + " -aot " + tmp_input.string () + " "
+                      + output_path.string ();
+
+    wsl::log::cli ()->info ("AOT-compiling {} -> {}", aot_input, aot_output);
+    int ret = std::system (cmd.c_str ());
+    if (ret != 0) {
+      wsl::log::cli ()->error ("AOT compilation failed (exit code {})", ret);
+      return { true, 1, std::nullopt };
+    }
+    return { true, 0, std::nullopt };
   }
 
   if (*create_project) {

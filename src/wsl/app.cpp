@@ -243,7 +243,8 @@ app::run ()
       }
       if (we.kind () == event_kind::window
           && e.window.windowID
-                 == SDL_GetWindowID (m_runtime_context->window ().handler ())) {
+                 == SDL_GetWindowID (m_runtime_context->window ().handler ())
+          && e.window.type == SDL_EVENT_WINDOW_RESIZED) {
         m_runtime_context->window ().on_resize ();
       }
       m_runtime_context->scene_manager ().handle_events (we);
