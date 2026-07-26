@@ -10,8 +10,8 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Runtime Slang compiler wrapper.
+/**
+ * Runtime Slang compiler wrapper.
  *
  * Compiles Slang source strings to platform-native bytecode at runtime
  * using the already-linked slang::slang library.
@@ -22,18 +22,18 @@ public:
   shader_compiler ();
   ~shader_compiler ();
 
-  /*! \brief Compile a vertex shader from Slang source. */
+  /** Compile a vertex shader from Slang source. */
   bool compile_vertex (const char *source, size_t source_len,
                        shader_program &out_program);
 
-  /*! \brief Compile a fragment shader from Slang source. */
+  /** Compile a fragment shader from Slang source. */
   bool compile_fragment (const char *source, size_t source_len,
                          shader_program &out_program);
 
-  /*! \brief Fill reflection metadata for an already-compiled program. */
+  /** Fill reflection metadata for an already-compiled program. */
   bool reflect (shader_program &program);
 
-  /*! \brief Returns the last diagnostic string if compilation failed. */
+  /** Returns the last diagnostic string if compilation failed. */
   const std::string &
   last_error () const
   {

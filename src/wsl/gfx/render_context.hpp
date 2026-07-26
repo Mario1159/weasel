@@ -9,8 +9,7 @@ namespace wsl
 {
 
 /**
- * @namespace wsl::gfx
- * @brief Low-level graphics and rendering abstractions.
+ * Low-level graphics and rendering abstractions.
  */
 namespace gfx
 {
@@ -41,16 +40,20 @@ public:
   // replaces the old max-1 frame-in-flight stall on the swapchain acquire.
   static constexpr uint32_t kMaxFramesInFlight = 3;
 
-  //! Index of the slot chosen for the current frame
-  //! (0 .. kMaxFramesInFlight-1).
+  /**
+   * Index of the slot chosen for the current frame
+   * (0 .. kMaxFramesInFlight-1).
+   */
   [[nodiscard]] uint32_t
   current_frame_slot () const
   {
     return m_current_slot;
   }
 
-  //! Monotonically increasing frame counter, useful for per-frame
-  //! data tagging.
+  /**
+   * Monotonically increasing frame counter, useful for per-frame
+   * data tagging.
+   */
   [[nodiscard]] uint64_t
   frame_index () const
   {
@@ -87,13 +90,13 @@ public:
   void begin_ui_render_pass (SDL_GPUTexture *swapchain);
   void end_ui_render_pass ();
 
-  //! Sets the GPU viewport on the active main render pass.
+  /** Sets the GPU viewport on the active main render pass. */
   void set_viewport (const SDL_GPUViewport &vp);
-  //! Sets the GPU scissor rect on the active main render pass.
+  /** Sets the GPU scissor rect on the active main render pass. */
   void set_scissor_rect (const SDL_Rect &rect);
-  //! Resets the viewport to the full render target.
+  /** Resets the viewport to the full render target. */
   void reset_viewport (uint32_t width, uint32_t height);
-  //! Resets the scissor rect to the full render target.
+  /** Resets the scissor rect to the full render target. */
   void reset_scissor_rect (uint32_t width, uint32_t height);
 
   SDL_GPUDevice *gpu_device = nullptr;
@@ -102,10 +105,12 @@ public:
   SDL_GPURenderPass *ui_pass = nullptr;
 
 private:
-  //! Per-slot state. `cmd_buffer` is the live command buffer for this
-  //! slot while the frame is being recorded; `fence` is set by
-  //! `submit_frame` and is non-null from submit until the next
-  //! `begin_frame` on this slot completes.
+  /**
+   * Per-slot state. `cmd_buffer` is the live command buffer for this
+   * slot while the frame is being recorded; `fence` is set by
+   * `submit_frame` and is non-null from submit until the next
+   * `begin_frame` on this slot completes.
+   */
   struct FrameSlot
   {
     SDL_GPUFence *fence = nullptr;

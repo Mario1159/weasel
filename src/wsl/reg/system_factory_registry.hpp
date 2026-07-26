@@ -27,58 +27,48 @@ struct system_iteration_debug_entry;
 struct signal_hub;
 } // namespace sig
 
-/*!
- * \brief Forward-declaration of system iteration descriptor.
- */
+/** Forward-declaration of system iteration descriptor. */
 using system_iteration_descriptor = sig::system_iteration_debug_entry;
 
-/*!
- * \brief Ordering modes for registered system descriptors.
- */
+/** Ordering modes for registered system descriptors. */
 enum class system_order
 {
-  //! Sort by display name.
+  /** Sort by display name. */
   display_name,
 
-  //! Sort by stable system type identifier.
+  /** Sort by stable system type identifier. */
   type_id
 };
 
-/*!
- * \brief Registration options for system descriptors.
- */
+/** Registration options for system descriptors. */
 struct system_registration_options
 {
-  //! Editor-facing or scene-facing system name.
+  /** Editor-facing or scene-facing system name. */
   std::string_view display_name;
 
-  //! Whether the registration was supplied by runtime project code.
+  /** Whether the registration was supplied by runtime project code. */
   bool runtime_registered = false;
 };
 
-/*!
- * \brief Human-readable reference to a registered system type.
- */
+/** Human-readable reference to a registered system type. */
 struct system_type_ref
 {
-  //! Stable system type identifier.
+  /** Stable system type identifier. */
   entt::id_type type_id{};
 
-  //! Reflected C++ type name.
+  /** Reflected C++ type name. */
   std::string type_name;
 
-  //! Scene/editor-facing system name.
+  /** Scene/editor-facing system name. */
   std::string display_name;
 };
 
-/*!
- * \brief Function signature for system factory functions.
- */
+/** Function signature for system factory functions. */
 using system_factory_fn
     = std::function<std::unique_ptr<sys::ecs_system> (rsc::scene &)>;
 
-/*!
- * \brief Registry for system factories, allowing dynamic creation of systems by
+/**
+ * Registry for system factories, allowing dynamic creation of systems by
  * name.
  *
  * This class maps system names to factory functions that can instantiate
@@ -87,51 +77,49 @@ using system_factory_fn
 class system_factory_registry
 {
 public:
-  /*!
-   * \brief Describes a registered system factory.
-   */
+  /** Describes a registered system factory. */
   struct system_descriptor
   {
-    //! Stable system type identifier.
+    /** Stable system type identifier. */
     entt::id_type type_id{};
 
-    //! Reflected C++ type name.
+    /** Reflected C++ type name. */
     std::string type_name;
 
-    //! Scene/editor-facing system name.
+    /** Scene/editor-facing system name. */
     std::string display_name;
 
-    //! Factory function that creates a system instance.
+    /** Factory function that creates a system instance. */
     system_factory_fn factory;
 
-    //! Whether this factory was registered at runtime.
+    /** Whether this factory was registered at runtime. */
     bool runtime_registered = false;
 
-    //! Declared system dependencies.
+    /** Declared system dependencies. */
     std::vector<entt::id_type> dependencies;
 
-    //! Declared system conflicts.
+    /** Declared system conflicts. */
     std::vector<entt::id_type> conflicts;
   };
 
   using descriptor = system_descriptor;
 
-  /*!
-   * \brief Sets the signal hub used for iteration queries.
-   * \param hub Pointer to the engine signal hub.
-   */
+  /**
+ * Sets the signal hub used for iteration queries.
+ * :param hub: Pointer to the engine signal hub.
+ */
   void
   set_signal_hub (sig::signal_hub *hub)
   {
     m_signal_hub = hub;
   }
 
-  /*!
-   * \brief Registers a system type with a default factory.
-   * \tparam T The system type.
-   * \param name The name to register the system under.
-   * \param runtime_registered Whether this system is registered at runtime.
-   */
+  /**
+ * Registers a system type with a default factory.
+ * :param T: The system type.
+ * :param name: The name to register the system under.
+ * :param runtime_registered: Whether this system is registered at runtime.
+ */
   template <typename T>
   void
   register_system (const char *name, bool runtime_registered = false)
@@ -144,41 +132,41 @@ public:
     register_system_type<T> (options);
   }
 
-  /*!
-   * \brief Registers a system type with the engine-facing API.
-   * \tparam T System type to register.
-   * \param options Registration options.
-   */
+  /**
+ * Registers a system type with the engine-facing API.
+ * :param T: System type to register.
+ * :param options: Registration options.
+ */
   template <typename T>
   void register_system_type (const system_registration_options &options = {});
 
-  /*!
-   * \brief Registers cached metadata for a runtime system (placeholder).
-   *
-   * Creates a no-op placeholder system for CLI operations.
-   */
+  /**
+ * Registers cached metadata for a runtime system (placeholder).
+ *
+ * Creates a no-op placeholder system for CLI operations.
+ */
   void register_cached_runtime_system (entt::id_type type_id,
                                        std::string_view type_name,
                                        std::string_view display_name);
 
-  /*!
-   * \brief Registers a daslang runtime system with live script execution.
-   *
-   * Creates a das_system that delegates lifecycle callbacks to the daslang
-   * script via the engine.
-   */
+  /**
+ * Registers a daslang runtime system with live script execution.
+ *
+ * Creates a das_system that delegates lifecycle callbacks to the daslang
+ * script via the engine.
+ */
   void register_cached_runtime_system (entt::id_type type_id,
                                        std::string_view type_name,
                                        std::string_view display_name,
                                        std::string_view script_path,
                                        das::das_engine &engine);
 
-  /*!
-   * \brief Registers a system with a custom factory function.
-   * \param name The name to register the system under.
-   * \param factory The custom factory function.
-   * \param runtime_registered Whether this system is registered at runtime.
-   */
+  /**
+ * Registers a system with a custom factory function.
+ * :param name: The name to register the system under.
+ * :param factory: The custom factory function.
+ * :param runtime_registered: Whether this system is registered at runtime.
+ */
   void
   register_system (const char *name, system_factory_fn factory,
                    bool runtime_registered = false)
@@ -186,12 +174,12 @@ public:
     register_system_factory (name, std::move (factory), runtime_registered);
   }
 
-  /*!
-   * \brief Registers a system with a custom factory function.
-   * \param display_name Scene/editor-facing system name.
-   * \param factory Factory function that creates the system.
-   * \param runtime_registered Whether the factory came from runtime code.
-   */
+  /**
+ * Registers a system with a custom factory function.
+ * :param display_name: Scene/editor-facing system name.
+ * :param factory: Factory function that creates the system.
+ * :param runtime_registered: Whether the factory came from runtime code.
+ */
   void
   register_system_factory (std::string_view display_name,
                            system_factory_fn factory,
@@ -203,117 +191,117 @@ public:
     register_system_factory (std::move (factory), options);
   }
 
-  /*!
-   * \brief Registers a system with a custom factory function.
-   * \param factory Factory function that creates the system.
-   * \param options Registration options.
-   */
+  /**
+ * Registers a system with a custom factory function.
+ * :param factory: Factory function that creates the system.
+ * :param options: Registration options.
+ */
   void register_system_factory (system_factory_fn factory,
                                 const system_registration_options &options
                                 = {});
 
-  /*!
-   * \brief Finds a system descriptor by scene/editor-facing name.
-   * \param display_name Registered system name.
-   * \return Matching descriptor, or `nullptr` when not found.
-   */
+  /**
+ * Finds a system descriptor by scene/editor-facing name.
+ * :param display_name: Registered system name.
+ * :return: Matching descriptor, or `nullptr` when not found.
+ */
   const system_descriptor *find_system (std::string_view display_name) const;
 
-  /*!
-   * \brief Finds a system descriptor by stable type ID.
-   * \param type_id Stable system type identifier.
-   * \return Matching descriptor, or `nullptr` when not found.
-   */
+  /**
+ * Finds a system descriptor by stable type ID.
+ * :param type_id: Stable system type identifier.
+ * :return: Matching descriptor, or `nullptr` when not found.
+ */
   const system_descriptor *find_system (entt::id_type type_id) const;
 
-  /*!
-   * \brief Returns registered systems in the requested order.
-   * \param order Requested descriptor ordering.
-   * \return Ordered system descriptor list.
-   */
+  /**
+ * Returns registered systems in the requested order.
+ * :param order: Requested descriptor ordering.
+ * :return: Ordered system descriptor list.
+ */
   std::vector<const system_descriptor *>
   get_systems (system_order order = system_order::display_name) const;
 
-  /*!
-   * \brief Returns the user-facing system names for editor search and scene
-   * persistence.
-   */
+  /**
+ * Returns the user-facing system names for editor search and scene
+ * persistence.
+ */
   std::vector<std::string> get_system_factory_names () const;
 
-  /*!
-   * \brief Creates a system instance by name.
-   * \param name The name of the system to create.
-   * \param scene The scene the system will be associated with.
-   * \return A unique pointer to the created system, or nullptr if not found.
-   */
+  /**
+ * Creates a system instance by name.
+ * :param name: The name of the system to create.
+ * :param scene: The scene the system will be associated with.
+ * :return: A unique pointer to the created system, or nullptr if not found.
+ */
   std::unique_ptr<sys::ecs_system> create (const std::string &name,
                                            rsc::scene &scene);
 
-  /*!
-   * \brief Instantiates the requested system for the target scene.
-   * \param display_name Scene/editor-facing system name.
-   * \param scene Scene that will own the system instance.
-   * \return Instantiated system, or `nullptr` when not found.
-   */
+  /**
+ * Instantiates the requested system for the target scene.
+ * :param display_name: Scene/editor-facing system name.
+ * :param scene: Scene that will own the system instance.
+ * :return: Instantiated system, or `nullptr` when not found.
+ */
   std::unique_ptr<sys::ecs_system>
   create_system (std::string_view display_name, rsc::scene &scene)
   {
     return create (std::string (display_name), scene);
   }
 
-  /*!
-   * \brief Declares that one system depends on another.
-   * \tparam OwnerSystem The system that has the dependency.
-   * \tparam DependencySystem The system that must exist for the owner.
-   */
+  /**
+ * Declares that one system depends on another.
+ * :param OwnerSystem: The system that has the dependency.
+ * :param DependencySystem: The system that must exist for the owner.
+ */
   template <typename OwnerSystem, typename DependencySystem>
   void declare_system_dependency ();
 
-  /*!
-   * \brief Declares that one system conflicts with another.
-   * \tparam OwnerSystem The system that has the conflict.
-   * \tparam ConflictSystem The system that cannot exist with the owner.
-   */
+  /**
+ * Declares that one system conflicts with another.
+ * :param OwnerSystem: The system that has the conflict.
+ * :param ConflictSystem: The system that cannot exist with the owner.
+ */
   template <typename OwnerSystem, typename ConflictSystem>
   void declare_system_conflict ();
 
-  /*!
-   * \brief Returns the declared dependency list for the system.
-   * \param system_type_id Stable system type identifier.
-   * \return List of dependencies as system type references.
-   */
+  /**
+ * Returns the declared dependency list for the system.
+ * :param system_type_id: Stable system type identifier.
+ * :return: List of dependencies as system type references.
+ */
   std::vector<system_type_ref>
   get_system_dependencies (entt::id_type system_type_id) const;
 
-  /*!
-   * \brief Returns the declared conflict list for the system.
-   * \param system_type_id Stable system type identifier.
-   * \return List of conflicts as system type references.
-   */
+  /**
+ * Returns the declared conflict list for the system.
+ * :param system_type_id: Stable system type identifier.
+ * :return: List of conflicts as system type references.
+ */
   std::vector<system_type_ref>
   get_system_conflicts (entt::id_type system_type_id) const;
 
-  /*!
-   * \brief Returns the declared iterations for the system.
-   * \param system_type_id Stable system type identifier.
-   * \return List of system iteration descriptors.
-   */
+  /**
+ * Returns the declared iterations for the system.
+ * :param system_type_id: Stable system type identifier.
+ * :return: List of system iteration descriptors.
+ */
   std::vector<const system_iteration_descriptor *>
   get_system_iterations (entt::id_type system_type_id) const;
 
-  /*!
-   * \brief Returns every declared system iteration whose required component set
-   * includes the queried world component.
-   * \param component_type_id Stable world component identifier.
-   * \return List of matching system iteration descriptors.
-   */
+  /**
+ * Returns every declared system iteration whose required component set
+ * includes the queried world component.
+ * :param component_type_id: Stable world component identifier.
+ * :return: List of matching system iteration descriptors.
+ */
   std::vector<const system_iteration_descriptor *>
   find_iterations_using_world_component (entt::id_type component_type_id) const;
 
-  /*! \brief Clears all runtime-registered system factories. */
+  /** Clears all runtime-registered system factories. */
   void clear_runtime_systems ();
 
-  /*! \brief Returns a list of all registered system factory names. */
+  /** Returns a list of all registered system factory names. */
   std::vector<std::string>
   get_factory_names () const
   {

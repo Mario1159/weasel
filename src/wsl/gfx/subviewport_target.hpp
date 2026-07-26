@@ -9,8 +9,8 @@ namespace wsl::gfx
 class render_window;
 class render_context;
 
-/*!
- * \brief GPU render-target set for a single subviewport.
+/**
+ * GPU render-target set for a single subviewport.
  *
  * Contains MSAA + resolve colour targets (HDR), an MSAA depth target,
  * and an optional LDR output target.  The formats match the main window

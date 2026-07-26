@@ -4262,10 +4262,10 @@ gfx::scene_renderer::draw_grid (const glm::vec3 & /*unused*/,
 
   SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_grid);
 
-  /*!
-   * VS Data: space1, slot 0
-   * Centers the grid plane on the gaze point and scales it to the radius.
-   */
+  /**
+ * VS Data: space1, slot 0
+ * Centers the grid plane on the gaze point and scales it to the radius.
+ */
   struct alignas (16) scene_data
   {
     glm::mat4 view_proj;
@@ -4275,10 +4275,10 @@ gfx::scene_renderer::draw_grid (const glm::vec3 & /*unused*/,
 
   SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &sd, sizeof (sd));
 
-  /*!
-   * FS Data: space3, slot 0
-   * Configures the grid appearance and Fog of War parameters.
-   */
+  /**
+ * FS Data: space3, slot 0
+ * Configures the grid appearance and Fog of War parameters.
+ */
   struct alignas (16) grid_data
   {
     glm::vec3 fog_center;

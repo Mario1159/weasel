@@ -9,9 +9,7 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief CPU-side material data used by mesh primitives.
- */
+/** CPU-side material data used by mesh primitives. */
 struct material
 {
   glm::vec4 base_color_factor{ 1.0F };
@@ -22,23 +20,23 @@ struct material
   glm::vec3 emissive_factor{ 0.0F };
   float pad1 = 0.0F;
 
-  //! Base color texture sampled by the material.
+  /** Base color texture sampled by the material. */
   SDL_GPUTexture *base_color_tex = nullptr;
-  //! Metallic-roughness texture sampled by the material.
+  /** Metallic-roughness texture sampled by the material. */
   SDL_GPUTexture *metallic_roughness_tex = nullptr;
-  //! Normal map texture sampled by the material.
+  /** Normal map texture sampled by the material. */
   SDL_GPUTexture *normal_tex = nullptr;
-  //! Occlusion texture sampled by the material.
+  /** Occlusion texture sampled by the material. */
   SDL_GPUTexture *occlusion_tex = nullptr;
-  //! Emissive texture sampled by the material.
+  /** Emissive texture sampled by the material. */
   SDL_GPUTexture *emissive_tex = nullptr;
 
-  //! Sampler shared by the material textures.
+  /** Sampler shared by the material textures. */
   SDL_GPUSampler *sampler = nullptr;
 
   bool double_sided = false;
 
-  //! GPU device used to release resources.
+  /** GPU device used to release resources. */
   SDL_GPUDevice *device = nullptr;
 
   material () = default;
@@ -117,9 +115,7 @@ private:
   }
 };
 
-/*!
- * \brief GPU material parameters uploaded to shader buffers.
- */
+/** GPU material parameters uploaded to shader buffers. */
 struct gpu_material
 {
   glm::vec4 base_color;

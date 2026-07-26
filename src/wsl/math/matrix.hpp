@@ -18,7 +18,7 @@ namespace math
 
 struct mat33f
 {
-  /*! Column-major storage: data[(col * 3) + row] */
+  /** Column-major storage: data[(col * 3) + row] */
 private:
   float m_data[9]{ 1, 0, 0, 0, 1, 0, 0, 0, 1 };
 
@@ -148,7 +148,7 @@ public:
 
 struct mat44f
 {
-  /*! Column-major storage: data[(col * 4) + row] */
+  /** Column-major storage: data[(col * 4) + row] */
 private:
   float m_data[16]{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 
@@ -197,16 +197,17 @@ public:
     return *this;
   }
 
-  /*! Column-major indexed access (read-only), compatible with
-   * glm::mat4[col][row] */
+  /**
+ * Column-major indexed access (read-only), compatible with
+ * glm::mat4[col][row]
+ */
   float const *
   operator[] (int col) const
   {
     return &m_data[static_cast<ptrdiff_t> (col) * 4];
   }
 
-  /*! Column-major indexed access (mutable), compatible with glm::mat4[col][row]
-   */
+  /** Column-major indexed access (mutable), compatible with glm::mat4[col][row] */
   float *
   operator[] (int col)
   {

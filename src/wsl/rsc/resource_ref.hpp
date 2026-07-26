@@ -11,33 +11,35 @@ namespace rsc
 namespace io
 {
 
-/*! \brief Supported resource types that can be referenced in scenes and project
- * metadata. */
+/**
+ * Supported resource types that can be referenced in scenes and project
+ * metadata.
+ */
 enum class resource_type
 {
-  //! 3D model (glTF).
+  /** 3D model (glTF). */
   model,
-  //! 2D texture image (PNG, HDR, etc.).
+  /** 2D texture image (PNG, HDR, etc.). */
   image,
-  //! Cubemap texture (Skybox, etc.).
+  /** Cubemap texture (Skybox, etc.). */
   cubemap,
-  //! Another scene instance.
+  /** Another scene instance. */
   scene,
-  //! Audio asset (WAV, MP3, etc.).
+  /** Audio asset (WAV, MP3, etc.). */
   audio,
-  //! Material asset (.wslmat).
+  /** Material asset (.wslmat). */
   material
 };
 
-/*!
- * \brief A generic reference to a resource, combining its type and unique
+/**
+ * A generic reference to a resource, combining its type and unique
  * identifier.
  */
 struct resource_ref
 {
-  //! The type of the referenced resource.
+  /** The type of the referenced resource. */
   resource_type type;
-  //! The unique identifier of the resource.
+  /** The unique identifier of the resource. */
   entt::id_type id;
 };
 

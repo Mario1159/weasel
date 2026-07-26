@@ -8,8 +8,8 @@ namespace wsl::das
 
 class das_engine;
 
-/*!
- * \brief A system implementation backed by a daslang script.
+/**
+ * A system implementation backed by a daslang script.
  *
  * Compiles a .das file and delegates lifecycle callbacks to module-level
  * wrapper functions (on_init, on_update, on_event, on_inactive) which

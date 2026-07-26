@@ -16,12 +16,10 @@ class runtime_context;
 namespace rsc
 {
 
-/*!
- * \brief Unique identifier for a 3D model resource.
- */
+/** Unique identifier for a 3D model resource. */
 struct model_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const model_id &other) const
@@ -33,12 +31,10 @@ struct model_id
                        comp::singl::runtime_context *runtime);
 };
 
-/*!
- * \brief Unique identifier for an image resource.
- */
+/** Unique identifier for an image resource. */
 struct image_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const image_id &other) const
@@ -50,12 +46,10 @@ struct image_id
                        comp::singl::runtime_context *runtime);
 };
 
-/*!
- * \brief Unique identifier for a cubemap resource.
- */
+/** Unique identifier for a cubemap resource. */
 struct cubemap_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const cubemap_id &other) const
@@ -64,12 +58,10 @@ struct cubemap_id
   }
 };
 
-/*!
- * \brief Unique identifier for a scene resource.
- */
+/** Unique identifier for a scene resource. */
 struct scene_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const scene_id &other) const
@@ -78,12 +70,10 @@ struct scene_id
   }
 };
 
-/*!
- * \brief Unique identifier for an audio resource.
- */
+/** Unique identifier for an audio resource. */
 struct audio_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const audio_id &other) const
@@ -95,12 +85,10 @@ struct audio_id
                        comp::singl::runtime_context *runtime);
 };
 
-/*!
- * \brief Unique identifier for a UI layout resource.
- */
+/** Unique identifier for a UI layout resource. */
 struct ui_layout_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const ui_layout_id &other) const
@@ -109,12 +97,10 @@ struct ui_layout_id
   }
 };
 
-/*!
- * \brief Unique identifier for a font resource.
- */
+/** Unique identifier for a font resource. */
 struct font_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const font_id &other) const
@@ -123,12 +109,10 @@ struct font_id
   }
 };
 
-/*!
- * \brief Unique identifier for a shader resource.
- */
+/** Unique identifier for a shader resource. */
 struct shader_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const shader_id &other) const
@@ -137,12 +121,10 @@ struct shader_id
   }
 };
 
-/*!
- * \brief Unique identifier for a shader program resource.
- */
+/** Unique identifier for a shader program resource. */
 struct shader_program_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const shader_program_id &other) const
@@ -151,12 +133,10 @@ struct shader_program_id
   }
 };
 
-/*!
- * \brief Unique identifier for a material asset resource.
- */
+/** Unique identifier for a material asset resource. */
 struct material_id
 {
-  //! The hashed identifier value.
+  /** The hashed identifier value. */
   entt::id_type value{ 0 };
   bool
   operator== (const material_id &other) const

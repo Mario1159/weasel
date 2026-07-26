@@ -8,8 +8,8 @@
 
 namespace wsl::mcp_server {
 
-/*!
- * \brief Simple MCP server using stdio transport (line-delimited JSON-RPC).
+/**
+ * Simple MCP server using stdio transport (line-delimited JSON-RPC).
  *
  * This is used by OpenCode and other MCP clients that launch a local process
  * and communicate over stdin/stdout.
@@ -27,7 +27,7 @@ public:
 
   void register_tool (const mcp::tool &tool, tool_handler handler);
 
-  /*!\brief Reads JSON-RPC requests from stdin and writes responses to stdout. */
+  /** Reads JSON-RPC requests from stdin and writes responses to stdout. */
   void run ();
 
 private:

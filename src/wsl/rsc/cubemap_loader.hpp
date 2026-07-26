@@ -19,32 +19,32 @@ namespace wsl
 namespace rsc
 {
 
-/*!
- * \brief Specialized loader for cubemap resources.
+/**
+ * Specialized loader for cubemap resources.
  *
  * Supports loading cubemaps from TAR archives (containing 6 faces) or
  * from equirectangular images.
  */
 struct cubemap_loader final : entt::resource_loader<gfx::cubemap>
 {
-  /*!
-   * \brief Constructs a cubemap loader.
-   * \param ctx Pointer to the render context.
-   */
+  /**
+ * Constructs a cubemap loader.
+ * :param ctx: Pointer to the render context.
+ */
   explicit cubemap_loader (gfx::render_context *ctx);
 
-  /*!
-   * \brief Loads a cubemap from the specified path.
-   * \param path Path to the cubemap file (TAR or image).
-   * \return Shared pointer to the loaded cubemap, or `nullptr` if loading failed.
-   */
+  /**
+ * Loads a cubemap from the specified path.
+ * :param path: Path to the cubemap file (TAR or image).
+ * :return: Shared pointer to the loaded cubemap, or `nullptr` if loading failed.
+ */
   std::shared_ptr<gfx::cubemap> operator() (const std::string &path) const;
 
-  /*!
-   * \brief Wraps an existing cubemap into a shared pointer.
-   * \param ready_cubemap The cubemap object to wrap.
-   * \return Shared pointer to the cubemap.
-   */
+  /**
+ * Wraps an existing cubemap into a shared pointer.
+ * :param ready_cubemap: The cubemap object to wrap.
+ * :return: Shared pointer to the cubemap.
+ */
   std::shared_ptr<gfx::cubemap>
   operator() (gfx::cubemap &&ready_cubemap) const
   {

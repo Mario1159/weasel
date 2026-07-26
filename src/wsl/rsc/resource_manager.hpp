@@ -31,38 +31,36 @@ class runtime_context;
 class editor_context;
 }
 
-/*!
- * \brief Contains types and classes for managing engine resources, scenes, and
+/**
+ * Contains types and classes for managing engine resources, scenes, and
  * project metadata.
  */
 namespace rsc
 {
 
-/*!
- * \brief Internal implementation details for resource management.
- */
+/** Internal implementation details for resource management. */
 namespace detail
 {
 }
 
-/*!
- * \brief Core structures for raw, CPU-side asset representation before GPU
+/**
+ * Core structures for raw, CPU-side asset representation before GPU
  * upload.
  */
 namespace raw
 {
 }
 
-/*!
- * \brief Input/Output and serialization logic for scenes and resource
+/**
+ * Input/Output and serialization logic for scenes and resource
  * references.
  */
 namespace io
 {
 }
 
-/*!
- * \brief Tools for interacting with the CMake File API and project
+/**
+ * Tools for interacting with the CMake File API and project
  * configuration.
  */
 namespace cmake
@@ -73,7 +71,7 @@ using namespace entt::literals;
 constexpr entt::id_type builtin_skybox_procedural
     = "builtin/skybox_procedural"_hs;
 
-/*! \brief Represents the current loading state of a 3D model. */
+/** Represents the current loading state of a 3D model. */
 enum class model_state
 {
   not_loaded,
@@ -82,21 +80,21 @@ enum class model_state
   uploading_gpu,
   loaded
 };
-/*! \brief Represents the current loading state of an image. */
+/** Represents the current loading state of an image. */
 enum class image_state
 {
   not_loaded,
   loading,
   loaded
 };
-/*! \brief Represents the current loading state of a cubemap. */
+/** Represents the current loading state of a cubemap. */
 enum class cubemap_state
 {
   not_loaded,
   loading,
   loaded
 };
-/*! \brief Represents the current loading state of a scene. */
+/** Represents the current loading state of a scene. */
 enum class scene_state
 {
   not_loaded,
@@ -104,7 +102,7 @@ enum class scene_state
   loaded
 };
 
-/*! \brief Represents the current loading state of an audio asset. */
+/** Represents the current loading state of an audio asset. */
 enum class audio_state
 {
   not_loaded,
@@ -112,14 +110,14 @@ enum class audio_state
   loaded
 };
 
-/*! \brief Represents the current loading state of a UI layout. */
+/** Represents the current loading state of a UI layout. */
 enum class ui_layout_state
 {
   not_loaded,
   loaded
 };
 
-/*! \brief Represents the current loading state of a shader module. */
+/** Represents the current loading state of a shader module. */
 enum class shader_state
 {
   not_loaded,
@@ -127,246 +125,206 @@ enum class shader_state
   loaded
 };
 
-/*! \brief Represents the current loading state of a material asset. */
+/** Represents the current loading state of a material asset. */
 enum class material_state
 {
   not_loaded,
   loaded
 };
 
-/*! \brief Represents the current loading state of a shader program. */
+/** Represents the current loading state of a shader program. */
 enum class shader_program_state
 {
   not_loaded,
   loaded
 };
 
-/*!
- * \brief Metadata for a 3D model resource.
- */
+/** Metadata for a 3D model resource. */
 struct model_resource_info
 {
-  entt::id_type id{};  //!< Unique identifier.
-  std::string path;    //!< Path to the model file.
-  std::string name;    //!< Human-readable name.
-  model_state state{}; //!< Current loading state.
+  entt::id_type id{};  // Unique identifier.
+  std::string path;    // Path to the model file.
+  std::string name;    // Human-readable name.
+  model_state state{}; // Current loading state.
   bool preview_owned
-      = false; //!< Whether the model is currently used as a preview.
-  bool lowest_lod_only = false; //!< Whether only the lowest LOD is loaded.
+      = false; // Whether the model is currently used as a preview.
+  bool lowest_lod_only = false; // Whether only the lowest LOD is loaded.
 };
 
-/*!
- * \brief Metadata for an image resource.
- */
+/** Metadata for an image resource. */
 struct image_resource_info
 {
-  entt::id_type id{};  //!< Unique identifier.
-  std::string path;    //!< Path to the image file.
-  std::string name;    //!< Human-readable name.
-  image_state state{}; //!< Current loading state.
+  entt::id_type id{};  // Unique identifier.
+  std::string path;    // Path to the image file.
+  std::string name;    // Human-readable name.
+  image_state state{}; // Current loading state.
 };
 
-/*!
- * \brief Metadata for a cubemap resource.
- */
+/** Metadata for a cubemap resource. */
 struct cubemap_resource_info
 {
-  entt::id_type id{};    //!< Unique identifier.
-  std::string path;      //!< Path to the cubemap file.
-  std::string name;      //!< Human-readable name.
-  cubemap_state state{}; //!< Current loading state.
+  entt::id_type id{};    // Unique identifier.
+  std::string path;      // Path to the cubemap file.
+  std::string name;      // Human-readable name.
+  cubemap_state state{}; // Current loading state.
 };
 
-/*!
- * \brief Metadata for a scene resource.
- */
+/** Metadata for a scene resource. */
 struct scene_resource_info
 {
-  entt::id_type id{};     //!< Unique identifier.
-  std::string path;       //!< Path to the scene file.
-  std::string name;       //!< Human-readable name.
-  scene_state state{};    //!< Current loading state.
-  bool is_prefab = false; //!< Whether the scene is a prefab.
+  entt::id_type id{};     // Unique identifier.
+  std::string path;       // Path to the scene file.
+  std::string name;       // Human-readable name.
+  scene_state state{};    // Current loading state.
+  bool is_prefab = false; // Whether the scene is a prefab.
 };
 
-/*!
- * \brief Metadata for an audio resource.
- */
+/** Metadata for an audio resource. */
 struct audio_resource_info
 {
-  entt::id_type id{};  //!< Unique identifier.
-  std::string path;    //!< Path to the audio file.
-  std::string name;    //!< Human-readable name.
-  audio_state state{}; //!< Current loading state.
+  entt::id_type id{};  // Unique identifier.
+  std::string path;    // Path to the audio file.
+  std::string name;    // Human-readable name.
+  audio_state state{}; // Current loading state.
 };
 
-/*!
- * \brief Metadata for a UI layout resource.
- */
+/** Metadata for a UI layout resource. */
 struct ui_layout_resource_info
 {
-  entt::id_type id{};      //!< Unique identifier.
-  std::string path;        //!< Path to the UI layout file.
-  std::string name;        //!< Human-readable name.
-  ui_layout_state state{}; //!< Current loading state.
+  entt::id_type id{};      // Unique identifier.
+  std::string path;        // Path to the UI layout file.
+  std::string name;        // Human-readable name.
+  ui_layout_state state{}; // Current loading state.
 };
 
-/*!
- * \brief Metadata for a font resource.
- */
+/** Metadata for a font resource. */
 struct font_resource_info
 {
-  entt::id_type id{}; //!< Unique identifier.
-  std::string path;   //!< Path to the font file.
-  std::string name;   //!< Human-readable name.
+  entt::id_type id{}; // Unique identifier.
+  std::string path;   // Path to the font file.
+  std::string name;   // Human-readable name.
 };
 
-/*!
- * \brief Metadata for a shader resource.
- */
+/** Metadata for a shader resource. */
 struct shader_resource_info
 {
-  entt::id_type id{};   //!< Unique identifier.
-  std::string path;     //!< Path to the shader file.
-  std::string name;     //!< Human-readable name.
-  shader_state state{}; //!< Current loading state.
+  entt::id_type id{};   // Unique identifier.
+  std::string path;     // Path to the shader file.
+  std::string name;     // Human-readable name.
+  shader_state state{}; // Current loading state.
 };
 
-/*!
- * \brief Metadata for a material asset resource.
- */
+/** Metadata for a material asset resource. */
 struct material_resource_info
 {
-  entt::id_type id{};                   //!< Unique identifier.
-  std::string path;                     //!< Path to the material file.
-  std::string name;                     //!< Human-readable name.
-  material_state state{};               //!< Current loading state.
-  entt::id_type shader_program_id{ 0 }; //!< Referenced shader program.
+  entt::id_type id{};                   // Unique identifier.
+  std::string path;                     // Path to the material file.
+  std::string name;                     // Human-readable name.
+  material_state state{};               // Current loading state.
+  entt::id_type shader_program_id{ 0 }; // Referenced shader program.
 };
 
-/*!
- * \brief Metadata for a shader program resource.
- */
+/** Metadata for a shader program resource. */
 struct shader_program_resource_info
 {
-  entt::id_type id{}; //!< Unique identifier.
-  std::string path;   //!< Optional path (empty for runtime generated).
-  std::string name;   //!< Human-readable name.
-  shader_program_state state{}; //!< Current loading state.
+  entt::id_type id{}; // Unique identifier.
+  std::string path;   // Optional path (empty for runtime generated).
+  std::string name;   // Human-readable name.
+  shader_program_state state{}; // Current loading state.
 };
 
 namespace detail
 {
 
-/*!
- * \brief Internal record tracking the state and data of a model resource.
- */
+/** Internal record tracking the state and data of a model resource. */
 struct model_record
 {
-  std::string path;                            //!< Path to the model file.
-  std::string name;                            //!< Human-readable name.
-  model_state state = model_state::not_loaded; //!< Current loading state.
+  std::string path;                            // Path to the model file.
+  std::string name;                            // Human-readable name.
+  model_state state = model_state::not_loaded; // Current loading state.
   std::future<std::shared_ptr<raw::cpu_model>>
-      job{};                                  //!< Async CPU loading job.
-  std::shared_ptr<raw::cpu_model> cpu_data{}; //!< Loaded CPU data.
+      job{};                                  // Async CPU loading job.
+  std::shared_ptr<raw::cpu_model> cpu_data{}; // Loaded CPU data.
   std::unique_ptr<model_loader::upload_session>
-      upload{}; //!< Active GPU upload session.
+      upload{}; // Active GPU upload session.
 };
 
-/*!
- * \brief Internal record tracking the state and data of an image resource.
- */
+/** Internal record tracking the state and data of an image resource. */
 struct image_record
 {
-  std::string path;                            //!< Path to the image file.
-  std::string name;                            //!< Human-readable name.
-  image_state state = image_state::not_loaded; //!< Current loading state.
-  std::future<std::shared_ptr<raw::image_cpu>> job{}; //!< Async loading job.
+  std::string path;                            // Path to the image file.
+  std::string name;                            // Human-readable name.
+  image_state state = image_state::not_loaded; // Current loading state.
+  std::future<std::shared_ptr<raw::image_cpu>> job{}; // Async loading job.
 };
 
-/*!
- * \brief Internal record tracking the state and data of a cubemap resource.
- */
+/** Internal record tracking the state and data of a cubemap resource. */
 struct cubemap_record
 {
-  std::string path; //!< Path to the cubemap file.
-  std::string name; //!< Human-readable name.
-  cubemap_state state = cubemap_state::not_loaded;  //!< Current loading state.
-  std::future<std::shared_ptr<gfx::cubemap>> job{}; //!< Async loading job.
+  std::string path; // Path to the cubemap file.
+  std::string name; // Human-readable name.
+  cubemap_state state = cubemap_state::not_loaded;  // Current loading state.
+  std::future<std::shared_ptr<gfx::cubemap>> job{}; // Async loading job.
 };
 
-/*!
- * \brief Internal record tracking the state and data of a scene resource.
- */
+/** Internal record tracking the state and data of a scene resource. */
 struct scene_record
 {
-  std::string path;                            //!< Path to the scene file.
-  std::string name;                            //!< Human-readable name.
-  scene_state state = scene_state::not_loaded; //!< Current loading state.
-  bool is_prefab = false; //!< Whether the scene is a prefab.
-  std::future<std::shared_ptr<rsc::scene>> job{}; //!< Async loading job.
+  std::string path;                            // Path to the scene file.
+  std::string name;                            // Human-readable name.
+  scene_state state = scene_state::not_loaded; // Current loading state.
+  bool is_prefab = false; // Whether the scene is a prefab.
+  std::future<std::shared_ptr<rsc::scene>> job{}; // Async loading job.
 };
 
-/*!
- * \brief Internal record tracking the state and data of an audio resource.
- */
+/** Internal record tracking the state and data of an audio resource. */
 struct audio_record
 {
-  std::string path;                            //!< Path to the audio file.
-  std::string name;                            //!< Human-readable name.
-  audio_state state = audio_state::not_loaded; //!< Current loading state.
-  MIX_Audio *audio = nullptr; //!< Pointer to loaded audio data.
+  std::string path;                            // Path to the audio file.
+  std::string name;                            // Human-readable name.
+  audio_state state = audio_state::not_loaded; // Current loading state.
+  MIX_Audio *audio = nullptr; // Pointer to loaded audio data.
 };
 
-/*!
- * \brief Internal record tracking the state of a UI layout resource.
- */
+/** Internal record tracking the state of a UI layout resource. */
 struct ui_layout_record
 {
-  std::string path; //!< Path to the UI layout file.
-  std::string name; //!< Human-readable name.
-  ui_layout_state state = ui_layout_state::not_loaded; //!< Current state.
+  std::string path; // Path to the UI layout file.
+  std::string name; // Human-readable name.
+  ui_layout_state state = ui_layout_state::not_loaded; // Current state.
 };
 
-/*!
- * \brief Internal record tracking the location of a font resource.
- */
+/** Internal record tracking the location of a font resource. */
 struct font_record
 {
-  std::string path; //!< Path to the font file.
-  std::string name; //!< Human-readable name.
+  std::string path; // Path to the font file.
+  std::string name; // Human-readable name.
 };
 
-/*!
- * \brief Internal record tracking the state of a shader resource.
- */
+/** Internal record tracking the state of a shader resource. */
 struct shader_record
 {
-  std::string path;                              //!< Path to the shader file.
-  std::string name;                              //!< Human-readable name.
-  shader_state state = shader_state::not_loaded; //!< Current loading state.
+  std::string path;                              // Path to the shader file.
+  std::string name;                              // Human-readable name.
+  shader_state state = shader_state::not_loaded; // Current loading state.
 };
 
-/*!
- * \brief Internal record tracking the state of a material asset.
- */
+/** Internal record tracking the state of a material asset. */
 struct material_record
 {
-  std::string path; //!< Path to the material file.
-  std::string name; //!< Human-readable name.
-  material_state state = material_state::not_loaded; //!< Current loading state.
-  entt::id_type shader_program_id{ 0 }; //!< Referenced shader program.
+  std::string path; // Path to the material file.
+  std::string name; // Human-readable name.
+  material_state state = material_state::not_loaded; // Current loading state.
+  entt::id_type shader_program_id{ 0 }; // Referenced shader program.
 };
 
-/*!
- * \brief Internal record tracking the state of a shader program.
- */
+/** Internal record tracking the state of a shader program. */
 struct shader_program_record
 {
-  std::string path; //!< Optional path.
-  std::string name; //!< Human-readable name.
+  std::string path; // Optional path.
+  std::string name; // Human-readable name.
   shader_program_state state
-      = shader_program_state::not_loaded; //!< Current loading state.
+      = shader_program_state::not_loaded; // Current loading state.
 };
 
 } // namespace detail
@@ -382,358 +340,377 @@ public:
   using material_handle = std::shared_ptr<gfx::material_asset>;
   using shader_program_handle = std::shared_ptr<gfx::shader_program>;
 
-  /*!
-   * \brief Construct a resource manager for the runtime.
-   * \param runtime_ctx Pointer to the runtime context (non-owning).
-   * \param engine_res_path Path to engine-provided resources used as a base for
-   * resolution.
+  /**
+   * Construct a resource manager for the runtime.
+   * :param runtime_ctx: Pointer to the runtime context (non-owning).
+   * :param engine_res_path: Path to engine-provided resources used as a base
+   * for resolution.
    */
   explicit resource_manager (comp::singl::runtime_context *runtime_ctx,
                              const std::string &engine_res_path = ".",
                              bool manages_runtime_state = true);
-  /*! \brief Destroy the resource manager and release owned resources. */
+  /** Destroy the resource manager and release owned resources. */
   ~resource_manager ();
 
-  /*! \brief Final shutdown used when the owning runtime is being destroyed. */
+  /** Final shutdown used when the owning runtime is being destroyed. */
   void shutdown ();
 
-  /*! \brief Assign an editor context for editor-only behaviors (non-owning).
-   * \param editor_ctx Editor context pointer, or nullptr to clear.
+  /**
+   * Assign an editor context for editor-only behaviors (non-owning).
+   * :param editor_ctx: Editor context pointer, or nullptr to clear.
    */
   void set_editor_context (comp::singl::editor_context *editor_ctx);
 
-  /*! \brief Poll and finalize any asynchronous upload jobs started for GPU
+  /**
+   * Poll and finalize any asynchronous upload jobs started for GPU
    * resources. This should be called from the main thread to move resources
    * from CPU-side jobs into GPU upload sessions when ready.
    */
   void update_async_uploads ();
 
-  /*! \brief Register a model path and return its id without loading. */
+  /** Register a model path and return its id without loading. */
   model_id register_model (const std::string &path);
 
-  /*! \brief Import a model into the project and optionally request loading.
-   * \param path Filesystem path to the model asset.
-   * \param request_load If true, start asynchronous loading immediately.
-   * \return The assigned model id.
+  /**
+   * Import a model into the project and optionally request loading.
+   * :param path: Filesystem path to the model asset.
+   * :param request_load: If true, start asynchronous loading immediately.
+   * :return: The assigned model id.
    */
   model_id import_model (const std::string &path, bool request_load = true);
 
-  /*! \brief Load a model resource handle (may start loading if not ready).
-   * \param id Model id to load.
-   * \return A handle to the model resource.
+  /**
+   * Load a model resource handle (may start loading if not ready).
+   * :param id: Model id to load.
+   * :return: A handle to the model resource.
    */
   model_handle load (model_id id);
 
-  /*! \brief Load a resource given a generic resource_ref. */
+  /** Load a resource given a generic resource_ref. */
   void load (io::resource_ref ref);
 
-  /*! \brief Unload a previously registered model id.
-   * \param id Model id to unload.
+  /**
+   * Unload a previously registered model id.
+   * :param id: Model id to unload.
    */
   void unload (model_id id);
 
-  /*! \brief Unload a resource referenced by a generic resource_ref. */
+  /** Unload a resource referenced by a generic resource_ref. */
   void unload (io::resource_ref ref);
 
-  /*! \brief Get a model handle for the given id.
-   * \return An entt::resource handle; if the resource is not loaded the
+  /**
+   * Get a model handle for the given id.
+   * :return: An entt::resource handle; if the resource is not loaded the
    *         returned handle may be empty or trigger a load when accessed.
    */
   model_handle get (model_id id);
 
-  /*! \brief Query the current loading state of a model id. */
+  /** Query the current loading state of a model id. */
   model_state state (model_id id) const;
 
-  /*! \brief Check whether the manager knows about the given model id. */
+  /** Check whether the manager knows about the given model id. */
   bool contains (model_id id) const;
 
-  /*! \brief Find a registered model id by the original path if present. */
+  /** Find a registered model id by the original path if present. */
   std::optional<model_id> find_model_by_path (const std::string &path) const;
 
-  /*! \brief Retrieve metadata about a registered model id. */
+  /** Retrieve metadata about a registered model id. */
   std::optional<model_resource_info> info (model_id id) const;
 
-  /*! \brief List metadata for all known models. */
+  /** List metadata for all known models. */
   std::vector<model_resource_info> list_models () const;
 
-  /*! \brief Load a preview model optimized to the lowest LOD for quick display.
-   * \param id Model id to load as preview.
+  /**
+   * Load a preview model optimized to the lowest LOD for quick display.
+   * :param id: Model id to load as preview.
    */
   void load_preview_model_low_lod (model_id id);
 
-  /*! \brief Get the currently active preview model id, or entt::null. */
+  /** Get the currently active preview model id, or entt::null. */
   model_id current_preview_model () const;
 
-  /*! \brief Unload the current preview model if one is active. */
+  /** Unload the current preview model if one is active. */
   void unload_preview_model ();
 
-  /*! \brief Release preview ownership for a model if the provided id matches.
+  /**
+   * Release preview ownership for a model if the provided id matches.
    * This clears internal preview ownership flags without unloading the model.
    */
   void release_preview_ownership_if_matches (model_id id);
 
-  /*! \brief Query whether the given model id is currently owned as a preview.
-   */
+  /** Query whether the given model id is currently owned as a preview. */
   bool is_preview_owned (model_id id) const;
 
-  /*! \brief Register an image asset path without loading. */
+  /** Register an image asset path without loading. */
   image_id register_image (const std::string &path);
 
-  /*! \brief Import an image into the project and optionally request loading.
-   * \param path Path to the image file.
-   * \param request_load If true, start loading immediately.
+  /**
+   * Import an image into the project and optionally request loading.
+   * :param path: Path to the image file.
+   * :param request_load: If true, start loading immediately.
    */
   image_id import_image (const std::string &path, bool request_load = true);
 
-  /*! \brief Load an image handle for use by the renderer. */
+  /** Load an image handle for use by the renderer. */
   image_handle load (image_id id);
 
-  /*! \brief Unload the image resource referenced by id. */
+  /** Unload the image resource referenced by id. */
   void unload (image_id id);
 
-  /*! \brief Get an image handle for the given id. */
+  /** Get an image handle for the given id. */
   image_handle get (image_id id);
 
-  /*! \brief Query the loading state of an image id. */
+  /** Query the loading state of an image id. */
   image_state state (image_id id) const;
 
-  /*! \brief Check if an image id is known to the manager. */
+  /** Check if an image id is known to the manager. */
   bool contains (image_id id) const;
 
-  /*! \brief Retrieve metadata for an image id. */
+  /** Retrieve metadata for an image id. */
   std::optional<image_resource_info> info (image_id id) const;
 
-  /*! \brief List all registered images and their metadata. */
+  /** List all registered images and their metadata. */
   std::vector<image_resource_info> list_images () const;
 
-  /*! \brief Register a cubemap asset path. */
+  /** Register a cubemap asset path. */
   cubemap_id register_cubemap (const std::string &path);
 
-  /*! \brief Import a cubemap and optionally request loading. */
+  /** Import a cubemap and optionally request loading. */
   cubemap_id import_cubemap (const std::string &path, bool request_load = true);
 
-  /*! \brief Load a cubemap handle for rendering. */
+  /** Load a cubemap handle for rendering. */
   cubemap_handle load (cubemap_id id);
 
-  /*! \brief Unload a cubemap by id. */
+  /** Unload a cubemap by id. */
   void unload (cubemap_id id);
 
-  /*! \brief Get a cubemap handle for the given id. */
+  /** Get a cubemap handle for the given id. */
   cubemap_handle get (cubemap_id id);
 
-  /*! \brief Query the load state of a cubemap id. */
+  /** Query the load state of a cubemap id. */
   cubemap_state state (cubemap_id id) const;
 
-  /*! \brief Check presence of cubemap id in manager. */
+  /** Check presence of cubemap id in manager. */
   bool contains (cubemap_id id) const;
 
-  /*! \brief Get metadata for a cubemap id. */
+  /** Get metadata for a cubemap id. */
   std::optional<cubemap_resource_info> info (cubemap_id id) const;
 
-  /*! \brief List all registered cubemaps. */
+  /** List all registered cubemaps. */
   std::vector<cubemap_resource_info> list_cubemaps () const;
 
-  /*! \brief Register a scene asset path. */
+  /** Register a scene asset path. */
   scene_id register_scene (const std::string &path);
 
-  /*! \brief Import a scene (or prefab) and optionally start loading.
-   * \param path Filesystem path to the scene or prefab.
-   * \param request_load Start asynchronous load if true.
+  /**
+   * Import a scene (or prefab) and optionally start loading.
+   * :param path: Filesystem path to the scene or prefab.
+   * :param request_load: Start asynchronous load if true.
    */
   scene_id import_scene (const std::string &path, bool request_load = true);
 
-  /*! \brief Load a scene resource handle. */
+  /** Load a scene resource handle. */
   scene_handle load (scene_id id);
 
-  /*! \brief Unload a scene resource. */
+  /** Unload a scene resource. */
   void unload (scene_id id);
 
-  /*! \brief Get a scene resource handle for the given id. */
+  /** Get a scene resource handle for the given id. */
   scene_handle get (scene_id id);
 
-  /*! \brief Return a raw pointer to a loaded scene instance or nullptr if not
+  /**
+   * Return a raw pointer to a loaded scene instance or nullptr if not
    * loaded. The returned pointer is non-owning and valid until the scene is
    * unloaded.
    */
   scene *find_loaded_scene (scene_id id) const;
 
-  /*! \brief Activate the scene with the provided id as the active scene.
-   * \return True if activation succeeded.
+  /**
+   * Activate the scene with the provided id as the active scene.
+   * :return: True if activation succeeded.
    */
   bool activate_scene (scene_id id);
 
-  /*! \brief Instantiate a prefab scene under the optional parent entity. */
+  /** Instantiate a prefab scene under the optional parent entity. */
   void instantiate_prefab (scene_id id, entt::entity parent = entt::null);
 
-  /*! \brief Query the loading state of a scene id. */
+  /** Query the loading state of a scene id. */
   scene_state state (scene_id id) const;
 
-  /*! \brief Check whether the manager knows about the provided scene id. */
+  /** Check whether the manager knows about the provided scene id. */
   bool contains (scene_id id) const;
 
-  /*! \brief Retrieve metadata for a scene id. */
+  /** Retrieve metadata for a scene id. */
   std::optional<scene_resource_info> info (scene_id id) const;
 
-  /*! \brief List metadata for all registered scenes. */
+  /** List metadata for all registered scenes. */
   std::vector<scene_resource_info> list_scenes () const;
 
-  /*! \brief Save a scene to disk. \param scene Scene to save. \param path
-   * Destination path. \param is_prefab Mark whether the saved scene is a
-   * prefab.
-   * \return True on success.
+  /**
+   * Save a scene to disk.
+   *
+   * :param scene: Scene to save.
+   * :param path: Destination path.
+   * :param is_prefab: Mark whether the saved scene is a prefab.
+   * :return: True on success.
    */
   bool save_scene (const rsc::scene &scene, const std::string &path,
                    bool is_prefab = false);
 
-  /*! \brief Register an audio asset path. */
+  /** Register an audio asset path. */
   audio_id register_audio (const std::string &path);
 
-  /*! \brief Import audio and optionally request loading. */
+  /** Import audio and optionally request loading. */
   audio_id import_audio (const std::string &path, bool request_load = true);
 
-  /*! \brief Load audio and return a raw MIX_Audio pointer owned by the mixer.
+  /**
+   * Load audio and return a raw MIX_Audio pointer owned by the mixer.
    * The pointer is non-owning; do not free it manually.
    */
   MIX_Audio *load (audio_id id);
 
-  /*! \brief Unload an audio asset by id. */
+  /** Unload an audio asset by id. */
   void unload (audio_id id);
 
-  /*! \brief Get the raw MIX_Audio pointer for the given id. */
+  /** Get the raw MIX_Audio pointer for the given id. */
   MIX_Audio *get (audio_id id);
 
-  /*! \brief Query the state of an audio id. */
+  /** Query the state of an audio id. */
   audio_state state (audio_id id) const;
 
-  /*! \brief Check presence of audio id. */
+  /** Check presence of audio id. */
   bool contains (audio_id id) const;
 
-  /*! \brief Get metadata for an audio id. */
+  /** Get metadata for an audio id. */
   std::optional<audio_resource_info> info (audio_id id) const;
 
-  /*! \brief List all registered audio assets. */
+  /** List all registered audio assets. */
   std::vector<audio_resource_info> list_audio () const;
 
-  /*! \brief Register a UI layout asset path. */
+  /** Register a UI layout asset path. */
   ui_layout_id register_ui_layout (const std::string &path);
 
-  /*! \brief Get metadata for a UI layout id. */
+  /** Get metadata for a UI layout id. */
   std::optional<ui_layout_resource_info> info (ui_layout_id id) const;
 
-  /*! \brief List all registered UI layouts. */
+  /** List all registered UI layouts. */
   std::vector<ui_layout_resource_info> list_ui_layouts () const;
 
-  /*! \brief Register a font asset path. */
+  /** Register a font asset path. */
   font_id register_font (const std::string &path);
 
-  /*! \brief Get metadata for a font id. */
+  /** Get metadata for a font id. */
   std::optional<font_resource_info> info (font_id id) const;
 
-  /*! \brief List all registered fonts. */
+  /** List all registered fonts. */
   std::vector<font_resource_info> list_fonts () const;
 
-  /*! \brief Register a shader asset path. */
+  /** Register a shader asset path. */
   shader_id register_shader (const std::string &path);
 
-  /*! \brief Load a shader module handle for the given id. */
+  /** Load a shader module handle for the given id. */
   shader_handle load (shader_id id);
 
-  /*! \brief Unload a shader module. */
+  /** Unload a shader module. */
   void unload (shader_id id);
 
-  /*! \brief Get a shader handle for the given id. */
+  /** Get a shader handle for the given id. */
   shader_handle get (shader_id id);
 
-  /*! \brief Query shader loading state. */
+  /** Query shader loading state. */
   shader_state state (shader_id id) const;
 
-  /*! \brief Check whether a shader id is registered. */
+  /** Check whether a shader id is registered. */
   bool contains (shader_id id) const;
 
-  /*! \brief Get metadata for a shader id. */
+  /** Get metadata for a shader id. */
   std::optional<shader_resource_info> info (shader_id id) const;
 
-  /*! \brief List all registered shaders and metadata. */
+  /** List all registered shaders and metadata. */
   std::vector<shader_resource_info> list_shaders () const;
 
   // ---- Materials ----
-  /*! \brief Register a material asset path. */
+  /** Register a material asset path. */
   material_id register_material (const std::string &path);
 
-  /*! \brief Import a material asset and optionally request loading. */
+  /** Import a material asset and optionally request loading. */
   material_id import_material (const std::string &path,
                                bool request_load = true);
 
-  /*! \brief Load a material handle for the given id. */
+  /** Load a material handle for the given id. */
   material_handle load (material_id id);
 
-  /*! \brief Unload a material asset. */
+  /** Unload a material asset. */
   void unload (material_id id);
 
-  /*! \brief Get a material handle for the given id. */
+  /** Get a material handle for the given id. */
   material_handle get (material_id id);
 
-  /*! \brief Query material loading state. */
+  /** Query material loading state. */
   material_state state (material_id id) const;
 
-  /*! \brief Check whether a material id is registered. */
+  /** Check whether a material id is registered. */
   bool contains (material_id id) const;
 
-  /*! \brief Get metadata for a material id. */
+  /** Get metadata for a material id. */
   std::optional<material_resource_info> info (material_id id) const;
 
-  /*! \brief List all registered materials. */
+  /** List all registered materials. */
   std::vector<material_resource_info> list_materials () const;
 
   // ---- Shader Programs ----
-  /*! \brief Register a shader program (runtime generated or file path). */
+  /** Register a shader program (runtime generated or file path). */
   shader_program_id register_shader_program (const std::string &path);
 
-  /*! \brief Store a runtime-generated shader program. */
+  /** Store a runtime-generated shader program. */
   shader_program_id
   register_shader_program (std::shared_ptr<gfx::shader_program> prog,
                            const std::string &name);
 
-  /*! \brief Get a shader program handle for the given id. */
+  /** Get a shader program handle for the given id. */
   shader_program_handle get (shader_program_id id);
 
-  /*! \brief Query shader program state. */
+  /** Query shader program state. */
   shader_program_state state (shader_program_id id) const;
 
-  /*! \brief Check whether a shader program id is registered. */
+  /** Check whether a shader program id is registered. */
   bool contains (shader_program_id id) const;
 
-  /*! \brief Get metadata for a shader program id. */
+  /** Get metadata for a shader program id. */
   std::optional<shader_program_resource_info> info (shader_program_id id) const;
 
-  /*! \brief List all registered shader programs. */
+  /** List all registered shader programs. */
   std::vector<shader_program_resource_info> list_shader_programs () const;
 
-  /*! \brief Set the base engine resource path used to resolve engine-provided
-   * assets. */
+  /**
+   * Set the base engine resource path used to resolve engine-provided
+   * assets.
+   */
   void set_engine_resource_path (const std::string &path);
 
-  /*! \brief Get the configured engine resource base path. */
+  /** Get the configured engine resource base path. */
   std::string
   get_engine_resource_path () const
   {
     return m_wsl_resource_path;
   }
 
-  /*! \brief Create a new project from the provided project descriptor. */
+  /** Create a new project from the provided project descriptor. */
   bool new_project (const rsc::project &proj);
 
-  /*! \brief Load a project file from disk and set it as active. */
+  /** Load a project file from disk and set it as active. */
   bool load_project (const std::string &path);
 
-  /*! \brief Return the currently active project if any. */
+  /** Return the currently active project if any. */
   std::shared_ptr<rsc::project> current_project () const;
 
-  /*! \brief Unload and clear all managed resources, releasing GPU and CPU
-   * memory. */
+  /**
+   * Unload and clear all managed resources, releasing GPU and CPU
+   * memory.
+   */
   void clear_all_resources (bool restore_builtin_defaults = true);
 
-  /*! \brief Access to the internal audio mixer instance (non-owning). */
+  /** Access to the internal audio mixer instance (non-owning). */
   MIX_Mixer *
   mixer () const
   {
@@ -741,26 +718,29 @@ public:
   }
 
   // Path resolution helpers
-  /*! \brief Resolve a possibly-relative asset path to an absolute
-   * engine/project path. */
+  /**
+   * Resolve a possibly-relative asset path to an absolute
+   * engine/project path.
+   */
   std::string resolve_path (const std::string &path) const;
 
-  /*! \brief Get the filesystem path for a registered model id. */
+  /** Get the filesystem path for a registered model id. */
   std::string get_resource_path (model_id id) const;
 
-  /*! \brief Get the filesystem path for a registered cubemap id. */
+  /** Get the filesystem path for a registered cubemap id. */
   std::string get_resource_path (cubemap_id id) const;
 
-  /*! \brief Get the filesystem path for a registered audio id. */
+  /** Get the filesystem path for a registered audio id. */
   std::string get_resource_path (audio_id id) const;
 
-  /*! \brief Get the filesystem path for a registered material id. */
+  /** Get the filesystem path for a registered material id. */
   std::string get_resource_path (material_id id) const;
 
-  /*! \brief Get the filesystem path for a generic resource reference. */
+  /** Get the filesystem path for a generic resource reference. */
   std::string get_path (io::resource_ref ref) const;
 
-  /*! \brief Helper providing thread-local access to the active resource manager
+  /**
+   * Helper providing thread-local access to the active resource manager
    * during serialization operations. This is internal and should be set by the
    * manager when performing (de)serialization.
    */
@@ -838,11 +818,10 @@ private:
   };
   std::optional<project_load_job> m_active_project_load;
 
-  /*! \brief Register built-in engine models used as placeholders or defaults.
-   */
+  /** Register built-in engine models used as placeholders or defaults. */
   void register_builtin_models ();
 
-  /*! \brief Register built-in cubemaps used by engine defaults. */
+  /** Register built-in cubemaps used by engine defaults. */
   void register_builtin_cubemaps ();
 };
 
@@ -855,13 +834,14 @@ struct resource_manager_view : comp::singleton_component
   {
   }
 
-  /*! \brief Register reflection metadata used by the editor for this view. */
+  /** Register reflection metadata used by the editor for this view. */
   static void register_meta ();
 
-  /*! \brief Draw a compact ImGui inspector for the resource manager.
-   * \param label Optional UI label.
-   * \param runtime_ctx Runtime context used to resolve runtime resources.
-   * \return True if interactive UI was drawn.
+  /**
+   * Draw a compact ImGui inspector for the resource manager.
+   * :param label: Optional UI label.
+   * :param runtime_ctx: Runtime context used to resolve runtime resources.
+   * :return: True if interactive UI was drawn.
    */
   bool custom_inspect (const char *label,
                        comp::singl::runtime_context *runtime_ctx) const;

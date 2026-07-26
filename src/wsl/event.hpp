@@ -6,8 +6,8 @@
 namespace wsl
 {
 
-/*!
- * \brief High-level event kind used by the engine's event dispatch.
+/**
+ * High-level event kind used by the engine's event dispatch.
  *
  * Maps the most common SDL3 event types to a small, script-friendly
  * enumeration.  Events that do not map to a named kind are classified
@@ -28,8 +28,8 @@ enum class event_kind : uint32_t
   other
 };
 
-/*!
- * \brief Engine-level event wrapper.
+/**
+ * Engine-level event wrapper.
  *
  * Wraps an `SDL_Event` and exposes a typed `kind()` accessor so that
  * daslang (and C++) consumers can dispatch without touching SDL
@@ -45,39 +45,33 @@ public:
   engine_event () = default;
   explicit engine_event (const SDL_Event &e) : m_sdl (e) {}
 
-  /*!
-   * \brief Returns the high-level kind of this event.
-   */
+  /** Returns the high-level kind of this event. */
   event_kind
   kind () const
   {
     return classify (m_sdl.type);
   }
 
-  /*!
-   * \brief Returns the raw SDL event type (e.g. `SDL_EVENT_MOUSE_MOTION`).
-   */
+  /** Returns the raw SDL event type (e.g. `SDL_EVENT_MOUSE_MOTION`). */
   uint32_t
   type () const
   {
     return m_sdl.type;
   }
 
-  /*!
-   * \brief Returns the underlying SDL event (const).
-   */
+  /** Returns the underlying SDL event (const). */
   const SDL_Event &
   sdl () const
   {
     return m_sdl;
   }
 
-  /*!
-   * \brief Returns the underlying SDL event (mutable).
-   *
-   * Provided for call-sites that need to adjust event fields before
-   * forwarding (e.g. coordinate remapping in `render_ui_system`).
-   */
+  /**
+ * Returns the underlying SDL event (mutable).
+ *
+ * Provided for call-sites that need to adjust event fields before
+ * forwarding (e.g. coordinate remapping in `render_ui_system`).
+ */
   SDL_Event &
   sdl ()
   {

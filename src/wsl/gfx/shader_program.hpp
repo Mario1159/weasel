@@ -12,9 +12,7 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Describes a single member inside a uniform buffer.
- */
+/** Describes a single member inside a uniform buffer. */
 struct shader_buffer_member
 {
   std::string name;
@@ -22,9 +20,7 @@ struct shader_buffer_member
   uint32_t size = 0;
 };
 
-/*!
- * \brief Reflection metadata for a single uniform buffer binding.
- */
+/** Reflection metadata for a single uniform buffer binding. */
 struct shader_uniform_buffer
 {
   std::string name;
@@ -34,9 +30,7 @@ struct shader_uniform_buffer
   std::vector<shader_buffer_member> members;
 };
 
-/*!
- * \brief Reflection metadata for a single texture/sampler binding.
- */
+/** Reflection metadata for a single texture/sampler binding. */
 struct shader_texture_binding
 {
   std::string name;
@@ -45,9 +39,7 @@ struct shader_texture_binding
   bool is_cube = false;
 };
 
-/*!
- * \brief Reflection metadata for a single storage buffer binding.
- */
+/** Reflection metadata for a single storage buffer binding. */
 struct shader_storage_buffer
 {
   std::string name;
@@ -56,8 +48,8 @@ struct shader_storage_buffer
   uint32_t size = 0;
 };
 
-/*!
- * \brief Reflection metadata extracted from a compiled shader module.
+/**
+ * Reflection metadata extracted from a compiled shader module.
  *
  * Used to auto-layout material uniform blobs and validate binding counts.
  */
@@ -67,25 +59,27 @@ struct shader_reflection
   std::vector<shader_texture_binding> textures;
   std::vector<shader_storage_buffer> storage_buffers;
 
-  //! Number of `SamplerState` bindings the shader declares (i.e. the size of
-  //! its `u_Samplers[N]` array). SDL_GPU requires the graphics-pipeline shader
-  //! to declare exactly this many samplers. Derived from codegen/slang
-  //! reflection; falls back to textures.size() when unset (legacy path).
+  /**
+   * Number of `SamplerState` bindings the shader declares (i.e. the size of
+   * its `u_Samplers[N]` array). SDL_GPU requires the graphics-pipeline shader
+   * to declare exactly this many samplers. Derived from codegen/slang
+   * reflection; falls back to textures.size() when unset (legacy path).
+   */
   uint32_t sampler_count = 0;
 
   uint32_t num_uniform_buffers () const;
   uint32_t num_samplers () const;
   uint32_t num_storage_buffers () const;
 
-  /*!\brief Find a uniform buffer by name, or nullptr. */
+  /** Find a uniform buffer by name, or nullptr. */
   const shader_uniform_buffer *
   find_uniform_buffer (const std::string &name) const;
-  /*!\brief Find a texture binding by name, or nullptr. */
+  /** Find a texture binding by name, or nullptr. */
   const shader_texture_binding *find_texture (const std::string &name) const;
 };
 
-/*!
- * \brief A complete shader program combining vertex and fragment stages.
+/**
+ * A complete shader program combining vertex and fragment stages.
  *
  * May also hold compute for future expansion.
  */
@@ -99,7 +93,7 @@ struct shader_program
 
   SDL_GPUShaderFormat format = SDL_GPU_SHADERFORMAT_SPIRV;
 
-  /*! \brief Release any compiled GPU handles held by this program. */
+  /** Release any compiled GPU handles held by this program. */
   void clear () noexcept;
 };
 

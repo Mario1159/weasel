@@ -28,7 +28,7 @@ public:
   void draw ();
   void new_scene_dialog ();
 
-  /*! \brief Request to open a material in the Shader Graph (set by UI). */
+  /** Request to open a material in the Shader Graph (set by UI). */
   std::string m_request_open_shader_graph;
 
 private:

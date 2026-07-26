@@ -15,9 +15,7 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Supported pin data types in the shader graph.
- */
+/** Supported pin data types in the shader graph. */
 enum class graph_pin_type
 {
   none,
@@ -32,9 +30,7 @@ enum class graph_pin_type
   mat4
 };
 
-/*!
- * \brief A typed input or output on a graph node.
- */
+/** A typed input or output on a graph node. */
 struct graph_pin
 {
   uint64_t id = 0;
@@ -52,9 +48,7 @@ struct graph_pin
   }
 };
 
-/*!
- * \brief A connection between two pins.
- */
+/** A connection between two pins. */
 struct graph_link
 {
   uint64_t from_node = 0;
@@ -73,9 +67,7 @@ struct graph_link
   }
 };
 
-/*!
- * \brief Kinds of built-in shader graph nodes.
- */
+/** Kinds of built-in shader graph nodes. */
 enum class graph_node_kind
 {
   unknown,
@@ -122,9 +114,7 @@ enum class graph_node_kind
   model_pbr_emissive
 };
 
-/*!
- * \brief A single node in the shader graph.
- */
+/** A single node in the shader graph. */
 struct graph_node
 {
   uint64_t id = 0;
@@ -133,10 +123,10 @@ struct graph_node
   float pos_x = 0.0F;
   float pos_y = 0.0F;
 
-  //! Node-specific properties (e.g., default value for a uniform).
+  /** Node-specific properties (e.g., default value for a uniform). */
   std::unordered_map<std::string, std::string> properties;
 
-  //! Pins exposed by this node.
+  /** Pins exposed by this node. */
   std::vector<graph_pin> pins;
 
   template <class Archive>
@@ -151,8 +141,8 @@ struct graph_node
   }
 };
 
-/*!
- * \brief A node-based shader graph that can be serialized and compiled to
+/**
+ * A node-based shader graph that can be serialized and compiled to
  * Slang.
  */
 struct shader_graph
@@ -169,17 +159,17 @@ struct shader_graph
         cereal::make_nvp ("links", links));
   }
 
-  /*! \brief Find a node by id, or nullptr. */
+  /** Find a node by id, or nullptr. */
   const graph_node *find_node (uint64_t id) const;
   graph_node *find_node (uint64_t id);
 
-  /*! \brief Find the unique material output node, or nullptr. */
+  /** Find the unique material output node, or nullptr. */
   const graph_node *find_output_node () const;
 
-  /*! \brief Find the link that drives a given target pin, or nullptr. */
+  /** Find the link that drives a given target pin, or nullptr. */
   const graph_link *find_input_link (uint64_t to_node, uint64_t to_pin) const;
 
-  /*! \brief List all nodes connected to an output pin (used for traversal). */
+  /** List all nodes connected to an output pin (used for traversal). */
   std::vector<const graph_link *> find_output_links (uint64_t from_node,
                                                      uint64_t from_pin) const;
 };

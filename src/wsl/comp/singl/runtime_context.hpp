@@ -33,8 +33,8 @@ namespace wsl
 namespace comp::singl
 {
 
-/*!
- * \brief Core shared state for a Weasel runtime instance.
+/**
+ * Core shared state for a Weasel runtime instance.
  *
  * This singleton aggregates all major subsystems (resource manager, scene
  * manager, world, dispatcher) and provides a central point of access for
@@ -43,83 +43,83 @@ namespace comp::singl
 class runtime_context : public comp::singleton_component
 {
 public:
-  /*!
-   * \brief Constructs the runtime context.
-   * \param name Window title.
-   * \param width Window width.
-   * \param height Window height.
-   * \param engine_res_path Base path for engine resources.
-   */
+  /**
+ * Constructs the runtime context.
+ * :param name: Window title.
+ * :param width: Window width.
+ * :param height: Window height.
+ * :param engine_res_path: Base path for engine resources.
+ */
   explicit runtime_context (const char *name, int width, int height,
                             const std::string &engine_res_path,
                             bool headless = false);
 
   ~runtime_context ();
 
-  /*! \brief Register reflection metadata for this class. */
+  /** Register reflection metadata for this class. */
   static void register_meta ();
 
-  /*! \brief Returns the active rendering manager from the current scene. */
+  /** Returns the active rendering manager from the current scene. */
   rendering_manager *get_active_rendering_manager () const;
 
-  /*! \brief Attempts to get the active scene renderer, may return nullptr. */
+  /** Attempts to get the active scene renderer, may return nullptr. */
   gfx::scene_renderer *try_get_active_scene_renderer ();
 
-  /*! \brief Gets the active scene renderer, ensuring it exists. */
+  /** Gets the active scene renderer, ensuring it exists. */
   gfx::scene_renderer &get_active_scene_renderer ();
 
-  /*! \brief Returns the active physics manager from the current scene. */
+  /** Returns the active physics manager from the current scene. */
   physics_manager *get_active_physics_manager () const;
 
-  /*! \brief Attempts to get the active physics engine, may return nullptr. */
+  /** Attempts to get the active physics engine, may return nullptr. */
   phys::engine *try_get_active_physics_engine ();
 
-  /*! \brief Gets the active physics engine, ensuring it exists. */
+  /** Gets the active physics engine, ensuring it exists. */
   phys::engine &get_active_physics_engine ();
 
-  /*! \brief Sets the simulation running state. */
+  /** Sets the simulation running state. */
   void set_running (bool value);
 
-  /*! \brief Stops the current play session and restores scene states. */
+  /** Stops the current play session and restores scene states. */
   void stop ();
 
-  /*! \brief Synchronizes deferred state changes. */
+  /** Synchronizes deferred state changes. */
   void sync ();
 
-  /*! \brief Saves the state of a specific scene for later restoration. */
+  /** Saves the state of a specific scene for later restoration. */
   void save_scene_state (rsc::scene *scene);
 
-  /*! \brief Saves the state of the currently active scene. */
+  /** Saves the state of the currently active scene. */
   void save_active_scene_state ();
 
-  /*! \brief Callback for scene change events. */
+  /** Callback for scene change events. */
   void on_scene_changed (const wsl::event::scene_changed &event);
 
-  /*! \brief Assigns an editor context for tool-specific behaviors. */
+  /** Assigns an editor context for tool-specific behaviors. */
   void set_editor_ctx (class editor_context *editor_ctx);
 
-  /*! \brief Returns the application input map. */
+  /** Returns the application input map. */
   wsl::input::action_map &
   get_app_input_map ()
   {
     return m_app_input_map;
   }
 
-  /*! \brief Returns the application input map. */
+  /** Returns the application input map. */
   const wsl::input::action_map &
   get_app_input_map () const
   {
     return m_app_input_map;
   }
 
-  /*! \brief Returns current input map (may be null). */
+  /** Returns current input map (may be null). */
   wsl::input::action_map *
   get_current_input_map () const
   {
     return m_current_input_map;
   }
 
-  /*! \brief Returns whether this context was created in headless mode. */
+  /** Returns whether this context was created in headless mode. */
   bool
   is_headless () const
   {

@@ -14,8 +14,7 @@ namespace phys
 {
 
 /**
- * @namespace wsl::phys::layers
- * @brief Collision layer definitions and filtering logic.
+ * Collision layer definitions and filtering logic.
  */
 namespace layers
 {

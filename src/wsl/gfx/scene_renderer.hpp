@@ -33,8 +33,8 @@ class resource_manager;
 namespace gfx
 {
 
-/*!
- * \brief Engine-facing 3D renderer.
+/**
+ * Engine-facing 3D renderer.
  *
  * Owns GPU pipelines, per-frame submission state, and supporting passes such
  * as shadows, SSAO, skybox rendering, and outlines.
@@ -42,103 +42,100 @@ namespace gfx
 class scene_renderer : public renderer
 {
 public:
-  /*!
-   * \brief Camera state resolved for a single 3D frame.
-   */
+  /** Camera state resolved for a single 3D frame. */
   struct view_state
   {
-    //! True when a valid camera was resolved and the matrices can be used.
+    /** True when a valid camera was resolved and the matrices can be used. */
     bool valid = false;
-    //! Aspect ratio used to build `proj`.
+    /** Aspect ratio used to build `proj`. */
     float aspect_ratio = 1.0F;
-    //! Camera origin in world space.
+    /** Camera origin in world space. */
     glm::vec3 world_position{ 0.0F };
-    //! World-to-view transform.
+    /** World-to-view transform. */
     glm::mat4 view{ 1.0F };
-    //! View-to-clip transform.
+    /** View-to-clip transform. */
     glm::mat4 proj{ 1.0F };
-    //! Cached `proj * view`.
+    /** Cached `proj * view`. */
     glm::mat4 view_proj{ 1.0F };
   };
 
-  /*!
-   * \brief Single model submission reused by renderer passes.
-   */
+  /** Single model submission reused by renderer passes. */
   struct draw_command
   {
-    //! Model resource to draw.
+    /** Model resource to draw. */
     gfx::model_3d *model = nullptr;
-    //! Scene slot inside the model resource.
+    /** Scene slot inside the model resource. */
     size_t scene_index = 0;
-    //! Model-to-world transform.
+    /** Model-to-world transform. */
     glm::mat4 transform{ 1.0F };
-    //! Source entity for selection and debug linkage.
+    /** Source entity for selection and debug linkage. */
     entt::entity entity = entt::null;
-    //! True when the submission should also receive an outline pass.
+    /** True when the submission should also receive an outline pass. */
     bool draw_outline = false;
-    //! Per-instance texture mip LOD bias.
+    /** Per-instance texture mip LOD bias. */
     float mip_lod_bias = 0.0F;
-    //! Per-instance geometry LOD aggressiveness bias.
+    /** Per-instance geometry LOD aggressiveness bias. */
     float geometry_lod_bias = 0.0F;
-    //! Per-instance max draw distance (0 = unlimited).
+    /** Per-instance max draw distance (0 = unlimited). */
     float visibility_range = 0.0F;
-    //! Optional per-instance material override. When set (non-null) the
-    //! renderer should use this material instead of the model's own mesh
-    //! materials. TODO: hook into the draw path (custom-material / PBR).
+    /**
+     * Optional per-instance material override. When set (non-null) the
+     * renderer should use this material instead of the model's own mesh
+     * materials. TODO: hook into the draw path (custom-material / PBR).
+     */
     rsc::material_id material_override{};
   };
 
-  /*!
-   * \brief Creates the renderer and its long-lived GPU resources.
-   */
+  /** Creates the renderer and its long-lived GPU resources. */
   scene_renderer (wsl::gfx::render_window &window, render_context *ctx,
                   wsl::rsc::resource_manager *res_mgr);
 
-  /*!
-   * \brief Releases GPU resources owned by the renderer.
-   */
+  /** Releases GPU resources owned by the renderer. */
   ~scene_renderer () override;
 
-  //! When false, custom material paths are disabled and all meshes fall back
-  //! to the legacy PBR pipeline. Used for backwards compatibility / debugging.
+  /**
+   * When false, custom material paths are disabled and all meshes fall back
+   * to the legacy PBR pipeline. Used for backwards compatibility / debugging.
+   */
   bool enable_custom_materials = true;
 
-  //! Begins a frame with resolved camera data.
+  /** Begins a frame with resolved camera data. */
   void begin_frame (const view_state &view);
-  //! Clears transient frame-local state.
+  /** Clears transient frame-local state. */
   void end_frame ();
-  //! Returns true when the renderer currently owns valid frame state.
+  /** Returns true when the renderer currently owns valid frame state. */
   [[nodiscard]] auto has_active_frame () const -> bool;
-  //! Returns the active frame view state.
+  /** Returns the active frame view state. */
   [[nodiscard]] auto frame_view () const -> const view_state &;
 
-  //! Replaces the visible draw list used by scene passes.
+  /** Replaces the visible draw list used by scene passes. */
   void set_visible_draws (std::vector<draw_command> draws);
-  //! Returns the visible draw list for the active frame.
+  /** Returns the visible draw list for the active frame. */
   [[nodiscard]] auto visible_draws () const
       -> const std::vector<draw_command> &;
-  //! Clears the visible draw list for the current frame.
+  /** Clears the visible draw list for the current frame. */
   void clear_visible_draws ();
 
-  //! Sets the environment cubemap used by skybox and IBL rendering.
+  /** Sets the environment cubemap used by skybox and IBL rendering. */
   void set_environment (const gfx::cubemap *env);
 
-  //! Binds the default lit main-scene pipeline.
+  /** Binds the default lit main-scene pipeline. */
   void bind_main_pipeline ();
-  //! Draws the current visible models.
+  /** Draws the current visible models. */
   void draw_visible_models ();
-  //! Draws outlines for submissions that requested highlighting.
+  /** Draws outlines for submissions that requested highlighting. */
   void draw_visible_model_outlines ();
-  //! Builds SSAO from the current visible draw list.
+  /** Builds SSAO from the current visible draw list. */
   void build_ssao_for_visible_models ();
-  //! Draws the active environment cubemap as the current skybox.
+  /** Draws the active environment cubemap as the current skybox. */
   void draw_active_environment (const glm::quat &skybox_rotation = glm::quat{});
 
-  /*!
-   * \brief Draws a procedural infinite grid at the origin.
-   * \param camera_pos The world-space position of the camera.
-   * \param fog_center The world-space center of the visibility radius.
-   * \param fog_radius The world-space radius of the Fog of War.
+  /**
+   * Draws a procedural infinite grid at the origin.
+   *
+   * :param camera_pos: The world-space position of the camera.
+   * :param fog_center: The world-space center of the visibility radius.
+   * :param fog_radius: The world-space radius of the Fog of War.
    */
   void draw_grid (const glm::vec3 &camera_pos, const glm::vec3 &fog_center,
                   float fog_radius);
@@ -152,86 +149,84 @@ public:
   void draw_debug_lines (const std::vector<debug_vertex> &verts,
                          const glm::mat4 &vp);
 
-  //! Uploads the frame lighting buffer.
+  /** Uploads the frame lighting buffer. */
   void upload_lighting (const lighting_ubo &lighting);
 
-  //! Dispatches the clustered-light compute passes for the active frame.
-  //! `point_lights` holds world-space lights in `gpu_point_light` layout;
-  //! the renderer copies them into the GPU SSBO and assigns them to the
-  //! cluster grid. When `clustered_lighting` is disabled, the call is a
-  //! no-op and the lights stay in the UBO fallback path.
+  /**
+   * Dispatches the clustered-light compute passes for the active frame.
+   * `point_lights` holds world-space lights in `gpu_point_light` layout;
+   * the renderer copies them into the GPU SSBO and assigns them to the
+   * cluster grid. When `clustered_lighting` is disabled, the call is a
+   * no-op and the lights stay in the UBO fallback path.
+   */
   void run_clustered_lighting (std::span<const gpu_point_light> point_lights,
                                const glm::mat4 &view, float z_near,
                                float z_far);
 
-  //! Returns true when the clustered-light compute passes are active.
+  /** Returns true when the clustered-light compute passes are active. */
   [[nodiscard]] bool
   clustered_lighting_enabled () const
   {
     return m_clustered.is_active ();
   }
 
-  /*!
-   * \brief Draws a model immediately using explicit transform data.
-   */
+  /** Draws a model immediately using explicit transform data. */
   void draw_model (gfx::model_3d &model, size_t scene_index,
                    const glm::mat4 &model_matrix, const glm::mat4 &view_proj,
                    float mip_lod_bias = 0.0F, float geometry_lod_bias = 0.0F,
                    float visibility_range = 0.0F);
 
-  //! Overrides the cached camera position used by shading.
+  /** Overrides the cached camera position used by shading. */
   void set_camera_position (const glm::vec3 &position);
-  //! Returns the camera position used by shading.
+  /** Returns the camera position used by shading. */
   [[nodiscard]] auto camera_position () const -> const glm::vec3 &;
 
-  //! Forces subsequent model draws to use the unlit material path.
+  /** Forces subsequent model draws to use the unlit material path. */
   void set_force_unlit (bool enabled);
-  //! Returns true when the unlit override is active.
+  /** Returns true when the unlit override is active. */
   [[nodiscard]] auto is_force_unlit () const -> bool;
 
-  //! Sets the world-space direction used by the directional shadow cascade.
+  /** Sets the world-space direction used by the directional shadow cascade. */
   void set_shadow_direction (const glm::vec3 &direction);
-  //! Returns the world-space directional shadow direction.
+  /** Returns the world-space directional shadow direction. */
   [[nodiscard]] auto shadow_direction () const -> const glm::vec3 &;
 
-  //! Enables or disables directional shadow rendering.
+  /** Enables or disables directional shadow rendering. */
   void set_directional_shadows_enabled (bool enabled);
-  //! Returns true when directional shadows are enabled.
+  /** Returns true when directional shadows are enabled. */
   [[nodiscard]] auto directional_shadows_enabled () const -> bool;
-  //! Rebuilds the directional shadow matrix from the active camera state.
+  /** Rebuilds the directional shadow matrix from the active camera state. */
   void update_directional_shadow_view ();
-  //! Returns the active directional light view-projection matrix.
+  /** Returns the active directional light view-projection matrix. */
   [[nodiscard]] auto directional_shadow_view () const -> const glm::mat4 &;
 
-  //! Returns the default shadow depth bias.
+  /** Returns the default shadow depth bias. */
   [[nodiscard]] auto shadow_map_bias () const -> float;
-  //! Updates the default shadow depth bias.
+  /** Updates the default shadow depth bias. */
   void set_shadow_map_bias (float bias);
-  //! Returns the default shadow strength multiplier.
+  /** Returns the default shadow strength multiplier. */
   [[nodiscard]] auto shadow_map_strength () const -> float;
-  //! Updates the default shadow strength multiplier.
+  /** Updates the default shadow strength multiplier. */
   void set_shadow_map_strength (float strength);
-  //! Returns the shadow map resolution used by renderer-owned targets.
+  /** Returns the shadow map resolution used by renderer-owned targets. */
   [[nodiscard]] auto shadow_map_resolution () const -> uint32_t;
 
-  //! Updates the intensity used by image-based lighting.
+  /** Updates the intensity used by image-based lighting. */
   void set_ibl_intensity (float intensity);
 
-  //! Returns the renderer-owned spot shadow slots.
+  /** Returns the renderer-owned spot shadow slots. */
   auto spot_shadow_maps () -> std::array<shadow_map_2d, 4> &;
-  //! Returns the renderer-owned spot shadow slots.
+  /** Returns the renderer-owned spot shadow slots. */
   [[nodiscard]] auto spot_shadow_maps () const
       -> const std::array<shadow_map_2d, 4> &;
 
-  //! Returns the renderer-owned point shadow slots.
+  /** Returns the renderer-owned point shadow slots. */
   auto point_shadow_maps () -> std::array<point_shadow_map, 2> &;
-  //! Returns the renderer-owned point shadow slots.
+  /** Returns the renderer-owned point shadow slots. */
   [[nodiscard]] auto point_shadow_maps () const
       -> const std::array<point_shadow_map, 2> &;
 
-  /*!
-   * \brief Builds a directional light matrix derived from the camera frustum.
-   */
+  /** Builds a directional light matrix derived from the camera frustum. */
   static auto make_light_vp_from_camera (const glm::mat4 &cam_view,
                                          const glm::mat4 &cam_proj,
                                          const glm::vec3 &light_dir_world,
@@ -239,78 +234,74 @@ public:
                                          float shadow_far = 200.0F,
                                          float z_padding = 10.0F) -> glm::mat4;
 
-  /*!
-   * \brief Builds a spotlight view-projection matrix for a single light.
-   */
+  /** Builds a spotlight view-projection matrix for a single light. */
   static auto make_spot_light_vp (const glm::vec3 &light_pos,
                                   const glm::vec3 &light_dir,
                                   float outer_angle_radians, float near_plane,
                                   float far_plane) -> glm::mat4;
 
-  //! Begins the directional shadow pass.
+  /** Begins the directional shadow pass. */
   void begin_shadow_pass ();
-  //! Ends the directional shadow pass.
+  /** Ends the directional shadow pass. */
   void end_shadow_pass ();
-  //! Draws a model into the directional shadow map.
+  /** Draws a model into the directional shadow map. */
   void draw_model_shadow (gfx::model_3d &model, size_t scene_index,
                           const glm::mat4 &model_matrix);
 
-  //! Begins a spotlight shadow pass for a renderer-owned slot.
+  /** Begins a spotlight shadow pass for a renderer-owned slot. */
   void begin_spot_shadow_pass (int index);
-  //! Ends the active spotlight shadow pass.
+  /** Ends the active spotlight shadow pass. */
   void end_spot_shadow_pass ();
-  //! Draws a model into the active spotlight shadow pass.
+  /** Draws a model into the active spotlight shadow pass. */
   void draw_model_spot_shadow (gfx::model_3d &model, size_t scene_index,
                                const glm::mat4 &model_matrix,
                                const glm::mat4 &light_vp);
 
-  //! Begins a point-light cubemap shadow face pass.
+  /** Begins a point-light cubemap shadow face pass. */
   void begin_point_shadow_pass (int index, int face);
-  //! Ends the active point-light cubemap shadow face pass.
+  /** Ends the active point-light cubemap shadow face pass. */
   void end_point_shadow_pass ();
-  //! Draws a model into a point-light shadow cubemap face.
+  /** Draws a model into a point-light shadow cubemap face. */
   void draw_model_point_shadow (gfx::model_3d &model, size_t scene_index,
                                 const glm::mat4 &model_matrix,
                                 const glm::mat4 &light_vp_mat,
                                 const glm::vec3 &light_pos, float far_plane);
 
-  /*!
-   * \brief Returns the view-projection matrix for a point-light cubemap face.
-   */
+  /** Returns the view-projection matrix for a point-light cubemap face. */
   static auto make_point_light_view_proj (const glm::vec3 &light_pos, int face,
                                           float near_plane, float far_plane)
       -> glm::mat4;
 
-  //! Bakes irradiance, prefilter, and BRDF resources for a cubemap.
+  /** Bakes irradiance, prefilter, and BRDF resources for a cubemap. */
   void bake_ibl (gfx::cubemap &env);
-  //! Bakes an equirectangular 2D texture into a cubemap.
+  /** Bakes an equirectangular 2D texture into a cubemap. */
   void bake_equirect_to_cube (gfx::cubemap &env, SDL_GPUTexture *equi_tex);
-  //! Bakes the procedural skybox into a cubemap.
+  /** Bakes the procedural skybox into a cubemap. */
   void bake_procedural_skybox (gfx::cubemap &env, const glm::vec3 &sun_dir);
-  //! Binds the preview background pipeline used by asset previews.
+  /** Binds the preview background pipeline used by asset previews. */
   void bind_preview_bg_pipeline (SDL_GPURenderPass *pass);
 
-  //! Default clear color used by renderer-owned full-screen passes.
+  /** Default clear color used by renderer-owned full-screen passes. */
   SDL_FColor clear_color{ .r = 0.1F, .g = 0.15F, .b = 0.2F, .a = 1.0F };
-  //! Enables or disables SSAO generation.
+  /** Enables or disables SSAO generation. */
   bool ssao_enabled = true;
-  //! Sampling radius in view space for SSAO.
+  /** Sampling radius in view space for SSAO. */
   float ssao_radius = 0.6F;
-  //! Bias applied to SSAO depth comparisons.
+  /** Bias applied to SSAO depth comparisons. */
   float ssao_bias = 0.025F;
-  //! Exponent applied to SSAO output.
+  /** Exponent applied to SSAO output. */
   float ssao_power = 1.25F;
-  //! Final multiplier applied to SSAO contribution.
+  /** Final multiplier applied to SSAO contribution. */
   float ssao_intensity = 1.0F;
-  //! Brightness threshold where bloom starts contributing.
+  /** Brightness threshold where bloom starts contributing. */
   float bloom_threshold = 1.0F;
-  //! Soft transition width around the bloom threshold.
+  /** Soft transition width around the bloom threshold. */
   float bloom_knee = 0.5F;
-  //! Final bloom contribution multiplier.
+  /** Final bloom contribution multiplier. */
   float bloom_intensity = 1.0F;
-  //! Color used by the outline pass.
+  /** Color used by the outline pass. */
   glm::vec4 outline_color{ 1.0F, 0.65F, 0.1F, 1.0F };
-  //! Expansion distance used by the outline pass.
+  /** Expansion distance used by the outline pass. */
   float outline_width = 0.035F;
 
 private:
@@ -322,8 +313,10 @@ private:
   void render_mesh (const glm::mat4 &model, const glm::mat4 &view_proj,
                     const mesh &mesh, float mip_lod_bias = 0.0F);
   void render_custom_primitive (const primitive &prim, float mip_lod_bias);
-  //! Renders a primitive using an explicit material instance (used both for
-  //! per-mesh custom materials and for per-instance material overrides).
+  /**
+   * Renders a primitive using an explicit material instance (used both for
+   * per-mesh custom materials and for per-instance material overrides).
+   */
   void render_custom_primitive (const primitive &prim,
                                 const gfx::material_instance &mat_inst,
                                 float mip_lod_bias);
@@ -483,23 +476,27 @@ private:
   SDL_GPUGraphicsPipeline *m_pipeline_debug_lines = nullptr;
 
   // Grid resources.
-  //! Graphics pipeline for the procedural projected grid.
+  /** Graphics pipeline for the procedural projected grid. */
   SDL_GPUGraphicsPipeline *m_pipeline_grid = nullptr;
 
-  //! Clustered forward lighting. Owns the SSBOs and compute pipelines
-  //! used by `cube.frag.slang` to shade point lights in clusters.
+  /**
+   * Clustered forward lighting. Owns the SSBOs and compute pipelines
+   * used by `cube.frag.slang` to shade point lights in clusters.
+   */
   clustered_lighting m_clustered;
 
-  //! Pipeline cache for custom material permutations.
+  /** Pipeline cache for custom material permutations. */
   pipeline_cache m_pipeline_cache;
 
-  //! Per-instance material override currently in effect for the active draw
-  //! (set from draw_command::material_override, consumed by render_mesh).
+  /**
+   * Per-instance material override currently in effect for the active draw
+   * (set from draw_command::material_override, consumed by render_mesh).
+   */
   rsc::material_id m_active_material_override{};
 };
 
-/*!
- * \brief Binds a custom material and its associated pipeline for a single draw.
+/**
+ * Binds a custom material and its associated pipeline for a single draw.
  *
  * Used by scene_renderer when a primitive has use_custom_material set.
  */

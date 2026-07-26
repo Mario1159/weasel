@@ -7,7 +7,7 @@ namespace wsl::cli
 {
 
 /**
- * @brief Handles command-line arguments for the Weasel Engine.
+ * Handles command-line arguments for the Weasel Engine.
  *
  * This class encapsulates CLI11 parsing for both headless utility commands
  * and non-interactive equivalents of the REPL command families.
@@ -29,12 +29,11 @@ public:
   };
 
   /**
-   * @brief Parses the command-line arguments and executes subcommands if
-   * necessary.
+   * Parses the command-line arguments and executes subcommands if necessary.
    *
-   * @param argc Argument count.
-   * @param argv Argument vector.
-   * @return result Information about whether the application should exit or
+   * :param argc: Argument count.
+   * :param argv: Argument vector.
+   * :return: result Information about whether the application should exit or
    * continue.
    */
   result parse (int argc, char **argv);

@@ -10,8 +10,8 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Defines a screen region and optional camera for rendering a sub-view.
+/**
+ * Defines a screen region and optional camera for rendering a sub-view.
  *
  * Coordinates are normalized [0,1] relative to the window. The rendering
  * pipeline uses this to set the GPU viewport and scissor, and to compute
@@ -19,33 +19,33 @@ namespace gfx
  */
 struct viewport
 {
-  float x = 0.0F;      //!< Normalized left edge (0 = left)
-  float y = 0.0F;      //!< Normalized top edge (0 = top)
-  float width = 1.0F;  //!< Normalized width
-  float height = 1.0F; //!< Normalized height
+  float x = 0.0F;      // Normalized left edge (0 = left)
+  float y = 0.0F;      // Normalized top edge (0 = top)
+  float width = 1.0F;  // Normalized width
+  float height = 1.0F; // Normalized height
   float min_depth = 0.0F;
   float max_depth = 1.0F;
 
-  entt::entity camera = entt::null; //!< Camera entity for this viewport; null =
-                                    //!< use scene camera
+  entt::entity camera = entt::null; // Camera entity for this viewport; null =
+                                    // use scene camera
 
   bool clear_color
-      = false; //!< Whether to clear the color target before this viewport
+      = false; // Whether to clear the color target before this viewport
   bool clear_depth
-      = false; //!< Whether to clear the depth target before this viewport
+      = false; // Whether to clear the depth target before this viewport
 
   SDL_FColor clear_color_value{
     0.0F, 0.0F, 0.0F, 1.0F
-  }; //!< Color to clear with (if clear_color is true)
+  }; // Color to clear with (if clear_color is true)
 
-  //! Returns true when the viewport covers the full screen.
+  /** Returns true when the viewport covers the full screen. */
   [[nodiscard]] bool
   is_fullscreen () const
   {
     return (x <= 0.0F) && (y <= 0.0F) && (width >= 1.0F) && (height >= 1.0F);
   }
 
-  //! Converts normalized coordinates to pixel dimensions.
+  /** Converts normalized coordinates to pixel dimensions. */
   [[nodiscard]] auto
   to_pixels (uint32_t window_width, uint32_t window_height) const
   {
@@ -61,7 +61,7 @@ struct viewport
     };
   }
 
-  //! Computes the aspect ratio (width/height) for this viewport.
+  /** Computes the aspect ratio (width/height) for this viewport. */
   [[nodiscard]] float
   aspect_ratio (uint32_t window_width, uint32_t window_height) const
   {

@@ -11,8 +11,8 @@
 namespace wsl::reg::sig
 {
 
-/*!
- * \brief Describes a related component type used by signal and iteration
+/**
+ * Describes a related component type used by signal and iteration
  * metadata.
  */
 struct component_type_debug_entry
@@ -76,9 +76,7 @@ make_entity_match_predicate ()
   };
 }
 
-/*!
- * \brief Debug and editor metadata for a declared signal.
- */
+/** Debug and editor metadata for a declared signal. */
 struct signal_debug_entry
 {
   entt::id_type type_id{};
@@ -96,9 +94,7 @@ struct signal_debug_entry
   }
 };
 
-/*!
- * \brief Debug metadata for a declared event handler.
- */
+/** Debug metadata for a declared event handler. */
 struct system_handler_debug_entry
 {
   entt::id_type system_type_id{};
@@ -106,9 +102,7 @@ struct system_handler_debug_entry
   std::string handler_name;
 };
 
-/*!
- * \brief Debug metadata for a declared system iteration.
- */
+/** Debug metadata for a declared system iteration. */
 struct system_iteration_debug_entry
 {
   entt::id_type system_type_id{};
@@ -134,9 +128,7 @@ struct system_iteration_debug_entry
   }
 };
 
-/*!
- * \brief Debug metadata for a connectable signal handler.
- */
+/** Debug metadata for a connectable signal handler. */
 struct signal_connectable_handler_debug_entry
 {
   entt::id_type signal_type_id{};
@@ -164,9 +156,7 @@ struct signal_connectable_handler_debug_entry
   }
 };
 
-/*!
- * \brief Debug metadata for an explicit signal-to-handler connection.
- */
+/** Debug metadata for an explicit signal-to-handler connection. */
 struct signal_connection_debug_entry
 {
   entt::id_type signal_type_id{};
@@ -178,9 +168,7 @@ struct signal_connection_debug_entry
   entt::entity target_entity{ entt::null };
 };
 
-/*!
- * \brief Serializable data for an explicit signal connection.
- */
+/** Serializable data for an explicit signal connection. */
 struct signal_connection_data
 {
   entt::id_type signal_type_id{};
@@ -198,9 +186,7 @@ struct signal_connection_data
   }
 };
 
-/*!
- * \brief Editor/debug database that mirrors declared signals and connections.
- */
+/** Editor/debug database that mirrors declared signals and connections. */
 struct signal_debug_db
 {
   std::unordered_map<entt::id_type, signal_debug_entry> entries;
@@ -389,9 +375,7 @@ struct signal_debug_db
   }
 };
 
-/*!
- * \brief Runtime signal declaration and explicit connection hub.
- */
+/** Runtime signal declaration and explicit connection hub. */
 struct signal_hub
 {
   struct registered_connectable_handler
@@ -906,11 +890,11 @@ struct signal_hub
   }
 };
 
-/*!
- * \brief Emits a fully constructed signal instance.
- * \tparam Signal Signal type.
- * \param hub Signal hub that owns the runtime connections.
- * \param event Signal instance to emit.
+/**
+ * Emits a fully constructed signal instance.
+ * :param Signal: Signal type.
+ * :param hub: Signal hub that owns the runtime connections.
+ * :param event: Signal instance to emit.
  */
 template <typename Signal>
 void
@@ -919,12 +903,12 @@ emit (signal_hub &hub, const Signal &event)
   hub.dispatch<Signal> (event);
 }
 
-/*!
- * \brief Constructs and emits a signal instance in one call.
- * \tparam Signal Signal type.
- * \tparam Args Constructor argument types.
- * \param hub Signal hub that owns the runtime connections.
- * \param args Constructor arguments used to build the signal.
+/**
+ * Constructs and emits a signal instance in one call.
+ * :param Signal: Signal type.
+ * :param Args: Constructor argument types.
+ * :param hub: Signal hub that owns the runtime connections.
+ * :param args: Constructor arguments used to build the signal.
  */
 template <typename Signal, typename... Args>
 void
@@ -933,9 +917,7 @@ emit (signal_hub &hub, Args &&...args)
   hub.dispatch<Signal> (Signal{ std::forward<Args> (args)... });
 }
 
-/*!
- * \brief Declares a signal owned by a system-like type.
- */
+/** Declares a signal owned by a system-like type. */
 template <typename Signal, typename OwnerSystem, typename... Components>
 void
 declare_system (signal_hub &hub)
@@ -943,9 +925,7 @@ declare_system (signal_hub &hub)
   hub.template declare_signal<Signal, OwnerSystem, Components...> ();
 }
 
-/*!
- * \brief Declares a signal whose source entity lives in a signal data member.
- */
+/** Declares a signal whose source entity lives in a signal data member. */
 template <typename Signal, typename OwnerSystem,
           entt::entity Signal::*SourceMember, typename... Components>
 void
@@ -957,9 +937,7 @@ declare_entity_signal (signal_hub &hub)
       });
 }
 
-/*!
- * \brief Declares a non-connectable event handler owned by a system.
- */
+/** Declares a non-connectable event handler owned by a system. */
 template <typename OwnerSystem>
 void
 declare_handler (signal_hub &hub, const char *handler_name)
@@ -967,9 +945,7 @@ declare_handler (signal_hub &hub, const char *handler_name)
   hub.template declare_handler<OwnerSystem> (handler_name);
 }
 
-/*!
- * \brief Declares a named system iteration and its component contract.
- */
+/** Declares a named system iteration and its component contract. */
 template <typename OwnerSystem, typename... Components>
 void
 declare_iteration (signal_hub &hub, const char *iteration_name)

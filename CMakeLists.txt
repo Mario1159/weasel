@@ -646,18 +646,22 @@ if(DEFINED stb_SOURCE_DIR)
 endif()
 
 # --- Documentation ---
-find_package(Doxygen)
-if(DOXYGEN_FOUND)
-    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
-    set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
-    configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
+# Unified Sphinx build: daslang API (auto-generated) + C++ API (via hawkmoth)
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_FOUND)
     add_custom_target(docs
-        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Generating API documentation"
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/doc/source/das_api_gen.py
+            --source ${CMAKE_CURRENT_SOURCE_DIR}/src
+            --output ${CMAKE_CURRENT_SOURCE_DIR}/doc/source/stdlib
+        COMMAND sphinx-build --keep-going -b html
+            ${CMAKE_CURRENT_SOURCE_DIR}/doc/source
+            ${CMAKE_CURRENT_BINARY_DIR}/docs
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doc
+        COMMENT "Generating documentation (Sphinx + hawkmoth + das_api_gen)"
         VERBATIM
     )
 endif()
+
 
 # --- Testing ---
 enable_testing()

@@ -9,8 +9,7 @@
 #include <memory>
 
 /**
- * @namespace wsl
- * @brief Game framework library for the Weasel engine.
+ * Game framework library for the Weasel engine.
  */
 namespace wsl
 {

@@ -1,0 +1,7 @@
+{% if logo %}
+<p class="logo">
+  <a href="{{ pathtro(master_doc) }}">
+    <img class="logo" src="{{ pathto('_static/' + logo, 1) }}" alt="Logo"/>
+  </a>
+</p>
+{% endif %}

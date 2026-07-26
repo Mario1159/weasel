@@ -14,8 +14,8 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Generates Slang fragment shader source from a shader_graph.
+/**
+ * Generates Slang fragment shader source from a shader_graph.
  *
  * Emits a complete fragment shader that conforms to the engine's binding
  * conventions:
@@ -28,20 +28,21 @@ class shader_graph_codegen
 public:
   explicit shader_graph_codegen (const shader_graph &graph);
 
-  /*! \brief Generate the complete fragment shader source. */
+  /** Generate the complete fragment shader source. */
   std::string generate () const;
 
-  /*! \brief Extract reflection metadata from the generated bindings. */
+  /** Extract reflection metadata from the generated bindings. */
   shader_reflection build_reflection () const;
 
-  /*! \brief Supply the shared PBR module source (pbr_common.slang).
-   *
-   *  When set, the generated fragment shader includes the engine's full PBR
-   *  lighting (directional / clustered point / spot lights, IBL, shadows,
-   *  SSAO, bloom) so shader-graph materials are lit identically to the
-   *  standard cube.frag material. The source is inlined at the top of the
-   *  generated shader so no runtime include path is required.
-   */
+  /**
+ * Supply the shared PBR module source (pbr_common.slang).
+ *
+ *  When set, the generated fragment shader includes the engine's full PBR
+ *  lighting (directional / clustered point / spot lights, IBL, shadows,
+ *  SSAO, bloom) so shader-graph materials are lit identically to the
+ *  standard cube.frag material. The source is inlined at the top of the
+ *  generated shader so no runtime include path is required.
+ */
   void
   set_pbr_common_source (const std::string &source)
   {

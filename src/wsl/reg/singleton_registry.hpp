@@ -23,45 +23,39 @@ namespace wsl
 namespace reg
 {
 
-/*!
- * \brief Ordering modes for singleton component descriptor queries.
- */
+/** Ordering modes for singleton component descriptor queries. */
 enum class singleton_component_order
 {
-  //! Sort by display name, falling back to the C++ type name.
+  /** Sort by display name, falling back to the C++ type name. */
   display_name,
 
-  //! Sort by stable type identifier.
+  /** Sort by stable type identifier. */
   type_id
 };
 
-/*!
- * \brief Registration options for singleton components.
- */
+/** Registration options for singleton components. */
 struct singleton_component_registration_options
 {
-  //! Optional editor-facing display name override.
+  /** Optional editor-facing display name override. */
   std::string_view display_name;
 
-  //! Whether the singleton is owned by the engine core.
+  /** Whether the singleton is owned by the engine core. */
   bool core = false;
 
-  //! Whether the registration came from runtime project code.
+  /** Whether the registration came from runtime project code. */
   bool runtime_registered = false;
 
-  //! Whether the singleton should be serialized with a scene snapshot.
+  /** Whether the singleton should be serialized with a scene snapshot. */
   bool serialize_with_scene = true;
 };
 
-/*!
- * \brief Concept for types that have a serialize method compatible with Cereal.
- */
+/** Concept for types that have a serialize method compatible with Cereal. */
 template <typename T>
 concept has_serialize
     = requires (T &v, cereal::BinaryOutputArchive &ar) { v.serialize (ar); };
 
-/*!
- * \brief Central registry for singleton components (singletons) in the engine.
+/**
+ * Central registry for singleton components (singletons) in the engine.
  *
  * This class manages the registration, creation, and destruction of singletons,
  * which are components that exist globally within a scene or registry.
@@ -69,169 +63,161 @@ concept has_serialize
 class singleton_registry
 {
 public:
-  /*!
-   * \brief Describes a registered singleton type.
-   */
+  /** Describes a registered singleton type. */
   struct descriptor
   {
-    //! The stable type ID of the singleton.
+    /** The stable type ID of the singleton. */
     ::entt::id_type type_id{};
-    //! The C++ type name.
+    /** The C++ type name. */
     std::string type_name;
-    //! The user-friendly display name.
+    /** The user-friendly display name. */
     std::string display_name;
-    //! Whether this singleton was registered by user code at runtime.
+    /** Whether this singleton was registered by user code at runtime. */
     bool runtime_registered = false;
-    //! Whether this is a core engine singleton that cannot be removed.
+    /** Whether this is a core engine singleton that cannot be removed. */
     bool core = false;
-    //! Whether this singleton should be serialized as part of the scene
-    //! snapshot.
+    /**
+     * Whether this singleton should be serialized as part of the scene
+     * snapshot.
+     */
     bool serialize_with_scene = false;
-    //! Whether the singleton can be default-constructed.
+    /** Whether the singleton can be default-constructed. */
     bool can_add_default = false;
-    //! Function pointer to check if the singleton exists in a registry.
+    /** Function pointer to check if the singleton exists in a registry. */
     bool (*contains) (::entt::registry &) = nullptr;
-    //! Function pointer to emplace a default instance of the singleton.
+    /** Function pointer to emplace a default instance of the singleton. */
     bool (*emplace_default) (::entt::registry &) = nullptr;
-    //! Function pointer to remove the singleton from a registry.
+    /** Function pointer to remove the singleton from a registry. */
     bool (*remove) (::entt::registry &) = nullptr;
-    //! Function pointer to get a raw pointer to the singleton instance.
+    /** Function pointer to get a raw pointer to the singleton instance. */
     void *(*get_ptr) (::entt::registry &) = nullptr;
-    //! Function pointer to save the singleton to a binary archive.
+    /** Function pointer to save the singleton to a binary archive. */
     void (*save_binary) (cereal::BinaryOutputArchive &, ::entt::registry &)
         = nullptr;
-    //! Function pointer to load the singleton from a binary archive.
+    /** Function pointer to load the singleton from a binary archive. */
     void (*load_binary) (cereal::BinaryInputArchive &, ::entt::registry &)
         = nullptr;
-    //! Function pointer to save the singleton to a JSON archive.
+    /** Function pointer to save the singleton to a JSON archive. */
     void (*save_json) (cereal::JSONOutputArchive &, ::entt::registry &)
         = nullptr;
-    //! Function pointer to load the singleton from a JSON archive.
+    /** Function pointer to load the singleton from a JSON archive. */
     void (*load_json) (cereal::JSONInputArchive &, ::entt::registry &)
         = nullptr;
   };
 
   using singleton_component_descriptor = descriptor;
 
-  /*!
-   * \brief Registers a value-owned singleton component type.
-   * \tparam T Singleton component type.
-   * \param options Registration options.
-   */
+  /**
+ * Registers a value-owned singleton component type.
+ * :param T: Singleton component type.
+ * :param options: Registration options.
+ */
   template <comp::singleton_component_type T>
   void register_singleton_component (
       const singleton_component_registration_options &options = {});
 
-  /*!
-   * \brief Registers metadata for a runtime singleton without loading its C++
-   * type.
-   *
-   * Cached descriptors are only suitable for discovery and name lookup. They do
-   * not provide construction, reflection, access, or serialization callbacks.
-   */
+  /**
+ * Registers metadata for a runtime singleton without loading its C++
+ * type.
+ *
+ * Cached descriptors are only suitable for discovery and name lookup. They do
+ * not provide construction, reflection, access, or serialization callbacks.
+ */
   void
   register_cached_runtime_singleton_component (::entt::id_type type_id,
                                                std::string_view type_name,
                                                std::string_view display_name);
 
-  /*!
-   * \brief Registers a bound singleton component type stored as a raw pointer.
-   * \tparam T Singleton component type.
-   * \param options Registration options.
-   */
+  /**
+ * Registers a bound singleton component type stored as a raw pointer.
+ * :param T: Singleton component type.
+ * :param options: Registration options.
+ */
   template <comp::singleton_component_type T>
   void register_bound_singleton_component (
       const singleton_component_registration_options &options = {});
 
-  /*! \brief Finds a singleton component descriptor by type ID. */
+  /** Finds a singleton component descriptor by type ID. */
   const descriptor *find_singleton_component (::entt::id_type type_id) const;
 
-  /*!
-   * \brief Finds a singleton component descriptor by C++ type name.
-   * \param type_name Reflected type name.
-   * \return Matching descriptor, or `nullptr` when not found.
-   */
+  /**
+ * Finds a singleton component descriptor by C++ type name.
+ * :param type_name: Reflected type name.
+ * :return: Matching descriptor, or `nullptr` when not found.
+ */
   const descriptor *find_singleton_component (std::string_view type_name) const;
 
-  /*!
-   * \brief Returns registered singleton component descriptors in the requested
-   * order.
-   * \param order Requested descriptor ordering.
-   * \return Ordered descriptor list.
-   */
+  /**
+ * Returns registered singleton component descriptors in the requested
+ * order.
+ * :param order: Requested descriptor ordering.
+ * :return: Ordered descriptor list.
+ */
   std::vector<const descriptor *>
   get_singleton_components (singleton_component_order order
                             = singleton_component_order::display_name) const;
 
-  /*! \brief Ensures all core singleton components exist in the registry. */
+  /** Ensures all core singleton components exist in the registry. */
   void apply_core_singleton_components (::entt::registry &registry) const;
 
-  /*! \brief Resets or removes non-core singleton components in the registry. */
+  /** Resets or removes non-core singleton components in the registry. */
   void reset_scene_singleton_components (::entt::registry &registry) const;
 
-  /*! \brief Clears runtime-registered singleton components from the world. */
+  /** Clears runtime-registered singleton components from the world. */
   void clear_runtime_singleton_components (rsc::world &world);
 
-  /*!
-   * \brief Saves one registered singleton component to a binary archive.
-   */
+  /** Saves one registered singleton component to a binary archive. */
   bool save_singleton_binary (cereal::BinaryOutputArchive &archive,
                               ::entt::registry &registry,
                               ::entt::id_type type_id) const;
 
-  /*!
-   * \brief Loads one registered singleton component from a binary archive.
-   */
+  /** Loads one registered singleton component from a binary archive. */
   bool load_singleton_binary (cereal::BinaryInputArchive &archive,
                               ::entt::registry &registry,
                               ::entt::id_type type_id) const;
 
-  /*!
-   * \brief Saves one registered singleton component to a JSON archive.
-   */
+  /** Saves one registered singleton component to a JSON archive. */
   bool save_singleton_json (cereal::JSONOutputArchive &archive,
                             ::entt::registry &registry,
                             ::entt::id_type type_id) const;
 
-  /*!
-   * \brief Loads one registered singleton component from a JSON archive.
-   */
+  /** Loads one registered singleton component from a JSON archive. */
   bool load_singleton_json (cereal::JSONInputArchive &archive,
                             ::entt::registry &registry,
                             ::entt::id_type type_id) const;
 
-  /*! \brief Finds a singleton descriptor by type ID. */
+  /** Finds a singleton descriptor by type ID. */
   const descriptor *
   find (::entt::id_type type_id) const
   {
     return find_singleton_component (type_id);
   }
-  /*! \brief Returns all registered descriptors sorted by display name. */
+  /** Returns all registered descriptors sorted by display name. */
   std::vector<const descriptor *>
   ordered () const
   {
     return get_singleton_components (singleton_component_order::display_name);
   }
-  /*! \brief Returns all registered descriptors sorted by type ID. */
+  /** Returns all registered descriptors sorted by type ID. */
   std::vector<const descriptor *>
   by_type_id () const
   {
     return get_singleton_components (singleton_component_order::type_id);
   }
 
-  /*! \brief Ensures all core singletons are present in the given registry. */
+  /** Ensures all core singletons are present in the given registry. */
   void
   apply_core_singletons (::entt::registry &registry) const
   {
     apply_core_singleton_components (registry);
   }
-  /*! \brief Resets or removes non-core singletons in the registry. */
+  /** Resets or removes non-core singletons in the registry. */
   void
   reset_scene_registry (::entt::registry &registry) const
   {
     reset_scene_singleton_components (registry);
   }
-  /*! \brief Clears runtime-registered singletons from the specified world. */
+  /** Clears runtime-registered singletons from the specified world. */
   void
   clear_runtime_singletons (rsc::world &world)
   {

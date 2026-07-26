@@ -193,8 +193,8 @@ split_command_line (const std::string &command)
   return out;
 }
 
-/*!
- * \brief Returns a pointer to the engine's meta context locator handle.
+/**
+ * Returns a pointer to the engine's meta context locator handle.
  *
  * This is exported as a C symbol so that compiled shared libraries can
  * look it up dynamically rather than hardcoding an absolute address.

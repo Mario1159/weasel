@@ -21,32 +21,34 @@ class resource_manager;
 namespace gfx
 {
 
-/*!
- * \brief Configuration for the clustered lighting grid.
- */
+/** Configuration for the clustered lighting grid. */
 struct clustered_lighting_config
 {
-  //! Number of tiles along the X axis (screen width).
+  /** Number of tiles along the X axis (screen width). */
   uint32_t grid_x = 16;
-  //! Number of tiles along the Y axis (screen height).
+  /** Number of tiles along the Y axis (screen height). */
   uint32_t grid_y = 9;
-  //! Number of depth slices.
+  /** Number of depth slices. */
   uint32_t grid_z = 24;
-  //! Maximum lights that can be assigned to a single cluster.
+  /** Maximum lights that can be assigned to a single cluster. */
   uint32_t max_lights_per_cluster = 100;
-  //! Upper bound on the number of point lights uploaded to the SSBO.
+  /** Upper bound on the number of point lights uploaded to the SSBO. */
   uint32_t max_point_lights = 4096;
-  //! When true, point lights outside the view frustum are filtered out
-  //! on the CPU before the GPU cull pass. Cuts O(L*C) to O(V*C) where
-  //! V is the number of visible lights.
+  /**
+   * When true, point lights outside the view frustum are filtered out
+   * on the CPU before the GPU cull pass. Cuts O(L*C) to O(V*C) where
+   * V is the number of visible lights.
+   */
   bool frustum_pre_cull = true;
-  //! Master switch: when false, the compute passes are skipped and the
-  //! fragment shader must use the fallback path.
+  /**
+   * Master switch: when false, the compute passes are skipped and the
+   * fragment shader must use the fallback path.
+   */
   bool enabled = true;
 };
 
-/*!
- * \brief GPU-side mirror of `gpu_point_light`. Layout matches the
+/**
+ * GPU-side mirror of `gpu_point_light`. Layout matches the
  * StructuredBuffer<GpuPointLight> declaration in `light_cull.slang`.
  */
 struct alignas (16) gpu_cluster_light
@@ -56,8 +58,8 @@ struct alignas (16) gpu_cluster_light
   glm::ivec4 shadow_info;    // x = shadow index, y = cast_shadows
 };
 
-/*!
- * \brief Cluster AABB + light list. Mirrors the Slang `Cluster` struct.
+/**
+ * Cluster AABB + light list. Mirrors the Slang `Cluster` struct.
  *
  * Padded to 16 bytes by `alignas(16)` so the SPIR-V std430 layout matches.
  */
@@ -69,8 +71,8 @@ struct alignas (16) gpu_cluster
   uint32_t light_indices[100];
 };
 
-/*!
- * \brief Owns the compute pipelines, storage buffers, and per-frame
+/**
+ * Owns the compute pipelines, storage buffers, and per-frame
  *        dispatch logic for clustered forward lighting.
  *
  * Lifecycle:
@@ -94,38 +96,46 @@ public:
   clustered_lighting (const clustered_lighting &) = delete;
   clustered_lighting &operator= (const clustered_lighting &) = delete;
 
-  //! Updates the screen size used by the cluster build pass.
+  /** Updates the screen size used by the cluster build pass. */
   void on_resize (uint32_t width, uint32_t height);
 
-  //! Records the active view so the next `update()` knows the projection
-  //! and view matrices to feed the compute shaders.
+  /**
+   * Records the active view so the next `update()` knows the projection
+   * and view matrices to feed the compute shaders.
+   */
   void on_camera_changed (const glm::mat4 &view, const glm::mat4 &proj,
                           float z_near, float z_far);
 
-  //! Uploads the point lights and dispatches both compute passes.
-  //! `lights.size()` must be `<= config.max_point_lights`.
+  /**
+   * Uploads the point lights and dispatches both compute passes.
+   * `lights.size()` must be `<= config.max_point_lights`.
+   */
   void update (SDL_GPUCommandBuffer *cmd,
                std::span<const gpu_cluster_light> lights,
                const glm::mat4 &view);
 
-  //! Binds the cluster and light storage buffers for the fragment stage
-  //! of the main 3D render pass.
+  /**
+   * Binds the cluster and light storage buffers for the fragment stage
+   * of the main 3D render pass.
+   */
   void bind_for_graphics (SDL_GPURenderPass *pass) const;
 
-  //! Pushes the per-frame cluster uniform data (cbuffer b0, space3 in
-  //! Slang) to the fragment stage. Called from the 3D render loop.
+  /**
+   * Pushes the per-frame cluster uniform data (cbuffer b0, space3 in
+   * Slang) to the fragment stage. Called from the 3D render loop.
+   */
   void push_graphics_uniforms (SDL_GPUCommandBuffer *cmd,
                                const glm::mat4 &inv_proj,
                                const glm::vec2 &screen_size) const;
 
-  //! Returns the current configuration.
+  /** Returns the current configuration. */
   [[nodiscard]] const clustered_lighting_config &
   config () const
   {
     return m_cfg;
   }
 
-  //! True when the master switch is on and GPU resources are valid.
+  /** True when the master switch is on and GPU resources are valid. */
   [[nodiscard]] bool
   is_active () const
   {
@@ -170,13 +180,13 @@ private:
   SDL_GPUBuffer *m_cluster_bufs[k_cluster_buf_slots]{};
   SDL_GPUBuffer *m_light_buf = nullptr;
 
-  //! Transfer buffer used to upload point lights each frame.
+  /** Transfer buffer used to upload point lights each frame. */
   SDL_GPUTransferBuffer *m_light_transfer = nullptr;
   uint32_t m_light_transfer_capacity = 0;
 
   clustered_lighting_config m_cfg{};
 
-  //! Cached for the next `update()` call.
+  /** Cached for the next `update()` call. */
   glm::mat4 m_cached_view{ 1.0F };
   glm::mat4 m_cached_proj{ 1.0F };
   float m_cached_z_near = 0.1F;

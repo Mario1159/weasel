@@ -19,8 +19,7 @@ namespace wsl
 {
 
 /**
- * @namespace wsl::math
- * @brief Common math types and vector utilities.
+ * Common math types and vector utilities.
  */
 namespace math
 {

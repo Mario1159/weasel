@@ -6,8 +6,7 @@ namespace wsl
 {
 
 /**
- * @namespace wsl::event
- * @brief Editor-wide events and messages.
+ * Editor-wide events and messages.
  */
 namespace event
 {

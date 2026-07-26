@@ -15,8 +15,8 @@ namespace wsl::das
 
 class das_engine;
 
-/*!
- * \brief Dual-inheritance bridge: ecs_system (C++) + EcsSystemAdapter
+/**
+ * Dual-inheritance bridge: ecs_system (C++) + EcsSystemAdapter
  * (daslang).
  *
  * When C++ calls on_init/on_update/on_event/on_inactive, the adapter
@@ -27,16 +27,16 @@ class das_engine;
 class das_system_adapter : public sys::ecs_system, public EcsSystemAdapter
 {
 public:
-  /*!
-   * \brief Constructs a daslang-backed system.
-   * \param name Display name for the system.
-   * \param script_path Path to the .das script file.
-   * \param engine Reference to the daslang engine.
-   * \param type_id Per-instance type identifier (from registration).
-   * \param class_ptr Pointer to the daslang class instance (VM heap).
-   * \param class_info StructInfo of the daslang class (for adapter offsets).
-   * \param ctx daslang execution context.
-   */
+  /**
+ * Constructs a daslang-backed system.
+ * :param name: Display name for the system.
+ * :param script_path: Path to the .das script file.
+ * :param engine: Reference to the daslang engine.
+ * :param type_id: Per-instance type identifier (from registration).
+ * :param class_ptr: Pointer to the daslang class instance (VM heap).
+ * :param class_info: StructInfo of the daslang class (for adapter offsets).
+ * :param ctx: daslang execution context.
+ */
   das_system_adapter (const std::string &name, const std::string &script_path,
                       das_engine &engine, entt::id_type type_id,
                       void *class_ptr, const StructInfo *class_info,

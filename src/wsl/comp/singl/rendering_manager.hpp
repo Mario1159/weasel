@@ -56,21 +56,25 @@ struct rendering_manager : singleton_component
   float shadow_bias = 0.0025F;
   float shadow_strength = 1.0F;
 
-  //! Active viewports for this scene. If empty, a fullscreen root viewport is
-  //! used.
+  /**
+   * Active viewports for this scene. If empty, a fullscreen root viewport is
+   * used.
+   */
   std::vector<gfx::viewport> viewports;
 
-  //! The active render viewport entity (null = Root Viewport).
+  /** The active render viewport entity (null = Root Viewport). */
   entt::entity render_viewport = entt::null;
 
-  //! Design/virtual size for the root viewport, used by the editor 2D game view
-  //! as a guizmo reference.
+  /**
+   * Design/virtual size for the root viewport, used by the editor 2D game view
+   * as a guizmo reference.
+   */
   math::vec2f root_viewport_virtual_size{ 1920.0F, 1080.0F };
 
-  //! Offscreen GPU targets for subviewport entities.
+  /** Offscreen GPU targets for subviewport entities. */
   std::unordered_map<entt::entity, gfx::subviewport_target> subviewport_targets;
 
-  //! Shared unit-quad model used to draw subviewport contents in 3D space.
+  /** Shared unit-quad model used to draw subviewport contents in 3D space. */
   std::shared_ptr<gfx::model_3d> subviewport_quad_model;
 
   gfx::scene_renderer &

@@ -8,8 +8,8 @@
 namespace wsl::comp
 {
 
-/*!
- * \brief 2D local transform (position, rotation, scale).
+/**
+ * 2D local transform (position, rotation, scale).
  *
  * Entities with this component are skipped by the 3D transform_system.
  * The sprite renderer uses this directly for 2D positioning.

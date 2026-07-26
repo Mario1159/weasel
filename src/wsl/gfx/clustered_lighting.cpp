@@ -21,8 +21,8 @@ namespace gfx
 namespace
 {
 
-/*!
- * \brief CPU-side mirror of the Slang `ClusterParams` cbuffer (b0, space3).
+/**
+ * CPU-side mirror of the Slang `ClusterParams` cbuffer (b0, space3).
  * Must stay in sync with `cluster_build.slang` and `light_cull.slang`.
  */
 struct alignas (16) cluster_params
@@ -47,8 +47,8 @@ constexpr Uint32 kBuildThreadsY = 4;
 constexpr Uint32 kBuildThreadsZ = 1;
 constexpr Uint32 kCullThreadsX = 64;
 
-/*!
- * \brief Six frustum planes (a, b, c, d) where a*x + b*y + c*z + d >= 0
+/**
+ * Six frustum planes (a, b, c, d) where a*x + b*y + c*z + d >= 0
  * for points inside the frustum. Extracted from the view-projection
  * matrix using Gribb-Hartmann. Assumes the standard OpenGL clip-space
  * convention (z in [-1, 1]) which matches glm::perspective.
@@ -58,9 +58,7 @@ struct frustum_planes
   glm::vec4 planes[6];
 };
 
-/*!
- * \brief Extracts the six frustum planes from a view-projection matrix.
- */
+/** Extracts the six frustum planes from a view-projection matrix. */
 frustum_planes
 extract_frustum_planes (const glm::mat4 &vp)
 {
@@ -81,8 +79,8 @@ extract_frustum_planes (const glm::mat4 &vp)
   return out;
 }
 
-/*!
- * \brief Returns true if the sphere (center, radius) intersects the
+/**
+ * Returns true if the sphere (center, radius) intersects the
  * frustum (or is fully inside it). Conservative: a sphere that is just
  * outside the far plane but within epsilon is still reported visible, so
  * the GPU-side cluster AABB test catches the real rejection.

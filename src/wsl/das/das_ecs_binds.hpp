@@ -12,8 +12,8 @@ class ModuleGroup;
 namespace wsl::das
 {
 
-/*!
- * \brief Registers Weasel ECS types with daslang.
+/**
+ * Registers Weasel ECS types with daslang.
  *
  * This module registers engine component types (transform, camera, etc.)
  * as daScript types so they can be used in daslang scripts.

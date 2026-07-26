@@ -15,21 +15,19 @@
 #include <utility>
 
 /**
- * @namespace wsl
- * @brief Root namespace for the Weasel engine.
+ * Root namespace for the Weasel engine.
  */
 namespace wsl
 {
 
 /**
- * @namespace wsl::comp
- * @brief Contains all ECS component definitions and metadata utilities.
+ * Contains all ECS component definitions and metadata utilities.
  */
 namespace comp
 {
 
-/*!
- * \brief Explicit base type for entity-owned ECS components.
+/**
+ * Explicit base type for entity-owned ECS components.
  *
  * World components remain regular value types. This base exists only as a
  * non-owning concept tag so aggregate component construction still works.
@@ -38,9 +36,7 @@ struct world_component
 {
 };
 
-/*!
- * \brief Explicit base type for scene/global singleton components.
- */
+/** Explicit base type for scene/global singleton components. */
 struct singleton_component
 {
 };
@@ -52,15 +48,11 @@ concept has_register_meta = requires {
   { T::register_meta () } -> std::same_as<void>;
 };
 
-/*!
- * \brief Concept for types that model entity-owned world components.
- */
+/** Concept for types that model entity-owned world components. */
 template <typename T>
 concept world_component_type = std::derived_from<T, world_component>;
 
-/*!
- * \brief Concept for types that model scene/global singleton components.
- */
+/** Concept for types that model scene/global singleton components. */
 template <typename T>
 concept singleton_component_type = std::derived_from<T, singleton_component>;
 
@@ -109,10 +101,10 @@ struct meta_info
   std::string icon_path;
 };
 
-/*!
- * \brief Returns the unqualified portion of a reflected identifier.
- * \param identifier Fully qualified identifier or member name.
- * \return The portion after the last namespace separator.
+/**
+ * Returns the unqualified portion of a reflected identifier.
+ * :param identifier: Fully qualified identifier or member name.
+ * :return: The portion after the last namespace separator.
  */
 inline std::string_view
 leaf_identifier (std::string_view identifier)
@@ -125,10 +117,10 @@ leaf_identifier (std::string_view identifier)
   return identifier.substr (separator + 2);
 }
 
-/*!
- * \brief Converts a reflected identifier into a human-friendly label.
- * \param identifier Member name or type name to humanize.
- * \return Title-cased text suitable for inspector labels.
+/**
+ * Converts a reflected identifier into a human-friendly label.
+ * :param identifier: Member name or type name to humanize.
+ * :return: Title-cased text suitable for inspector labels.
  */
 inline std::string
 humanize_identifier (std::string_view identifier)
@@ -174,14 +166,14 @@ humanize_identifier (std::string_view identifier)
   return out;
 }
 
-/*!
- * \brief Creates reflected type metadata with editor-facing labels.
- * \tparam T Type being reflected.
- * \param type_id Stable runtime reflection identifier.
- * \param display_name Optional display name for the inspector.
- * \param description Optional tooltip text for the inspector.
- * \param icon_path Optional icon path for component headers.
- * \return A meta factory ready for additional field registrations.
+/**
+ * Creates reflected type metadata with editor-facing labels.
+ * :param T: Type being reflected.
+ * :param type_id: Stable runtime reflection identifier.
+ * :param display_name: Optional display name for the inspector.
+ * :param description: Optional tooltip text for the inspector.
+ * :param icon_path: Optional icon path for component headers.
+ * :return: A meta factory ready for additional field registrations.
  */
 template <typename T>
 inline entt::meta_factory<T>
@@ -200,15 +192,15 @@ reflect_type (entt::id_type type_id, std::string_view display_name = {},
       std::move (info));
 }
 
-/*!
- * \brief Reflects a data member and assigns a default inspector label.
- * \tparam T Owning reflected type.
- * \tparam Member Pointer to the reflected data member.
- * \param factory Active meta factory for the owning type.
- * \param identifier Stable identifier used for reflection lookup.
- * \param display_name Optional display name for the inspector.
- * \param description Optional tooltip text for the inspector.
- * \return The updated meta factory so calls can remain chained.
+/**
+ * Reflects a data member and assigns a default inspector label.
+ * :param T: Owning reflected type.
+ * :param Member: Pointer to the reflected data member.
+ * :param factory: Active meta factory for the owning type.
+ * :param identifier: Stable identifier used for reflection lookup.
+ * :param display_name: Optional display name for the inspector.
+ * :param description: Optional tooltip text for the inspector.
+ * :return: The updated meta factory so calls can remain chained.
  */
 template <typename T, auto Member>
 inline entt::meta_factory<T>
@@ -292,20 +284,20 @@ meta_icon_path (const entt::meta_type &meta)
   return "";
 }
 
-/*!
- * \brief Serializes a field only if it differs from its default value.
+/**
+ * Serializes a field only if it differs from its default value.
  *
  * For JSON output archives, the field is skipped when it matches the default.
  * For JSON input archives, missing fields are ignored (the current value is
  * retained, which should be the default if the object was default-constructed).
  * Binary archives always serialize the field unconditionally.
  *
- * \tparam Archive Cereal archive type.
- * \tparam T Field type.
- * \param ar The archive to serialize into/from.
- * \param name The name of the field.
- * \param field The field value to serialize.
- * \param default_value The default value to compare against.
+ * :param Archive: Cereal archive type.
+ * :param T: Field type.
+ * :param ar: The archive to serialize into/from.
+ * :param name: The name of the field.
+ * :param field: The field value to serialize.
+ * :param default_value: The default value to compare against.
  */
 template <class Archive, typename T>
 inline void

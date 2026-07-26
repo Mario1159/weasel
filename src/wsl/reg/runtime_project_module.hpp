@@ -28,8 +28,8 @@ namespace reg
 
 class dynamic_library;
 
-/*!
- * \brief Runtime module loading, code compilation, and registration helpers.
+/**
+ * Runtime module loading, code compilation, and registration helpers.
  *
  * The \c runtime sub-namespace provides:
  * - \c runtime_project_module: builds and loads user-authored
@@ -45,8 +45,8 @@ class dynamic_library;
 namespace runtime
 {
 
-/*!
- * \brief Builds and loads user-authored runtime code for a project.
+/**
+ * Builds and loads user-authored runtime code for a project.
  *
  * A runtime project module discovers project headers and source files,
  * generates a translation unit that wires up registration hooks, and then
@@ -56,96 +56,95 @@ namespace runtime
 class runtime_project_module
 {
 public:
-  /*!
-   * \brief Creates a runtime module bound to a runtime context.
-   * \param runtime_ctx Runtime context that owns the registries to populate.
-   */
+  /**
+ * Creates a runtime module bound to a runtime context.
+ * :param runtime_ctx: Runtime context that owns the registries to populate.
+ */
   explicit runtime_project_module (comp::singl::runtime_context *runtime_ctx);
   ~runtime_project_module ();
 
-  /*!
-   * \brief Rebuilds and loads the runtime code for a project.
-   * \param project Project description that provides source directories.
-   * \return \c true on success, otherwise \c false.
-   */
+  /**
+ * Rebuilds and loads the runtime code for a project.
+ * :param project: Project description that provides source directories.
+ * :return: \c true on success, otherwise \c false.
+ */
   bool compile_and_load (const rsc::project &project);
 
-  /*! \brief Starts an asynchronous reload of the runtime code.
-   *
-   * Use \c poll_async_reload() in the main loop to check completion and
-   * call \c finalize_load() on the main thread when ready.
-   */
+  /**
+ * Starts an asynchronous reload of the runtime code.
+ *
+ * Use \c poll_async_reload() in the main loop to check completion and
+ * call \c finalize_load() on the main thread when ready.
+ */
   void compile_and_load_async (const rsc::project &project);
 
-  /*! \brief Polls an in-progress async reload.
-   *
-   * If the background compilation finished, this calls \c finalize_load()
-   * on the calling (main) thread and returns \c true.
-   * \return \c true if a reload just completed this call, otherwise \c false.
-   */
+  /**
+ * Polls an in-progress async reload.
+ *
+ * If the background compilation finished, this calls \c finalize_load()
+ * on the calling (main) thread and returns \c true.
+ * :return: \c true if a reload just completed this call, otherwise \c false.
+ */
   bool poll_async_reload ();
 
-  /*! \brief Reports whether an async reload is currently in progress.
-   *
-   * \return \c true if compilation is still running in the background.
-   */
+  /**
+ * Reports whether an async reload is currently in progress.
+ *
+ * :return: \c true if compilation is still running in the background.
+ */
   bool is_reloading () const;
 
-  /*!
-   * \brief Loads cached runtime registration metadata for a project.
-   *
-   * This is a fast path for commands that only need runtime names and system
-   * placeholders. It does not load user C++ types.
-   */
+  /**
+ * Loads cached runtime registration metadata for a project.
+ *
+ * This is a fast path for commands that only need runtime names and system
+ * placeholders. It does not load user C++ types.
+ */
   bool load_cached_metadata (const rsc::project &project);
 
-  /*!
-   * \brief Finalizes the loading process on the main thread.
-   *
-   * This clears the registries and applies the registrations.
-   */
+  /**
+ * Finalizes the loading process on the main thread.
+ *
+ * This clears the registries and applies the registrations.
+ */
   void finalize_load ();
 
-  /*!
-   * \brief Clears runtime-loaded registrations and resets runtime-module state.
-   */
+  /** Clears runtime-loaded registrations and resets runtime-module state. */
   void unload ();
 
-  /*!
-   * \brief Returns the latest human-readable status message.
-   * \return The most recent status string.
-   */
+  /**
+ * Returns the latest human-readable status message.
+ * :return: The most recent status string.
+ */
   const std::string &
   last_status () const
   {
     return m_last_status;
   }
 
-  /*!
-   * \brief Reports whether a runtime module has already been loaded.
-   * \return \c true if runtime code is active for this session.
-   */
+  /**
+ * Reports whether a runtime module has already been loaded.
+ * :return: \c true if runtime code is active for this session.
+ */
   bool
   has_loaded_module () const
   {
     return m_module_loaded;
   }
 
-  /*!
-   * \brief Reports whether cached runtime metadata is active.
-   */
+  /** Reports whether cached runtime metadata is active. */
   bool
   has_loaded_cached_metadata () const
   {
     return m_metadata_cache_loaded;
   }
 
-  /*!
-   * \brief Returns the daslang engine instance.
-   *
-   * The engine is created on first use. Returns nullptr if daslang
-   * is not enabled.
-   */
+  /**
+ * Returns the daslang engine instance.
+ *
+ * The engine is created on first use. Returns nullptr if daslang
+ * is not enabled.
+ */
   wsl::das::das_engine *get_das_engine ();
 
   // User C++ hook function pointer types
@@ -153,28 +152,24 @@ public:
   using hook_update_fn = void (*) (wsl::app &, double);
   using hook_shutdown_fn = void (*) (wsl::app &);
 
-  /*!
-   * \brief Returns the resolved user init hook, or nullptr if not available.
-   */
+  /** Returns the resolved user init hook, or nullptr if not available. */
   hook_init_fn
   get_hook_init () const
   {
     return m_hook_init;
   }
 
-  /*!
-   * \brief Returns the resolved user update hook, or nullptr if not available.
-   */
+  /** Returns the resolved user update hook, or nullptr if not available. */
   hook_update_fn
   get_hook_update () const
   {
     return m_hook_update;
   }
 
-  /*!
-   * \brief Returns the resolved user shutdown hook, or nullptr if not
-   * available.
-   */
+  /**
+ * Returns the resolved user shutdown hook, or nullptr if not
+ * available.
+ */
   hook_shutdown_fn
   get_hook_shutdown () const
   {

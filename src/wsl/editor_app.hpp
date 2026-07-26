@@ -10,7 +10,7 @@ namespace wsl
 {
 
 /**
- * @brief Abstract base class for editor-mode applications.
+ * Abstract base class for editor-mode applications.
  *
  * Derive from this class to create a custom editor. The base class handles
  * editor_context creation, registration, and lifecycle. Concrete editors

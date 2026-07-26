@@ -18,9 +18,7 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Axis-aligned bounding box.
- */
+/** Axis-aligned bounding box. */
 struct aabb
 {
   glm::vec3 min{ std::numeric_limits<float>::max () };
@@ -61,9 +59,7 @@ struct aabb
   }
 };
 
-/*!
- * \brief Scene graph node used by a model scene.
- */
+/** Scene graph node used by a model scene. */
 struct node
 {
   glm::mat4 world_transform{ 1.0F };
@@ -72,25 +68,19 @@ struct node
   std::vector<node> children;
 };
 
-/*!
- * \brief Renderable scene inside a model resource.
- */
+/** Renderable scene inside a model resource. */
 struct scene
 {
   std::vector<node> roots;
 };
 
-/*!
- * \brief GPU-ready 3D model resource.
- */
+/** GPU-ready 3D model resource. */
 struct model_3d
 {
   std::vector<mesh> meshes;
   std::vector<scene> scenes;
 
-  /*!
-   * \brief Set of meshes representing different LOD levels for a base mesh.
-   */
+  /** Set of meshes representing different LOD levels for a base mesh. */
   struct lod_group
   {
     std::string base_name;
@@ -134,20 +124,20 @@ struct model_3d
     return *this;
   }
 
-  //! Builds GPU buffers for the current mesh data.
+  /** Builds GPU buffers for the current mesh data. */
   void build_gpu_buffers (gfx::render_context *ctx);
-  //! Releases GPU buffers owned by the model.
+  /** Releases GPU buffers owned by the model. */
   void destroy_gpu_buffers (gfx::render_context *ctx);
 
-  //! Creates a unit quad model.
+  /** Creates a unit quad model. */
   static std::shared_ptr<model_3d> make_unit_quad ();
-  //! Creates a unit cube model.
+  /** Creates a unit cube model. */
   static std::shared_ptr<model_3d> make_unit_cube ();
-  //! Creates a unit prism model.
+  /** Creates a unit prism model. */
   static std::shared_ptr<model_3d> make_unit_prism ();
-  //! Creates a unit cylinder model.
+  /** Creates a unit cylinder model. */
   static std::shared_ptr<model_3d> make_unit_cylinder ();
-  //! Creates a unit sphere model.
+  /** Creates a unit sphere model. */
   static std::shared_ptr<model_3d> make_unit_sphere ();
 
   int default_scene = 0;
@@ -173,11 +163,11 @@ struct model_3d
     m_gpu_ready = true;
   }
 
-  //! Returns the world-space bounds for a scene index when available.
+  /** Returns the world-space bounds for a scene index when available. */
   bool get_scene_bounds (size_t scene_index, glm::vec3 &out_min,
                          glm::vec3 &out_max) const;
 
-  //! Recomputes cached scene bounds from mesh data and scene transforms.
+  /** Recomputes cached scene bounds from mesh data and scene transforms. */
   void rebuild_scene_bounds ();
 
 private:

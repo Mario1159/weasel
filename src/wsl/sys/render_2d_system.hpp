@@ -6,9 +6,7 @@
 namespace wsl::sys
 {
 
-/*!
- * \brief System for submitting 2D sprites to the batch renderer.
- */
+/** System for submitting 2D sprites to the batch renderer. */
 class render_2d_system : public sys::ecs_system_t<render_2d_system>
 {
 public:

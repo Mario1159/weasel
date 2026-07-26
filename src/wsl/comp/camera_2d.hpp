@@ -8,8 +8,8 @@
 namespace wsl::comp
 {
 
-/*!
- * \brief 2D orthographic camera component.
+/**
+ * 2D orthographic camera component.
  *
  * An entity with this component should also have a transform_2d component that
  * defines the camera centre.  The projection is always orthographic.

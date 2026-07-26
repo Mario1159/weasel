@@ -21,8 +21,8 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Strongly-typed material parameter value.
+/**
+ * Strongly-typed material parameter value.
  *
  * Supports scalars, vectors, and texture references.
  */
@@ -48,8 +48,8 @@ struct material_parameter
   }
 };
 
-/*!
- * \brief A shared material template defining a shader program and default
+/**
+ * A shared material template defining a shader program and default
  * parameters.
  *
  * Multiple material_instances can reference one material_asset with different
@@ -59,22 +59,24 @@ struct material_asset
 {
   rsc::material_id id{};
   std::string name;
-  std::string path; //!< Path to the .wslmat file, if persisted.
+  std::string path; // Path to the .wslmat file, if persisted.
 
   rsc::shader_program_id shader_program{};
 
-  //! Path to the vertex shader variant used with this material.
-  //! Default: "engine://compiled_shaders/cube.vert.slang.spv"
+  /**
+   * Path to the vertex shader variant used with this material.
+   * Default: "engine://compiled_shaders/cube.vert.slang.spv"
+   */
   std::string vertex_shader_path
       = "engine://compiled_shaders/cube.vert.slang.spv";
 
-  //! Default parameters defined by the asset (populated from the shader graph).
+  /** Default parameters defined by the asset (populated from the shader graph). */
   std::unordered_map<std::string, material_parameter> default_parameters;
 
-  //! Metadata: is this material double-sided?
+  /** Metadata: is this material double-sided? */
   bool double_sided = false;
 
-  //! Metadata: does this material use alpha test / opacity mask?
+  /** Metadata: does this material use alpha test / opacity mask? */
   bool alpha_test = false;
 
   template <class Archive>
@@ -90,8 +92,8 @@ struct material_asset
   }
 };
 
-/*!
- * \brief A lightweight per-mesh override layer on top of a material_asset.
+/**
+ * A lightweight per-mesh override layer on top of a material_asset.
  *
  * This is what `mesh::primitive` holds at runtime.
  */
@@ -99,19 +101,21 @@ struct material_instance
 {
   rsc::material_id asset_id{};
 
-  //! Per-instance parameter overrides (sparse — missing keys fall back to asset
-  //! defaults).
+  /**
+   * Per-instance parameter overrides (sparse — missing keys fall back to asset
+   * defaults).
+   */
   std::unordered_map<std::string, material_parameter> overrides;
 
-  /*! \brief Build a uniform buffer blob matching the shader reflection layout.
-   *
-   *  Looks up parameter values from instance overrides then asset defaults.
-   */
+  /**
+ * Build a uniform buffer blob matching the shader reflection layout.
+ *
+ *  Looks up parameter values from instance overrides then asset defaults.
+ */
   std::vector<uint8_t> build_uniform_blob (const shader_reflection &reflection,
                                            const material_asset &asset) const;
 
-  /*! \brief Get effective parameter value (instance override or asset default).
-   */
+  /** Get effective parameter value (instance override or asset default). */
   material_parameter::value_type
   get_parameter (const std::string &name, const material_asset &asset) const;
 };

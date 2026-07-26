@@ -16,8 +16,8 @@ namespace gfx
 class render_context;
 class render_window;
 
-/*!
- * \brief Key for a cached graphics pipeline.
+/**
+ * Key for a cached graphics pipeline.
  *
  * Combines shader program identity with the fixed-function state needed to
  * create an SDL_GPU pipeline.
@@ -27,7 +27,7 @@ struct pipeline_key
   uint64_t shader_program_hash = 0;
   uint32_t vertex_layout_hash = 0;
   uint32_t render_target_hash = 0;
-  uint32_t flags = 0; //!< double-sided, blend mode, depth state, etc.
+  uint32_t flags = 0; // double-sided, blend mode, depth state, etc.
 
   bool operator== (const pipeline_key &other) const;
 };
@@ -50,8 +50,8 @@ namespace wsl
 namespace gfx
 {
 
-/*!
- * \brief Cache for SDL_GPU graphics pipelines.
+/**
+ * Cache for SDL_GPU graphics pipelines.
  *
  * Because custom materials can produce many shader permutations,
  * we cache pipelines by their full state key to avoid redundant
@@ -66,15 +66,13 @@ public:
   pipeline_cache (const pipeline_cache &) = delete;
   pipeline_cache &operator= (const pipeline_cache &) = delete;
 
-  /*! \brief Invalidate all cached pipelines. Call when a shader is recompiled.
-   */
+  /** Invalidate all cached pipelines. Call when a shader is recompiled. */
   void invalidate_all ();
 
-  /*! \brief Invalidate only pipelines referencing a given shader program hash.
-   */
+  /** Invalidate only pipelines referencing a given shader program hash. */
   void invalidate_shader (uint64_t shader_program_hash);
 
-  /*! \brief Acquire or create a pipeline for the given key and description. */
+  /** Acquire or create a pipeline for the given key and description. */
   SDL_GPUGraphicsPipeline *
   acquire (const pipeline_key &key,
            const SDL_GPUGraphicsPipelineCreateInfo &info);

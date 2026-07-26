@@ -8,18 +8,16 @@
 
 namespace wsl::mcp_server {
 
-/*!
- * \brief Encapsulates the MCP server that exposes weasel-cli documentation.
- */
+/** Encapsulates the MCP server that exposes weasel-cli documentation. */
 class mcp_server_app {
 public:
-  /*!\brief Constructs the server with the given bind address and port. */
+  /** Constructs the server with the given bind address and port. */
   explicit mcp_server_app (const std::string &host, int port);
 
-  /*!\brief Enables stdio transport instead of HTTP. */
+  /** Enables stdio transport instead of HTTP. */
   void set_stdio_mode (bool enable);
 
-  /*!\brief Starts the server and blocks until stopped. */
+  /** Starts the server and blocks until stopped. */
   void run ();
 
 private:

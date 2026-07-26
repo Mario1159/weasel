@@ -5,8 +5,8 @@
 namespace wsl::sys
 {
 
-/*!
- * \brief Start the periodic Tracy telemetry tick.
+/**
+ * Start the periodic Tracy telemetry tick.
  *
  * Spawns a background thread that, every ~250 ms, pushes:
  *   - `mem.rss_mb`  : resident set size in MB (ProcessMemory form)
@@ -19,7 +19,7 @@ namespace wsl::sys
  * thread to fetch the current frame index, FPS, and play state. The
  * caller is responsible for keeping the underlying context alive.
  *
- * The thread is shut down by @ref tracy_telemetry::shutdown(), which
+ * The thread is shut down by ``tracy_telemetry::shutdown()``, which
  * the application calls from its destructor. Safe to call multiple
  * times; the second call is a no-op.
  */
@@ -28,8 +28,8 @@ using runtime_snapshot_fn = void (*) (uint64_t &frame_index, double &fps,
 void tracy_telemetry_init (runtime_snapshot_fn snapshot_fn);
 void tracy_telemetry_shutdown ();
 
-/*!
- * \brief Force-push the current frame counter as a Tracy frame marker.
+/**
+ * Force-push the current frame counter as a Tracy frame marker.
  *
  * Should be called once per rendered frame, after the command buffer
  * is submitted. Tracy computes the frame time automatically from the
@@ -38,23 +38,23 @@ void tracy_telemetry_shutdown ();
  */
 void tracy_telemetry_frame_mark (uint64_t frame_index);
 
-/*!
- * \brief Open a secondary frame set named @p name.
+/**
+ * Open a secondary frame set named ``name``.
  *
  * Tracy's Frame view supports multiple frame sets. The main one is
- * driven by @ref tracy_telemetry_frame_mark (one entry per render
+ * driven by ``tracy_telemetry_frame_mark`` (one entry per render
  * loop). Use the secondary frame APIs to mark disjoint work units
  * — e.g. one "Update" frame and one "Render" frame per loop
  * iteration — that the profiler can show side-by-side.
  *
- * The string @p name must be a string literal whose address is
+ * The string ``name`` must be a string literal whose address is
  * unique per frame set (Tracy interns it by pointer).
  */
 void tracy_telemetry_secondary_frame_begin (const char *name);
 
-/*!
- * \brief Close a secondary frame set opened by
- *        @ref tracy_telemetry_secondary_frame_begin.
+/**
+ * Close a secondary frame set opened by
+ *        ``tracy_telemetry_secondary_frame_begin``.
  *
  * Must be called exactly once per begin, in the same thread, in
  * the correct LIFO order if nested.

@@ -19,15 +19,15 @@ namespace reg
 namespace runtime
 {
 
-/*!
- * \brief Returns the engine-owned runtime context for currently loaded
+/**
+ * Returns the engine-owned runtime context for currently loaded
  *        runtime project code.
- * \return Pointer to the active runtime context.
+ * :return: Pointer to the active runtime context.
  */
 comp::singl::runtime_context *active_runtime_context ();
 
-/*!
- * \brief Shared registries exposed to runtime code during registration.
+/**
+ * Shared registries exposed to runtime code during registration.
  *
  * Runtime components, singletons, and systems register themselves against
  * these engine-owned registries after their headers or interpreted code have
@@ -40,8 +40,8 @@ struct runtime_module_registration_context
   system_factory_registry &systems;
 };
 
-/*!
- * \brief Helper class that centralizes runtime registration helpers and
+/**
+ * Helper class that centralizes runtime registration helpers and
  * buckets.
  *
  * This class replaces the previous free-floating runtime_detail namespace and
@@ -53,16 +53,16 @@ class runtime_registrar
 public:
   using registration_fn = void (*) (runtime_module_registration_context &);
 
-  /*!
-   * \brief Makes the current runtime boundary use the engine-owned meta
-   * context.
-   * \param meta_ctx_ptr Pointer to the engine's default \c entt::meta_ctx.
-   *
-   * EnTT stores reflection data in a per-boundary default context. Runtime code
-   * compiled or interpreted outside the engine must adopt the engine-owned
-   * context before registering reflected types, otherwise the inspector
-   * resolves a different registry than the one runtime components populated.
-   */
+  /**
+ * Makes the current runtime boundary use the engine-owned meta
+ * context.
+ * :param meta_ctx_ptr: Pointer to the engine's default \c entt::meta_ctx.
+ *
+ * EnTT stores reflection data in a per-boundary default context. Runtime code
+ * compiled or interpreted outside the engine must adopt the engine-owned
+ * context before registering reflected types, otherwise the inspector
+ * resolves a different registry than the one runtime components populated.
+ */
   static void
   sync_runtime_state (void *meta_ctx_ptr)
   {
@@ -72,41 +72,39 @@ public:
     }
   }
 
-  /*!
-   * \brief Sets the active runtime context for the current runtime boundary.
-   * \param runtime_ctx Pointer to the runtime context to activate.
-   */
+  /**
+ * Sets the active runtime context for the current runtime boundary.
+ * :param runtime_ctx: Pointer to the runtime context to activate.
+ */
   static void
   set_active_runtime_context (comp::singl::runtime_context *runtime_ctx);
 
-  /*!
-   * \brief Returns the component registration bucket for runtime code.
-   * \return The shared component registration callback list.
-   */
+  /**
+ * Returns the component registration bucket for runtime code.
+ * :return: The shared component registration callback list.
+ */
   static std::vector<registration_fn> &component_registrations ();
 
-  /*!
-   * \brief Returns the singleton registration bucket for runtime code.
-   * \return The shared singleton registration callback list.
-   */
+  /**
+ * Returns the singleton registration bucket for runtime code.
+ * :return: The shared singleton registration callback list.
+ */
   static std::vector<registration_fn> &singleton_registrations ();
 
-  /*!
-   * \brief Returns the system registration bucket for runtime code.
-   * \return The shared system registration callback list.
-   */
+  /**
+ * Returns the system registration bucket for runtime code.
+ * :return: The shared system registration callback list.
+ */
   static std::vector<registration_fn> &system_registrations ();
 
-  /*!
-   * \brief Adds a registration callback to one of the runtime buckets.
-   */
+  /** Adds a registration callback to one of the runtime buckets. */
   struct registration_hook
   {
-    /*!
-     * \brief Registers a callback function into a specific bucket.
-     * \param bucket Function that returns the target registration bucket.
-     * \param fn The registration callback to add.
-     */
+    /**
+ * Registers a callback function into a specific bucket.
+ * :param bucket: Function that returns the target registration bucket.
+ * :param fn: The registration callback to add.
+ */
     registration_hook (std::vector<registration_fn> &(*bucket) (),
                        registration_fn fn)
     {
@@ -114,12 +112,12 @@ public:
     }
   };
 
-  /*!
-   * \brief Helper to register a component type in the registration context.
-   * \tparam T The component type to register.
-   * \param ctx The registration context.
-   * \param display_name User-facing name for the component.
-   */
+  /**
+ * Helper to register a component type in the registration context.
+ * :param T: The component type to register.
+ * :param ctx: The registration context.
+ * :param display_name: User-facing name for the component.
+ */
   template <typename T>
   static void
   register_component (runtime_module_registration_context &ctx,
@@ -133,12 +131,12 @@ public:
     ctx.components.register_world_component<T> (options);
   }
 
-  /*!
-   * \brief Helper to register a singleton type in the registration context.
-   * \tparam T The singleton type to register.
-   * \param ctx The registration context.
-   * \param display_name User-facing name for the singleton.
-   */
+  /**
+ * Helper to register a singleton type in the registration context.
+ * :param T: The singleton type to register.
+ * :param ctx: The registration context.
+ * :param display_name: User-facing name for the singleton.
+ */
   template <typename T>
   static void
   register_singleton (runtime_module_registration_context &ctx,
@@ -152,12 +150,12 @@ public:
     ctx.singletons.register_singleton_component<T> (options);
   }
 
-  /*!
-   * \brief Helper to register a system type in the registration context.
-   * \tparam T The system type to register.
-   * \param ctx The registration context.
-   * \param display_name User-facing name for the system.
-   */
+  /**
+ * Helper to register a system type in the registration context.
+ * :param T: The system type to register.
+ * :param ctx: The registration context.
+ * :param display_name: User-facing name for the system.
+ */
   template <typename T>
   static void
   register_system (runtime_module_registration_context &ctx,

@@ -24,8 +24,8 @@ class editor_context;
 namespace rsc
 {
 
-/*!
- * \brief Represents a collection of entities and systems that form a unit of
+/**
+ * Represents a collection of entities and systems that form a unit of
  * gameplay or world space.
  *
  * The scene manages an EnTT registry and a list of systems that operate on that
@@ -35,12 +35,12 @@ namespace rsc
 class scene
 {
 public:
-  /*!
-   * \brief Constructs a scene with a runtime and optional editor context.
-   * \param runtime_ctx Pointer to the runtime context.
-   * \param editor_ctx Pointer to the editor context.
-   * \param name The name of the scene.
-   */
+  /**
+ * Constructs a scene with a runtime and optional editor context.
+ * :param runtime_ctx: Pointer to the runtime context.
+ * :param editor_ctx: Pointer to the editor context.
+ * :param name: The name of the scene.
+ */
   explicit scene (comp::singl::runtime_context *runtime_ctx,
                   comp::singl::editor_context *editor_ctx,
                   const std::string &name);
@@ -52,110 +52,110 @@ public:
   scene (const scene &) = delete;
   scene &operator= (const scene &) = delete;
 
-  /*! \brief Returns the EnTT registry owned by this scene. */
+  /** Returns the EnTT registry owned by this scene. */
   entt::registry &get_registry ();
 
-  /*! \brief Returns the scene name. */
+  /** Returns the scene name. */
   const std::string &get_name () const;
 
-  /*! \brief Sets the scene name. */
+  /** Sets the scene name. */
   void set_name (std::string name);
 
-  /*!
-   * \brief Adds a system to the scene.
-   * \tparam T The type of the system.
-   * \param args Arguments to pass to the system's constructor.
-   * \return Reference to the created system.
-   */
+  /**
+ * Adds a system to the scene.
+ * :param T: The type of the system.
+ * :param args: Arguments to pass to the system's constructor.
+ * :return: Reference to the created system.
+ */
   template <typename T, typename... Args> T &add_system (Args &&...args);
 
-  /*!
-   * \brief Adds a system instance to the scene.
-   * \param sys Unique pointer to the system instance.
-   * \param initialize_if_running Whether to initialize the system if the scene
-   * is already running.
-   * \return Reference to the added system.
-   */
+  /**
+ * Adds a system instance to the scene.
+ * :param sys: Unique pointer to the system instance.
+ * :param initialize_if_running: Whether to initialize the system if the scene
+ * is already running.
+ * :return: Reference to the added system.
+ */
   sys::ecs_system &add_system_instance (std::unique_ptr<sys::ecs_system> sys,
                                         bool initialize_if_running = true);
 
-  /*! \brief Removes a system from the scene. */
+  /** Removes a system from the scene. */
   void remove_system (sys::ecs_system *system);
 
-  /*! \brief Initializes the scene and its systems. */
+  /** Initializes the scene and its systems. */
   void init ();
 
-  /*! \brief Pauses the scene and its systems. */
+  /** Pauses the scene and its systems. */
   void pause ();
 
-  /*! \brief Resumes the scene and its systems. */
+  /** Resumes the scene and its systems. */
   void resume ();
 
-  /*! \brief Updates all active systems in the scene. */
+  /** Updates all active systems in the scene. */
   void update (double dt);
 
-  /*! \brief Forwards an engine event to all active systems in the scene. */
+  /** Forwards an engine event to all active systems in the scene. */
   void handle_events (const wsl::engine_event &e);
 
-  /*! \brief Shuts down all systems and clears the registry. */
+  /** Shuts down all systems and clears the registry. */
   void stop_and_clear ();
 
-  /*! \brief Shuts down all systems and clears their storage. */
+  /** Shuts down all systems and clears their storage. */
   void clear ();
 
-  /*! \brief Clears all entities and their names from the registry. */
+  /** Clears all entities and their names from the registry. */
   void clear_registry ();
 
-  /*! \brief Adds a resource to the scene's load list. */
+  /** Adds a resource to the scene's load list. */
   void add_resource (io::resource_type type, entt::id_type id);
 
-  /*! \brief Removes a resource from the scene's load list. */
+  /** Removes a resource from the scene's load list. */
   void remove_resource (io::resource_type type, entt::id_type id);
 
-  /*! \brief Checks if a resource is in the scene's load list. */
+  /** Checks if a resource is in the scene's load list. */
   bool has_resource (io::resource_type type, entt::id_type id) const;
 
-  /*! \brief Returns the list of resources to be loaded for this scene. */
+  /** Returns the list of resources to be loaded for this scene. */
   const std::vector<io::resource_ref> &get_load_list () const;
 
-  /*! \brief Sets the name of an entity. */
+  /** Sets the name of an entity. */
   void set_entity_name (entt::entity e, std::string name);
 
-  /*! \brief Gets the name of an entity. */
+  /** Gets the name of an entity. */
   const std::string &get_entity_name (entt::entity e) const;
 
-  /*! \brief Removes an entity name entry. */
+  /** Removes an entity name entry. */
   void remove_entity_name (entt::entity e);
 
-  /*! \brief Returns the internal mapping of entities to names. */
+  /** Returns the internal mapping of entities to names. */
   std::unordered_map<entt::entity, std::string> &get_entity_names ();
 
-  /*! \brief Returns the internal mapping of entities to names (const). */
+  /** Returns the internal mapping of entities to names (const). */
   const std::unordered_map<entt::entity, std::string> &
   get_entity_names () const;
 
-  /*!
-   * \brief Copies an entity and its components from another scene to this one.
-   * \param src_scene The source scene.
-   * \param src_entity The source entity to copy.
-   * \param dst_parent Optional parent entity in this scene.
-   * \param is_instantiating_prefab Whether the copy is part of a prefab
-   * instantiation.
-   * \param prefab_id The ID of the prefab if applicable.
-   * \return The newly created entity in this scene.
-   */
+  /**
+ * Copies an entity and its components from another scene to this one.
+ * :param src_scene: The source scene.
+ * :param src_entity: The source entity to copy.
+ * :param dst_parent: Optional parent entity in this scene.
+ * :param is_instantiating_prefab: Whether the copy is part of a prefab
+ * instantiation.
+ * :param prefab_id: The ID of the prefab if applicable.
+ * :return: The newly created entity in this scene.
+ */
   entt::entity copy_entity (scene &src_scene, entt::entity src_entity,
                             entt::entity dst_parent = entt::null,
                             bool is_instantiating_prefab = false,
                             rsc::scene_id prefab_id = {});
 
-  /*! \brief Returns a list of raw pointers to systems in this scene. */
+  /** Returns a list of raw pointers to systems in this scene. */
   std::vector<sys::ecs_system *> get_systems ();
 
-  //! The systems associated with this scene.
+  /** The systems associated with this scene. */
   std::vector<std::unique_ptr<sys::ecs_system>> systems;
 
-  //! The active camera entity in this scene.
+  /** The active camera entity in this scene. */
   entt::entity camera{ entt::null };
 
 protected:

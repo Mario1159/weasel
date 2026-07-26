@@ -8,8 +8,8 @@
 namespace wsl::log
 {
 
-/*!
- * \brief spdlog sink that forwards every log line to Tracy as a
+/**
+ * spdlog sink that forwards every log line to Tracy as a
  *        `TracyMessageLC` (coloured message).
  *
  * The level maps to a colour: trace/debug = gray, info = green,

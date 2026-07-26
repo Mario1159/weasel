@@ -19,8 +19,8 @@
 namespace wsl::reg::detail
 {
 
-/*!
- * \brief Resolves a display name for a registered type, falling back to
+/**
+ * Resolves a display name for a registered type, falling back to
  *        humanized type name or meta information.
  */
 template <typename T>
@@ -40,8 +40,8 @@ resolve_display_name (std::string_view display_name)
   return comp::humanize_identifier (entt::type_name<T> ().value ());
 }
 
-/*!
- * \brief Ensures that EnTT metadata is registered for a type, handling runtime
+/**
+ * Ensures that EnTT metadata is registered for a type, handling runtime
  *        reset if requested.
  */
 template <typename T>
@@ -59,9 +59,7 @@ ensure_meta_registered (entt::id_type type_id, bool runtime_registered)
   }
 }
 
-/*!
- * \brief Generic helper to sort a list of descriptors by their display name.
- */
+/** Generic helper to sort a list of descriptors by their display name. */
 template <typename Descriptor>
 inline void
 sort_by_display_name (std::vector<const Descriptor *> &descriptors)
@@ -81,9 +79,7 @@ sort_by_display_name (std::vector<const Descriptor *> &descriptors)
              });
 }
 
-/*!
- * \brief Generic helper to sort a list of descriptors by their stable type ID.
- */
+/** Generic helper to sort a list of descriptors by their stable type ID. */
 template <typename Descriptor>
 inline void
 sort_by_type_id (std::vector<const Descriptor *> &descriptors)
@@ -94,9 +90,7 @@ sort_by_type_id (std::vector<const Descriptor *> &descriptors)
              });
 }
 
-/*!
- * \brief Returns a Cereal archive name for a component or singleton type.
- */
+/** Returns a Cereal archive name for a component or singleton type. */
 inline std::string
 make_archive_name (std::string_view prefix, std::string_view type_name)
 {
@@ -113,7 +107,7 @@ make_archive_name (std::string_view prefix, std::string_view type_name)
 // JSON archives so that the produced JSON is human readable.
 // ------------------------------------------------------------------
 
-/*! \brief Detects whether T is stored with the in-place deletion policy. */
+/** Detects whether T is stored with the in-place deletion policy. */
 template <typename T, typename = void>
 struct is_in_place_storage : std::false_type
 {
@@ -131,8 +125,10 @@ struct is_in_place_storage<
 template <typename T>
 inline constexpr bool is_in_place_storage_v = is_in_place_storage<T>::value;
 
-/*! \brief Single save entry: writes an entity id and its component data,
- *         or a tombstone marker for in-place deleted slots. */
+/**
+ * Single save entry: writes an entity id and its component data,
+ *         or a tombstone marker for in-place deleted slots.
+ */
 template <typename T> struct component_save_entry
 {
   entt::entity entity_id{};
@@ -151,8 +147,10 @@ template <typename T> struct component_save_entry
   }
 };
 
-/*! \brief Single load entry: reads an entity id and its component data,
- *         or detects a tombstone marker. */
+/**
+ * Single load entry: reads an entity id and its component data,
+ *         or detects a tombstone marker.
+ */
 template <typename T> struct component_load_entry
 {
   entt::entity entity_id{};

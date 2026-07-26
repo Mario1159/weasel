@@ -6,8 +6,8 @@
 namespace wsl
 {
 
-/*!
- * \brief Lightweight, non-owning handle to an entt::registry.
+/**
+ * Lightweight, non-owning handle to an entt::registry.
  *
  * Replaces raw `entt::registry&` / `entt::registry*` in public APIs so that
  * daslang (and other scripting) bindings receive a single, stable type

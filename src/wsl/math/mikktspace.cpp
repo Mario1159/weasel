@@ -1,8 +1,8 @@
-/*! \file mikktspace.cpp
- *  \brief Pure C++ port of the MikkTSpace tangent space generator.
+/**
+ * Pure C++ port of the MikkTSpace tangent space generator.
  *
- *  Original algorithm by Morten S. Mikkelsen.
- *  This implementation uses direct array access instead of callbacks.
+ * Original algorithm by Morten S. Mikkelsen.
+ * This implementation uses direct array access instead of callbacks.
  */
 
 #include "mikktspace.hpp"

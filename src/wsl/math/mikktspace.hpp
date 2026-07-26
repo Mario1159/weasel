@@ -10,7 +10,8 @@
 namespace wsl::math
 {
 
-/*! \brief Pure C++ MikkTSpace tangent space generator.
+/**
+ * Pure C++ MikkTSpace tangent space generator.
  *
  *  Generates tangent and bitangent vectors for normal mapping using
  *  the MikkTSpace algorithm. Uses vertex data directly instead of callbacks.
@@ -32,15 +33,15 @@ public:
     vec4f tangent;
   };
 
-  /*! \brief Generate tangent space using the default angular threshold (180°).
+  /**
+   * Generate tangent space using the default angular threshold (180°).
    *
-   *  \param positions Vertex positions (3 floats per vertex).
-   *  \param normals Vertex normals (3 floats per vertex).
-   *  \param texcoords Vertex texture coordinates (2 floats per vertex).
-   *  \param triangle_indices Triangle index buffer (3 indices per triangle).
-   *  \param[out] out_tangents Per-vertex tangent output (same size as
-   * positions).
-   *  \return true on success, false on failure.
+   * :param positions: Vertex positions (3 floats per vertex).
+   * :param normals: Vertex normals (3 floats per vertex).
+   * :param texcoords: Vertex texture coordinates (2 floats per vertex).
+   * :param triangle_indices: Triangle index buffer (3 indices per triangle).
+   * :param out_tangents: Per-vertex tangent output (same size as positions).
+   * :return: true on success, false on failure.
    */
   bool gen_tang_space_default (const std::vector<vec3f> &positions,
                                const std::vector<vec3f> &normals,
@@ -48,16 +49,16 @@ public:
                                const std::vector<uint32_t> &triangle_indices,
                                std::vector<vec4f> &out_tangents) const noexcept;
 
-  /*! \brief Generate tangent space with a custom angular threshold.
+  /**
+   * Generate tangent space with a custom angular threshold.
    *
-   *  \param positions Vertex positions (3 floats per vertex).
-   *  \param normals Vertex normals (3 floats per vertex).
-   *  \param texcoords Vertex texture coordinates (2 floats per vertex).
-   *  \param triangle_indices Triangle index buffer (3 indices per triangle).
-   *  \param[out] out_tangents Per-vertex tangent output (same size as
-   * positions).
-   *  \param angular_threshold Threshold in degrees used when splitting groups.
-   *  \return true on success, false on failure.
+   * :param positions: Vertex positions (3 floats per vertex).
+   * :param normals: Vertex normals (3 floats per vertex).
+   * :param texcoords: Vertex texture coordinates (2 floats per vertex).
+   * :param triangle_indices: Triangle index buffer (3 indices per triangle).
+   * :param out_tangents: Per-vertex tangent output (same size as positions).
+   * :param angular_threshold: Threshold in degrees used when splitting groups.
+   * :return: true on success, false on failure.
    */
   bool gen_tang_space (const std::vector<vec3f> &positions,
                        const std::vector<vec3f> &normals,
@@ -66,19 +67,19 @@ public:
                        std::vector<vec4f> &out_tangents,
                        float angular_threshold) const noexcept;
 
-  /*! \brief Generate tangent space from a vertex array with accessors.
+  /**
+   * Generate tangent space from a vertex array with accessors.
    *
-   *  Generic version that works with any vertex type via accessor lambdas.
+   * Generic version that works with any vertex type via accessor lambdas.
    *
-   *  \param vertices Array of vertices.
-   *  \param triangle_indices Triangle index buffer (3 indices per triangle).
-   *  \param[out] out_tangents Per-vertex tangent output (same size as
-   * vertices).
-   *  \param get_position Lambda returning vec3f position from a vertex.
-   *  \param get_normal Lambda returning vec3f normal from a vertex.
-   *  \param get_texcoord Lambda returning vec2f texcoord from a vertex.
-   *  \param angular_threshold Threshold in degrees used when splitting groups.
-   *  \return true on success, false on failure.
+   * :param vertices: Array of vertices.
+   * :param triangle_indices: Triangle index buffer (3 indices per triangle).
+   * :param out_tangents: Per-vertex tangent output (same size as vertices).
+   * :param get_position: Lambda returning vec3f position from a vertex.
+   * :param get_normal: Lambda returning vec3f normal from a vertex.
+   * :param get_texcoord: Lambda returning vec2f texcoord from a vertex.
+   * :param angular_threshold: Threshold in degrees used when splitting groups.
+   * :return: true on success, false on failure.
    */
   template <typename Vertex, typename PosFn, typename NormFn, typename UVFn>
   bool
@@ -102,8 +103,7 @@ public:
                            out_tangents, angular_threshold);
   }
 
-  /*! \brief Generate tangent space with default threshold from a vertex array.
-   */
+  /** Generate tangent space with default threshold from a vertex array. */
   template <typename Vertex, typename PosFn, typename NormFn, typename UVFn>
   bool
   gen_tang_space_default (const std::vector<Vertex> &vertices,

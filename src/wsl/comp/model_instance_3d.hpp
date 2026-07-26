@@ -18,9 +18,11 @@ struct model_instance_3d : world_component
   rsc::model_id id{};
   uint32_t scene_index = 0;
 
-  //! Optional per-instance material override. When set (non-null) the
-  //! renderer uses this material instead of the model's own mesh materials.
-  //! Rendering hook is currently a stub (see scene_renderer::draw_command).
+  /**
+   * Optional per-instance material override. When set (non-null) the
+   * renderer uses this material instead of the model's own mesh materials.
+   * Rendering hook is currently a stub (see scene_renderer::draw_command).
+   */
   rsc::material_id material_override{};
 
   float mip_lod_bias = 0.0F;

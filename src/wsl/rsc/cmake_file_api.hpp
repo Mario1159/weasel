@@ -15,9 +15,7 @@ namespace rsc
 namespace cmake
 {
 
-/*!
- * \brief Parsed information about a CMake target.
- */
+/** Parsed information about a CMake target. */
 struct cmake_target_info
 {
   std::string name;
@@ -27,9 +25,7 @@ struct cmake_target_info
   std::vector<std::string> link_libraries;
 };
 
-/*!
- * \brief Parsed information about a CMake test.
- */
+/** Parsed information about a CMake test. */
 struct cmake_test_info
 {
   std::string name;
@@ -37,8 +33,8 @@ struct cmake_test_info
   std::vector<std::string> arguments;
 };
 
-/*!
- * \brief Interface for interacting with the CMake File API.
+/**
+ * Interface for interacting with the CMake File API.
  *
  * This class handles creating API queries, triggering CMake configuration,
  * and parsing the resulting reply files to extract project structure metadata.
@@ -46,9 +42,7 @@ struct cmake_test_info
 class cmake_file_api
 {
 public:
-  /*!
-   * \brief Represents the result of a project metadata query.
-   */
+  /** Represents the result of a project metadata query. */
   struct project_info
   {
     std::string name;
@@ -56,24 +50,24 @@ public:
     std::vector<cmake_test_info> tests;
   };
 
-  /*!
-   * \brief Configures the API query and triggers a CMake run.
-   * \param project_root Path to the project containing CMakeLists.txt.
-   * \param build_dir Path to the directory where CMake should generate files.
-   * \param extra_args Additional arguments to pass to the CMake command.
-   * \param res_mgr Reference to the resource manager to get engine settings.
-   * \return \c true if the API query was successfully configured and executed.
-   */
+  /**
+ * Configures the API query and triggers a CMake run.
+ * :param project_root: Path to the project containing CMakeLists.txt.
+ * :param build_dir: Path to the directory where CMake should generate files.
+ * :param extra_args: Additional arguments to pass to the CMake command.
+ * :param res_mgr: Reference to the resource manager to get engine settings.
+ * :return: \c true if the API query was successfully configured and executed.
+ */
   bool query_and_configure (const std::filesystem::path &project_root,
                             const std::filesystem::path &build_dir,
                             const std::string &extra_args,
                             resource_manager &res_mgr);
 
-  /*!
-   * \brief Parses the CMake API replies from a build directory.
-   * \param build_dir Path to the build directory containing the .cmake/api/v1/reply folder.
-   * \return The parsed project information, or \c std::nullopt on failure.
-   */
+  /**
+ * Parses the CMake API replies from a build directory.
+ * :param build_dir: Path to the build directory containing the .cmake/api/v1/reply folder.
+ * :return: The parsed project information, or \c std::nullopt on failure.
+ */
   std::optional<project_info> parse_replies (const std::filesystem::path &build_dir);
 
 private:

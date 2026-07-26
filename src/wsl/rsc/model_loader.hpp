@@ -24,8 +24,8 @@ namespace wsl
 namespace rsc
 {
 
-/*!
- * \brief Resource loader for 3D models (glTF, etc.).
+/**
+ * Resource loader for 3D models (glTF, etc.).
  *
  * This loader handles parsing glTF files into CPU-side data (raw::cpu_model)
  * and managing the asynchronous upload of that data to GPU memory (gfx::model_3d).
@@ -33,7 +33,7 @@ namespace rsc
  */
 struct model_loader final : entt::resource_loader<gfx::model_3d>
 {
-  /*! \brief Identifies the type of built-in primitive model. */
+  /** Identifies the type of built-in primitive model. */
   enum class primitive_model
   {
     quad,
@@ -43,7 +43,7 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
     sphere,
   };
 
-  /*! \brief Contains metadata about a built-in primitive. */
+  /** Contains metadata about a built-in primitive. */
   struct primitive_model_info
   {
     primitive_model primitive{};
@@ -51,7 +51,7 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
     std::string_view display_name;
   };
 
-  /*! \brief Represents a single unit of work in the asynchronous GPU upload process. */
+  /** Represents a single unit of work in the asynchronous GPU upload process. */
   struct upload_task
   {
     enum class type
@@ -69,14 +69,14 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
     size_t count = 0;
   };
 
-  /*! \brief Configuration options for the GPU upload process. */
+  /** Configuration options for the GPU upload process. */
   struct upload_options
   {
-    //! If true, only the lowest detail mesh is uploaded (useful for previews).
+    /** If true, only the lowest detail mesh is uploaded (useful for previews). */
     bool lowest_lod_only;
-    //! Number of vertices to upload in a single batch.
+    /** Number of vertices to upload in a single batch. */
     size_t vertex_chunk_size;
-    //! Number of indices to upload in a single batch.
+    /** Number of indices to upload in a single batch. */
     size_t index_chunk_size;
 
     upload_options (bool lowest_lod_only = false,
@@ -89,7 +89,7 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
     }
   };
 
-  /*! \brief Tracks the state of an active asynchronous GPU upload for one model. */
+  /** Tracks the state of an active asynchronous GPU upload for one model. */
   struct upload_session
   {
     upload_options options;
@@ -101,83 +101,83 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
     explicit upload_session (upload_options options) : options (options) {}
   };
 
-  /*!
-   * \brief Constructs a model loader with a render context.
-   * \param ctx Pointer to the render context (must be valid for GPU uploads).
-   */
+  /**
+ * Constructs a model loader with a render context.
+ * :param ctx: Pointer to the render context (must be valid for GPU uploads).
+ */
   explicit model_loader (gfx::render_context *ctx) : m_ctx (ctx) {}
 
-  /*! \brief Returns a list of all supported built-in primitives. */
+  /** Returns a list of all supported built-in primitives. */
   static std::span<const primitive_model_info> builtin_primitives ();
 
-  /*! \brief Attempts to identify a built-in primitive from its engine path. */
+  /** Attempts to identify a built-in primitive from its engine path. */
   static std::optional<primitive_model>
   primitive_from_path (std::string_view path);
 
-  /*! \brief Returns the display name of a built-in primitive. */
+  /** Returns the display name of a built-in primitive. */
   static std::string_view primitive_display_name (std::string_view path);
 
-  /*! \brief entt requirement: handle moving a ready model into a resource handle. */
+  /** entt requirement: handle moving a ready model into a resource handle. */
   std::shared_ptr<gfx::model_3d> operator() (gfx::model_3d &&ready_model) const;
 
-  /*!
-   * \brief Loads or retrieves a model from the specified path.
-   *
-   * If the path starts with "builtin://", it returns a built-in primitive.
-   * Otherwise, it loads a glTF file and performs a synchronous upload.
-   */
+  /**
+ * Loads or retrieves a model from the specified path.
+ *
+ * If the path starts with "builtin://", it returns a built-in primitive.
+ * Otherwise, it loads a glTF file and performs a synchronous upload.
+ */
   std::shared_ptr<gfx::model_3d> operator() (const std::string &path) const;
 
-  /*! \brief Directly creates a GPU model for a built-in primitive. */
+  /** Directly creates a GPU model for a built-in primitive. */
   static std::shared_ptr<gfx::model_3d>
   load_primitive (primitive_model primitive) ;
 
-  /*!
-   * \brief Uploads a CPU-side model to the GPU.
-   * \param cpu The source CPU model data.
-   * \return The resulting GPU-side model.
-   */
+  /**
+ * Uploads a CPU-side model to the GPU.
+ * :param cpu: The source CPU model data.
+ * :return: The resulting GPU-side model.
+ */
   gfx::model_3d upload_gpu (const raw::cpu_model &cpu) const;
 
-  /*!
-   * \brief Loads a model from disk into CPU memory.
-   * \param path Path to the model file.
-   * \return Shared pointer to the CPU model data, or nullptr on failure.
-   */
+  /**
+ * Loads a model from disk into CPU memory.
+ * :param path: Path to the model file.
+ * :return: Shared pointer to the CPU model data, or nullptr on failure.
+ */
   std::shared_ptr<raw::cpu_model> load_cpu (const std::string &path) const;
 
-  /*! \brief Begins an asynchronous upload session for a CPU model. */
+  /** Begins an asynchronous upload session for a CPU model. */
   upload_session begin_upload (const raw::cpu_model &cpu) const;
 
-  /*! 
-   * \brief Begins an asynchronous upload session with custom options.
-   * \param cpu The source CPU model data.
-   * \param options Custom upload options.
-   */
+  /**
+ * Begins an asynchronous upload session with custom options.
+ * :param cpu: The source CPU model data.
+ * :param options: Custom upload options.
+ */
   upload_session begin_upload (const raw::cpu_model &cpu,
                                const upload_options &options) const;
 
-  /*!
-   * \brief Processes a batch of upload tasks for an active session.
-   * \param session Reference to the upload session.
-   * \param cpu The source CPU model data.
-   * \param max_tasks Maximum number of tasks to process in this batch.
-   */
+  /**
+ * Processes a batch of upload tasks for an active session.
+ * :param session: Reference to the upload session.
+ * :param cpu: The source CPU model data.
+ * :param max_tasks: Maximum number of tasks to process in this batch.
+ */
   void upload_next_batch (upload_session &session, const raw::cpu_model &cpu,
                           size_t max_tasks) const;
 
-  /*! \brief Returns true if all tasks in the session are complete. */
+  /** Returns true if all tasks in the session are complete. */
   static bool is_upload_complete (const upload_session &session) ;
 
-  /*! 
-   * \brief Finalizes an upload session and returns the GPU model.
-   * \param session Reference to the completed upload session.
-   * \param cpu The source CPU model data.
-   */
+  /**
+ * Finalizes an upload session and returns the GPU model.
+ * :param session: Reference to the completed upload session.
+ * :param cpu: The source CPU model data.
+ */
   static gfx::model_3d finish_upload (upload_session &session,
                                const raw::cpu_model &cpu) ;
 
-  /*! \brief Helper to create a GPU texture from CPU texture data. */
+  /** Helper to create a GPU texture from CPU texture data. */
   SDL_GPUTexture *create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const;
 
 private:

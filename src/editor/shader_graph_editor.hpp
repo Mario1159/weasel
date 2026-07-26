@@ -21,8 +21,8 @@ class editor_context;
 namespace editor
 {
 
-/*!
- * \brief Editor panel for authoring shader graphs using ImNodeFlow.
+/**
+ * Editor panel for authoring shader graphs using ImNodeFlow.
  *
  * Provides node-based authoring of fragment shaders, compilation preview,
  * and material creation.
@@ -40,10 +40,10 @@ public:
   bool load_graph (const std::string &path);
   bool save_graph (const std::string &path);
 
-  /*! \brief Compile the current graph and update the preview material. */
+  /** Compile the current graph and update the preview material. */
   void compile_and_preview ();
 
-  /*! \brief Create a material_asset from the compiled graph. */
+  /** Create a material_asset from the compiled graph. */
   wsl::rsc::material_id create_material_from_graph (const std::string &name);
 
 private:

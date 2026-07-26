@@ -24,8 +24,7 @@ namespace wsl
 {
 
 /**
- * @namespace wsl::phys
- * @brief Physics engine interfaces and Jolt Physics integration.
+ * Physics engine interfaces and Jolt Physics integration.
  */
 namespace phys
 {

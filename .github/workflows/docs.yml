@@ -1,0 +1,69 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm \
+            base-devel git cmake ninja \
+            sdl3 libarchive glm pkgconf \
+            opus opusfile libvorbis flac libgme mpg123 fluidsynth wavpack \
+            brotli zlib freetype2 openssl protobuf libsodium \
+            libavif libtiff libwebp libpng libjpeg-turbo \
+            abseil-cpp re2 gtest nlohmann-json boost \
+            llvm clang python python-sphinx hawkmoth \
+            python-sphinx_rtd_theme nodejs
+
+      - name: Install Python packages
+        run: |
+          pip install sphinx==9.1.0 hawkmoth
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM20_PREFIX=/usr \
+            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            -G Ninja
+
+      - name: Build docs
+        run: cmake --build build --target docs
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
