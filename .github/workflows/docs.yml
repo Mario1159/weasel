@@ -34,12 +34,19 @@ jobs:
             brotli zlib freetype2 openssl protobuf libsodium \
             libavif libtiff libwebp libpng libjpeg-turbo \
             abseil-cpp re2 gtest nlohmann-json boost \
-            llvm clang python python-sphinx hawkmoth \
-            python-sphinx_rtd_theme nodejs
+            llvm clang python python-sphinx \
+            nodejs
 
-      - name: Install Python packages
+      - name: Install yay and AUR packages
         run: |
-          pip install sphinx==9.1.0 hawkmoth
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          su - builder -c "
+            git clone https://aur.archlinux.org/yay-bin.git /tmp/yay-bin &&
+            cd /tmp/yay-bin &&
+            makepkg -si --noconfirm &&
+            yay -S --noconfirm python-sphinx-hawkmoth
+          "
 
       - name: Configure
         run: |

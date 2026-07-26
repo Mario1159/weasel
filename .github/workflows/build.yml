@@ -50,6 +50,8 @@ jobs:
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
             -DLLVM20_PREFIX=/usr \
             -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             -G Ninja
