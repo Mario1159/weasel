@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-
 namespace wsl
 {
 
@@ -39,7 +38,8 @@ struct cpu_texture
   std::vector<uint8_t> pixels; // RGBA8
 };
 
-/** Represents a texture slot, combining a texture with an optional transform. */
+/** Represents a texture slot, combining a texture with an optional transform.
+ */
 struct cpu_tex_slot
 {
   /** Shared pointer to the CPU texture. */
@@ -74,6 +74,8 @@ struct cpu_material
 
   /** Whether the material is double-sided. */
   bool double_sided = false;
+  /** Whether the material is unlit (KHR_materials_unlit). */
+  bool unlit = false;
 };
 
 /** Represents a single vertex in a CPU mesh. */

@@ -36,6 +36,9 @@ struct material
 
   bool double_sided = false;
 
+  /** Whether the material is unlit (KHR_materials_unlit). */
+  bool unlit = false;
+
   /** GPU device used to release resources. */
   SDL_GPUDevice *device = nullptr;
 
@@ -58,6 +61,7 @@ struct material
       roughness_factor = other.roughness_factor;
       emissive_factor = other.emissive_factor;
       double_sided = other.double_sided;
+      unlit = other.unlit;
 
       base_color_tex = other.base_color_tex;
       metallic_roughness_tex = other.metallic_roughness_tex;

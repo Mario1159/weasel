@@ -418,7 +418,7 @@ gfx::scene_renderer::draw_debug_lines (const std::vector<debug_vertex> &verts,
 
       // Depth
       pi.target_info.has_depth_stencil_target = true;
-      pi.target_info.depth_stencil_format = m_window->depth_format();
+      pi.target_info.depth_stencil_format = m_window->depth_format ();
       pi.depth_stencil_state.enable_depth_test = true;
       pi.depth_stencil_state.enable_depth_write = true;
       pi.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
@@ -689,7 +689,7 @@ gfx::scene_renderer::create_pipeline ()
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format();
+  pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
   SDL_GPUColorTargetDescription ctd[2]{};
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
@@ -908,7 +908,7 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
 
     SDL_GPUGraphicsPipeline *pipe = nullptr;
 
-    if (m_force_unlit) {
+    if (m_force_unlit || prim.mat.unlit) {
       pipe = prim.mat.double_sided ? m_pipeline_unlit_double_sided
                                    : m_pipeline_unlit;
     } else {
@@ -1173,7 +1173,7 @@ gfx::scene_renderer::render_custom_primitive (
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format();
+  pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
   SDL_GPUColorTargetDescription ctd[2]{};
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
@@ -1623,7 +1623,7 @@ gfx::scene_renderer::create_skybox_pipeline ()
   pipe.target_info.color_target_descriptions = ctd;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format();
+  pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
   pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
   pipe.multisample_state.sample_mask = 0;
@@ -1719,7 +1719,7 @@ gfx::scene_renderer::create_unlit_pipeline ()
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format();
+  pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
   pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
 
@@ -1876,7 +1876,7 @@ gfx::scene_renderer::create_preview_bg_pipeline ()
   pipe.target_info.color_target_descriptions = ctd;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format();
+  pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
   pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
 
@@ -4010,7 +4010,7 @@ gfx::scene_renderer::create_outline_pipeline ()
   pipe.depth_stencil_state.enable_stencil_test = false;
 
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format();
+  pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
   SDL_GPUColorTargetDescription ctd[2]{};
   ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
@@ -4224,7 +4224,7 @@ gfx::scene_renderer::create_grid_pipeline ()
 
   pipe.target_info.color_target_descriptions = ctd;
   pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format();
+  pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
   pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
   pipe.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
@@ -4263,9 +4263,9 @@ gfx::scene_renderer::draw_grid (const glm::vec3 & /*unused*/,
   SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline_grid);
 
   /**
- * VS Data: space1, slot 0
- * Centers the grid plane on the gaze point and scales it to the radius.
- */
+   * VS Data: space1, slot 0
+   * Centers the grid plane on the gaze point and scales it to the radius.
+   */
   struct alignas (16) scene_data
   {
     glm::mat4 view_proj;
@@ -4276,9 +4276,9 @@ gfx::scene_renderer::draw_grid (const glm::vec3 & /*unused*/,
   SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &sd, sizeof (sd));
 
   /**
- * FS Data: space3, slot 0
- * Configures the grid appearance and Fog of War parameters.
- */
+   * FS Data: space3, slot 0
+   * Configures the grid appearance and Fog of War parameters.
+   */
   struct alignas (16) grid_data
   {
     glm::vec3 fog_center;

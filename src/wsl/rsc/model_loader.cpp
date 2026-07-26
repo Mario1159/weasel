@@ -385,6 +385,7 @@ model_loader::upload_next_batch (upload_session &session,
       dst.mat.roughness_factor = mat.roughness_factor;
       dst.mat.emissive_factor = mat.emissive_factor;
       dst.mat.double_sided = mat.double_sided;
+      dst.mat.unlit = mat.unlit;
       break;
     }
 
@@ -753,6 +754,7 @@ model_loader::load_cpu (const std::string &path) const
         mat.metallic_factor = gltf_mat.pbrData.metallicFactor;
         mat.roughness_factor = gltf_mat.pbrData.roughnessFactor;
         mat.double_sided = gltf_mat.doubleSided;
+        mat.unlit = gltf_mat.unlit;
         mat.emissive_factor
             = glm::vec3 (gltf_mat.emissiveFactor[0], gltf_mat.emissiveFactor[1],
                          gltf_mat.emissiveFactor[2]);
