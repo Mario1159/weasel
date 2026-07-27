@@ -38,6 +38,22 @@ CPMAddPackage(
     SYSTEM ON
 )
 
+# daslang builds with -fno-rtti, which causes undefined typeinfo symbols when
+# linking with clang. Enable RTTI on all daslang targets when using clang.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    foreach(_target libDaScript libDaScriptDyn libDaScript_runtime libUriParser)
+        if(TARGET ${_target})
+            target_compile_options(${_target} PRIVATE -frtti)
+        endif()
+    endforeach()
+    foreach(_module PUGIXML Minfft Fft Imgui Aot Raylib)
+        set(_target "libDasModule${_module}")
+        if(TARGET ${_target})
+            target_compile_options(${_target} PRIVATE -frtti)
+        endif()
+    endforeach()
+endif()
+
 if(TARGET libDaScript)
     add_library(weasel_daslang INTERFACE)
     target_link_libraries(weasel_daslang INTERFACE libDaScript)
