@@ -5,6 +5,7 @@ file(GLOB_RECURSE EDITOR_SOURCES
 # Ensure new files are picked up if glob fails to update
 list(APPEND EDITOR_SOURCES
     "console.cpp"
+    "chat_panel.cpp"
     "logger.cpp"
 )
 list(REMOVE_DUPLICATES EDITOR_SOURCES)

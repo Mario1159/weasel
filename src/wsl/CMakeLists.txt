@@ -84,6 +84,35 @@ if(TARGET nlohmann_json::nlohmann_json)
     target_link_libraries(wsl PRIVATE nlohmann_json::nlohmann_json)
 endif()
 
+# A2A protocol support
+if(TARGET simdjson::simdjson)
+    target_sources(wsl PRIVATE
+        ai/a2a/types.cpp
+        ai/a2a/agent_card.cpp
+        ai/a2a/errors.cpp
+        ai/a2a/json_util.cpp
+        ai/a2a/client.cpp
+        ai/a2a/server.cpp
+        ai/a2a/discovery.cpp
+        ai/a2a/streaming.cpp
+        ai/a2a/http/http_client.cpp
+        ai/a2a/http/http_server.cpp
+        ai/a2a/http/json_rpc_server.cpp
+    )
+    target_link_libraries(wsl PRIVATE simdjson::simdjson CURL::libcurl)
+endif()
+
+# ACP (Agent Client Protocol) support
+if(TARGET simdjson::simdjson)
+    target_sources(wsl PRIVATE
+        ai/acp/acp_types.cpp
+        ai/acp/acp_client.cpp
+        ai/acp/acp_session.cpp
+        ai/acp/acp_agent_manager.cpp
+    )
+    target_link_libraries(wsl PRIVATE simdjson::simdjson)
+endif()
+
 # Absolute path to the slangc executable deployed next to the editor, so the
 # runtime shader compiler can find it regardless of the working directory.
 if(TARGET slangc)

@@ -51,6 +51,7 @@ editor::root::root (wsl::comp::singl::runtime_context *runtime_ctx,
                     wsl::comp::singl::editor_context *editor_ctx)
     : m_console_window (editor_ctx),
       m_interactive_console (runtime_ctx, editor_ctx),
+      m_chat_panel (runtime_ctx, editor_ctx),
       m_system_inspector_window (runtime_ctx, editor_ctx, &m_selection),
       m_ecs_inspector_window (runtime_ctx, editor_ctx, m_selection),
       m_resource_inspector_window (runtime_ctx, editor_ctx),
@@ -140,9 +141,7 @@ editor::root::draw (entt::registry &registry,
   }
 
   if (m_show_agent) {
-    if (ImGui::Begin ("Agent", &m_show_agent)) {
-    }
-    ImGui::End ();
+    m_chat_panel.draw ("Agent", &m_show_agent);
   }
 
   if (m_show_signal_inspector) {

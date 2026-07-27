@@ -6,6 +6,7 @@
 #include "inspector.hpp"
 #include "logger.hpp"
 #include "console.hpp"
+#include "chat_panel.hpp"
 #include "ecs_inspector.hpp"
 #include "file_list.hpp"
 #include "game_view.hpp"
@@ -50,6 +51,7 @@ private:
 
   logger m_console_window;
   console m_interactive_console;
+  chat_panel m_chat_panel;
   system_inspector m_system_inspector_window;
   ecs_inspector m_ecs_inspector_window;
   resource_inspector m_resource_inspector_window;

@@ -398,6 +398,12 @@ if(NOT ai-sdk-cpp_POPULATED)
 endif()
 add_subdirectory(${ai-sdk-cpp_SOURCE_DIR} ${ai-sdk-cpp_BINARY_DIR} EXCLUDE_FROM_ALL SYSTEM)
 
+# A2A protocol: simdjson for JSON parsing
+find_package(simdjson REQUIRED)
+
+# A2A protocol: libcurl for HTTP transport
+find_package(CURL REQUIRED)
+
 # --- Asset Compilation ---
 set(SHADER_SOURCE_DIR "${CMAKE_SOURCE_DIR}/rsc/shaders")
 
