@@ -28,15 +28,15 @@ class das_system_adapter : public sys::ecs_system, public EcsSystemAdapter
 {
 public:
   /**
- * Constructs a daslang-backed system.
- * :param name: Display name for the system.
- * :param script_path: Path to the .das script file.
- * :param engine: Reference to the daslang engine.
- * :param type_id: Per-instance type identifier (from registration).
- * :param class_ptr: Pointer to the daslang class instance (VM heap).
- * :param class_info: StructInfo of the daslang class (for adapter offsets).
- * :param ctx: daslang execution context.
- */
+   * Constructs a daslang-backed system.
+   * :param name: Display name for the system.
+   * :param script_path: Path to the .das script file.
+   * :param engine: Reference to the daslang engine.
+   * :param type_id: Per-instance type identifier (from registration).
+   * :param class_ptr: Pointer to the daslang class instance (VM heap).
+   * :param class_info: StructInfo of the daslang class (for adapter offsets).
+   * :param ctx: daslang execution context.
+   */
   das_system_adapter (const std::string &name, const std::string &script_path,
                       das_engine &engine, entt::id_type type_id,
                       void *class_ptr, const StructInfo *class_info,
@@ -52,6 +52,12 @@ public:
   void on_inactive (entt::registry &registry) override;
   void on_event (registry_handle registry, const engine_event &ev) override;
 
+  bool
+  has_failed () const override
+  {
+    return m_has_failed;
+  }
+
   const std::string &
   script_path () const
   {
@@ -64,6 +70,7 @@ private:
   entt::id_type m_type_id;
   void *m_class_ptr;
   Context *m_ctx;
+  bool m_has_failed = false;
 };
 
 } // namespace wsl::das

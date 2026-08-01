@@ -9,7 +9,7 @@ namespace wsl::das
 class Module_Ecs : public ::das::Module
 {
 public:
-  Module_Ecs () : Module ("weasel_ecs")
+  Module_Ecs () : Module ("weasel_ecs_native")
   {
     ::das::ModuleLibrary lib (this);
     lib.addBuiltInModule ();

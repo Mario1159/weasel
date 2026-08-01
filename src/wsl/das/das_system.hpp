@@ -31,6 +31,12 @@ public:
   void on_inactive (entt::registry &registry) override;
   void on_event (registry_handle registry, const engine_event &ev) override;
 
+  bool
+  has_failed () const override
+  {
+    return m_has_failed;
+  }
+
   const std::string &
   script_path () const
   {
@@ -41,6 +47,7 @@ private:
   std::string m_script_path;
   das_engine &m_engine;
   entt::id_type m_type_id;
+  bool m_has_failed = false;
 };
 
 } // namespace wsl::das

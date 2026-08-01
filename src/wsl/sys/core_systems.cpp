@@ -269,6 +269,10 @@ core_systems::update (double dt)
       continue;
     }
 
+    if (sys->has_failed ()) {
+      continue;
+    }
+
     sys->update (&registry, dt);
     if (sys->is_active ()) {
       ++active_count;
@@ -277,6 +281,9 @@ core_systems::update (double dt)
 
   if (scene != nullptr) {
     for (auto &sys : scene->systems) {
+      if (sys->has_failed ()) {
+        continue;
+      }
       sys->update (&registry, dt);
       active_count++;
     }

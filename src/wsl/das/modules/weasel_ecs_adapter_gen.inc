@@ -28,7 +28,7 @@ protected:
   };
 
 protected:
-  static int _das_class_method_offset[4];
+  static inline int _das_class_method_offset[4];
 
 public:
   EcsSystemAdapter ( const StructInfo * info ) {
@@ -92,5 +92,3 @@ public:
         __context__, nullptr, __funcCall__, self);
   }
 };
-
-int EcsSystemAdapter::_das_class_method_offset[4] = {};

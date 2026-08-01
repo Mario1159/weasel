@@ -11,6 +11,9 @@
 #include "das_ecs_binds.hpp"
 #include "../log/log.hpp"
 
+#include <signal.h>
+#include <setjmp.h>
+
 using namespace das;
 
 DECLARE_ALL_DEFAULT_MODULES;
@@ -35,6 +38,7 @@ initialize_modules_for_engine (TextPrinter &tout,
   setDasRoot (std::string (WEASEL_BUILD_DIR) + "/_deps/daslang-src");
 
   faccess = smart_ptr<FsFileAccess> (new FsFileAccess);
+  faccess->introduceDaslib ();
 
   // Register all default builtin modules (BuiltIn, Math, Strings, etc.)
   // into this thread's local ModuleKarma.  ModuleLibrary::addBuiltInModule()
@@ -89,6 +93,76 @@ ensure_thread_das_environment (TextPrinter &tout,
 }
 
 } // anonymous namespace
+
+// ── SIGSEGV protection for daScript execution ──
+// These live in namespace wsl::das so das_system_adapter.cpp can link to them.
+
+namespace wsl::das::das_signal
+{
+
+thread_local sigjmp_buf *tls_jmp = nullptr;
+thread_local struct sigaction tls_prev_segv{};
+thread_local bool tls_installed = false;
+thread_local ::std::vector<char> tls_sigstack;
+thread_local bool tls_sigstack_ready = false;
+
+void
+ensure_sigstack ()
+{
+  if (tls_sigstack_ready) {
+    return;
+  }
+  tls_sigstack.resize (SIGSTKSZ);
+  stack_t ss{};
+  ss.ss_sp = tls_sigstack.data ();
+  ss.ss_size = tls_sigstack.size ();
+  ss.ss_flags = 0;
+  sigaltstack (&ss, nullptr);
+  tls_sigstack_ready = true;
+}
+
+namespace
+{
+void
+segv_handler (int sig, siginfo_t *info, void *ucontext)
+{
+  (void)sig;
+  (void)info;
+  (void)ucontext;
+  if (tls_jmp) {
+    longjmp (*tls_jmp, 1);
+  }
+  signal (SIGSEGV, SIG_DFL);
+  raise (SIGSEGV);
+}
+} // anonymous namespace
+
+void
+install ()
+{
+  if (tls_installed) {
+    return;
+  }
+  ensure_sigstack ();
+  struct sigaction sa{};
+  sa.sa_sigaction = segv_handler;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+  sigemptyset (&sa.sa_mask);
+  sigaction (SIGSEGV, &sa, &tls_prev_segv);
+  tls_installed = true;
+}
+
+void
+restore ()
+{
+  if (!tls_installed) {
+    return;
+  }
+  sigaction (SIGSEGV, &tls_prev_segv, nullptr);
+  tls_installed = false;
+}
+
+} // namespace wsl::das::das_signal
 
 // Defined outside namespace wsl::das because PULL_ALL_DEFAULT_MODULES
 // expands to code using das::ModuleKarma which fails inside a nested namespace.
@@ -155,10 +229,14 @@ struct das_engine::impl
   // last-registered function with each name.  Only used when callers
   // don't specify a file path.
   std::unordered_map<std::string, fn_entry> fn_lookup;
+  // Persistent DebugInfoHelper for making StructInfo after simulate() returns
+  // (ctx->thisHelper is cleared to null at the end of simulate).
+  ::das::DebugInfoHelper debug_info_helper;
 
   impl ()
   {
     policies.aot = true;
+    policies.aot_module = true;
     policies.fail_on_no_aot = false;
     // Keep all functions in compiled programs so the C++ side can call
     // them at runtime (on_init, on_update, etc.) even if the das code
@@ -170,6 +248,8 @@ struct das_engine::impl
     // are globally initialized on the main thread and the ModuleGroup
     // (passed via compileDaScript) has all required modules.
     policies.no_init_check = true;
+    // Use v2 syntax for all .das files (class fields, curly braces, etc.)
+    policies.version_2_syntax = true;
   }
 
   bool
@@ -251,6 +331,17 @@ struct das_engine::impl
           "execute_file: tabMnLookup is NULL after simulate!");
     }
 
+    // Also log all functions from the context directly
+    int32_t nfunc = raw_ctx->getTotalFunctions ();
+    wsl::log::cmake ()->debug ("execute_file: context has {} total functions",
+                               nfunc);
+    for (int32_t i = 0; i < nfunc; ++i) {
+      auto *sf = raw_ctx->getFunction (i);
+      if (sf && sf->name) {
+        wsl::log::cmake ()->debug ("  ctx fn[{}]: name='{}'", i, sf->name);
+      }
+    }
+
     return true;
   }
 
@@ -328,16 +419,60 @@ struct das_engine::impl
       return {};
     }
 
-    // Allocate zero-initialized memory on the VM heap
+    // Allocate zero-initialized memory on the VM heap.
     char *ptr = ctx->allocate (static_cast<uint64_t> (bytes), nullptr);
     memset (ptr, 0, static_cast<std::size_t> (bytes));
 
+    // Find the generated default constructor.
+    // The constructor has the same name as the class (no backtick) and
+    // debugInfo->count == 0 (zero explicit arguments — the implicit
+    // 'this' pointer is not counted).
+    SimFunction *ctor_fn = nullptr;
+    int32_t nfunc = ctx->getTotalFunctions ();
+    for (int32_t i = 0; i < nfunc; ++i) {
+      auto *sf = ctx->getFunction (i);
+      if (sf && sf->name && class_name == sf->name) {
+        if (sf->debugInfo && sf->debugInfo->count == 0) {
+          ctor_fn = sf;
+          break;
+        }
+      }
+    }
+
+    if (ctor_fn) {
+      // Pass the pre-allocated instance as the cmres (copy-mode result)
+      // buffer. The constructor writes __rtti, __finalize, virtual-method
+      // function pointers, and field defaults directly into ptr.
+      ctx->evalWithCatch (ctor_fn, nullptr, ptr);
+
+      const char *ex = ctx->getException ();
+      if (ex) {
+        error = "Constructor call failed: ";
+        error += ex;
+        if (ctx->exceptionAt.fileInfo) {
+          error += " at ";
+          error += ctx->exceptionAt.fileInfo->name;
+          error += ":";
+          error += std::to_string (ctx->exceptionAt.line);
+        }
+        ctx->clearException ();
+        return {};
+      }
+
+      das_engine::class_instance inst;
+      inst.ptr = ptr;
+      inst.ctx = ctx.get ();
+      inst.info = debug_info_helper.makeStructureDebugInfo (*st);
+      return inst;
+    }
+
+    // No constructor found — fall back to raw zeroed allocation.
+    // The instance has zeroed function pointers; the class adapter
+    // will silently skip every method call.
     das_engine::class_instance result;
     result.ptr = ptr;
     result.ctx = ctx.get ();
-    // StructInfo is not yet available — the adapter pattern is deferred.
-    result.info = nullptr;
-
+    result.info = debug_info_helper.makeStructureDebugInfo (*st);
     return result;
   }
 
@@ -443,7 +578,8 @@ struct das_engine::impl
   }
 
   bool
-  call_void_function (const char *func_name, std::string &error)
+  call_void_function (const char *func_name, std::string &error,
+                      das_error &das_err)
   {
     auto it = fn_lookup.find (func_name);
     if (it == fn_lookup.end () || !it->second.sf) {
@@ -464,12 +600,25 @@ struct das_engine::impl
 
     auto &entry = it->second;
     entry.ctx->evalWithCatch (entry.sf, nullptr);
+
+    const char *ex = entry.ctx->getException ();
+    if (ex) {
+      das_err.message = ex;
+      if (entry.ctx->exceptionAt.fileInfo) {
+        das_err.file = entry.ctx->exceptionAt.fileInfo->name;
+      }
+      das_err.line = entry.ctx->exceptionAt.line;
+      das_err.column = entry.ctx->exceptionAt.column;
+      entry.ctx->clearException ();
+      error = das_err.message;
+      return false;
+    }
     return true;
   }
 
   bool
   call_void_function (const std::string &path, const char *func_name,
-                      std::string &error)
+                      std::string &error, das_error &das_err)
   {
     auto file_it = file_fn_lookup.find (path);
     if (file_it == file_fn_lookup.end ()) {
@@ -488,11 +637,25 @@ struct das_engine::impl
 
     auto &entry = it->second;
     entry.ctx->evalWithCatch (entry.sf, nullptr);
+
+    const char *ex = entry.ctx->getException ();
+    if (ex) {
+      das_err.message = ex;
+      if (entry.ctx->exceptionAt.fileInfo) {
+        das_err.file = entry.ctx->exceptionAt.fileInfo->name;
+      }
+      das_err.line = entry.ctx->exceptionAt.line;
+      das_err.column = entry.ctx->exceptionAt.column;
+      entry.ctx->clearException ();
+      error = das_err.message;
+      return false;
+    }
     return true;
   }
 
   bool
-  call_int_function (const char *func_name, int &out_value, std::string &error)
+  call_int_function (const char *func_name, int &out_value, std::string &error,
+                     das_error &das_err)
   {
     auto it = fn_lookup.find (func_name);
     if (it == fn_lookup.end () || !it->second.sf) {
@@ -503,7 +666,198 @@ struct das_engine::impl
     }
 
     auto &entry = it->second;
-    entry.ctx->evalWithCatch (entry.sf, nullptr);
+    vec4f result = entry.ctx->evalWithCatch (entry.sf, nullptr);
+
+    const char *ex = entry.ctx->getException ();
+    if (ex) {
+      das_err.message = ex;
+      if (entry.ctx->exceptionAt.fileInfo) {
+        das_err.file = entry.ctx->exceptionAt.fileInfo->name;
+      }
+      das_err.line = entry.ctx->exceptionAt.line;
+      das_err.column = entry.ctx->exceptionAt.column;
+      entry.ctx->clearException ();
+      error = das_err.message;
+      return false;
+    }
+
+    out_value = cast<int32_t>::to (result);
+    return true;
+  }
+
+  // Safe call wrappers — install a SIGSEGV handler before calling into
+  // the VM so that null dereferences, out-of-bounds accesses, and
+  // use-after-free crashes are caught and turned into error messages
+  // instead of crashing the entire engine.
+  //
+  // We bypass evalWithCatch (which replaces throwBuf with its own jmp_buf)
+  // and call callWithCopyOnReturn directly, setting ctx->throwBuf to our
+  // jmp_buf. This way both SIGSEGV (via signal handler) and daScript
+  // panic() (via throw_error_at → longjmp) jump to the same recovery point.
+
+  bool
+  call_void_function_safe (const char *func_name, std::string &error,
+                           das_error &das_err)
+  {
+    auto it = fn_lookup.find (func_name);
+    if (it == fn_lookup.end () || !it->second.sf) {
+      error = "Function '";
+      error += func_name;
+      error += "' not found.";
+      return false;
+    }
+
+    auto &entry = it->second;
+    auto *ctx = entry.ctx;
+
+    // Save context state (same as evalWithCatch does)
+    auto aa = ctx->abiArg;
+    auto acm = ctx->abiCMRES;
+    auto atba = ctx->abiThisBlockArg;
+    char *EP, *SP;
+    ctx->stack.watermark (EP, SP);
+    auto *saved_throwBuf = ctx->throwBuf;
+
+    // Install SIGSEGV handler and set throwBuf to our jmp_buf
+    das_signal::install ();
+    jmp_buf sj;
+    das_signal::tls_jmp = &sj;
+    ctx->throwBuf = &sj;
+
+    bool caught = false;
+    if (setjmp (sj) == 0) {
+      // Normal path — execute the function directly
+      ctx->callWithCopyOnReturn (entry.sf, nullptr, nullptr, nullptr);
+    } else {
+      // Longjmp path — either SIGSEGV (signal handler) or daScript panic()
+      caught = true;
+    }
+
+    // Restore context state
+    ctx->throwBuf = saved_throwBuf;
+    das_signal::tls_jmp = nullptr;
+    das_signal::restore ();
+
+    if (caught) {
+      // Extract error info from the context
+      const char *ex = ctx->getException ();
+      if (ex) {
+        // daScript panic — message already set by throw_fatal_error
+        das_err.message = ex;
+        if (ctx->exceptionAt.fileInfo) {
+          das_err.file = ctx->exceptionAt.fileInfo->name;
+        }
+        das_err.line = ctx->exceptionAt.line;
+        das_err.column = ctx->exceptionAt.column;
+        ctx->clearException ();
+      } else {
+        // SIGSEGV — no daScript exception, just the signal
+        das_err.message = "Segmentation fault in daslang script";
+      }
+      // Restore context state after longjmp (stack/abi may be corrupted)
+      ctx->abiArg = aa;
+      ctx->abiCMRES = acm;
+      ctx->abiThisBlockArg = atba;
+      ctx->stack.pop (EP, SP);
+      error = das_err.message;
+      return false;
+    }
+
+    // Check for daScript panics that didn't longjmp (shouldn't happen, but
+    // be defensive)
+    const char *ex = ctx->getException ();
+    if (ex) {
+      das_err.message = ex;
+      if (ctx->exceptionAt.fileInfo) {
+        das_err.file = ctx->exceptionAt.fileInfo->name;
+      }
+      das_err.line = ctx->exceptionAt.line;
+      das_err.column = ctx->exceptionAt.column;
+      ctx->clearException ();
+      error = das_err.message;
+      return false;
+    }
+    return true;
+  }
+
+  bool
+  call_void_function_safe (const std::string &path, const char *func_name,
+                           std::string &error, das_error &das_err)
+  {
+    auto file_it = file_fn_lookup.find (path);
+    if (file_it == file_fn_lookup.end ()) {
+      error = "No compiled functions for path: " + path;
+      return false;
+    }
+    auto it = file_it->second.find (func_name);
+    if (it == file_it->second.end () || !it->second.sf) {
+      error = "Function '";
+      error += func_name;
+      error += "' not found in file '";
+      error += path;
+      error += "'.";
+      return false;
+    }
+
+    auto &entry = it->second;
+    auto *ctx = entry.ctx;
+
+    auto aa = ctx->abiArg;
+    auto acm = ctx->abiCMRES;
+    auto atba = ctx->abiThisBlockArg;
+    char *EP, *SP;
+    ctx->stack.watermark (EP, SP);
+    auto *saved_throwBuf = ctx->throwBuf;
+
+    das_signal::install ();
+    jmp_buf sj;
+    das_signal::tls_jmp = &sj;
+    ctx->throwBuf = &sj;
+
+    bool caught = false;
+    if (setjmp (sj) == 0) {
+      ctx->callWithCopyOnReturn (entry.sf, nullptr, nullptr, nullptr);
+    } else {
+      caught = true;
+    }
+
+    ctx->throwBuf = saved_throwBuf;
+    das_signal::tls_jmp = nullptr;
+    das_signal::restore ();
+
+    if (caught) {
+      const char *ex = ctx->getException ();
+      if (ex) {
+        das_err.message = ex;
+        if (ctx->exceptionAt.fileInfo) {
+          das_err.file = ctx->exceptionAt.fileInfo->name;
+        }
+        das_err.line = ctx->exceptionAt.line;
+        das_err.column = ctx->exceptionAt.column;
+        ctx->clearException ();
+      } else {
+        das_err.message = "Segmentation fault in daslang script";
+      }
+      ctx->abiArg = aa;
+      ctx->abiCMRES = acm;
+      ctx->abiThisBlockArg = atba;
+      ctx->stack.pop (EP, SP);
+      error = das_err.message;
+      return false;
+    }
+
+    const char *ex = ctx->getException ();
+    if (ex) {
+      das_err.message = ex;
+      if (ctx->exceptionAt.fileInfo) {
+        das_err.file = ctx->exceptionAt.fileInfo->name;
+      }
+      das_err.line = ctx->exceptionAt.line;
+      das_err.column = ctx->exceptionAt.column;
+      ctx->clearException ();
+      error = das_err.message;
+      return false;
+    }
     return true;
   }
 
@@ -627,7 +981,7 @@ das_engine::call_void_function (const char *func_name)
     return false;
   }
 
-  return m_impl->call_void_function (func_name, m_last_error);
+  return m_impl->call_void_function (func_name, m_last_error, m_last_das_error);
 }
 
 bool
@@ -639,7 +993,8 @@ das_engine::call_void_function (const std::filesystem::path &path,
     return false;
   }
 
-  return m_impl->call_void_function (path.string (), func_name, m_last_error);
+  return m_impl->call_void_function (path.string (), func_name, m_last_error,
+                                     m_last_das_error);
 }
 
 bool
@@ -657,7 +1012,37 @@ das_engine::call_int_function (const char *func_name, int *out_value)
 
   int dummy = 0;
   return m_impl->call_int_function (func_name, out_value ? *out_value : dummy,
-                                    m_last_error);
+                                    m_last_error, m_last_das_error);
+}
+
+bool
+das_engine::call_void_function_safe (const char *func_name)
+{
+  if (!m_initialized) {
+    m_last_error = "Engine not initialized";
+    return false;
+  }
+
+  if (m_impl->fn_lookup.empty ()) {
+    m_last_error = "No functions loaded";
+    return false;
+  }
+
+  return m_impl->call_void_function_safe (func_name, m_last_error,
+                                          m_last_das_error);
+}
+
+bool
+das_engine::call_void_function_safe (const std::filesystem::path &path,
+                                     const char *func_name)
+{
+  if (!m_initialized) {
+    m_last_error = "Engine not initialized";
+    return false;
+  }
+
+  return m_impl->call_void_function_safe (path.string (), func_name,
+                                          m_last_error, m_last_das_error);
 }
 
 das_engine::class_instance
@@ -680,6 +1065,28 @@ das_engine::instantiate_class (const std::filesystem::path &path,
     m_last_error = error;
   }
   return result;
+}
+
+bool
+das_engine::has_class (const std::filesystem::path &path,
+                       const std::string &class_name)
+{
+  if (!m_initialized) {
+    return false;
+  }
+  if (m_impl->program_contexts.empty ()) {
+    return false;
+  }
+  auto it = m_impl->compiled_programs.find (path.string ());
+  if (it == m_impl->compiled_programs.end ()) {
+    return false;
+  }
+  auto program = it->second;
+  if (!program || !program->thisModule) {
+    return false;
+  }
+  auto structs = program->findStructure (class_name.c_str ());
+  return !structs.empty ();
 }
 
 void
@@ -728,6 +1135,21 @@ das_engine::call_void_function (const char *)
 
 bool
 das_engine::call_int_function (const char *, int *)
+{
+  m_last_error = "daslang support not enabled";
+  return false;
+}
+
+bool
+das_engine::call_void_function_safe (const char *)
+{
+  m_last_error = "daslang support not enabled";
+  return false;
+}
+
+bool
+das_engine::call_void_function_safe (const std::filesystem::path &,
+                                     const char *)
 {
   m_last_error = "daslang support not enabled";
   return false;

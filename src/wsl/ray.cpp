@@ -17,7 +17,9 @@ make_pick_ray (entt::registry &registry, entt::entity camera_entity,
   auto const &wt = registry.get<comp::world_transform> (camera_entity);
 
   glm::mat4 const view = comp::camera::view (wt);
-  glm::mat4 const proj = cam.proj ();
+  float const aspect = (vp_h > 0.0F) ? (vp_w / vp_h) : 1.0F;
+  glm::mat4 const proj = glm::perspective (glm::radians (cam.fov ()), aspect,
+                                           cam.near (), cam.far ());
   glm::mat4 const inv_vp = glm::inverse (proj * view);
 
   // Screen-space -> NDC

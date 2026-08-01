@@ -3,6 +3,7 @@
 #include "../rsc/scene.hpp"
 #include "../sys/system.hpp"
 #include "../das/das_system.hpp"
+#include "../das/das_system_adapter.hpp"
 #include "../das/das_engine.hpp"
 #include "../log/log.hpp"
 
@@ -81,7 +82,18 @@ system_factory_registry::register_cached_runtime_system (
   desc.runtime_registered = true;
   desc.factory = [display_name = desc.display_name,
                   script_path = std::string (script_path), type_id,
-                  &engine] (rsc::scene &) {
+                  &engine] (rsc::scene &) -> std::unique_ptr<sys::ecs_system> {
+    // Check if the script defines a "System" class (class-adapter pattern).
+    // If so, instantiate the class and use das_system_adapter which dispatches
+    // virtual method calls to daslang overrides via the adapter pattern.
+    // Otherwise, fall back to das_system which calls exported free functions.
+    std::string error;
+    auto instance = engine.instantiate_class (script_path, "System", error);
+    if (instance.ptr && instance.info && instance.ctx) {
+      return std::make_unique<das::das_system_adapter> (
+          display_name, script_path, engine, type_id, instance.ptr,
+          instance.info, instance.ctx);
+    }
     return std::make_unique<das::das_system> (display_name, script_path, engine,
                                               type_id);
   };

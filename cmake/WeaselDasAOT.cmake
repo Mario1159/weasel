@@ -9,6 +9,12 @@
 
 include(CMakeParseArguments)
 
+# Capture the cmake module directory at file scope.
+# CMAKE_CURRENT_LIST_DIR inside a function() reflects the *caller's* file,
+# not the file where the function is defined.  Store it here while the file
+# is being included so the lookup functions can use the correct base path.
+get_filename_component(_WEASEL_CMAKE_MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
+
 # Find the daslang binary. Searches PATH first, then falls back to
 # the Weasel export variable.
 function(_weasel_find_daslang)
@@ -35,13 +41,13 @@ function(_weasel_find_daslib)
         return()
     endif()
     # Check engine source tree (for in-tree builds)
-    set(_daslib_hint "${CMAKE_CURRENT_LIST_DIR}/../_deps/daslang-src/daslib")
+    set(_daslib_hint "${_WEASEL_CMAKE_MODULE_DIR}/../_deps/daslang-src/daslib")
     if(EXISTS "${_daslib_hint}/weasel_api.das")
         set(WEASEL_DASLIB_DIR "${_daslib_hint}" PARENT_SCOPE)
         return()
     endif()
     # Check installed location (lib/cmake/Weasel/../../../share/weasel/daslib)
-    set(_daslib_hint "${CMAKE_CURRENT_LIST_DIR}/../../../share/weasel/daslib")
+    set(_daslib_hint "${_WEASEL_CMAKE_MODULE_DIR}/../../../share/weasel/daslib")
     if(EXISTS "${_daslib_hint}/weasel_api.das")
         set(WEASEL_DASLIB_DIR "${_daslib_hint}" PARENT_SCOPE)
         return()
@@ -90,20 +96,25 @@ function(weasel_aot_das)
         set(_TmpDir "${_OutputDir}/_tmp_${_Name}")
 
         # daScript -aot mode only resolves modules from the input file's directory.
-        # Create a temp dir with the input file + weasel_api.das together.
+        # Create a temp dir with the input file + weasel_api.das + daslib/weasel_ecs.das.
         add_custom_command(
             OUTPUT "${_OutFile}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_TmpDir}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_TmpDir}/daslib"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${_AbsFile}" "${_TmpDir}/${_Name}.das"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${WEASEL_DASLIB_DIR}/weasel_api.das"
                     "${_TmpDir}/weasel_api.das"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
+                    "${_TmpDir}/daslib/weasel_ecs.das"
             COMMAND "${DASLANG_TOOL}" -aot
                     "${_TmpDir}/${_Name}.das" "${_OutFile}"
             COMMAND ${CMAKE_COMMAND} -E remove_directory "${_TmpDir}"
             DEPENDS "${_AbsFile}"
                     "${WEASEL_DASLIB_DIR}/weasel_api.das"
+                    "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
             COMMENT "AOT-compiling ${_DasFile} -> ${_Name}.das.cpp"
             VERBATIM
         )

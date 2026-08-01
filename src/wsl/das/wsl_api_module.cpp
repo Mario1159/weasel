@@ -1,4 +1,5 @@
 #include "wsl_api_module.hpp"
+#include "das_interop.hpp"
 
 #include "daScript/ast/ast.h"
 #include "daScript/ast/ast_handle.h"
@@ -15,9 +16,13 @@
 #include "wsl/log/log.hpp"
 #include "wsl/ray.hpp"
 #include "wsl/rsc/scene.hpp"
+#include "wsl/rsc/resource_manager.hpp"
+#include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/reg/component_registry.hpp"
 
 #include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_keyboard.h>
+#include <entt/core/hashed_string.hpp>
 #include <cstring>
 
 namespace wsl::das
@@ -234,32 +239,187 @@ wsl_remove_world_transform (uint32_t entity)
   return true;
 }
 
-// ── Transform operations (global-state) ──
+// ── Generic component add/remove ──
 
-float g_transform_out[3] = {};
-
-void
-wsl_get_position (uint32_t entity)
+bool
+wsl_add_component (uint32_t type_id, uint32_t entity)
 {
   auto *reg = get_registry ();
   if (!reg) {
-    g_transform_out[0] = 0;
-    g_transform_out[1] = 0;
-    g_transform_out[2] = 0;
-    return;
+    return false;
   }
   auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    g_transform_out[0] = 0;
-    g_transform_out[1] = 0;
-    g_transform_out[2] = 0;
+  if (!reg->valid (e)) {
+    return false;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return false;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return false;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *desc = comp_reg.find_world_component (type_id);
+  if (!desc) {
+    return false;
+  }
+  if (desc->is_das_component) {
+    return comp_reg.das_component_add (type_id, e);
+  }
+  if (desc->emplace_default) {
+    return desc->emplace_default (*reg, e);
+  }
+  return false;
+}
+
+bool
+wsl_remove_component (uint32_t type_id, uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return false;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e)) {
+    return false;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return false;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return false;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *desc = comp_reg.find_world_component (type_id);
+  if (!desc) {
+    return false;
+  }
+  if (desc->is_das_component) {
+    return comp_reg.das_component_remove (type_id, e);
+  }
+  if (desc->remove) {
+    return desc->remove (*reg, e);
+  }
+  return false;
+}
+
+// ── Camera field access ──
+
+float
+wsl_get_camera_fov (uint32_t camera)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 60.0f;
+  }
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return 60.0f;
+  }
+  return reg->get<comp::camera> (e).fov ();
+}
+
+void
+wsl_set_camera_fov (uint32_t camera, float fov)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
     return;
   }
-  const auto &t = reg->get<comp::transform> (e);
-  g_transform_out[0] = t.position.x ();
-  g_transform_out[1] = t.position.y ();
-  g_transform_out[2] = t.position.z ();
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return;
+  }
+  reg->get<comp::camera> (e).fov () = fov;
 }
+
+float
+wsl_get_camera_near (uint32_t camera)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.5f;
+  }
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return 0.5f;
+  }
+  return reg->get<comp::camera> (e).near ();
+}
+
+void
+wsl_set_camera_near (uint32_t camera, float near_val)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return;
+  }
+  reg->get<comp::camera> (e).near () = near_val;
+}
+
+float
+wsl_get_camera_far (uint32_t camera)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 50.0f;
+  }
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return 50.0f;
+  }
+  return reg->get<comp::camera> (e).far ();
+}
+
+void
+wsl_set_camera_far (uint32_t camera, float far_val)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return;
+  }
+  reg->get<comp::camera> (e).far () = far_val;
+}
+
+float
+wsl_get_camera_aspect_ratio (uint32_t camera)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 1.0f;
+  }
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return 1.0f;
+  }
+  return reg->get<comp::camera> (e).aspect_ratio ();
+}
+
+void
+wsl_set_camera_aspect_ratio (uint32_t camera, float aspect)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (camera);
+  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
+    return;
+  }
+  reg->get<comp::camera> (e).aspect_ratio () = aspect;
+}
+
+// ── Transform operations (per-component getters) ──
 
 void
 wsl_set_position (uint32_t entity, float x, float y, float z)
@@ -274,30 +434,6 @@ wsl_set_position (uint32_t entity, float x, float y, float z)
   }
   auto &t = reg->get<comp::transform> (e);
   t.position = glm::vec3 (x, y, z);
-}
-
-void
-wsl_get_rotation_euler (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    g_transform_out[0] = 0;
-    g_transform_out[1] = 0;
-    g_transform_out[2] = 0;
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    g_transform_out[0] = 0;
-    g_transform_out[1] = 0;
-    g_transform_out[2] = 0;
-    return;
-  }
-  const auto &t = reg->get<comp::transform> (e);
-  math::vec3f euler = t.get_rotation_xyz ();
-  g_transform_out[0] = euler.x ();
-  g_transform_out[1] = euler.y ();
-  g_transform_out[2] = euler.z ();
 }
 
 void
@@ -316,29 +452,6 @@ wsl_set_rotation_euler (uint32_t entity, float pitch, float yaw, float roll)
 }
 
 void
-wsl_get_scale (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    g_transform_out[0] = 0;
-    g_transform_out[1] = 0;
-    g_transform_out[2] = 0;
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    g_transform_out[0] = 0;
-    g_transform_out[1] = 0;
-    g_transform_out[2] = 0;
-    return;
-  }
-  const auto &t = reg->get<comp::transform> (e);
-  g_transform_out[0] = t.scale.x ();
-  g_transform_out[1] = t.scale.y ();
-  g_transform_out[2] = t.scale.z ();
-}
-
-void
 wsl_set_scale (uint32_t entity, float x, float y, float z)
 {
   auto *reg = get_registry ();
@@ -354,21 +467,132 @@ wsl_set_scale (uint32_t entity, float x, float y, float z)
 }
 
 float
-wsl_get_transform_x ()
+wsl_get_position_x (uint32_t entity)
 {
-  return g_transform_out[0];
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  return reg->get<comp::transform> (e).position.x ();
 }
 
 float
-wsl_get_transform_y ()
+wsl_get_position_y (uint32_t entity)
 {
-  return g_transform_out[1];
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  return reg->get<comp::transform> (e).position.y ();
 }
 
 float
-wsl_get_transform_z ()
+wsl_get_position_z (uint32_t entity)
 {
-  return g_transform_out[2];
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  return reg->get<comp::transform> (e).position.z ();
+}
+
+float
+wsl_get_rotation_pitch (uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  math::vec3f euler = reg->get<comp::transform> (e).get_rotation_xyz ();
+  return euler.x ();
+}
+
+float
+wsl_get_rotation_yaw (uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  math::vec3f euler = reg->get<comp::transform> (e).get_rotation_xyz ();
+  return euler.y ();
+}
+
+float
+wsl_get_rotation_roll (uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  math::vec3f euler = reg->get<comp::transform> (e).get_rotation_xyz ();
+  return euler.z ();
+}
+
+float
+wsl_get_scale_x (uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  return reg->get<comp::transform> (e).scale.x ();
+}
+
+float
+wsl_get_scale_y (uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  return reg->get<comp::transform> (e).scale.y ();
+}
+
+float
+wsl_get_scale_z (uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return 0.0f;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
+    return 0.0f;
+  }
+  return reg->get<comp::transform> (e).scale.z ();
 }
 
 // ── Scene operations ──
@@ -448,6 +672,87 @@ wsl_set_active_camera (uint32_t entity)
   }
 
   scene->camera = static_cast<entt::entity> (entity);
+}
+
+uint32_t
+wsl_instantiate_prefab (const char *path)
+{
+  auto *reg = get_registry ();
+  if (!reg || !path) {
+    return NULL_ENTITY_ID;
+  }
+
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return NULL_ENTITY_ID;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return NULL_ENTITY_ID;
+  }
+
+  const entt::id_type prefab_hash = entt::hashed_string{ path };
+  rsc::scene_id prefab_id{ prefab_hash };
+  entt::entity e
+      = runtime_ctx->resource_manager ().instantiate_prefab (prefab_id);
+  return static_cast<uint32_t> (e);
+}
+
+// ── Editor viewport (global-state) ──
+
+float g_editor_img_min_x = 0.0f;
+float g_editor_img_min_y = 0.0f;
+float g_editor_img_size_x = 0.0f;
+float g_editor_img_size_y = 0.0f;
+
+void
+wsl_refresh_editor_viewport ()
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return;
+  }
+  auto *editor_ctx = runtime_ctx->editor_ctx ();
+  if (!editor_ctx) {
+    g_editor_img_min_x = 0.0f;
+    g_editor_img_min_y = 0.0f;
+    g_editor_img_size_x = 0.0f;
+    g_editor_img_size_y = 0.0f;
+    return;
+  }
+  auto const &mn = editor_ctx->last_img_min ();
+  auto const &sz = editor_ctx->last_img_size ();
+  g_editor_img_min_x = mn.x;
+  g_editor_img_min_y = mn.y;
+  g_editor_img_size_x = sz.x;
+  g_editor_img_size_y = sz.y;
+}
+
+float
+wsl_get_editor_img_min_x ()
+{
+  return g_editor_img_min_x;
+}
+float
+wsl_get_editor_img_min_y ()
+{
+  return g_editor_img_min_y;
+}
+float
+wsl_get_editor_img_size_x ()
+{
+  return g_editor_img_size_x;
+}
+float
+wsl_get_editor_img_size_y ()
+{
+  return g_editor_img_size_y;
 }
 
 // ── Component type ID constants ──
@@ -539,6 +844,54 @@ wsl_get_event_mouse_button ()
     return 0;
   }
   return g_current_event->as_mouse_button ().button;
+}
+
+// ── Keyboard event functions ──
+
+int
+wsl_get_event_key_scancode ()
+{
+  if (!g_current_event
+      || (g_current_event->kind () != event_kind::key_down
+          && g_current_event->kind () != event_kind::key_up)) {
+    return 0;
+  }
+  return static_cast<int> (g_current_event->as_keyboard ().scancode);
+}
+
+int
+wsl_get_event_key_keycode ()
+{
+  if (!g_current_event
+      || (g_current_event->kind () != event_kind::key_down
+          && g_current_event->kind () != event_kind::key_up)) {
+    return 0;
+  }
+  return static_cast<int> (g_current_event->as_keyboard ().key);
+}
+
+bool
+wsl_get_event_key_repeat ()
+{
+  if (!g_current_event
+      || (g_current_event->kind () != event_kind::key_down
+          && g_current_event->kind () != event_kind::key_up)) {
+    return false;
+  }
+  return g_current_event->as_keyboard ().repeat;
+}
+
+// ── Keyboard state ──
+
+bool
+wsl_is_key_pressed (int scancode)
+{
+  int num_keys = 0;
+  const bool *state = SDL_GetKeyboardState (&num_keys);
+  if (!state || scancode < 0 || scancode >= num_keys) {
+    return false;
+  }
+  return state[scancode];
 }
 
 // ── SDL window operations ──
@@ -707,7 +1060,7 @@ wsl_refresh_entities_with_component (uint32_t type_id)
     return;
   }
   g_entity_count = 0;
-  for (auto e : reg->view<comp::transform> ()) {
+  for (auto e : reg->storage<entt::entity> ()) {
     bool has = false;
     if (desc->is_das_component) {
       has = comp_reg.das_component_contains (type_id, e);
@@ -1016,46 +1369,71 @@ public:
         "wsl::das::wsl_remove_world_transform")
         ->arg ("entity");
 
-    // Transform operations
-    addExtern<DAS_BIND_FUN (wsl_get_position)> (
-        *this, lib, "get_position", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_get_position")
-        ->arg ("entity");
+    // Generic component add/remove
+    addExtern<DAS_BIND_FUN (wsl_add_component)> (
+        *this, lib, "add_component", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_add_component")
+        ->args ({ "type_id", "entity" });
 
+    addExtern<DAS_BIND_FUN (wsl_remove_component)> (
+        *this, lib, "remove_component", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_remove_component")
+        ->args ({ "type_id", "entity" });
+
+    // Transform operations
     addExtern<DAS_BIND_FUN (wsl_set_position)> (
         *this, lib, "set_position", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_set_position")
         ->args ({ "entity", "x", "y", "z" });
-
-    addExtern<DAS_BIND_FUN (wsl_get_rotation_euler)> (
-        *this, lib, "get_rotation", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_get_rotation_euler")
-        ->arg ("entity");
 
     addExtern<DAS_BIND_FUN (wsl_set_rotation_euler)> (
         *this, lib, "set_rotation", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_set_rotation_euler")
         ->args ({ "entity", "pitch", "yaw", "roll" });
 
-    addExtern<DAS_BIND_FUN (wsl_get_scale)> (*this, lib, "get_scale",
-                                             ::das::SideEffects::modifyExternal,
-                                             "wsl::das::wsl_get_scale")
-        ->arg ("entity");
-
     addExtern<DAS_BIND_FUN (wsl_set_scale)> (*this, lib, "set_scale",
                                              ::das::SideEffects::modifyExternal,
                                              "wsl::das::wsl_set_scale")
         ->args ({ "entity", "x", "y", "z" });
 
-    addExtern<DAS_BIND_FUN (wsl_get_transform_x)> (
-        *this, lib, "get_transform_x", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_transform_x");
-    addExtern<DAS_BIND_FUN (wsl_get_transform_y)> (
-        *this, lib, "get_transform_y", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_transform_y");
-    addExtern<DAS_BIND_FUN (wsl_get_transform_z)> (
-        *this, lib, "get_transform_z", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_transform_z");
+    addExtern<DAS_BIND_FUN (wsl_get_position_x)> (
+        *this, lib, "get_position_x", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_position_x")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_get_position_y)> (
+        *this, lib, "get_position_y", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_position_y")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_get_position_z)> (
+        *this, lib, "get_position_z", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_position_z")
+        ->arg ("entity");
+
+    addExtern<DAS_BIND_FUN (wsl_get_rotation_pitch)> (
+        *this, lib, "get_rotation_pitch", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_rotation_pitch")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_get_rotation_yaw)> (
+        *this, lib, "get_rotation_yaw", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_rotation_yaw")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_get_rotation_roll)> (
+        *this, lib, "get_rotation_roll", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_rotation_roll")
+        ->arg ("entity");
+
+    addExtern<DAS_BIND_FUN (wsl_get_scale_x)> (
+        *this, lib, "get_scale_x", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_scale_x")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_get_scale_y)> (
+        *this, lib, "get_scale_y", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_scale_y")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_get_scale_z)> (
+        *this, lib, "get_scale_z", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_scale_z")
+        ->arg ("entity");
 
     // Scene operations
     addExtern<DAS_BIND_FUN (wsl_find_entity_by_name)> (
@@ -1071,6 +1449,30 @@ public:
         *this, lib, "set_active_camera", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_set_active_camera")
         ->arg ("entity");
+
+    addExtern<DAS_BIND_FUN (wsl_instantiate_prefab)> (
+        *this, lib, "instantiate_prefab", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_instantiate_prefab")
+        ->arg ("path");
+
+    // Editor viewport
+    addExtern<DAS_BIND_FUN (wsl_refresh_editor_viewport)> (
+        *this, lib, "refresh_editor_viewport",
+        ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_refresh_editor_viewport");
+
+    addExtern<DAS_BIND_FUN (wsl_get_editor_img_min_x)> (
+        *this, lib, "get_editor_img_min_x", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_editor_img_min_x");
+    addExtern<DAS_BIND_FUN (wsl_get_editor_img_min_y)> (
+        *this, lib, "get_editor_img_min_y", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_editor_img_min_y");
+    addExtern<DAS_BIND_FUN (wsl_get_editor_img_size_x)> (
+        *this, lib, "get_editor_img_size_x", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_editor_img_size_x");
+    addExtern<DAS_BIND_FUN (wsl_get_editor_img_size_y)> (
+        *this, lib, "get_editor_img_size_y", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_editor_img_size_y");
 
     // Component type ID constants
     addExtern<DAS_BIND_FUN (wsl_type_id_transform)> (
@@ -1114,6 +1516,62 @@ public:
         *this, lib, "get_event_mouse_button",
         ::das::SideEffects::accessExternal,
         "wsl::das::wsl_get_event_mouse_button");
+
+    // Keyboard event functions
+    addExtern<DAS_BIND_FUN (wsl_get_event_key_scancode)> (
+        *this, lib, "get_event_key_scancode",
+        ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_event_key_scancode");
+
+    addExtern<DAS_BIND_FUN (wsl_get_event_key_keycode)> (
+        *this, lib, "get_event_key_keycode", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_event_key_keycode");
+
+    addExtern<DAS_BIND_FUN (wsl_get_event_key_repeat)> (
+        *this, lib, "get_event_key_repeat", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_event_key_repeat");
+
+    // Keyboard state
+    addExtern<DAS_BIND_FUN (wsl_is_key_pressed)> (
+        *this, lib, "is_key_pressed", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_is_key_pressed")
+        ->arg ("scancode");
+
+    // Camera field access
+    addExtern<DAS_BIND_FUN (wsl_get_camera_fov)> (
+        *this, lib, "get_camera_fov", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_camera_fov")
+        ->arg ("camera");
+    addExtern<DAS_BIND_FUN (wsl_set_camera_fov)> (
+        *this, lib, "set_camera_fov", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_camera_fov")
+        ->args ({ "camera", "fov" });
+    addExtern<DAS_BIND_FUN (wsl_get_camera_near)> (
+        *this, lib, "get_camera_near", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_camera_near")
+        ->arg ("camera");
+    addExtern<DAS_BIND_FUN (wsl_set_camera_near)> (
+        *this, lib, "set_camera_near", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_camera_near")
+        ->args ({ "camera", "near_val" });
+    addExtern<DAS_BIND_FUN (wsl_get_camera_far)> (
+        *this, lib, "get_camera_far", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_camera_far")
+        ->arg ("camera");
+    addExtern<DAS_BIND_FUN (wsl_set_camera_far)> (
+        *this, lib, "set_camera_far", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_camera_far")
+        ->args ({ "camera", "far_val" });
+    addExtern<DAS_BIND_FUN (wsl_get_camera_aspect_ratio)> (
+        *this, lib, "get_camera_aspect_ratio",
+        ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_camera_aspect_ratio")
+        ->arg ("camera");
+    addExtern<DAS_BIND_FUN (wsl_set_camera_aspect_ratio)> (
+        *this, lib, "set_camera_aspect_ratio",
+        ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_camera_aspect_ratio")
+        ->args ({ "camera", "aspect" });
 
     // SDL window operations
     addExtern<DAS_BIND_FUN (wsl_set_relative_mouse_mode)> (
@@ -1243,6 +1701,13 @@ public:
         static_cast<uint32_t> (event_kind::mouse_button_up));
     ::das::addConstant<uint32_t> (*this, "EVENT_QUIT",
                                   static_cast<uint32_t> (event_kind::quit));
+    ::das::addConstant<uint32_t> (*this, "EVENT_KEY_DOWN",
+                                  static_cast<uint32_t> (event_kind::key_down));
+    ::das::addConstant<uint32_t> (*this, "EVENT_KEY_UP",
+                                  static_cast<uint32_t> (event_kind::key_up));
+
+    // Low-level interop functions (addInterop)
+    register_interop_functions (*this);
   }
 
   virtual ::das::ModuleAotType

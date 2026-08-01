@@ -25,7 +25,7 @@ def entity_create() : uint => 0
 def entity_destroy(entity : uint) { }
 /// Returns true if the entity ID refers to a live entity.
 def entity_valid(entity : uint) : bool => false
-/// Returns true if the entity ID is the null sentinel.
+/// Returns true if the entity ID refers to a live entity.
 def entity_is_null(entity : uint) : bool => true
 /// Returns the null entity sentinel value.
 def null_entity() : uint => 0
@@ -34,43 +34,55 @@ def null_entity() : uint => 0
 /// Returns true if the entity owns a component with the given type ID.
 def has_component(type_id : uint, entity : uint) : bool => false
 
+// --- Generic component add/remove ---
+/// Adds a component by type ID to the entity. Returns true on success.
+def add_component(type_id : uint, entity : uint) : bool => false
+/// Removes a component by type ID from the entity. Returns true on success.
+def remove_component(type_id : uint, entity : uint) : bool => false
+
 // --- Per-component add/remove ---
-/// Adds a Transform component to the entity.
-def add_transform(entity : uint) { }
-/// Removes the Transform component from the entity.
-def remove_transform(entity : uint) { }
-/// Adds a Camera component to the entity.
-def add_camera(entity : uint) { }
-/// Removes the Camera component from the entity.
-def remove_camera(entity : uint) { }
-/// Adds a Hierarchy component to the entity.
-def add_hierarchy(entity : uint) { }
-/// Removes the Hierarchy component from the entity.
-def remove_hierarchy(entity : uint) { }
-/// Adds a World Transform component to the entity.
-def add_world_transform(entity : uint) { }
-/// Removes the World Transform component from the entity.
-def remove_world_transform(entity : uint) { }
+/// Adds a Transform component to the entity. Returns true on success.
+def add_transform(entity : uint) : bool => false
+/// Removes the Transform component from the entity. Returns true on success.
+def remove_transform(entity : uint) : bool => false
+/// Adds a Camera component to the entity. Returns true on success.
+def add_camera(entity : uint) : bool => false
+/// Removes the Camera component from the entity. Returns true on success.
+def remove_camera(entity : uint) : bool => false
+/// Adds a Hierarchy component to the entity. Returns true on success.
+def add_hierarchy(entity : uint) : bool => false
+/// Removes the Hierarchy component from the entity. Returns true on success.
+def remove_hierarchy(entity : uint) : bool => false
+/// Adds a World Transform component to the entity. Returns true on success.
+def add_world_transform(entity : uint) : bool => false
+/// Removes the World Transform component from the entity. Returns true on success.
+def remove_world_transform(entity : uint) : bool => false
 
 // --- Transform operations ---
-/// Reads the entity's local position. Use get_transform_x/y/z to extract components.
-def get_position(entity : uint) { }
 /// Sets the entity's local position.
 def set_position(entity : uint, x : float, y : float, z : float) { }
-/// Reads the entity's rotation as Euler angles (pitch, yaw, roll) in degrees.
-def get_rotation(entity : uint) { }
 /// Sets the entity's rotation from Euler angles in degrees.
 def set_rotation(entity : uint, pitch : float, yaw : float, roll : float) { }
-/// Reads the entity's local scale. Use get_transform_x/y/z to extract components.
-def get_scale(entity : uint) { }
 /// Sets the entity's local scale.
 def set_scale(entity : uint, x : float, y : float, z : float) { }
-/// Returns the X component of the last get_position/get_scale call.
-def get_transform_x() : float => 0.0
-/// Returns the Y component of the last get_position/get_scale call.
-def get_transform_y() : float => 0.0
-/// Returns the Z component of the last get_position/get_scale call.
-def get_transform_z() : float => 0.0
+/// Returns the X component of the entity's local position.
+def get_position_x(entity : uint) : float => 0.0
+/// Returns the Y component of the entity's local position.
+def get_position_y(entity : uint) : float => 0.0
+/// Returns the Z component of the entity's local position.
+def get_position_z(entity : uint) : float => 0.0
+/// Returns the pitch (X) component of the entity's rotation in degrees.
+def get_rotation_pitch(entity : uint) : float => 0.0
+/// Returns the yaw (Y) component of the entity's rotation in degrees.
+def get_rotation_yaw(entity : uint) : float => 0.0
+/// Returns the roll (Z) component of the entity's rotation in degrees.
+def get_rotation_roll(entity : uint) : float => 0.0
+/// Returns the X component of the entity's local scale.
+def get_scale_x(entity : uint) : float => 0.0
+/// Returns the Y component of the entity's local scale.
+def get_scale_y(entity : uint) : float => 0.0
+/// Returns the Z component of the entity's local scale.
+def get_scale_z(entity : uint) : float => 0.0
 
 // --- Scene operations ---
 /// Finds an entity by its scene name. Returns null if not found.
@@ -79,6 +91,8 @@ def find_entity_by_name(name : string) : uint => 0
 def get_active_camera() : uint => 0
 /// Sets the active camera to the given entity.
 def set_active_camera(entity : uint) { }
+/// Instantiates a prefab scene and returns the root entity of the copy.
+def instantiate_prefab(path : string) : uint => 0
 
 // --- Component type ID constants ---
 /// Stable type ID for the Transform component.
@@ -90,6 +104,24 @@ def TYPE_HIERARCHY() : uint => 0
 /// Stable type ID for the World Transform component.
 def TYPE_WORLD_TRANSFORM() : uint => 0
 
+// --- Camera field access ---
+/// Returns the field of view of the camera in degrees.
+def get_camera_fov(camera : uint) : float => 60.0
+/// Sets the field of view of the camera in degrees.
+def set_camera_fov(camera : uint, fov : float) { }
+/// Returns the near clip plane of the camera.
+def get_camera_near(camera : uint) : float => 0.5
+/// Sets the near clip plane of the camera.
+def set_camera_near(camera : uint, near_val : float) { }
+/// Returns the far clip plane of the camera.
+def get_camera_far(camera : uint) : float => 50.0
+/// Sets the far clip plane of the camera.
+def set_camera_far(camera : uint, far_val : float) { }
+/// Returns the aspect ratio of the camera.
+def get_camera_aspect_ratio(camera : uint) : float => 1.0
+/// Sets the aspect ratio of the camera.
+def set_camera_aspect_ratio(camera : uint, aspect : float) { }
+
 // --- Event query functions ---
 /// Returns the type of the current event (see EVENT_* constants).
 def get_event_kind() : uint => 0
@@ -98,15 +130,27 @@ def get_event_mouse_dx() : float => 0.0
 /// Returns the vertical mouse delta for mouse motion events.
 def get_event_mouse_dy() : float => 0.0
 /// Returns the mouse X position for button events.
-def get_event_mouse_x() : float => 0.0
+def get_event_mouse_x() : int => 0
 /// Returns the mouse Y position for button events.
-def get_event_mouse_y() : float => 0.0
+def get_event_mouse_y() : int => 0
 /// Returns which mouse button was pressed/released.
 def get_event_mouse_button() : int => 0
 
+// --- Keyboard event functions ---
+/// Returns the SDL scancode of the key for key events.
+def get_event_key_scancode() : int => 0
+/// Returns the SDL keycode of the key for key events.
+def get_event_key_keycode() : int => 0
+/// Returns true if the key event is a repeat.
+def get_event_key_repeat() : bool => false
+
+// --- Keyboard state ---
+/// Returns true if the given SDL scancode is currently pressed.
+def is_key_pressed(scancode : int) : bool => false
+
 // --- SDL window operations ---
-/// Enables or disables relative mouse mode (FPS-style mouse).
-def set_relative_mouse_mode(enabled : bool) { }
+/// Enables or disables relative mouse mode (FPS-style mouse). Returns true on success.
+def set_relative_mouse_mode(enabled : bool) : bool => false
 /// Returns true if the cursor is currently visible.
 def cursor_visible() : bool => true
 /// Shows the system cursor.
@@ -121,6 +165,18 @@ def refresh_window_size() { }
 def get_window_width() : int => 0
 /// Returns the window height. Call refresh_window_size first.
 def get_window_height() : int => 0
+
+// --- Editor viewport ---
+/// Queries the editor for the game-view image bounds (call before get_editor_img_*).
+def refresh_editor_viewport() { }
+/// Returns the X position of the editor game-view image. Call refresh_editor_viewport first.
+def get_editor_img_min_x() : float => 0.0
+/// Returns the Y position of the editor game-view image. Call refresh_editor_viewport first.
+def get_editor_img_min_y() : float => 0.0
+/// Returns the width of the editor game-view image. Call refresh_editor_viewport first.
+def get_editor_img_size_x() : float => 0.0
+/// Returns the height of the editor game-view image. Call refresh_editor_viewport first.
+def get_editor_img_size_y() : float => 0.0
 
 // --- Entity iteration ---
 /// Populates the entity buffer with all entities that have a Transform.
@@ -146,7 +202,7 @@ def set_component_field_f(entity : uint, type_id : uint, offset : int, value : f
 
 // --- Raycasting ---
 /// Casts a ray from the camera through the given screen coordinates.
-def make_pick_ray(x : float, y : float) { }
+def make_pick_ray(camera_entity : uint, mouse_x : float, mouse_y : float, vp_x : float, vp_y : float, vp_w : float, vp_h : float) : bool => false
 /// Returns the X origin of the last pick ray.
 def get_ray_origin_x() : float => 0.0
 /// Returns the Y origin of the last pick ray.
@@ -159,8 +215,8 @@ def get_ray_dir_x() : float => 0.0
 def get_ray_dir_y() : float => 0.0
 /// Returns the Z direction of the last pick ray.
 def get_ray_dir_z() : float => 0.0
-/// Intersects the last pick ray with a plane. Returns true if hit.
-def ray_plane_intersect(plane_y : float) : bool => false
+/// Intersects a ray with a plane defined by a point and normal. Returns true if hit.
+def ray_plane_intersect(origin_x : float, origin_y : float, origin_z : float, dir_x : float, dir_y : float, dir_z : float, plane_x : float, plane_y : float, plane_z : float, plane_nx : float, plane_ny : float, plane_nz : float) : bool => false
 /// Returns the X coordinate of the last ray-plane intersection.
 def get_hit_x() : float => 0.0
 /// Returns the Y coordinate of the last ray-plane intersection.
@@ -175,5 +231,15 @@ let EVENT_MOUSE_MOTION : uint = 2
 let EVENT_MOUSE_BUTTON_DOWN : uint = 3
 /// Mouse button released.
 let EVENT_MOUSE_BUTTON_UP : uint = 4
+/// Key pressed.
+let EVENT_KEY_DOWN : uint = 5
+/// Key released.
+let EVENT_KEY_UP : uint = 6
 /// Application quit requested.
 let EVENT_QUIT : uint = 0
+
+// --- SDL button constants ---
+/// Left mouse button.
+let SDL_BUTTON_LEFT : uint = 1
+/// Right mouse button.
+let SDL_BUTTON_RIGHT : uint = 3

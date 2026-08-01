@@ -779,17 +779,17 @@ rsc::resource_manager::activate_scene (scene_id id)
   return false;
 }
 
-void
+entt::entity
 rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
 {
   scene *active_scene = m_runtime_ctx->scene_manager ().get_active ();
   if (active_scene == nullptr) {
-    return;
+    return entt::null;
   }
 
   detail::scene_record *rec = find_record (m_scene_table, id.value);
   if (rec == nullptr) {
-    return;
+    return entt::null;
   }
 
   // Ensure it is loaded.
@@ -814,22 +814,22 @@ rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
           }
         } else {
           rec->state = scene_state::not_loaded;
-          return;
+          return entt::null;
         }
       } catch (...) {
         rec->state = scene_state::not_loaded;
-        return;
+        return entt::null;
       }
     }
   }
 
   if (rec->state != scene_state::loaded) {
-    return;
+    return entt::null;
   }
 
   scene *prefab_scene = find_loaded_scene (id);
   if (prefab_scene == nullptr) {
-    return;
+    return entt::null;
   }
 
   entt::registry &prefab_reg = prefab_scene->get_registry ();
@@ -848,9 +848,15 @@ rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
     }
   });
 
+  entt::entity first_root = entt::null;
   for (entt::entity const root : roots) {
-    active_scene->copy_entity (*prefab_scene, root, parent, true, id);
+    entt::entity copied
+        = active_scene->copy_entity (*prefab_scene, root, parent, true, id);
+    if (first_root == entt::null) {
+      first_root = copied;
+    }
   }
+  return first_root;
 }
 
 rsc::scene_state

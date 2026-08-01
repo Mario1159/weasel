@@ -288,6 +288,12 @@ public:
     return m_editor_active;
   }
 
+  virtual bool
+  has_failed () const
+  {
+    return false;
+  }
+
 protected:
   void
   set_dependencies (std::vector<std::string> dependencies)

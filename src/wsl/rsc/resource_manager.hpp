@@ -227,9 +227,9 @@ struct material_resource_info
 /** Metadata for a shader program resource. */
 struct shader_program_resource_info
 {
-  entt::id_type id{}; // Unique identifier.
-  std::string path;   // Optional path (empty for runtime generated).
-  std::string name;   // Human-readable name.
+  entt::id_type id{};           // Unique identifier.
+  std::string path;             // Optional path (empty for runtime generated).
+  std::string name;             // Human-readable name.
   shader_program_state state{}; // Current loading state.
 };
 
@@ -239,12 +239,11 @@ namespace detail
 /** Internal record tracking the state and data of a model resource. */
 struct model_record
 {
-  std::string path;                            // Path to the model file.
-  std::string name;                            // Human-readable name.
-  model_state state = model_state::not_loaded; // Current loading state.
-  std::future<std::shared_ptr<raw::cpu_model>>
-      job{};                                  // Async CPU loading job.
-  std::shared_ptr<raw::cpu_model> cpu_data{}; // Loaded CPU data.
+  std::string path;                                   // Path to the model file.
+  std::string name;                                   // Human-readable name.
+  model_state state = model_state::not_loaded;        // Current loading state.
+  std::future<std::shared_ptr<raw::cpu_model>> job{}; // Async CPU loading job.
+  std::shared_ptr<raw::cpu_model> cpu_data{};         // Loaded CPU data.
   std::unique_ptr<model_loader::upload_session>
       upload{}; // Active GPU upload session.
 };
@@ -252,17 +251,17 @@ struct model_record
 /** Internal record tracking the state and data of an image resource. */
 struct image_record
 {
-  std::string path;                            // Path to the image file.
-  std::string name;                            // Human-readable name.
-  image_state state = image_state::not_loaded; // Current loading state.
+  std::string path;                                   // Path to the image file.
+  std::string name;                                   // Human-readable name.
+  image_state state = image_state::not_loaded;        // Current loading state.
   std::future<std::shared_ptr<raw::image_cpu>> job{}; // Async loading job.
 };
 
 /** Internal record tracking the state and data of a cubemap resource. */
 struct cubemap_record
 {
-  std::string path; // Path to the cubemap file.
-  std::string name; // Human-readable name.
+  std::string path;                                 // Path to the cubemap file.
+  std::string name;                                 // Human-readable name.
   cubemap_state state = cubemap_state::not_loaded;  // Current loading state.
   std::future<std::shared_ptr<gfx::cubemap>> job{}; // Async loading job.
 };
@@ -273,7 +272,7 @@ struct scene_record
   std::string path;                            // Path to the scene file.
   std::string name;                            // Human-readable name.
   scene_state state = scene_state::not_loaded; // Current loading state.
-  bool is_prefab = false; // Whether the scene is a prefab.
+  bool is_prefab = false;                      // Whether the scene is a prefab.
   std::future<std::shared_ptr<rsc::scene>> job{}; // Async loading job.
 };
 
@@ -283,7 +282,7 @@ struct audio_record
   std::string path;                            // Path to the audio file.
   std::string name;                            // Human-readable name.
   audio_state state = audio_state::not_loaded; // Current loading state.
-  MIX_Audio *audio = nullptr; // Pointer to loaded audio data.
+  MIX_Audio *audio = nullptr;                  // Pointer to loaded audio data.
 };
 
 /** Internal record tracking the state of a UI layout resource. */
@@ -531,8 +530,11 @@ public:
    */
   bool activate_scene (scene_id id);
 
-  /** Instantiate a prefab scene under the optional parent entity. */
-  void instantiate_prefab (scene_id id, entt::entity parent = entt::null);
+  /** Instantiate a prefab scene under the optional parent entity.
+   *  :return: The root entity of the first instantiated copy, or entt::null on
+   * failure. */
+  entt::entity instantiate_prefab (scene_id id,
+                                   entt::entity parent = entt::null);
 
   /** Query the loading state of a scene id. */
   scene_state state (scene_id id) const;
