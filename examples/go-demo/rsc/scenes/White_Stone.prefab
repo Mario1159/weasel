@@ -1,0 +1,97 @@
+{
+    "header": {
+        "scene_name": "White Stone",
+        "is_prefab": true,
+        "systems": [],
+        "entity_names": [
+            {
+                "first": 0,
+                "second": "White Stone"
+            }
+        ],
+        "connections": [],
+        "autoload": []
+    },
+    "entities": {
+        "alive_count": 1,
+        "free_list_count": 1,
+        "entities": [
+            0
+        ]
+    },
+    "component_data_wsl::comp::world_transform": {
+        "count": 1,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {}
+            }
+        ]
+    },
+    "component_data_wsl::comp::character_body": {
+        "count": 0
+    },
+    "component_data_wsl::comp::audio": {
+        "count": 0
+    },
+    "component_data_wsl::comp::point_light": {
+        "count": 0
+    },
+    "component_data_wsl::comp::hierarchy": {
+        "count": 1,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {}
+            }
+        ]
+    },
+    "component_data_wsl::comp::model_instance_3d": {
+        "count": 1,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {
+                    "model_path": "res://rsc/models/white_stone.glb"
+                }
+            }
+        ]
+    },
+    "component_data_wsl::comp::transform": {
+        "count": 1,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {}
+            }
+        ]
+    },
+    "component_data_wsl::comp::MouseRotate": {
+        "count": 0
+    },
+    "component_data_wsl::comp::area": {
+        "count": 0
+    },
+    "component_data_wsl::comp::camera": {
+        "count": 0
+    },
+    "component_data_wsl::comp::prefab_instance": {
+        "count": 0
+    },
+    "component_data_wsl::comp::rigid_body": {
+        "count": 0
+    },
+    "component_data_wsl::comp::directional_light": {
+        "count": 0
+    },
+    "component_data_wsl::comp::spot_light": {
+        "count": 0
+    },
+    "has_singleton_wsl::comp::singl::rendering_manager": true,
+    "has_singleton_wsl::comp::singl::editor_context": true,
+    "has_singleton_wsl::comp::singl::ui_manager": true,
+    "has_singleton_wsl::comp::singl::physics_manager": true,
+    "has_singleton_wsl::comp::singl::runtime_context": true,
+    "has_singleton_wsl::rsc::scene_manager": true,
+    "has_singleton_wsl::rsc::resource_manager_view": true
+}

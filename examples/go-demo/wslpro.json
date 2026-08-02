@@ -1,0 +1,20 @@
+{
+    "project": {
+        "name": "go-demo",
+        "author": "Unknown",
+        "root_path": "/home/mario/repositories/weasel/examples/go-demo",
+        "systems_path": "src/systems",
+        "components_path": "src/components",
+        "singletons_path": "src/singletons",
+        "scenes_path": "rsc/scenes",
+        "models_path": "rsc/models",
+        "images_path": "rsc/textures",
+        "cubemaps_path": "rsc/textures/cubemaps",
+        "audio_path": "rsc/audio",
+        "ui_layouts_path": "src/ui",
+        "fonts_path": "rsc/fonts",
+        "shaders_path": "",
+        "materials_path": "materials",
+        "default_scene_path": "rsc/scenes/main.wscn.json"
+    }
+}

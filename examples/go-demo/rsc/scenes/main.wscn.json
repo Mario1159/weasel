@@ -1,0 +1,343 @@
+{
+    "header": {
+        "scene_name": "Main Scene",
+        "is_prefab": false,
+        "systems": [
+            "Goban System",
+            "Mouse Rotate System"
+        ],
+        "entity_names": [
+            {
+                "first": 11,
+                "second": "White Stone"
+            },
+            {
+                "first": 1,
+                "second": "FP Camera"
+            },
+            {
+                "first": 1048581,
+                "second": "White Stone"
+            },
+            {
+                "first": 1048580,
+                "second": "Black Stone"
+            },
+            {
+                "first": 2,
+                "second": "Goban Camera"
+            },
+            {
+                "first": 0,
+                "second": "Environment"
+            },
+            {
+                "first": 1048582,
+                "second": "Black Stone"
+            },
+            {
+                "first": 1048579,
+                "second": "Sun"
+            },
+            {
+                "first": 5,
+                "second": "White Stone"
+            },
+            {
+                "first": 6,
+                "second": "Black Stone"
+            },
+            {
+                "first": 7,
+                "second": "White Stone"
+            },
+            {
+                "first": 8,
+                "second": "Black Stone"
+            },
+            {
+                "first": 9,
+                "second": "White Stone"
+            },
+            {
+                "first": 10,
+                "second": "Black Stone"
+            }
+        ],
+        "connections": [],
+        "autoload": [
+            {
+                "type": 0,
+                "path": "builtin://cube"
+            },
+            {
+                "type": 0,
+                "path": "builtin://sphere"
+            },
+            {
+                "type": 2,
+                "path": "builtin/skybox_procedural"
+            },
+            {
+                "type": 0,
+                "path": "res://rsc/models/tea_house_with_go_board.glb"
+            },
+            {
+                "type": 0,
+                "path": "res://rsc/models/black_stone.glb"
+            },
+            {
+                "type": 0,
+                "path": "res://rsc/models/white_stone.glb"
+            }
+        ],
+        "camera": 1
+    },
+    "entities": {
+        "alive_count": 12,
+        "free_list_count": 4,
+        "entities": [
+            0,
+            1,
+            2,
+            1048579,
+            1048580,
+            1048581,
+            1048582,
+            1048583,
+            1048584,
+            1048585,
+            1048586,
+            1048587
+        ]
+    },
+    "component_data_wsl::comp::world_transform": {
+        "count": 4,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {
+                    "matrix": {
+                        "m00": 5.0,
+                        "m11": 5.0,
+                        "m22": 5.0
+                    }
+                }
+            },
+            {
+                "entity": 1,
+                "data": {
+                    "matrix": {
+                        "m31": 5.5,
+                        "m32": 5.0
+                    }
+                }
+            },
+            {
+                "entity": 2,
+                "data": {
+                    "matrix": {
+                        "m11": 3.576229516966123e-7,
+                        "m12": -0.9999861717224121,
+                        "m21": 0.9999861717224121,
+                        "m22": 3.576229516966123e-7,
+                        "m31": 6.767021179199219
+                    }
+                }
+            },
+            {
+                "entity": 1048579,
+                "data": {
+                    "matrix": {
+                        "m00": 0.1961744874715805,
+                        "m01": 0.2801660895347595,
+                        "m02": -0.9396921396255493,
+                        "m10": -0.8191519975662231,
+                        "m11": 0.5735765099525452,
+                        "m12": -2.9802322387695315e-8,
+                        "m20": 0.5389852523803711,
+                        "m21": 0.769750714302063,
+                        "m22": 0.34201961755752566
+                    }
+                }
+            }
+        ]
+    },
+    "component_data_wsl::comp::subviewport": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::character_body": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::audio": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::point_light": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::hierarchy": {
+        "count": 4,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {}
+            },
+            {
+                "entity": 1,
+                "data": {}
+            },
+            {
+                "entity": 2,
+                "data": {}
+            },
+            {
+                "entity": 1048579,
+                "data": {}
+            }
+        ]
+    },
+    "component_data_wsl::comp::model_instance_3d": {
+        "count": 1,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {
+                    "model_path": "res://rsc/models/tea_house_with_go_board.glb"
+                }
+            }
+        ]
+    },
+    "component_data_wsl::comp::transform": {
+        "count": 4,
+        "entries": [
+            {
+                "entity": 0,
+                "data": {
+                    "scale": {
+                        "x": 5.0,
+                        "y": 5.0,
+                        "z": 5.0
+                    }
+                }
+            },
+            {
+                "entity": 1,
+                "data": {
+                    "position": {
+                        "y": 5.5,
+                        "z": 5.0
+                    }
+                }
+            },
+            {
+                "entity": 2,
+                "data": {
+                    "position": {
+                        "y": 6.767021179199219
+                    },
+                    "rotation": {
+                        "x": -0.7071066498756409,
+                        "w": 0.70710688829422
+                    },
+                    "scale": {
+                        "x": 1.0,
+                        "y": 0.9999862313270569,
+                        "z": 0.9999862313270569
+                    }
+                }
+            },
+            {
+                "entity": 1048579,
+                "data": {
+                    "rotation": {
+                        "x": -0.26484817266464236,
+                        "y": 0.508768618106842,
+                        "z": 0.37824225425720217,
+                        "w": 0.7265966534614563
+                    },
+                    "scale": {
+                        "x": 0.9999993443489075,
+                        "y": 1.0,
+                        "z": 0.9999993443489075
+                    }
+                }
+            }
+        ]
+    },
+    "component_data_wsl::comp::area": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::camera": {
+        "count": 2,
+        "entries": [
+            {
+                "entity": 1,
+                "data": {
+                    "fov": 70.0
+                }
+            },
+            {
+                "entity": 2,
+                "data": {}
+            }
+        ]
+    },
+    "component_data_wsl::comp::sprite_2d": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::prefab_instance": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::camera_2d": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::rigid_body": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::transform_2d": {
+        "count": 0,
+        "entries": []
+    },
+    "component_data_wsl::comp::directional_light": {
+        "count": 1,
+        "entries": [
+            {
+                "entity": 1048579,
+                "data": {
+                    "intensity": 1.5
+                }
+            }
+        ]
+    },
+    "component_data_wsl::comp::spot_light": {
+        "count": 0,
+        "entries": []
+    },
+    "das_component_count": 1,
+    "das_type_id": 3939709190,
+    "das_entity": 1,
+    "das_data": "cdcccc3d00000080000000000000b2c20000b242",
+    "has_singleton_wsl::comp::singl::rendering_manager": true,
+    "singleton_data_wsl::comp::singl::rendering_manager": {
+        "skybox": 979691283
+    },
+    "has_singleton_wsl::comp::singl::editor_context": true,
+    "has_singleton_wsl::comp::singl::ui_manager": true,
+    "singleton_data_wsl::comp::singl::ui_manager": {
+        "active_document_id": 4294967295
+    },
+    "has_singleton_wsl::comp::singl::physics_manager": true,
+    "singleton_data_wsl::comp::singl::physics_manager": {},
+    "has_singleton_wsl::comp::singl::runtime_context": true,
+    "has_singleton_wsl::rsc::scene_manager": true,
+    "has_singleton_wsl::rsc::resource_manager_view": true
+}
