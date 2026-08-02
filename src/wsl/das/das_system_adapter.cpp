@@ -101,6 +101,7 @@ das_system_adapter::das_system_adapter (const std::string &name,
       m_script_path (script_path), m_engine (engine), m_type_id (type_id),
       m_class_ptr (class_ptr), m_ctx (ctx)
 {
+  set_editor_active (false);
 }
 
 entt::id_type
