@@ -48,6 +48,14 @@ struct cpu_tex_slot
   uv_xform uv; // per-slot transform
 };
 
+/** Alpha blending mode from glTF alphaMode. */
+enum class alpha_mode : uint8_t
+{
+  opaque,
+  mask,
+  blend,
+};
+
 /** Represents a material stored in system memory. */
 struct cpu_material
 {
@@ -63,6 +71,9 @@ struct cpu_material
   /** Strength of the emissive color. */
   float emissive_strength = 1.0F;
 
+  /** Alpha cutoff threshold for MASK mode (default 0.5 per glTF spec). */
+  float alpha_cutoff = 0.5F;
+
   /** Base color texture slot. */
   cpu_tex_slot base_color;
   /** Metallic-roughness texture slot. */
@@ -72,6 +83,8 @@ struct cpu_material
   /** Emissive map texture slot. */
   cpu_tex_slot emissive;
 
+  /** Alpha blending mode (opaque, mask, blend). */
+  alpha_mode mode = alpha_mode::opaque;
   /** Whether the material is double-sided. */
   bool double_sided = false;
   /** Whether the material is unlit (KHR_materials_unlit). */

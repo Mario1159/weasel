@@ -399,6 +399,20 @@ private:
   SDL_GPUTransferBuffer *m_index_transfer_buffer = nullptr;
 
   // Main scene pipelines.
+  /** Pipeline set: one variant per alpha mode (opaque/mask/blend). */
+  struct pipeline_set
+  {
+    SDL_GPUGraphicsPipeline *opaque = nullptr; // no blend, depth write ON
+    SDL_GPUGraphicsPipeline *mask = nullptr;   // alpha-to-cov, depth write ON
+    SDL_GPUGraphicsPipeline *blend = nullptr;  // alpha blend, depth write OFF
+  };
+
+  pipeline_set m_pipelines;                    // lit, single-sided
+  pipeline_set m_pipelines_double_sided;       // lit, double-sided
+  pipeline_set m_pipelines_unlit;              // unlit, single-sided
+  pipeline_set m_pipelines_unlit_double_sided; // unlit, double-sided
+
+  // Legacy single pointers kept for backwards compatibility during transition.
   SDL_GPUGraphicsPipeline *m_pipeline = nullptr;
   SDL_GPUGraphicsPipeline *m_pipeline_double_sided = nullptr;
   SDL_GPUGraphicsPipeline *m_pipeline_unlit = nullptr;
@@ -493,6 +507,15 @@ private:
    * (set from draw_command::material_override, consumed by render_mesh).
    */
   rsc::material_id m_active_material_override{};
+
+  /** Controls which alpha modes render_mesh draws during the current pass. */
+  enum class alpha_render_pass : uint8_t
+  {
+    all,    /**< render all primitives (default, legacy behaviour). */
+    opaque, /**< only opaque + mask primitives. */
+    blend,  /**< only blend primitives. */
+  };
+  alpha_render_pass m_alpha_pass = alpha_render_pass::all;
 };
 
 /**

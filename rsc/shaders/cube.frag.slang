@@ -29,7 +29,8 @@ cbuffer Material : register(b0, space3)
     float4 u_BaseColorFactor;
     float  u_MetallicFactor;
     float  u_RoughnessFactor;
-    float2 pad_m0;
+    float  u_AlphaCutoff;
+    float  u_AlphaMode; // 0=opaque, 1=mask, 2=blend
 
     float3 u_EmissiveFactor;
     float  u_MipLodBias;
@@ -65,8 +66,17 @@ PSOut fsMain(PSInput input)
         u_BaseColorTex.SampleBias(u_Samplers[0], input.uv, u_MipLodBias) *
         u_BaseColorFactor;
 
-    if (baseColor.a < 0.01)
-        discard;
+    // alphaMode: 0=opaque, 1=mask, 2=blend
+    if (u_AlphaMode > 0.5 && u_AlphaMode < 1.5) // MASK
+    {
+        if (baseColor.a < u_AlphaCutoff)
+            discard;
+    }
+    else if (u_AlphaMode > 1.5) // BLEND
+    {
+        if (baseColor.a < 0.001)
+            discard;
+    }
 
     float3 albedo = baseColor.rgb;
 

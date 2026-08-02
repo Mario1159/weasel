@@ -9,13 +9,21 @@ namespace wsl
 namespace gfx
 {
 
+/** Alpha blending mode (matches glTF alphaMode). */
+enum class alpha_mode : uint8_t
+{
+  opaque = 0,
+  mask = 1,
+  blend = 2,
+};
+
 /** CPU-side material data used by mesh primitives. */
 struct material
 {
   glm::vec4 base_color_factor{ 1.0F };
   float metallic_factor = 0.0F;
   float roughness_factor = 1.0F;
-  float pad0[2]{};
+  float alpha_cutoff = 0.5F;
 
   glm::vec3 emissive_factor{ 0.0F };
   float pad1 = 0.0F;
@@ -34,6 +42,8 @@ struct material
   /** Sampler shared by the material textures. */
   SDL_GPUSampler *sampler = nullptr;
 
+  /** Alpha blending mode (opaque, mask, blend). */
+  alpha_mode mode = alpha_mode::opaque;
   bool double_sided = false;
 
   /** Whether the material is unlit (KHR_materials_unlit). */
@@ -59,7 +69,9 @@ struct material
       base_color_factor = other.base_color_factor;
       metallic_factor = other.metallic_factor;
       roughness_factor = other.roughness_factor;
+      alpha_cutoff = other.alpha_cutoff;
       emissive_factor = other.emissive_factor;
+      mode = other.mode;
       double_sided = other.double_sided;
       unlit = other.unlit;
 
@@ -125,7 +137,9 @@ struct gpu_material
   glm::vec4 base_color;
   float metallic;
   float roughness;
-  float pad0[2]{};
+  float alpha_cutoff;
+  /** 0 = opaque, 1 = mask, 2 = blend */
+  float alpha_mode;
   glm::vec3 emissive;
   float mip_lod_bias = 0.0F;
 };

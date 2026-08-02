@@ -383,7 +383,9 @@ model_loader::upload_next_batch (upload_session &session,
       dst.mat.base_color_factor = mat.base_color_factor;
       dst.mat.metallic_factor = mat.metallic_factor;
       dst.mat.roughness_factor = mat.roughness_factor;
+      dst.mat.alpha_cutoff = mat.alpha_cutoff;
       dst.mat.emissive_factor = mat.emissive_factor;
+      dst.mat.mode = static_cast<gfx::alpha_mode> (mat.mode);
       dst.mat.double_sided = mat.double_sided;
       dst.mat.unlit = mat.unlit;
       break;
@@ -716,8 +718,44 @@ model_loader::load_cpu (const std::string &path) const
       }
 
       // ---- uvs ----
-      if (const auto *t = prim.findAttribute ("TEXCOORD_0");
-          t != prim.attributes.end ()) {
+      // Load both UV sets if present. The dominant texCoord index from
+      // the material determines which set ends up in vertex.uv.
+      bool needs_uv1 = false;
+      if (prim.materialIndex.has_value ()) {
+        const auto &gltf_mat = gltf.materials[*prim.materialIndex];
+        auto check_tex_coord = [&] (const auto &tex_info) {
+          if (tex_info.has_value () && tex_info->texCoordIndex == 1) {
+            needs_uv1 = true;
+          }
+        };
+        check_tex_coord (gltf_mat.pbrData.baseColorTexture);
+        check_tex_coord (gltf_mat.pbrData.metallicRoughnessTexture);
+        check_tex_coord (gltf_mat.normalTexture);
+        check_tex_coord (gltf_mat.emissiveTexture);
+      }
+
+      if (needs_uv1) {
+        if (const auto *t = prim.findAttribute ("TEXCOORD_1");
+            t != prim.attributes.end ()) {
+          const auto &acc = gltf.accessors[t->accessorIndex];
+          fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2> (
+              gltf, acc, [&] (auto uv, size_t i) {
+                out.vertices[i].uv = { uv.x (), uv.y () };
+              });
+        } else if (const auto *t2 = prim.findAttribute ("TEXCOORD_0");
+                   t2 != prim.attributes.end ()) {
+          const auto &acc = gltf.accessors[t2->accessorIndex];
+          fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2> (
+              gltf, acc, [&] (auto uv, size_t i) {
+                out.vertices[i].uv = { uv.x (), uv.y () };
+              });
+        } else {
+          for (auto &v : out.vertices) {
+            v.uv = glm::vec2 (0.0F);
+          }
+        }
+      } else if (const auto *t = prim.findAttribute ("TEXCOORD_0");
+                 t != prim.attributes.end ()) {
         const auto &acc = gltf.accessors[t->accessorIndex];
         fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2> (
             gltf, acc, [&] (auto uv, size_t i) {
@@ -760,6 +798,21 @@ model_loader::load_cpu (const std::string &path) const
                          gltf_mat.emissiveFactor[2]);
         mat.emissive_strength = gltf_mat.emissiveStrength;
         mat.emissive_factor *= mat.emissive_strength;
+
+        // Parse alphaMode and alphaCutoff from glTF material.
+        switch (gltf_mat.alphaMode) {
+        case fastgltf::AlphaMode::Blend:
+          mat.mode = raw::alpha_mode::blend;
+          break;
+        case fastgltf::AlphaMode::Mask:
+          mat.mode = raw::alpha_mode::mask;
+          break;
+        case fastgltf::AlphaMode::Opaque:
+        default:
+          mat.mode = raw::alpha_mode::opaque;
+          break;
+        }
+        mat.alpha_cutoff = gltf_mat.alphaCutoff;
 
         auto load_tex = [&] (const auto &tex_info, raw::cpu_tex_slot &slot) {
           slot = {};

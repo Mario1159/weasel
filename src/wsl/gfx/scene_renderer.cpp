@@ -268,6 +268,8 @@ gfx::scene_renderer::draw_visible_models ()
     ZoneScopedN ("scene_renderer::draw_visible_models::loop");
     TracyPlot ("draw_commands", (int64_t)m_visible_draws.size ());
 
+    // Pass 1: opaque + mask primitives only (writes depth).
+    m_alpha_pass = alpha_render_pass::opaque;
     for (const draw_command &draw : m_visible_draws) {
       if (draw.model == nullptr) {
         continue;
@@ -279,6 +281,22 @@ gfx::scene_renderer::draw_visible_models ()
                   draw.geometry_lod_bias, draw.visibility_range);
       m_active_material_override = {};
     }
+
+    // Pass 2: blend primitives only (no depth write, reads depth from pass 1).
+    m_alpha_pass = alpha_render_pass::blend;
+    for (const draw_command &draw : m_visible_draws) {
+      if (draw.model == nullptr) {
+        continue;
+      }
+
+      m_active_material_override = draw.material_override;
+      draw_model (*draw.model, draw.scene_index, draw.transform,
+                  m_active_view.view_proj, draw.mip_lod_bias,
+                  draw.geometry_lod_bias, draw.visibility_range);
+      m_active_material_override = {};
+    }
+
+    m_alpha_pass = alpha_render_pass::all;
   }
 }
 
@@ -677,91 +695,144 @@ gfx::scene_renderer::create_pipeline ()
     return;
   }
 
-  SDL_GPUGraphicsPipelineCreateInfo pipe{};
-  SDL_zero (pipe);
+  // Helper: create a pipeline with specified alpha mode and cull mode.
+  auto make_pipeline = [&] (alpha_mode a_mode,
+                            SDL_GPUCullMode cull) -> SDL_GPUGraphicsPipeline * {
+    SDL_GPUGraphicsPipelineCreateInfo pipe{};
+    SDL_zero (pipe);
 
-  pipe.vertex_shader = vert;
-  pipe.fragment_shader = frag;
-  pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-  pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
-  pipe.depth_stencil_state.enable_depth_test = true;
-  pipe.depth_stencil_state.enable_depth_write = true;
-  pipe.depth_stencil_state.enable_stencil_test = false;
+    pipe.vertex_shader = vert;
+    pipe.fragment_shader = frag;
+    pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
+    pipe.depth_stencil_state.enable_depth_test = true;
+    pipe.depth_stencil_state.enable_stencil_test = false;
 
-  pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format ();
+    pipe.target_info.has_depth_stencil_target = true;
+    pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
-  SDL_GPUColorTargetDescription ctd[2]{};
-  ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
-  ctd[1].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+    SDL_GPUColorTargetDescription ctd[2]{};
+    ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+    ctd[1].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
 
-  for (int i = 0; i < 2; ++i) {
-    ctd[i].blend_state.enable_blend = true;
-    ctd[i].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
-    ctd[i].blend_state.dst_color_blendfactor
-        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    ctd[i].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-    ctd[i].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-    ctd[i].blend_state.dst_alpha_blendfactor
-        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    ctd[i].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-    ctd[i].blend_state.color_write_mask
-        = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
-          | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
-  }
+    switch (a_mode) {
+    case alpha_mode::opaque:
+      // No blending, depth write ON.
+      ctd[0].blend_state.enable_blend = false;
+      ctd[1].blend_state.enable_blend = false;
+      pipe.depth_stencil_state.enable_depth_write = true;
+      break;
 
-  pipe.target_info.num_color_targets = 2;
-  pipe.target_info.color_target_descriptions = ctd;
+    case alpha_mode::mask:
+      // Alpha-to-coverage: no traditional blend, coverage from alpha.
+      // Depth write ON.
+      ctd[0].blend_state.enable_blend = false;
+      ctd[1].blend_state.enable_blend = false;
+      pipe.depth_stencil_state.enable_depth_write = true;
+      pipe.multisample_state.enable_alpha_to_coverage = true;
+      break;
 
-  pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    case alpha_mode::blend:
+      // Standard alpha blending, depth write OFF.
+      ctd[0].blend_state.enable_blend = true;
+      ctd[0].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+      ctd[0].blend_state.dst_color_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[0].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[0].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+      ctd[0].blend_state.dst_alpha_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[0].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[0].blend_state.color_write_mask
+          = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+            | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
 
-  pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
-  pipe.multisample_state.sample_mask = 0;
-  pipe.multisample_state.enable_mask = false;
+      ctd[1].blend_state.enable_blend = true;
+      ctd[1].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+      ctd[1].blend_state.dst_color_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[1].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[1].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+      ctd[1].blend_state.dst_alpha_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[1].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[1].blend_state.color_write_mask
+          = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+            | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
 
-  static SDL_GPUVertexBufferDescription vbuf{};
-  vbuf.slot = 0;
-  vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-  vbuf.pitch = (Uint32)sizeof (vertex);
+      pipe.depth_stencil_state.enable_depth_write = false;
+      break;
+    }
 
-  pipe.vertex_input_state.num_vertex_buffers = 1;
-  pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
+    for (int i = 0; i < 2; ++i) {
+      ctd[i].blend_state.color_write_mask
+          = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+            | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
+    }
 
-  static SDL_GPUVertexAttribute attrs[4];
-  memset (attrs, 0, sizeof (attrs));
+    pipe.target_info.num_color_targets = 2;
+    pipe.target_info.color_target_descriptions = ctd;
 
-  attrs[0].location = 0;
-  attrs[0].buffer_slot = 0;
-  attrs[0].offset = offsetof (vertex, pos);
-  attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+    pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    pipe.rasterizer_state.cull_mode = cull;
 
-  attrs[1].location = 1;
-  attrs[1].buffer_slot = 0;
-  attrs[1].offset = offsetof (vertex, normal);
-  attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+    pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
+    pipe.multisample_state.sample_mask = 0;
 
-  attrs[2].location = 2;
-  attrs[2].buffer_slot = 0;
-  attrs[2].offset = offsetof (vertex, uv);
-  attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+    static SDL_GPUVertexBufferDescription vbuf{};
+    vbuf.slot = 0;
+    vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+    vbuf.pitch = (Uint32)sizeof (vertex);
 
-  // NEW: tangent at location 3
-  attrs[3].location = 3;
-  attrs[3].buffer_slot = 0;
-  attrs[3].offset = offsetof (vertex, tangent);
-  attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+    pipe.vertex_input_state.num_vertex_buffers = 1;
+    pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
 
-  pipe.vertex_input_state.num_vertex_attributes = 4;
-  pipe.vertex_input_state.vertex_attributes = attrs;
+    static SDL_GPUVertexAttribute attrs[4];
+    memset (attrs, 0, sizeof (attrs));
 
-  // ---------- BACK-FACE CULLING PIPELINE ----------
-  pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
-  m_pipeline = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+    attrs[0].location = 0;
+    attrs[0].buffer_slot = 0;
+    attrs[0].offset = offsetof (vertex, pos);
+    attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
 
-  // ---------- DOUBLE-SIDED PIPELINE ----------
-  pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
-  m_pipeline_double_sided
-      = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+    attrs[1].location = 1;
+    attrs[1].buffer_slot = 0;
+    attrs[1].offset = offsetof (vertex, normal);
+    attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+
+    attrs[2].location = 2;
+    attrs[2].buffer_slot = 0;
+    attrs[2].offset = offsetof (vertex, uv);
+    attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+
+    attrs[3].location = 3;
+    attrs[3].buffer_slot = 0;
+    attrs[3].offset = offsetof (vertex, tangent);
+    attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+
+    pipe.vertex_input_state.num_vertex_attributes = 4;
+    pipe.vertex_input_state.vertex_attributes = attrs;
+
+    return SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+  };
+
+  // Lit, single-sided: 3 alpha mode variants
+  m_pipelines.opaque
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_BACK);
+  m_pipelines.mask = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_BACK);
+  m_pipelines.blend = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_BACK);
+
+  // Lit, double-sided: 3 alpha mode variants
+  m_pipelines_double_sided.opaque
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_NONE);
+  m_pipelines_double_sided.mask
+      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE);
+  m_pipelines_double_sided.blend
+      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_NONE);
+
+  // Legacy pointers point to opaque variants (for backwards compatibility).
+  m_pipeline = m_pipelines.opaque;
+  m_pipeline_double_sided = m_pipelines_double_sided.opaque;
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -770,15 +841,26 @@ gfx::scene_renderer::create_pipeline ()
 void
 gfx::scene_renderer::destroy_pipeline ()
 {
-  if (m_pipeline != nullptr) {
-    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline);
-    m_pipeline = nullptr;
-  }
+  auto destroy_set = [this] (pipeline_set &ps) {
+    if (ps.opaque != nullptr) {
+      SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, ps.opaque);
+      ps.opaque = nullptr;
+    }
+    if (ps.mask != nullptr) {
+      SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, ps.mask);
+      ps.mask = nullptr;
+    }
+    if (ps.blend != nullptr) {
+      SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, ps.blend);
+      ps.blend = nullptr;
+    }
+  };
 
-  if (m_pipeline_double_sided != nullptr) {
-    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_double_sided);
-    m_pipeline_double_sided = nullptr;
-  }
+  destroy_set (m_pipelines);
+  destroy_set (m_pipelines_double_sided);
+
+  m_pipeline = nullptr;
+  m_pipeline_double_sided = nullptr;
 }
 
 gfx::scene_renderer::~scene_renderer ()
@@ -891,6 +973,15 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
   }
 
   for (const primitive &prim : m.primitives) {
+    // When a global alpha pass is active, skip primitives that don't belong.
+    if (m_alpha_pass == alpha_render_pass::opaque
+        && prim.mat.mode == alpha_mode::blend) {
+      continue;
+    }
+    if (m_alpha_pass == alpha_render_pass::blend
+        && prim.mat.mode != alpha_mode::blend) {
+      continue;
+    }
 
     if (m_active_material_override.value != entt::null) {
       // Per-instance material override: render every primitive of this mesh
@@ -909,10 +1000,35 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
     SDL_GPUGraphicsPipeline *pipe = nullptr;
 
     if (m_force_unlit || prim.mat.unlit) {
-      pipe = prim.mat.double_sided ? m_pipeline_unlit_double_sided
-                                   : m_pipeline_unlit;
+      const auto &ps = prim.mat.double_sided ? m_pipelines_unlit_double_sided
+                                             : m_pipelines_unlit;
+      switch (prim.mat.mode) {
+      case alpha_mode::mask:
+        pipe = ps.mask;
+        break;
+      case alpha_mode::blend:
+        pipe = ps.blend;
+        break;
+      case alpha_mode::opaque:
+      default:
+        pipe = ps.opaque;
+        break;
+      }
     } else {
-      pipe = prim.mat.double_sided ? m_pipeline_double_sided : m_pipeline;
+      const auto &ps
+          = prim.mat.double_sided ? m_pipelines_double_sided : m_pipelines;
+      switch (prim.mat.mode) {
+      case alpha_mode::mask:
+        pipe = ps.mask;
+        break;
+      case alpha_mode::blend:
+        pipe = ps.blend;
+        break;
+      case alpha_mode::opaque:
+      default:
+        pipe = ps.opaque;
+        break;
+      }
     }
 
     if ((pipe == nullptr) || (m_ctx->main_pass == nullptr)) {
@@ -926,6 +1042,8 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
     gpu_mat.base_color = prim.mat.base_color_factor;
     gpu_mat.metallic = prim.mat.metallic_factor;
     gpu_mat.roughness = prim.mat.roughness_factor;
+    gpu_mat.alpha_cutoff = prim.mat.alpha_cutoff;
+    gpu_mat.alpha_mode = static_cast<float> (prim.mat.mode);
     gpu_mat.emissive = prim.mat.emissive_factor;
     gpu_mat.mip_lod_bias = mip_lod_bias;
 
@@ -1705,93 +1823,143 @@ gfx::scene_renderer::create_unlit_pipeline ()
     return;
   }
 
-  SDL_GPUGraphicsPipelineCreateInfo pipe{};
+  auto make_pipeline = [&] (alpha_mode a_mode,
+                            SDL_GPUCullMode cull) -> SDL_GPUGraphicsPipeline * {
+    SDL_GPUGraphicsPipelineCreateInfo pipe{};
+    SDL_zero (pipe);
 
-  SDL_zero (pipe);
+    pipe.vertex_shader = vert;
+    pipe.fragment_shader = frag;
+    pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 
-  pipe.vertex_shader = vert;
-  pipe.fragment_shader = frag;
-  pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
+    pipe.depth_stencil_state.enable_depth_test = true;
+    pipe.depth_stencil_state.enable_stencil_test = false;
 
-  pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
-  pipe.depth_stencil_state.enable_depth_test = true;
-  pipe.depth_stencil_state.enable_depth_write = true;
-  pipe.depth_stencil_state.enable_stencil_test = false;
+    pipe.target_info.has_depth_stencil_target = true;
+    pipe.target_info.depth_stencil_format = m_window->depth_format ();
 
-  pipe.target_info.has_depth_stencil_target = true;
-  pipe.target_info.depth_stencil_format = m_window->depth_format ();
+    pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
 
-  pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
+    pipe.multisample_state.sample_mask = 0;
 
-  pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
-  pipe.multisample_state.sample_mask = 0;
-  pipe.multisample_state.enable_mask = false;
+    static SDL_GPUVertexBufferDescription vbuf{};
+    vbuf.slot = 0;
+    vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+    vbuf.pitch = (Uint32)sizeof (vertex);
 
-  static SDL_GPUVertexBufferDescription vbuf{};
-  vbuf.slot = 0;
-  vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-  vbuf.pitch = (Uint32)sizeof (vertex);
+    pipe.vertex_input_state.num_vertex_buffers = 1;
+    pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
 
-  pipe.vertex_input_state.num_vertex_buffers = 1;
-  pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
+    static SDL_GPUVertexAttribute attrs[4];
+    memset (attrs, 0, sizeof (attrs));
 
-  static SDL_GPUVertexAttribute attrs[4];
-  memset (attrs, 0, sizeof (attrs));
+    attrs[0].location = 0;
+    attrs[0].buffer_slot = 0;
+    attrs[0].offset = offsetof (vertex, pos);
+    attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
 
-  attrs[0].location = 0;
-  attrs[0].buffer_slot = 0;
-  attrs[0].offset = offsetof (vertex, pos);
-  attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+    attrs[1].location = 1;
+    attrs[1].buffer_slot = 0;
+    attrs[1].offset = offsetof (vertex, normal);
+    attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
 
-  attrs[1].location = 1;
-  attrs[1].buffer_slot = 0;
-  attrs[1].offset = offsetof (vertex, normal);
-  attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+    attrs[2].location = 2;
+    attrs[2].buffer_slot = 0;
+    attrs[2].offset = offsetof (vertex, uv);
+    attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
 
-  attrs[2].location = 2;
-  attrs[2].buffer_slot = 0;
-  attrs[2].offset = offsetof (vertex, uv);
-  attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+    attrs[3].location = 3;
+    attrs[3].buffer_slot = 0;
+    attrs[3].offset = offsetof (vertex, tangent);
+    attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
 
-  // NEW: tangent at location 3 (must match cube.vert)
-  attrs[3].location = 3;
-  attrs[3].buffer_slot = 0;
-  attrs[3].offset = offsetof (vertex, tangent);
-  attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+    pipe.vertex_input_state.num_vertex_attributes = 4;
+    pipe.vertex_input_state.vertex_attributes = attrs;
 
-  pipe.vertex_input_state.num_vertex_attributes = 4;
-  pipe.vertex_input_state.vertex_attributes = attrs;
+    SDL_GPUColorTargetDescription ctd[2]{};
+    ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
+    ctd[1].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
 
-  SDL_GPUColorTargetDescription ctd[2]{};
-  ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT; // scene
-  ctd[1].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT; // bloom
+    switch (a_mode) {
+    case alpha_mode::opaque:
+      ctd[0].blend_state.enable_blend = false;
+      ctd[1].blend_state.enable_blend = false;
+      pipe.depth_stencil_state.enable_depth_write = true;
+      break;
 
-  for (int i = 0; i < 2; ++i) {
-    ctd[i].blend_state.enable_blend = true;
-    ctd[i].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
-    ctd[i].blend_state.dst_color_blendfactor
-        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    ctd[i].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
-    ctd[i].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
-    ctd[i].blend_state.dst_alpha_blendfactor
-        = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
-    ctd[i].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
-    ctd[i].blend_state.color_write_mask
-        = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
-          | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
-  }
+    case alpha_mode::mask:
+      ctd[0].blend_state.enable_blend = false;
+      ctd[1].blend_state.enable_blend = false;
+      pipe.depth_stencil_state.enable_depth_write = true;
+      pipe.multisample_state.enable_alpha_to_coverage = true;
+      break;
 
-  pipe.target_info.num_color_targets = 2;
-  pipe.target_info.color_target_descriptions = ctd;
+    case alpha_mode::blend:
+      ctd[0].blend_state.enable_blend = true;
+      ctd[0].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+      ctd[0].blend_state.dst_color_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[0].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[0].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+      ctd[0].blend_state.dst_alpha_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[0].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[0].blend_state.color_write_mask
+          = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+            | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
 
-  // Back-face culling
-  pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
-  m_pipeline_unlit = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+      ctd[1].blend_state.enable_blend = true;
+      ctd[1].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+      ctd[1].blend_state.dst_color_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[1].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[1].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+      ctd[1].blend_state.dst_alpha_blendfactor
+          = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+      ctd[1].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+      ctd[1].blend_state.color_write_mask
+          = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+            | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
 
-  // Double-sided
-  pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
-  m_pipeline_unlit_double_sided
-      = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+      pipe.depth_stencil_state.enable_depth_write = false;
+      break;
+    }
+
+    for (int i = 0; i < 2; ++i) {
+      ctd[i].blend_state.color_write_mask
+          = SDL_GPU_COLORCOMPONENT_R | SDL_GPU_COLORCOMPONENT_G
+            | SDL_GPU_COLORCOMPONENT_B | SDL_GPU_COLORCOMPONENT_A;
+    }
+
+    pipe.target_info.num_color_targets = 2;
+    pipe.target_info.color_target_descriptions = ctd;
+
+    pipe.rasterizer_state.cull_mode = cull;
+
+    return SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+  };
+
+  // Unlit, single-sided
+  m_pipelines_unlit.opaque
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_BACK);
+  m_pipelines_unlit.mask
+      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_BACK);
+  m_pipelines_unlit.blend
+      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_BACK);
+
+  // Unlit, double-sided
+  m_pipelines_unlit_double_sided.opaque
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_NONE);
+  m_pipelines_unlit_double_sided.mask
+      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE);
+  m_pipelines_unlit_double_sided.blend
+      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_NONE);
+
+  // Legacy pointers
+  m_pipeline_unlit = m_pipelines_unlit.opaque;
+  m_pipeline_unlit_double_sided = m_pipelines_unlit_double_sided.opaque;
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -2431,8 +2599,8 @@ gfx::scene_renderer::create_shadow_resources (uint32_t size)
   // Depth texture (D32)
   SDL_GPUTextureCreateInfo ti{};
   ti.type = SDL_GPU_TEXTURETYPE_2D;
-  ti.format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT; // if your backend lacks it, try
-                                               // D24_UNORM_S8_UINT
+  ti.format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT; // if your backend lacks it,
+                                               // try D24_UNORM_S8_UINT
   ti.width = m_shadow_size;
   ti.height = m_shadow_size;
   ti.layer_count_or_depth = 1;
