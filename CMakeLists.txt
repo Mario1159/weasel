@@ -331,6 +331,7 @@ CPMAddPackage(
     GITHUB_REPOSITORY spnda/fastgltf
     GIT_TAG main
     SYSTEM ON
+    OPTIONS "FASTGLTF_ENABLE_INSTALL OFF"
 )
 
 # meshoptimizer is amalgamated (single .cpp + header). Used by the model
