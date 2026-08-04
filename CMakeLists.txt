@@ -315,6 +315,17 @@ CPMAddPackage(
     SYSTEM ON
 )
 
+# simdjson: required by fastgltf and the A2A/ACP protocol code.
+# Fetch via CPM so CI does not depend on a system-installed package.
+# Placed before fastgltf so it reuses this target instead of downloading
+# its own private amalgamation copy.
+CPMAddPackage(
+    NAME simdjson
+    GITHUB_REPOSITORY simdjson/simdjson
+    GIT_TAG v4.6.2
+    SYSTEM ON
+)
+
 CPMAddPackage(
     NAME fastgltf
     GITHUB_REPOSITORY spnda/fastgltf
@@ -397,9 +408,6 @@ if(NOT ai-sdk-cpp_POPULATED)
     endif()
 endif()
 add_subdirectory(${ai-sdk-cpp_SOURCE_DIR} ${ai-sdk-cpp_BINARY_DIR} EXCLUDE_FROM_ALL SYSTEM)
-
-# A2A protocol: simdjson for JSON parsing
-find_package(simdjson REQUIRED)
 
 # A2A protocol: libcurl for HTTP transport
 find_package(CURL REQUIRED)
@@ -723,8 +731,8 @@ if(APPLE)
     # /Applications/Weasel.app/. The dylibs and resources are installed
     # at the matching bundle-relative paths so they end up inside the
     # bundle.
-    install(TARGETS weasel MACOSX_BUNDLE
-        DESTINATION Applications
+    install(TARGETS weasel
+        BUNDLE DESTINATION Applications
         COMPONENT Engine
     )
     install(TARGETS wsl
