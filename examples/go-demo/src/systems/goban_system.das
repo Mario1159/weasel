@@ -1,12 +1,6 @@
 require weasel_api
+require weasel_ecs
 require math
-
-class EcsSystem {
-    def on_init() : void { }
-    def on_update(dt : float) : void { }
-    def on_event() : void { }
-    def on_inactive() : void { }
-}
 
 class System : EcsSystem {
     m_fp_camera : uint = 0

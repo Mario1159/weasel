@@ -859,6 +859,10 @@ install(FILES src/wsl/das/modules/weasel_api/weasel_api.das
     DESTINATION share/weasel/daslib
     COMPONENT Engine
 )
+install(FILES src/wsl/das/modules/weasel_helpers.das
+    DESTINATION share/weasel/daslib
+    COMPONENT Engine
+)
 install(FILES src/wsl/das/modules/weasel_ecs.das
     DESTINATION share/weasel/daslib
     COMPONENT Engine
@@ -872,6 +876,14 @@ add_custom_target(copy_weasel_ecs ALL
             "${CMAKE_SOURCE_DIR}/src/wsl/das/modules/weasel_ecs.das"
             "${CMAKE_BINARY_DIR}/_deps/daslang-src/daslib/weasel_ecs.das"
     COMMENT "Copying weasel_ecs.das to build daslib"
+)
+
+# Copy weasel_helpers.das to the build daslib directory for runtime module resolution.
+add_custom_target(copy_weasel_helpers ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/src/wsl/das/modules/weasel_helpers.das"
+            "${CMAKE_BINARY_DIR}/_deps/daslang-src/daslib/weasel_helpers.das"
+    COMMENT "Copying weasel_helpers.das to build daslib"
 )
 
 set(_WEASEL_HEADER_PATTERNS PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl")

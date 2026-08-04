@@ -10,6 +10,31 @@ Central registration system for components, singletons, system factories, and si
 | `singleton_registry` | `singleton_registry.hpp` | Registers singleton (registry-scoped) components with serialize/deserialize support. |
 | `system_factory_registry` | `system_factory_registry.hpp` | Maps system names to factory functions for dynamic instantiation in scenes. |
 | `registry_queries` | `registry_queries.hpp` | Cross-concept query interface — find which systems/iterations/signals relate to a given component or entity. |
+| `registry_handle` | `registry_handle.hpp` | Lightweight, non-owning handle to `entt::registry`. Used in public APIs (including daslang bindings) to avoid leaking the registry implementation detail. |
+
+## Component Types
+
+Components are classified into three kinds for generic dispatch:
+
+| Kind | Storage | Description |
+|------|---------|-------------|
+| `CPP_NATIVE` | `entt::registry::storage<T>` | Engine-built C++ components (transform, camera, etc.) |
+| `CPP_PROJECT` | `entt::registry::storage<T>` | User-defined C++ components (built by project code) |
+| `DAS_SCRIPT` | `component_registry::m_das_component_data[type_id][entity]` (raw bytes) | daScript-defined components (no C++ backing type) |
+
+All three are unified through `ComponentTypeInfo`:
+
+```cpp
+struct ComponentTypeInfo {
+    uint64_t type_id;           // Stable type identifier
+    ComponentKind kind;         // Storage kind
+    size_t struct_size;         // Size in bytes
+    void (*get)(uint32_t entity, void* dest);   // C++ types only
+    void (*set)(uint32_t entity, const void* src); // C++ types only
+};
+```
+
+Type IDs are stable hashes: `entt::hashed_string` for daScript types (from filename stem), `wsl::comp::stable_type_id<T>()` for C++ types.
 
 ## Signal System (`sig/`)
 
@@ -17,6 +42,28 @@ Central registration system for components, singletons, system factories, and si
 |-------|--------|-------------|
 | `signal_hub` | `sig/signal_hub.hpp` | Central hub for declaring signals, iterations, and event handlers. Supports typed signal emission and connection. |
 | `signal_hub_fwd` | `sig/signal_hub_fwd.hpp` | Forward declarations for signal types. |
+
+## Runtime Module Loading
+
+`runtime_project_module` handles compilation and loading of both C++ and daScript project code:
+
+```cpp
+#include <wsl/reg/runtime_project_module.hpp>
+
+wsl::reg::runtime::runtime_project_module rt_module(runtime_ctx);
+
+// Synchronous compilation and loading
+rt_module.compile_and_load(project);
+
+// Asynchronous reload (non-blocking)
+rt_module.compile_and_load_async(project);
+while (rt_module.is_reloading()) {
+    rt_module.poll_async_reload();  // calls finalize_load() when done
+}
+
+// Access the daslang engine for script execution
+auto *engine = rt_module.get_das_engine();
+```
 
 ## Usage
 

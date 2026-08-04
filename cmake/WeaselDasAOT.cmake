@@ -113,21 +113,24 @@ function(weasel_aot_das)
         add_custom_command(
             OUTPUT "${_OutFile}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_TmpDir}"
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${_TmpDir}/daslib"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${_AbsFile}" "${_TmpDir}/${_Name}.das"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${WEASEL_DASLIB_DIR}/weasel_api.das"
                     "${_TmpDir}/weasel_api.das"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${WEASEL_DASLIB_DIR}/weasel_helpers.das"
+                    "${_TmpDir}/weasel_helpers.das"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
-                    "${_TmpDir}/daslib/weasel_ecs.das"
+                    "${_TmpDir}/weasel_ecs.das"
             ${_CopyComponentCommands}
             COMMAND "${DASLANG_TOOL}" -aot
                     "${_TmpDir}/${_Name}.das" "${_OutFile}"
             COMMAND ${CMAKE_COMMAND} -E remove_directory "${_TmpDir}"
             DEPENDS "${_AbsFile}"
                     "${WEASEL_DASLIB_DIR}/weasel_api.das"
+                    "${WEASEL_DASLIB_DIR}/weasel_helpers.das"
                     "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
                     ${_ComponentDeps}
             COMMENT "AOT-compiling ${_DasFile} -> ${_Name}.das.cpp"

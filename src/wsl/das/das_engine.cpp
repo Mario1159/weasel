@@ -76,6 +76,13 @@ initialize_modules_for_engine (TextPrinter &tout,
   faccess = smart_ptr<FsFileAccess> (new ProjectFsFileAccess);
   faccess->introduceDaslib ();
 
+  // Add the engine's module directory to ProjectFsFileAccess so that
+  // `require weasel_helpers` can find weasel_helpers.das in interpreted mode.
+  auto engine_modules
+      = std::string (WEASEL_SOURCE_DIR) + "/src/wsl/das/modules";
+  static_cast<ProjectFsFileAccess *> (faccess.get ())
+      ->addProjectRoot ("engine_modules", engine_modules);
+
   // Register all default builtin modules (BuiltIn, Math, Strings, etc.)
   // into this thread's local ModuleKarma.  ModuleLibrary::addBuiltInModule()
   // calls Module::require("$") which searches the thread-local module list,
