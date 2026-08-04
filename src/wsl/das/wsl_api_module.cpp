@@ -626,6 +626,33 @@ wsl_find_entity_by_name (const char *name)
   return NULL_ENTITY_ID;
 }
 
+void
+wsl_set_entity_name (uint32_t entity, const char *name)
+{
+  auto *reg = get_registry ();
+  if (!reg || !name) {
+    return;
+  }
+
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return;
+  }
+
+  auto *scene = runtime_ctx->scene_manager ().get_active ();
+  if (!scene) {
+    return;
+  }
+
+  auto e = static_cast<entt::entity> (entity);
+  if (reg->valid (e)) {
+    scene->set_entity_name (e, name);
+  }
+}
+
 uint32_t
 wsl_get_active_camera ()
 {
@@ -1608,6 +1635,11 @@ public:
         "wsl::das::wsl_find_entity_by_name")
         ->arg ("name");
 
+    addExtern<DAS_BIND_FUN (wsl_set_entity_name)> (
+        *this, lib, "set_entity_name", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_entity_name")
+        ->args ({ "entity", "name" });
+
     addExtern<DAS_BIND_FUN (wsl_get_active_camera)> (
         *this, lib, "get_active_camera", ::das::SideEffects::accessExternal,
         "wsl::das::wsl_get_active_camera");
@@ -1884,6 +1916,7 @@ public:
     // Constants
     ::das::addConstant<uint32_t> (*this, "SDL_BUTTON_LEFT", 1);
     ::das::addConstant<uint32_t> (*this, "SDL_BUTTON_RIGHT", 3);
+    ::das::addConstant<int32_t> (*this, "SDL_SCANCODE_ESCAPE", 41);
     ::das::addConstant<uint32_t> (
         *this, "EVENT_MOUSE_MOTION",
         static_cast<uint32_t> (event_kind::mouse_motion));

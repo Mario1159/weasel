@@ -87,6 +87,8 @@ def get_scale_z(entity : uint) : float => 0.0
 // --- Scene operations ---
 /// Finds an entity by its scene name. Returns null if not found.
 def find_entity_by_name(name : string) : uint => 0
+/// Sets the name of an entity in the scene.
+def set_entity_name(entity : uint, name : string) { }
 /// Returns the entity ID of the active camera.
 def get_active_camera() : uint => 0
 /// Sets the active camera to the given entity.
@@ -269,3 +271,7 @@ let EVENT_QUIT : uint = 0
 let SDL_BUTTON_LEFT : uint = 1
 /// Right mouse button.
 let SDL_BUTTON_RIGHT : uint = 3
+
+// --- SDL scancode constants ---
+/// Escape key scancode.
+let SDL_SCANCODE_ESCAPE : int = 41

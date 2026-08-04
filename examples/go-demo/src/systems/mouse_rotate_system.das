@@ -7,7 +7,6 @@ require mouse_rotate
 class System : EcsSystem {
     m_accumulated_dx : float = 0.0
     m_accumulated_dy : float = 0.0
-    m_relative_mode_active : bool = false
 
     def override on_init() : void {
         refresh_entities_with_transform()
@@ -29,7 +28,6 @@ class System : EcsSystem {
 
     def override on_inactive() : void {
         set_relative_mouse_mode(false)
-        m_relative_mode_active = false
     }
 
     def override on_event() : void {
@@ -75,12 +73,6 @@ class System : EcsSystem {
                     break
                 }
             }
-        }
-
-        var should_be_relative = fp_active
-        if (m_relative_mode_active != should_be_relative) {
-            m_relative_mode_active = should_be_relative
-            set_relative_mouse_mode(should_be_relative)
         }
 
         if (!fp_active) {
