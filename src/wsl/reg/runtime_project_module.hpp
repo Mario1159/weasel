@@ -57,65 +57,65 @@ class runtime_project_module
 {
 public:
   /**
- * Creates a runtime module bound to a runtime context.
- * :param runtime_ctx: Runtime context that owns the registries to populate.
- */
+   * Creates a runtime module bound to a runtime context.
+   * :param runtime_ctx: Runtime context that owns the registries to populate.
+   */
   explicit runtime_project_module (comp::singl::runtime_context *runtime_ctx);
   ~runtime_project_module ();
 
   /**
- * Rebuilds and loads the runtime code for a project.
- * :param project: Project description that provides source directories.
- * :return: \c true on success, otherwise \c false.
- */
+   * Rebuilds and loads the runtime code for a project.
+   * :param project: Project description that provides source directories.
+   * :return: \c true on success, otherwise \c false.
+   */
   bool compile_and_load (const rsc::project &project);
 
   /**
- * Starts an asynchronous reload of the runtime code.
- *
- * Use \c poll_async_reload() in the main loop to check completion and
- * call \c finalize_load() on the main thread when ready.
- */
+   * Starts an asynchronous reload of the runtime code.
+   *
+   * Use \c poll_async_reload() in the main loop to check completion and
+   * call \c finalize_load() on the main thread when ready.
+   */
   void compile_and_load_async (const rsc::project &project);
 
   /**
- * Polls an in-progress async reload.
- *
- * If the background compilation finished, this calls \c finalize_load()
- * on the calling (main) thread and returns \c true.
- * :return: \c true if a reload just completed this call, otherwise \c false.
- */
+   * Polls an in-progress async reload.
+   *
+   * If the background compilation finished, this calls \c finalize_load()
+   * on the calling (main) thread and returns \c true.
+   * :return: \c true if a reload just completed this call, otherwise \c false.
+   */
   bool poll_async_reload ();
 
   /**
- * Reports whether an async reload is currently in progress.
- *
- * :return: \c true if compilation is still running in the background.
- */
+   * Reports whether an async reload is currently in progress.
+   *
+   * :return: \c true if compilation is still running in the background.
+   */
   bool is_reloading () const;
 
   /**
- * Loads cached runtime registration metadata for a project.
- *
- * This is a fast path for commands that only need runtime names and system
- * placeholders. It does not load user C++ types.
- */
+   * Loads cached runtime registration metadata for a project.
+   *
+   * This is a fast path for commands that only need runtime names and system
+   * placeholders. It does not load user C++ types.
+   */
   bool load_cached_metadata (const rsc::project &project);
 
   /**
- * Finalizes the loading process on the main thread.
- *
- * This clears the registries and applies the registrations.
- */
+   * Finalizes the loading process on the main thread.
+   *
+   * This clears the registries and applies the registrations.
+   */
   void finalize_load ();
 
   /** Clears runtime-loaded registrations and resets runtime-module state. */
   void unload ();
 
   /**
- * Returns the latest human-readable status message.
- * :return: The most recent status string.
- */
+   * Returns the latest human-readable status message.
+   * :return: The most recent status string.
+   */
   const std::string &
   last_status () const
   {
@@ -123,9 +123,9 @@ public:
   }
 
   /**
- * Reports whether a runtime module has already been loaded.
- * :return: \c true if runtime code is active for this session.
- */
+   * Reports whether a runtime module has already been loaded.
+   * :return: \c true if runtime code is active for this session.
+   */
   bool
   has_loaded_module () const
   {
@@ -140,11 +140,11 @@ public:
   }
 
   /**
- * Returns the daslang engine instance.
- *
- * The engine is created on first use. Returns nullptr if daslang
- * is not enabled.
- */
+   * Returns the daslang engine instance.
+   *
+   * The engine is created on first use. Returns nullptr if daslang
+   * is not enabled.
+   */
   wsl::das::das_engine *get_das_engine ();
 
   // User C++ hook function pointer types
@@ -167,9 +167,9 @@ public:
   }
 
   /**
- * Returns the resolved user shutdown hook, or nullptr if not
- * available.
- */
+   * Returns the resolved user shutdown hook, or nullptr if not
+   * available.
+   */
   hook_shutdown_fn
   get_hook_shutdown () const
   {
@@ -192,6 +192,7 @@ public:
     std::string display_name;
     bool is_das_component = false;
     int das_struct_size = 0;
+    std::string script_path;
     std::vector<cached_das_field> das_fields;
   };
 

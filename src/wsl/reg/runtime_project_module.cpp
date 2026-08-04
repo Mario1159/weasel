@@ -254,6 +254,10 @@ write_cached_registration (
   writer.Bool (registration.is_das_component);
   writer.Key ("das_struct_size");
   writer.Int (registration.das_struct_size);
+  writer.Key ("script_path");
+  writer.String (
+      registration.script_path.c_str (),
+      static_cast<rapidjson::SizeType> (registration.script_path.size ()));
   writer.Key ("das_fields");
   writer.StartArray ();
   for (const auto &f : registration.das_fields) {
@@ -327,6 +331,10 @@ read_cached_registration (const rapidjson::Value &value,
       = value.HasMember ("das_struct_size") && value["das_struct_size"].IsInt ()
             ? value["das_struct_size"].GetInt ()
             : 0;
+  out.script_path
+      = value.HasMember ("script_path") && value["script_path"].IsString ()
+            ? value["script_path"].GetString ()
+            : "";
   if (value.HasMember ("das_fields") && value["das_fields"].IsArray ()) {
     for (const auto &f : value["das_fields"].GetArray ()) {
       if (!f.IsObject () || !f.HasMember ("name") || !f["name"].IsString ()
@@ -574,11 +582,26 @@ runtime_project_module::write_registration_cache () const
     }
   }
 
+  // Build a map from type_id to script_path for das systems
+  std::unordered_map<std::uint64_t, std::string> das_script_paths;
+  for (const auto &reg : m_das_registrations) {
+    if (reg.kind == das_registration::system) {
+      das_script_paths[reg.type_id] = reg.script_path;
+    }
+  }
+
   for (const system_factory_registry::system_descriptor *desc :
        m_runtime_ctx->system_factory_registry ().get_systems (
            system_order::type_id)) {
     if (desc != nullptr && desc->runtime_registered) {
-      cache.systems.push_back (make_cached_registration (*desc));
+      auto cached = make_cached_registration (*desc);
+      // Populate script_path from m_das_registrations if available
+      auto it
+          = das_script_paths.find (static_cast<std::uint64_t> (desc->type_id));
+      if (it != das_script_paths.end ()) {
+        cached.script_path = it->second;
+      }
+      cache.systems.push_back (std::move (cached));
     }
   }
 
@@ -778,7 +801,7 @@ runtime_project_module::load_das_registrations_from_cache (
         entry.display_name,
         entry.type_id,
         entry.das_struct_size,
-        {},
+        entry.script_path,
         convert_fields (entry.das_fields),
     });
   }
@@ -1079,9 +1102,28 @@ runtime_project_module::compile_and_load (const rsc::project &project)
           das_eng->last_error ());
     }
 
+    // Register source directories as daScript extra roots so that
+    // bare `require` statements (e.g. `require mouse_rotate`) resolve
+    // across directories — matching AOT behaviour where CMake copies
+    // all component files alongside each system file during compilation.
+    if (das_eng) {
+      const auto comp_dir
+          = fs::weakly_canonical (project_root / project.components_path)
+                .string ();
+      const auto singl_dir
+          = fs::weakly_canonical (project_root / project.singletons_path)
+                .string ();
+      const auto sys_dir
+          = fs::weakly_canonical (project_root / project.systems_path)
+                .string ();
+      das_eng->addFsRoot ("components", comp_dir);
+      das_eng->addFsRoot ("singletons", singl_dir);
+      das_eng->addFsRoot ("systems", sys_dir);
+    }
+
     // Execute the daslang files so the persistent context has compiled
     // programs available for runtime calls (on_init, on_update, etc.).
-    for (const auto &reg : m_das_registrations) {
+    for (auto &reg : m_das_registrations) {
       if (!reg.script_path.empty ()) {
         if (!das_eng->execute_file (reg.script_path)) {
           wsl::log::cmake ()->warn (
@@ -1109,6 +1151,8 @@ runtime_project_module::compile_and_load (const rsc::project &project)
                 "Failed to execute daslang file on cache path: {} - {}",
                 das_path.string (), das_eng->last_error ());
           }
+          // Update script_path so the factory gets the correct path
+          reg.script_path = das_path.string ();
         }
       }
     }
