@@ -108,31 +108,31 @@ public:
   using singleton_component_descriptor = descriptor;
 
   /**
- * Registers a value-owned singleton component type.
- * :param T: Singleton component type.
- * :param options: Registration options.
- */
+   * Registers a value-owned singleton component type.
+   * :param T: Singleton component type.
+   * :param options: Registration options.
+   */
   template <comp::singleton_component_type T>
   void register_singleton_component (
       const singleton_component_registration_options &options = {});
 
   /**
- * Registers metadata for a runtime singleton without loading its C++
- * type.
- *
- * Cached descriptors are only suitable for discovery and name lookup. They do
- * not provide construction, reflection, access, or serialization callbacks.
- */
+   * Registers metadata for a runtime singleton without loading its C++
+   * type.
+   *
+   * Cached descriptors are only suitable for discovery and name lookup. They do
+   * not provide construction, reflection, access, or serialization callbacks.
+   */
   void
   register_cached_runtime_singleton_component (::entt::id_type type_id,
                                                std::string_view type_name,
                                                std::string_view display_name);
 
   /**
- * Registers a bound singleton component type stored as a raw pointer.
- * :param T: Singleton component type.
- * :param options: Registration options.
- */
+   * Registers a bound singleton component type stored as a raw pointer.
+   * :param T: Singleton component type.
+   * :param options: Registration options.
+   */
   template <comp::singleton_component_type T>
   void register_bound_singleton_component (
       const singleton_component_registration_options &options = {});
@@ -141,18 +141,18 @@ public:
   const descriptor *find_singleton_component (::entt::id_type type_id) const;
 
   /**
- * Finds a singleton component descriptor by C++ type name.
- * :param type_name: Reflected type name.
- * :return: Matching descriptor, or `nullptr` when not found.
- */
+   * Finds a singleton component descriptor by C++ type name.
+   * :param type_name: Reflected type name.
+   * :return: Matching descriptor, or `nullptr` when not found.
+   */
   const descriptor *find_singleton_component (std::string_view type_name) const;
 
   /**
- * Returns registered singleton component descriptors in the requested
- * order.
- * :param order: Requested descriptor ordering.
- * :return: Ordered descriptor list.
- */
+   * Returns registered singleton component descriptors in the requested
+   * order.
+   * :param order: Requested descriptor ordering.
+   * :return: Ordered descriptor list.
+   */
   std::vector<const descriptor *>
   get_singleton_components (singleton_component_order order
                             = singleton_component_order::display_name) const;
@@ -256,7 +256,6 @@ singleton_registry::register_singleton_component (
   desc.emplace_default = +[] (::entt::registry &registry) -> bool {
     auto &ctx = registry.ctx ();
     if (ctx.contains<T> ()) {
-      ctx.get<T> () = T{};
       return false;
     }
 
