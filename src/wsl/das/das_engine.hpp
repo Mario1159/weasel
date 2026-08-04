@@ -68,6 +68,19 @@ public:
   bool initialize ();
 
   /**
+   * Adds a filesystem root for module resolution.
+   *
+   * When daScript encounters a bare `require name`, it resolves the module
+   * by looking for `name.das` in registered extra roots.  This allows
+   * cross-directory requires (e.g. a system file requiring a component
+   * from a different directory) to work in interpret mode.
+   *
+   * :param name: Short name used as the root key (e.g. "components").
+   * :param path: Absolute path to the directory containing .das files.
+   */
+  void addFsRoot (const std::string &name, const std::string &path);
+
+  /**
    * Compiles and executes a .das file.
    * :param path: Path to the daslang file.
    * :return: \c true on success, \c false on failure.

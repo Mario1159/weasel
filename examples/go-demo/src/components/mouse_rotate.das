@@ -1,5 +1,7 @@
 options gen2
 
+module mouse_rotate
+
 // Mouse Rotate - World Component (daslang)
 // First-person mouse rotation for an entity.
 

@@ -68,9 +68,10 @@ endfunction()
 #     FILES file1.das file2.das ...
 #     OUTPUT_VAR <variable>       # variable name to receive generated .cpp paths
 #     [TARGET <target>]           # custom target name (default: ${PROJECT_NAME}_aot)
+#     [COMPONENTS comp1.das comp2.das ...]  # component files to include in AOT temp dir
 # )
 function(weasel_aot_das)
-    cmake_parse_arguments(AOT "" "OUTPUT_VAR;TARGET" "FILES" ${ARGN})
+    cmake_parse_arguments(AOT "" "OUTPUT_VAR;TARGET" "FILES;COMPONENTS" ${ARGN})
 
     if(NOT AOT_FILES)
         message(FATAL_ERROR "weasel_aot_das: FILES is required")
@@ -96,7 +97,19 @@ function(weasel_aot_das)
         set(_TmpDir "${_OutputDir}/_tmp_${_Name}")
 
         # daScript -aot mode only resolves modules from the input file's directory.
-        # Create a temp dir with the input file + weasel_api.das + daslib/weasel_ecs.das.
+        # Create a temp dir with the input file + weasel_api.das + daslib/weasel_ecs.das
+        # + all project component files (so component types are visible during AOT).
+        set(_CopyComponentCommands "")
+        set(_ComponentDeps "")
+        foreach(_CompFile IN LISTS AOT_COMPONENTS)
+            get_filename_component(_CompAbs "${_CompFile}" ABSOLUTE)
+            get_filename_component(_CompName "${_CompFile}" NAME)
+            list(APPEND _CopyComponentCommands
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_CompAbs}" "${_TmpDir}/${_CompName}")
+            list(APPEND _ComponentDeps "${_CompAbs}")
+        endforeach()
+
         add_custom_command(
             OUTPUT "${_OutFile}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_TmpDir}"
@@ -109,12 +122,14 @@ function(weasel_aot_das)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
                     "${_TmpDir}/daslib/weasel_ecs.das"
+            ${_CopyComponentCommands}
             COMMAND "${DASLANG_TOOL}" -aot
                     "${_TmpDir}/${_Name}.das" "${_OutFile}"
             COMMAND ${CMAKE_COMMAND} -E remove_directory "${_TmpDir}"
             DEPENDS "${_AbsFile}"
                     "${WEASEL_DASLIB_DIR}/weasel_api.das"
                     "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
+                    ${_ComponentDeps}
             COMMENT "AOT-compiling ${_DasFile} -> ${_Name}.das.cpp"
             VERBATIM
         )

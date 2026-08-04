@@ -21,6 +21,42 @@ DECLARE_ALL_DEFAULT_MODULES;
 namespace
 {
 
+// Custom FsFileAccess that searches project source directories when
+// resolving bare `require` names.  Without this, daScript's built-in
+// resolution only checks the same directory as the requiring file,
+// which breaks cross-directory requires in interpret mode.
+class ProjectFsFileAccess : public FsFileAccess
+{
+public:
+  void
+  addProjectRoot (const std::string &name, const std::string &path)
+  {
+    m_project_roots[name] = path;
+  }
+
+  ModuleInfo
+  getModuleInfo (const string &req, const string &from) const override
+  {
+    // For bare names (no '.' or '/'), search project directories first.
+    if (req.find_first_of ("./") == string::npos) {
+      for (const auto &[name, root] : m_project_roots) {
+        std::string candidate = root + "/" + req + ".das";
+        if (std::filesystem::exists (candidate)) {
+          ModuleInfo info;
+          info.moduleName = req;
+          info.fileName = candidate;
+          return info;
+        }
+      }
+    }
+    // Fall back to default FsFileAccess resolution.
+    return FsFileAccess::getModuleInfo (req, from);
+  }
+
+private:
+  std::map<std::string, std::string> m_project_roots;
+};
+
 bool
 initialize_modules_for_engine (TextPrinter &tout,
                                smart_ptr<FsFileAccess> &faccess,
@@ -37,7 +73,7 @@ initialize_modules_for_engine (TextPrinter &tout,
   // Set up the daslang source tree path and file access.
   setDasRoot (std::string (WEASEL_BUILD_DIR) + "/_deps/daslang-src");
 
-  faccess = smart_ptr<FsFileAccess> (new FsFileAccess);
+  faccess = smart_ptr<FsFileAccess> (new ProjectFsFileAccess);
   faccess->introduceDaslib ();
 
   // Register all default builtin modules (BuiltIn, Math, Strings, etc.)
@@ -265,6 +301,15 @@ struct das_engine::impl
     return true;
   }
 
+  void
+  addFsRoot (const std::string &name, const std::string &path)
+  {
+    ensure_thread_das_environment (tout, faccess, module_group);
+    if (auto *proj = static_cast<ProjectFsFileAccess *> (faccess.get ())) {
+      proj->addProjectRoot (name, path);
+    }
+  }
+
   bool
   execute_file (const std::string &path, std::string &error)
   {
@@ -272,13 +317,8 @@ struct das_engine::impl
     // including the module list needed by compileDaScript and Module::require.
     ensure_thread_das_environment (tout, faccess, module_group);
 
-    wsl::log::cmake ()->debug ("compileDaScript: starting compile of '{}'",
-                               path);
     auto program = compileDaScript (path.c_str (), faccess, tout, module_group,
                                     policies);
-    wsl::log::cmake ()->debug (
-        "compileDaScript: finished compile of '{}' (failed={})", path,
-        program->failed ());
     if (program->failed ()) {
       std::ostringstream oss;
       for (const auto &err : program->errors) {
@@ -316,29 +356,12 @@ struct das_engine::impl
     compiled_programs[path] = program;
 
     if (raw_ctx->tabMnLookup) {
-      wsl::log::cmake ()->debug ("execute_file: tabMnLookup has {} entries",
-                                 raw_ctx->tabMnLookup->size ());
       for (auto &kv : *raw_ctx->tabMnLookup) {
         auto *sf = kv.second;
         if (sf && sf->name) {
           file_fn_lookup[path][sf->name] = { sf, raw_ctx };
           fn_lookup[sf->name] = { sf, raw_ctx };
-          wsl::log::cmake ()->debug ("  fn_lookup: '{}'", sf->name);
         }
-      }
-    } else {
-      wsl::log::cmake ()->debug (
-          "execute_file: tabMnLookup is NULL after simulate!");
-    }
-
-    // Also log all functions from the context directly
-    int32_t nfunc = raw_ctx->getTotalFunctions ();
-    wsl::log::cmake ()->debug ("execute_file: context has {} total functions",
-                               nfunc);
-    for (int32_t i = 0; i < nfunc; ++i) {
-      auto *sf = raw_ctx->getFunction (i);
-      if (sf && sf->name) {
-        wsl::log::cmake ()->debug ("  ctx fn[{}]: name='{}'", i, sf->name);
       }
     }
 
@@ -896,8 +919,15 @@ das_engine::initialize ()
   return true;
 }
 
+void
+wsl::das::das_engine::addFsRoot (const std::string &name,
+                                 const std::string &path)
+{
+  m_impl->addFsRoot (name, path);
+}
+
 bool
-das_engine::execute_file (const std::filesystem::path &path)
+wsl::das::das_engine::execute_file (const std::filesystem::path &path)
 {
   if (!m_initialized) {
     m_last_error = "Engine not initialized";

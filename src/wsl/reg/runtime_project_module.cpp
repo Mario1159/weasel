@@ -671,6 +671,44 @@ runtime_project_module::apply_registration_cache (
             entry.display_name,
             entry.is_das_component ? entry.das_struct_size : 0,
             std::move (fields));
+
+    // Also register in the lookup table for generic dispatch.
+    if (entry.is_das_component) {
+      m_runtime_ctx->component_registry ().register_component_type_info (
+          entry.type_name, static_cast<uint64_t> (entry.type_id),
+          reg::ComponentKind::DAS_SCRIPT,
+          static_cast<size_t> (entry.das_struct_size));
+      // Also register with the full qualified name that typeinfo typename
+      // returns Format: "module_name::TypeName const" (e.g.,
+      // "mouse_rotate::MouseRotate const")
+      std::string qualified_name
+          = entry.type_name + "::" + entry.type_name + " const";
+      // Convert stem to PascalCase for the type name part
+      std::string pascal_name;
+      bool capitalize_next = true;
+      for (char ch : entry.type_name) {
+        if (ch == '_' || ch == '-') {
+          capitalize_next = true;
+        } else if (capitalize_next) {
+          auto upper = static_cast<char> (
+              std::toupper (static_cast<unsigned char> (ch)));
+          pascal_name += upper;
+          capitalize_next = false;
+        } else {
+          pascal_name += ch;
+        }
+      }
+      qualified_name = entry.type_name + "::" + pascal_name + " const";
+      m_runtime_ctx->component_registry ().register_component_type_info (
+          qualified_name, static_cast<uint64_t> (entry.type_id),
+          reg::ComponentKind::DAS_SCRIPT,
+          static_cast<size_t> (entry.das_struct_size));
+    } else {
+      m_runtime_ctx->component_registry ().register_component_type_info (
+          entry.type_name, static_cast<uint64_t> (entry.type_id),
+          reg::ComponentKind::CPP_PROJECT,
+          static_cast<size_t> (entry.das_struct_size));
+    }
   }
 
   for (const cached_registration &entry : cache.singletons) {
@@ -837,7 +875,6 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
 void
 runtime_project_module::finalize_load ()
 {
-  wsl::log::cmake ()->debug ("finalize_load: Clearing runtime registries");
   clear_runtime_registries (*m_runtime_ctx);
   runtime_registrar::set_active_runtime_context (m_runtime_ctx);
 
@@ -847,7 +884,6 @@ runtime_project_module::finalize_load ()
     m_runtime_ctx->system_factory_registry (),
   };
 
-  wsl::log::cmake ()->debug ("finalize_load: Applying registrations");
   const std::size_t registered_count = apply_interpreted_registrations (ctx);
 
   // Re-apply stored daslang registrations
@@ -862,19 +898,41 @@ runtime_project_module::finalize_load ()
 
     switch (reg.kind) {
     case das_registration::component:
-      wsl::log::cmake ()->debug (
-          "finalize_load: das component '{}' type_id={} struct_size={} "
-          "fields_count={}",
-          reg.display_name, reg.type_id, reg.struct_size, reg.fields.size ());
-      for (const auto &f : fields) {
-        wsl::log::cmake ()->debug (
-            "  field: name='{}' type='{}' offset={} size={} kind={}", f.name,
-            f.type_name, f.offset, f.size, static_cast<int> (f.kind));
-      }
       m_runtime_ctx->component_registry ()
           .register_cached_runtime_world_component (
               static_cast<entt::id_type> (reg.type_id), reg.type_name,
               reg.display_name, reg.struct_size, std::move (fields));
+
+      // Also register in the lookup table for generic dispatch
+      m_runtime_ctx->component_registry ().register_component_type_info (
+          reg.type_name, static_cast<uint64_t> (reg.type_id),
+          reg::ComponentKind::DAS_SCRIPT,
+          static_cast<size_t> (reg.struct_size));
+      // Also register with the full qualified name that typeinfo typename
+      // returns (e.g., "mouse_rotate::MouseRotate const")
+      {
+        std::string pascal_name;
+        bool capitalize_next = true;
+        for (char ch : reg.type_name) {
+          if (ch == '_' || ch == '-') {
+            capitalize_next = true;
+          } else if (capitalize_next) {
+            auto upper = static_cast<char> (
+                std::toupper (static_cast<unsigned char> (ch)));
+            pascal_name += upper;
+            capitalize_next = false;
+          } else {
+            pascal_name += ch;
+          }
+        }
+        std::string qualified_name
+            = reg.type_name + "::" + pascal_name + " const";
+        m_runtime_ctx->component_registry ().register_component_type_info (
+            qualified_name, static_cast<uint64_t> (reg.type_id),
+            reg::ComponentKind::DAS_SCRIPT,
+            static_cast<size_t> (reg.struct_size));
+      }
+
       ++das_count;
       break;
     case das_registration::singleton:
@@ -893,14 +951,8 @@ runtime_project_module::finalize_load ()
     }
   }
 
-  wsl::log::cmake ()->debug (
-      "finalize_load: Registered {} entries ({} C++ + {} das)",
-      registered_count + das_count, registered_count, das_count);
   m_metadata_cache_loaded = false;
-  if (write_registration_cache ()) {
-    wsl::log::cmake ()->debug ("finalize_load: Registration cache updated.");
-  }
-  wsl::log::cmake ()->debug ("finalize_load: Done");
+  write_registration_cache ();
 }
 
 void
@@ -1021,8 +1073,6 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     // Initialize the daslang engine so das_system instances can call
     // das functions at runtime.
     auto *das_eng = get_das_engine ();
-    wsl::log::cmake ()->debug ("Cache path: das engine ptr={}",
-                               static_cast<void *> (das_eng));
     if (das_eng && !das_eng->initialize ()) {
       wsl::log::cmake ()->warn (
           "Failed to initialize daslang engine on cache path: {}",
@@ -1031,17 +1081,12 @@ runtime_project_module::compile_and_load (const rsc::project &project)
 
     // Execute the daslang files so the persistent context has compiled
     // programs available for runtime calls (on_init, on_update, etc.).
-    int das_executed = 0;
     for (const auto &reg : m_das_registrations) {
       if (!reg.script_path.empty ()) {
-        wsl::log::cmake ()->debug ("Cache path: executing das file: {}",
-                                   reg.script_path);
         if (!das_eng->execute_file (reg.script_path)) {
           wsl::log::cmake ()->warn (
               "Failed to execute daslang file on cache path: {} - {}",
               reg.script_path, das_eng->last_error ());
-        } else {
-          das_executed++;
         }
       } else {
         // Reconstruct script path from project structure
@@ -1058,29 +1103,21 @@ runtime_project_module::compile_and_load (const rsc::project &project)
           break;
         }
         auto das_path = dir / (reg.type_name + ".das");
-        wsl::log::cmake ()->debug (
-            "Cache path: reconstructed das path: {} (exists={})",
-            das_path.string (), fs::exists (das_path));
         if (fs::exists (das_path)) {
           if (!das_eng->execute_file (das_path)) {
             wsl::log::cmake ()->warn (
                 "Failed to execute daslang file on cache path: {} - {}",
                 das_path.string (), das_eng->last_error ());
-          } else {
-            das_executed++;
           }
         }
       }
     }
-    wsl::log::cmake ()->debug ("Cache path: executed {} das files",
-                               das_executed);
 
     // Register all cached systems in the factory so scene deserialization
     // can find them.
     finalize_load ();
 
     m_last_status = "Runtime module loaded from shared library cache.";
-    wsl::log::cmake ()->debug ("{}", m_last_status);
     return true;
   }
 
@@ -1159,6 +1196,14 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     const auto sys_dir
         = fs::weakly_canonical (project_root / project.systems_path).string ();
 
+    // Register source directories as daScript extra roots so that
+    // bare `require` statements (e.g. `require mouse_rotate`) resolve
+    // across directories — matching AOT behaviour where CMake copies
+    // all component files alongside each system file during compilation.
+    das_engine->addFsRoot ("components", comp_dir);
+    das_engine->addFsRoot ("singletons", singl_dir);
+    das_engine->addFsRoot ("systems", sys_dir);
+
     for (const auto &das_file : sources.das_sources) {
       wsl::log::cmake ()->debug ("Executing daslang file: {}",
                                  das_file.string ());
@@ -1210,22 +1255,16 @@ runtime_project_module::compile_and_load (const rsc::project &project)
         m_das_registrations.push_back (
             { das_registration::component, stem, titled, type_id, si.size_of,
               das_file.string (), std::move (si.fields) });
-        wsl::log::cmake ()->debug ("Stored daslang component: {} ({} fields)",
-                                   titled,
-                                   m_das_registrations.back ().fields.size ());
       } else if (canonical.compare (0, singl_dir.size (), singl_dir) == 0) {
         m_das_registrations.push_back (
             { das_registration::singleton, stem, titled, type_id, si.size_of,
               das_file.string (), std::move (si.fields) });
-        wsl::log::cmake ()->debug ("Stored daslang singleton: {}", titled);
       } else if (canonical.compare (0, sys_dir.size (), sys_dir) == 0) {
         m_das_registrations.push_back (
             { das_registration::system, stem, titled, type_id, si.size_of,
               das_file.string (), std::move (si.fields) });
-        wsl::log::cmake ()->debug ("Stored daslang system: {}", titled);
       }
     }
-    wsl::log::cmake ()->debug ("daslang files executed successfully.");
   }
 
   m_last_status = "Runtime systems/components compiled and registered.";

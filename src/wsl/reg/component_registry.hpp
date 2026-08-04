@@ -27,6 +27,33 @@ namespace wsl
 namespace reg
 {
 
+/** Component type classification for generic dispatch. */
+enum class ComponentKind
+{
+  /** C++ native component (engine-built, stored in EnTT typed storage). */
+  CPP_NATIVE,
+  /** C++ project component (built by project code, stored in EnTT typed
+     storage). */
+  CPP_PROJECT,
+  /** daScript component (no C++ backing type, raw byte storage). */
+  DAS_SCRIPT
+};
+
+/** Type-erased metadata for a registered component type. */
+struct ComponentTypeInfo
+{
+  /** Stable type identifier. */
+  uint64_t type_id = 0;
+  /** Component storage kind. */
+  ComponentKind kind = ComponentKind::DAS_SCRIPT;
+  /** Size of the component struct in bytes. */
+  size_t struct_size = 0;
+  /** Type-erased getter (C++ types only): copies component data into dest. */
+  void (*get) (uint32_t entity, void *dest) = nullptr;
+  /** Type-erased setter (C++ types only): writes src into component storage. */
+  void (*set) (uint32_t entity, const void *src) = nullptr;
+};
+
 /** Ordering modes for world component descriptor queries. */
 enum class world_component_order
 {
@@ -68,7 +95,8 @@ public:
     std::string display_name;
     /** Whether the component was registered at runtime. */
     bool runtime_registered = false;
-    /** Whether the component can be default-constructed and added to an entity. */
+    /** Whether the component can be default-constructed and added to an entity.
+     */
     bool can_add_default = false;
     /** Whether this is a daslang component (no C++ backing type). */
     bool is_das_component = false;
@@ -109,78 +137,78 @@ public:
   using world_component_descriptor = descriptor;
 
   /**
- * Registers an entity-owned world component type.
- * :param T: The world component type to register.
- * :param options: Registration options.
- */
+   * Registers an entity-owned world component type.
+   * :param T: The world component type to register.
+   * :param options: Registration options.
+   */
   template <comp::world_component_type T>
   void
   register_world_component (const world_component_registration_options &options
                             = {});
 
   /**
- * Registers metadata for a runtime component without loading its C++
- * type.
- *
- * Cached descriptors are only suitable for discovery and name lookup. They do
- * not provide construction, reflection, copy, or serialization callbacks.
- */
+   * Registers metadata for a runtime component without loading its C++
+   * type.
+   *
+   * Cached descriptors are only suitable for discovery and name lookup. They do
+   * not provide construction, reflection, copy, or serialization callbacks.
+   */
   void register_cached_runtime_world_component (
       entt::id_type type_id, std::string_view type_name,
       std::string_view display_name, int struct_size = 0,
       std::vector<descriptor::das_field> fields = {});
 
   /**
- * Finds a registered world component by stable or internal type ID.
- * :param type_id: Stable world component ID or internal EnTT type ID.
- * :return: Matching descriptor, or `nullptr` when not found.
- */
+   * Finds a registered world component by stable or internal type ID.
+   * :param type_id: Stable world component ID or internal EnTT type ID.
+   * :return: Matching descriptor, or `nullptr` when not found.
+   */
   const descriptor *find_world_component (entt::id_type type_id) const;
 
   /**
- * Finds a registered world component by C++ type name.
- * :param type_name: Type name returned by reflection.
- * :return: Matching descriptor, or `nullptr` when not found.
- */
+   * Finds a registered world component by C++ type name.
+   * :param type_name: Type name returned by reflection.
+   * :return: Matching descriptor, or `nullptr` when not found.
+   */
   const descriptor *find_world_component (std::string_view type_name) const;
 
   /**
- * Returns whether a world component descriptor exists for the ID.
- * :param type_id: Stable world component ID or internal EnTT type ID.
- * :return: `true` when the descriptor exists, otherwise `false`.
- */
+   * Returns whether a world component descriptor exists for the ID.
+   * :param type_id: Stable world component ID or internal EnTT type ID.
+   * :return: `true` when the descriptor exists, otherwise `false`.
+   */
   bool contains_world_component (entt::id_type type_id) const;
 
   /**
- * Converts an internal or stable ID to the stable world component ID.
- * :param type_id: Stable world component ID or internal EnTT type ID.
- * :return: Stable world component ID when known, otherwise the input ID.
- */
+   * Converts an internal or stable ID to the stable world component ID.
+   * :param type_id: Stable world component ID or internal EnTT type ID.
+   * :return: Stable world component ID when known, otherwise the input ID.
+   */
   entt::id_type to_stable_world_component_id (entt::id_type type_id) const;
 
   /**
- * Returns registered world components in the requested order.
- * :param order: Requested descriptor ordering.
- * :return: Ordered descriptor list.
- */
+   * Returns registered world components in the requested order.
+   * :param order: Requested descriptor ordering.
+   * :return: Ordered descriptor list.
+   */
   std::vector<const descriptor *>
   get_world_components (world_component_order order
                         = world_component_order::display_name) const;
 
   /**
- * Returns the world components that may still be added to an entity.
- * :param registry: Registry that owns the entity.
- * :param entity: Entity to test.
- * :return: Addable world component descriptors for the entity.
- */
+   * Returns the world components that may still be added to an entity.
+   * :param registry: Registry that owns the entity.
+   * :param entity: Entity to test.
+   * :return: Addable world component descriptors for the entity.
+   */
   std::vector<const descriptor *>
   get_addable_world_components (entt::registry &registry,
                                 entt::entity entity) const;
 
   /**
- * Copies a single registered world component from one entity to
- * another.
- */
+   * Copies a single registered world component from one entity to
+   * another.
+   */
   bool copy_world_component (entt::registry &src_registry,
                              entt::entity src_entity,
                              entt::registry &dst_registry,
@@ -208,18 +236,18 @@ public:
                                   entt::id_type component_type_id) const;
 
   /**
- * Saves all das component data to a JSON archive.
- *
- * Each das component is serialized as a JSON array of objects with fields:
- * type_id (uint), entity (uint), data (hex string).
- */
+   * Saves all das component data to a JSON archive.
+   *
+   * Each das component is serialized as a JSON array of objects with fields:
+   * type_id (uint), entity (uint), data (hex string).
+   */
   void save_das_components_json (cereal::JSONOutputArchive &archive) const;
 
   /**
- * Loads das component data from a JSON archive.
- *
- * Expects the same format produced by save_das_components_json.
- */
+   * Loads das component data from a JSON archive.
+   *
+   * Expects the same format produced by save_das_components_json.
+   */
   void load_das_components_json (cereal::JSONInputArchive &archive);
 
   /**
@@ -228,7 +256,8 @@ public:
    */
   void save_das_components_binary (cereal::BinaryOutputArchive &archive) const;
 
-  /** Loads das component data from a binary archive (for play/stop snapshots). */
+  /** Loads das component data from a binary archive (for play/stop snapshots).
+   */
   void load_das_components_binary (cereal::BinaryInputArchive &archive);
 
   // ── Das component tracking ──
@@ -244,15 +273,15 @@ public:
   bool das_component_remove (entt::id_type type_id, entt::entity entity);
 
   /**
- * Returns a mutable pointer to the raw byte storage for a das
- * component on an entity. Allocates storage if not yet present.
- */
+   * Returns a mutable pointer to the raw byte storage for a das
+   * component on an entity. Allocates storage if not yet present.
+   */
   uint8_t *das_component_data (entt::id_type type_id, entt::entity entity);
 
   /**
- * Returns a const pointer to the raw byte storage for a das
- * component on an entity, or nullptr if not present.
- */
+   * Returns a const pointer to the raw byte storage for a das
+   * component on an entity, or nullptr if not present.
+   */
   const uint8_t *das_component_data (entt::id_type type_id,
                                      entt::entity entity) const;
 
@@ -260,10 +289,10 @@ public:
   void clear_runtime_world_components ();
 
   /**
- * Finds a component descriptor by its stable type identifier.
- * :param type_id: The stable type identifier.
- * :return: Pointer to the descriptor if found, otherwise `nullptr`.
- */
+   * Finds a component descriptor by its stable type identifier.
+   * :param type_id: The stable type identifier.
+   * :return: Pointer to the descriptor if found, otherwise `nullptr`.
+   */
   const descriptor *
   find (entt::id_type type_id) const
   {
@@ -271,11 +300,11 @@ public:
   }
 
   /**
- * Converts an internal entt type identifier to a stable type
- * identifier.
- * :param internal_id: The internal type identifier.
- * :return: The stable type identifier.
- */
+   * Converts an internal entt type identifier to a stable type
+   * identifier.
+   * :param internal_id: The internal type identifier.
+   * :return: The stable type identifier.
+   */
   entt::id_type
   to_stable_id (entt::id_type internal_id) const
   {
@@ -283,9 +312,9 @@ public:
   }
 
   /**
- * Returns all registered descriptors in insertion order.
- * :return: Vector of pointers to descriptors.
- */
+   * Returns all registered descriptors in insertion order.
+   * :return: Vector of pointers to descriptors.
+   */
   std::vector<const descriptor *>
   ordered () const
   {
@@ -293,9 +322,9 @@ public:
   }
 
   /**
- * Returns all registered descriptors sorted by type identifier.
- * :return: Vector of pointers to descriptors.
- */
+   * Returns all registered descriptors sorted by type identifier.
+   * :return: Vector of pointers to descriptors.
+   */
   std::vector<const descriptor *>
   by_type_id () const
   {
@@ -308,6 +337,38 @@ public:
   {
     clear_runtime_world_components ();
   }
+
+  // ── Component type lookup table (for generic daScript dispatch) ──
+
+  /**
+   * Registers component type info in the lookup table.
+   * :param das_type_name: The daScript-visible type name (e.g. "Transform").
+   * :param type_id: Stable type identifier.
+   * :param kind: Component storage kind.
+   * :param struct_size: Size of the component struct in bytes.
+   * :param getter: Type-erased getter function (C++ types only).
+   * :param setter: Type-erased setter function (C++ types only).
+   */
+  void register_component_type_info (
+      const std::string &das_type_name, uint64_t type_id, ComponentKind kind,
+      size_t struct_size, void (*getter) (uint32_t, void *) = nullptr,
+      void (*setter) (uint32_t, const void *) = nullptr);
+
+  /**
+   * Looks up component type info by daScript type name.
+   * :param das_type_name: The daScript-visible type name.
+   * :return: Pointer to the type info, or nullptr if not found.
+   */
+  const ComponentTypeInfo *
+  find_component_type_info (const std::string &das_type_name) const;
+
+  /**
+   * Looks up component type info by type_id.
+   * :param type_id: The stable type identifier.
+   * :return: Pointer to the type info, or nullptr if not found.
+   */
+  const ComponentTypeInfo *
+  find_component_type_info_by_id (uint64_t type_id) const;
 
 private:
   // ------------------------------------------------------------------
@@ -462,6 +523,11 @@ private:
   std::unordered_map<entt::id_type,
                      std::unordered_map<entt::entity, std::vector<uint8_t>>>
       m_das_component_data;
+
+  // Component type lookup table: daScript type name -> type info.
+  std::unordered_map<std::string, ComponentTypeInfo> m_type_info_by_name;
+  // Reverse lookup: type_id -> daScript type name.
+  std::unordered_map<uint64_t, std::string> m_type_id_to_name;
 };
 
 template <comp::world_component_type T>
@@ -557,6 +623,14 @@ component_registry::register_world_component (
   };
 
   m_descriptors[type_id] = std::move (desc);
+
+  // Also register in the lookup table for generic dispatch.
+  // Use the display name (or type name) as the daScript-visible key.
+  std::string das_name = desc.display_name.empty ()
+                             ? std::string (entt::type_name<T> ().value ())
+                             : desc.display_name;
+  register_component_type_info (das_name, type_id, ComponentKind::CPP_NATIVE,
+                                sizeof (T));
 }
 
 } // namespace reg

@@ -1163,6 +1163,173 @@ wsl_set_component_field_f (uint32_t entity, uint32_t type_id, int offset,
   std::memcpy (data + offset, &value, sizeof (float));
 }
 
+// ── Generic component type lookup (for get_component<T> / set_component<T>) ──
+
+uint32_t
+wsl_get_component_type_id_by_name (const char *type_name)
+{
+  auto *reg = get_registry ();
+  if (!reg || !type_name) {
+    return 0;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return 0;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return 0;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *info = comp_reg.find_component_type_info (type_name);
+  if (!info) {
+    return 0;
+  }
+  return static_cast<uint32_t> (info->type_id);
+}
+
+int
+wsl_get_component_kind_by_name (const char *type_name)
+{
+  auto *reg = get_registry ();
+  if (!reg || !type_name) {
+    return 0;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return 0;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return 0;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *info = comp_reg.find_component_type_info (type_name);
+  if (!info) {
+    return 0;
+  }
+  return static_cast<int> (info->kind);
+}
+
+int
+wsl_get_component_struct_size_by_name (const char *type_name)
+{
+  auto *reg = get_registry ();
+  if (!reg || !type_name) {
+    return 0;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return 0;
+  }
+  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+  if (!runtime_ctx) {
+    return 0;
+  }
+  auto &comp_reg = runtime_ctx->component_registry ();
+  auto *info = comp_reg.find_component_type_info (type_name);
+  if (!info) {
+    return 0;
+  }
+  return static_cast<int> (info->struct_size);
+}
+
+void
+wsl_get_component_into (uint32_t entity, uint32_t type_id, int kind, void *dest)
+{
+  auto *reg = get_registry ();
+  if (!reg || !dest) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  auto component_kind = static_cast<reg::ComponentKind> (kind);
+
+  if (component_kind == reg::ComponentKind::DAS_SCRIPT) {
+    // daScript component: memcpy from raw byte storage
+    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+      return;
+    }
+    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+    if (!runtime_ctx) {
+      return;
+    }
+    auto &comp_reg = runtime_ctx->component_registry ();
+    if (!comp_reg.das_component_contains (type_id, e)) {
+      return;
+    }
+    const auto *data = comp_reg.das_component_data (type_id, e);
+    if (!data) {
+      return;
+    }
+    auto *desc = comp_reg.find_world_component (type_id);
+    size_t size = desc ? static_cast<size_t> (desc->das_struct_size) : 0;
+    if (size > 0) {
+      std::memcpy (dest, data, size);
+    }
+  } else {
+    // C++ component: use the accessor from lookup table
+    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+      return;
+    }
+    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+    if (!runtime_ctx) {
+      return;
+    }
+    auto &comp_reg = runtime_ctx->component_registry ();
+    auto *info = comp_reg.find_component_type_info_by_id (type_id);
+    if (info && info->get) {
+      info->get (entity, dest);
+    }
+  }
+}
+
+void
+wsl_set_component_from (uint32_t entity, uint32_t type_id, int kind,
+                        const void *src)
+{
+  auto *reg = get_registry ();
+  if (!reg || !src) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  auto component_kind = static_cast<reg::ComponentKind> (kind);
+
+  if (component_kind == reg::ComponentKind::DAS_SCRIPT) {
+    // daScript component: memcpy to raw byte storage
+    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+      return;
+    }
+    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+    if (!runtime_ctx) {
+      return;
+    }
+    auto &comp_reg = runtime_ctx->component_registry ();
+    if (!comp_reg.das_component_contains (type_id, e)) {
+      return;
+    }
+    auto *data = comp_reg.das_component_data (type_id, e);
+    if (!data) {
+      return;
+    }
+    auto *desc = comp_reg.find_world_component (type_id);
+    size_t size = desc ? static_cast<size_t> (desc->das_struct_size) : 0;
+    if (size > 0) {
+      std::memcpy (data, src, size);
+    }
+  } else {
+    // C++ component: use the accessor from lookup table
+    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+      return;
+    }
+    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
+    if (!runtime_ctx) {
+      return;
+    }
+    auto &comp_reg = runtime_ctx->component_registry ();
+    auto *info = comp_reg.find_component_type_info_by_id (type_id);
+    if (info && info->set) {
+      info->set (entity, src);
+    }
+  }
+}
+
 // ── Raycasting (global-state) ──
 
 float g_ray_origin[3] = {};
@@ -1642,7 +1809,34 @@ public:
         *this, lib, "set_component_field_f", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_set_component_field_f")
         ->args ({ "entity", "type_id", "offset", "value" });
+    // Generic component type lookup (for get_component<T> / set_component<T>)
+    addExtern<DAS_BIND_FUN (wsl_get_component_type_id_by_name)> (
+        *this, lib, "_get_component_type_id_by_name",
+        ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_component_type_id_by_name")
+        ->arg ("type_name");
 
+    addExtern<DAS_BIND_FUN (wsl_get_component_kind_by_name)> (
+        *this, lib, "_get_component_kind_by_name",
+        ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_component_kind_by_name")
+        ->arg ("type_name");
+
+    addExtern<DAS_BIND_FUN (wsl_get_component_struct_size_by_name)> (
+        *this, lib, "_get_component_struct_size_by_name",
+        ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_component_struct_size_by_name")
+        ->arg ("type_name");
+
+    addExtern<DAS_BIND_FUN (wsl_get_component_into)> (
+        *this, lib, "_get_component_into", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_component_into")
+        ->args ({ "entity", "type_id", "kind", "dest" });
+
+    addExtern<DAS_BIND_FUN (wsl_set_component_from)> (
+        *this, lib, "_set_component_from", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_component_from")
+        ->args ({ "entity", "type_id", "kind", "src" });
     // Raycasting
     addExtern<DAS_BIND_FUN (wsl_make_pick_ray)> (
         *this, lib, "make_pick_ray", ::das::SideEffects::modifyExternal,

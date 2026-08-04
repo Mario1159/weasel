@@ -1,5 +1,6 @@
 require weasel_api
 require math
+require mouse_rotate
 
 class EcsSystem {
     def on_init() : void { }
@@ -8,35 +9,60 @@ class EcsSystem {
     def on_inactive() : void { }
 }
 
+// --- Generic component access helpers (defined here for AOT compatibility) ---
+
+/// Check if an entity has a component of the given type.
+def has_component_t(entity : uint; dummy : auto(component_type)) : bool {
+    var type_name = typeinfo typename(type<component_type>)
+    var type_id = _get_component_type_id_by_name(type_name)
+    if (type_id == 0) return false
+    return has_component(type_id, entity)
+}
+
+/// Returns a typed copy of the component of type T on the entity.
+def get_component_t(entity : uint; dummy : auto(component_type)) : component_type {
+    var type_name = typeinfo typename(type<component_type>)
+    var type_id = _get_component_type_id_by_name(type_name)
+    var kind = _get_component_kind_by_name(type_name)
+    if (type_id == 0 || !has_component(type_id, entity)) {
+        return default<component_type>
+    }
+    var result : component_type = default<component_type>
+    _get_component_into(entity, type_id, kind, unsafe(reinterpret<void?>(unsafe(addr(result)))))
+    return result
+}
+
+/// Writes the component struct back to the entity's component storage.
+def set_component_t(entity : uint; comp : auto(component_type)) {
+    var type_name = typeinfo typename(type<component_type>)
+    var type_id = _get_component_type_id_by_name(type_name)
+    var kind = _get_component_kind_by_name(type_name)
+    if (type_id == 0 || !has_component(type_id, entity)) {
+        return
+    }
+    _set_component_from(entity, type_id, kind, unsafe(reinterpret<void?>(unsafe(addr(comp)))))
+}
+
 class System : EcsSystem {
     m_accumulated_dx : float = 0.0
     m_accumulated_dy : float = 0.0
     m_relative_mode_active : bool = false
-    m_mouse_rot_type : uint = 0
-
-    // MouseRotate field byte offsets (float fields)
-    OFF_SENSITIVITY : int = 0
-    OFF_YAW : int = 4
-    OFF_PITCH : int = 8
-    OFF_PITCH_MIN : int = 12
-    OFF_PITCH_MAX : int = 16
 
     def override on_init() : void {
-        m_mouse_rot_type = get_component_type_id("Mouse Rotate")
-        if (m_mouse_rot_type == 0) return
-
         refresh_entities_with_transform()
         var count = get_entity_count()
         for (i in range(count)) {
             var e = get_entity_at(uint(i))
-            if (!has_component(m_mouse_rot_type, e)) continue
+            if (!has_component_t(e, MouseRotate())) continue
             if (!has_component(TYPE_TRANSFORM(), e)) continue
 
             var yaw = get_rotation_yaw(e)
             var pitch = get_rotation_pitch(e)
 
-            set_component_field_f(e, m_mouse_rot_type, OFF_YAW, yaw)
-            set_component_field_f(e, m_mouse_rot_type, OFF_PITCH, pitch)
+            var mr = get_component_t(e, MouseRotate())
+            mr.yaw = yaw
+            mr.pitch = pitch
+            set_component_t(e, mr)
         }
     }
 
@@ -57,7 +83,7 @@ class System : EcsSystem {
             var count = get_entity_count()
             for (i in range(count)) {
                 var e = get_entity_at(uint(i))
-                if (!has_component(m_mouse_rot_type, e)) continue
+                if (!has_component_t(e, MouseRotate())) continue
                 if (!has_component(TYPE_CAMERA(), e)) continue
                 if (e == active_cam) {
                     fp_active = true
@@ -73,8 +99,6 @@ class System : EcsSystem {
     }
 
     def override on_update(dt : float) : void {
-        if (m_mouse_rot_type == 0) return
-
         var active_cam = get_active_camera()
         var fp_active = false
 
@@ -83,7 +107,7 @@ class System : EcsSystem {
             var count = get_entity_count()
             for (i in range(count)) {
                 var e = get_entity_at(uint(i))
-                if (!has_component(m_mouse_rot_type, e)) continue
+                if (!has_component_t(e, MouseRotate())) continue
                 if (!has_component(TYPE_CAMERA(), e)) continue
                 if (e == active_cam) {
                     fp_active = true
@@ -110,23 +134,16 @@ class System : EcsSystem {
         var count = get_entity_count()
         for (i in range(count)) {
             var e = get_entity_at(uint(i))
-            if (!has_component(m_mouse_rot_type, e)) continue
+            if (!has_component_t(e, MouseRotate())) continue
             if (!has_component(TYPE_TRANSFORM(), e)) continue
 
-            var sensitivity = get_component_field_f(e, m_mouse_rot_type, OFF_SENSITIVITY)
-            var yaw = get_component_field_f(e, m_mouse_rot_type, OFF_YAW)
-            var pitch = get_component_field_f(e, m_mouse_rot_type, OFF_PITCH)
-            var pitch_min = get_component_field_f(e, m_mouse_rot_type, OFF_PITCH_MIN)
-            var pitch_max = get_component_field_f(e, m_mouse_rot_type, OFF_PITCH_MAX)
+            var mr = get_component_t(e, MouseRotate())
+            mr.yaw -= m_accumulated_dx * mr.sensitivity
+            mr.pitch -= m_accumulated_dy * mr.sensitivity
+            mr.pitch = clamp(mr.pitch, mr.pitch_min, mr.pitch_max)
+            set_component_t(e, mr)
 
-            yaw -= m_accumulated_dx * sensitivity
-            pitch -= m_accumulated_dy * sensitivity
-            pitch = clamp(pitch, pitch_min, pitch_max)
-
-            set_component_field_f(e, m_mouse_rot_type, OFF_YAW, yaw)
-            set_component_field_f(e, m_mouse_rot_type, OFF_PITCH, pitch)
-
-            set_rotation(e, pitch, yaw, 0.0)
+            set_rotation(e, mr.pitch, mr.yaw, 0.0)
         }
 
         m_accumulated_dx = 0.0

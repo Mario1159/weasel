@@ -542,8 +542,6 @@ model_loader::finish_upload (upload_session &session, const raw::cpu_model &cpu)
 
   model.rebuild_scene_bounds ();
 
-  wsl::log::rsc ()->debug ("GPU LOD GROUP COUNT: {}", model.lod_groups.size ());
-
   return std::move (model);
 }
 
@@ -885,8 +883,6 @@ model_loader::load_cpu (const std::string &path) const
 
     cpu->lod_groups.push_back (std::move (indices));
   }
-
-  wsl::log::rsc ()->debug ("LOD GROUP COUNT: {}", cpu->lod_groups.size ());
 
   // -------- scenes --------
   cpu->scenes.reserve (gltf.scenes.size ());

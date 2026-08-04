@@ -15,12 +15,11 @@ file(GLOB_RECURSE SOURCES
 )
 
 # AOT-compile .das files
-file(GLOB_RECURSE DAS_SOURCES
-    "src/components/*.das"
-    "src/systems/*.das"
-)
+file(GLOB_RECURSE DAS_COMPONENTS "src/components/*.das")
+file(GLOB_RECURSE DAS_SYSTEMS "src/systems/*.das")
+set(DAS_SOURCES ${DAS_COMPONENTS} ${DAS_SYSTEMS})
 if(DAS_SOURCES)
-    weasel_aot_das(FILES ${DAS_SOURCES} OUTPUT_VAR AOT_SRCS)
+    weasel_aot_das(FILES ${DAS_SOURCES} COMPONENTS ${DAS_COMPONENTS} OUTPUT_VAR AOT_SRCS)
     list(APPEND SOURCES ${AOT_SRCS})
 endif()
 

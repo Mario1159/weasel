@@ -6,6 +6,7 @@
 #include <entt/meta/factory.hpp>
 #include <string>
 #include <vector>
+#include "../log/log.hpp"
 
 namespace wsl
 {
@@ -306,11 +307,6 @@ component_registry::load_world_component_json (
     return false;
   }
 
-  wsl::log::sys ()->debug (
-      "load_world_component_json: type_id={} type_name='{}' load_json={}",
-      component_type_id, desc->type_name,
-      reinterpret_cast<const void *> (desc->load_json));
-
   desc->load_json (archive, registry);
   return true;
 }
@@ -524,6 +520,60 @@ component_registry::clear_runtime_world_components ()
   for (entt::id_type const internal_id : runtime_internal_ids) {
     m_internal_to_stable.erase (internal_id);
   }
+
+  // Also clear the lookup table entries for runtime components.
+  for (auto it = m_type_info_by_name.begin ();
+       it != m_type_info_by_name.end ();) {
+    if (auto id_it = m_type_id_to_name.find (it->second.type_id);
+        id_it != m_type_id_to_name.end ()) {
+      if (auto desc_it = m_descriptors.find (it->second.type_id);
+          desc_it != m_descriptors.end ()
+          && desc_it->second.runtime_registered) {
+        it = m_type_info_by_name.erase (it);
+        m_type_id_to_name.erase (id_it);
+        continue;
+      }
+    }
+    ++it;
+  }
+}
+
+// ── Component type lookup table ──
+
+void
+component_registry::register_component_type_info (
+    const std::string &das_type_name, uint64_t type_id, ComponentKind kind,
+    size_t struct_size, void (*getter) (uint32_t, void *),
+    void (*setter) (uint32_t, const void *))
+{
+  m_type_info_by_name[das_type_name]
+      = ComponentTypeInfo{ .type_id = type_id,
+                           .kind = kind,
+                           .struct_size = struct_size,
+                           .get = getter,
+                           .set = setter };
+  m_type_id_to_name[type_id] = das_type_name;
+}
+
+const ComponentTypeInfo *
+component_registry::find_component_type_info (
+    const std::string &das_type_name) const
+{
+  auto it = m_type_info_by_name.find (das_type_name);
+  if (it != m_type_info_by_name.end ()) {
+    return &it->second;
+  }
+  return nullptr;
+}
+
+const ComponentTypeInfo *
+component_registry::find_component_type_info_by_id (uint64_t type_id) const
+{
+  auto it = m_type_id_to_name.find (type_id);
+  if (it != m_type_id_to_name.end ()) {
+    return find_component_type_info (it->second);
+  }
+  return nullptr;
 }
 
 } // namespace reg

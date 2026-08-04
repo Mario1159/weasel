@@ -200,6 +200,32 @@ def get_component_field_f(entity : uint, type_id : uint, offset : int) : float =
 /// Writes a float field to a component at the given byte offset.
 def set_component_field_f(entity : uint, type_id : uint, offset : int, value : float) { }
 
+// --- Component type lookup (for generic dispatch) ---
+
+/// Component kind enum for generic dispatch.
+enum ComponentKind : int {
+    CPP_NATIVE = 0
+    CPP_PROJECT = 1
+    DAS_SCRIPT = 2
+}
+
+/// Looks up component type ID by daScript type name. Returns 0 if not found.
+def _get_component_type_id_by_name(type_name : string) : uint => 0
+
+/// Looks up component kind by daScript type name. Returns 0 (CPP_NATIVE) if not found.
+def _get_component_kind_by_name(type_name : string) : int => 0
+
+/// Looks up component struct size by daScript type name. Returns 0 if not found.
+def _get_component_struct_size_by_name(type_name : string) : int => 0
+
+/// Type-erased component getter.
+/// Fills dest with the component data for the given entity.
+def _get_component_into(entity : uint, type_id : uint, kind : int, dest : void?) { }
+
+/// Type-erased component setter.
+/// Writes src to component storage for the given entity.
+def _set_component_from(entity : uint, type_id : uint, kind : int, src : void?) { }
+
 // --- Raycasting ---
 /// Casts a ray from the camera through the given screen coordinates.
 def make_pick_ray(camera_entity : uint, mouse_x : float, mouse_y : float, vp_x : float, vp_y : float, vp_w : float, vp_h : float) : bool => false

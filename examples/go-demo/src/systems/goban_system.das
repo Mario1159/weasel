@@ -112,7 +112,9 @@ class System : EcsSystem {
             mouse_y = ny * float(h)
         }
 
-        if (!make_pick_ray(m_goban_camera, mouse_x, mouse_y, 0.0, 0.0, float(w), float(h))) return
+        if (!make_pick_ray(m_goban_camera, mouse_x, mouse_y, 0.0, 0.0, float(w), float(h))) {
+            return
+        }
 
         var ox = get_ray_origin_x()
         var oy = get_ray_origin_y()
@@ -121,7 +123,9 @@ class System : EcsSystem {
         var dy = get_ray_dir_y()
         var dz = get_ray_dir_z()
 
-        if (!ray_plane_intersect(ox, oy, oz, dx, dy, dz, 0.0, 2.21, 0.0, 0.0, 1.0, 0.0)) return
+        if (!ray_plane_intersect(ox, oy, oz, dx, dy, dz, 0.0, 2.21, 0.0, 0.0, 1.0, 0.0)) {
+            return
+        }
 
         var hit_x = get_hit_x()
         var hit_y = get_hit_y()
