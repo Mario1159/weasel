@@ -451,17 +451,17 @@ if(NOT SLANG_EXE)
     find_program(SLANG_EXE slangc)
 endif()
 
-# If slangc is built from source as a target, add a dependency on it but
-# keep using the prebuilt slangc for shader compilation (it's known to work
-# with -dxc-path; the freshly built executable has path-resolution issues).
+# If slangc is built from source as a target, use its built executable via a
+# generator expression and add a dependency so it is compiled before shaders.
 set(SLANGC_IS_TARGET FALSE)
-if(TARGET slangc)
-    set(SLANGC_IS_TARGET TRUE)
-endif()
-
 if(NOT SLANG_EXE)
-    message(FATAL_ERROR "Could not find slangc executable or target. "
-        "Set SLANG_EXE manually or ensure slang is built.")
+    if(TARGET slangc)
+        set(SLANGC_IS_TARGET TRUE)
+        set(SLANG_EXE "$<TARGET_FILE:slangc>")
+    else()
+        message(FATAL_ERROR "Could not find slangc executable or target. "
+            "Set SLANG_EXE manually or ensure slang is built.")
+    endif()
 endif()
 
 message(STATUS "Using slangc: ${SLANG_EXE}")
