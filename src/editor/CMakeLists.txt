@@ -111,7 +111,6 @@ target_link_libraries(weasel PRIVATE
     glm_dep
     slang::slang
     CLI11::CLI11
-    ai::sdk
     ${CMAKE_DL_LIBS}
 )
 

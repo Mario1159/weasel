@@ -390,26 +390,6 @@ CPMAddPackage(
 )
 target_compile_definitions(Jolt PUBLIC JPH_DEBUG_RENDERER CPP_RTTI_ENABLED)
 
-# ai-sdk-cpp is fetched manually so we can patch the missing natvis file
-# before add_subdirectory runs.  CPM's PATCH_COMMAND is not reliable here.
-include(FetchContent)
-FetchContent_Declare(
-    ai-sdk-cpp
-    GIT_REPOSITORY https://github.com/ClickHouse/ai-sdk-cpp.git
-    GIT_TAG main
-    GIT_SUBMODULES_RECURSE YES
-)
-FetchContent_GetProperties(ai-sdk-cpp)
-if(NOT ai-sdk-cpp_POPULATED)
-    FetchContent_Populate(ai-sdk-cpp)
-    # MSVC: nlohmann_json_patched expects a natvis file that doesn't exist.
-    set(_AI_SDK_NATVIS "${ai-sdk-cpp_SOURCE_DIR}/third_party/nlohmann_json_patched/nlohmann_json.natvis")
-    if(NOT EXISTS "${_AI_SDK_NATVIS}")
-        file(TOUCH "${_AI_SDK_NATVIS}")
-    endif()
-endif()
-add_subdirectory(${ai-sdk-cpp_SOURCE_DIR} ${ai-sdk-cpp_BINARY_DIR} EXCLUDE_FROM_ALL SYSTEM)
-
 # A2A protocol: libcurl for HTTP transport
 find_package(CURL REQUIRED)
 
@@ -715,8 +695,18 @@ add_executable(weasel_mcp_server_tests
 target_link_libraries(weasel_mcp_server_tests PRIVATE mcp_server_lib doctest)
 doctest_discover_tests(weasel_mcp_server_tests)
 
+# Engine daslang component-accessors smoke test. Runs only when daslang is
+# enabled in the build (the weasel_daslang target exists).
+if(TARGET weasel_daslang)
+  add_executable(weasel_das_tests
+      "${CMAKE_SOURCE_DIR}/tests/weasel-das/test_component_accessors.cpp"
+  )
+  target_link_libraries(weasel_das_tests PRIVATE wsl doctest)
+  doctest_discover_tests(weasel_das_tests)
+endif()
+
 # --- Installation ---
-# Only install our own targets/resources.  CPM dependencies (slang, ai-sdk-cpp,
+# Only install our own targets/resources.  CPM dependencies (slang,
 # etc.) have their own install() rules that break in CI (wrong paths, man pages,
 # missing files).  Tagging installs with COMPONENT Engine/CLI/McpServer and
 # limiting CPACK_COMPONENTS_ALL prevents CPack from touching them.
@@ -861,14 +851,14 @@ install(FILES cmake/WeaselDasAOT.cmake
     COMPONENT Engine
 )
 
-# Install weasel_api.das declarations for AOT compilation.
-# Downstream projects need this file in their daslib path.
-# Install to share/weasel/ so packaging/linux/Makefile picks it up.
-install(FILES src/wsl/das/modules/weasel_api/weasel_api.das
+# Install weasel_helpers.das (a genuine daslang source) for downstream
+# projects / AOT consumers. weasel_api is a C++ module (Module_WeaselApi)
+# loaded in-process, so it needs no .das declaration file.
+install(FILES src/wsl/das/modules/weasel_helpers.das
     DESTINATION share/weasel/daslib
     COMPONENT Engine
 )
-install(FILES src/wsl/das/modules/weasel_helpers.das
+install(FILES src/wsl/das/modules/weasel_ecs.das
     DESTINATION share/weasel/daslib
     COMPONENT Engine
 )
@@ -965,6 +955,29 @@ if(DEFINED slang_SOURCE_DIR)
     )
 endif()
 
+if(DEFINED imgui_SOURCE_DIR)
+    install(DIRECTORY ${imgui_SOURCE_DIR}/
+        DESTINATION include
+        COMPONENT Engine
+        FILES_MATCHING PATTERN "imgui*.h" PATTERN "imconfig.h")
+endif()
+
+if(DEFINED SDL3_image_SOURCE_DIR)
+    install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Engine
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+
+if(DEFINED SDL3_mixer_SOURCE_DIR)
+    install(DIRECTORY ${SDL3_mixer_SOURCE_DIR}/include/
+        DESTINATION include
+        COMPONENT Engine
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+
 # Tracy: the engine's public headers (wsl/sys/system.hpp) use
 # ZoneScopedN / ZoneText / FrameMark, so consumers must be able to
 # #include <tracy/Tracy.hpp>. Tracy.hpp itself pulls in siblings from
@@ -988,102 +1001,6 @@ if(DEFINED Tracy_SOURCE_DIR)
         DESTINATION include/client
         COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
-    )
-endif()
-
-if(DEFINED SDL3_image_SOURCE_DIR)
-    install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.h"
-    )
-endif()
-
-if(DEFINED SDL3_mixer_SOURCE_DIR)
-    install(DIRECTORY ${SDL3_mixer_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.h"
-    )
-endif()
-
-if(DEFINED imgui_SOURCE_DIR)
-    install(DIRECTORY ${imgui_SOURCE_DIR}/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "imgui*.h" PATTERN "imconfig.h"
-    )
-endif()
-
-if(DEFINED cereal_SOURCE_DIR)
-    install(DIRECTORY ${cereal_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
-    )
-endif()
-
-if(DEFINED JoltPhysics_SOURCE_DIR)
-    install(DIRECTORY ${JoltPhysics_SOURCE_DIR}/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-    )
-endif()
-
-if(DEFINED fastgltf_SOURCE_DIR)
-    install(DIRECTORY ${fastgltf_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
-    )
-endif()
-
-if(DEFINED spdlog_SOURCE_DIR)
-    install(DIRECTORY ${spdlog_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
-    )
-endif()
-
-if(DEFINED RmlUi_SOURCE_DIR)
-    install(DIRECTORY ${RmlUi_SOURCE_DIR}/Include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.inl"
-    )
-endif()
-
-if(DEFINED slang_SOURCE_DIR)
-    install(DIRECTORY ${slang_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-    )
-endif()
-
-if(DEFINED imgui_SOURCE_DIR)
-    install(DIRECTORY ${imgui_SOURCE_DIR}/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "imgui*.h" PATTERN "imconfig.h"
-    )
-endif()
-
-if(DEFINED SDL3_image_SOURCE_DIR)
-    install(DIRECTORY ${SDL3_image_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.h"
-    )
-endif()
-
-if(DEFINED SDL3_mixer_SOURCE_DIR)
-    install(DIRECTORY ${SDL3_mixer_SOURCE_DIR}/include/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING PATTERN "*.h"
     )
 endif()
 
@@ -1129,7 +1046,7 @@ set(CPACK_COMPONENT_MCPSERVER_DEPENDS Engine)
 
 # Override CPack's install step so it only installs our own components.
 # Without this CPack runs a full "cmake --install ." which also executes
-# broken install() rules from CPM dependencies (slang, ai-sdk-cpp, brotli...).
+# broken install() rules from CPM dependencies (slang, brotli...).
 set(CPACK_INSTALL_CMAKE_PROJECTS
     "${CMAKE_BINARY_DIR};weasel;Engine;/"
     "${CMAKE_BINARY_DIR};weasel;CLI;/"

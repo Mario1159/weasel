@@ -21,8 +21,9 @@ from typing import Optional
 @dataclass
 class BoundFunction:
     """A single function bound to daslang via addExtern."""
-    cpp_name: str           # C++ function name (e.g. wsl_entity_create)
-    das_name: str           # daslang-visible name (e.g. entity_create)
+
+    cpp_name: str  # C++ function name (e.g. wsl_entity_create)
+    das_name: str  # daslang-visible name (e.g. entity_create)
     args: list[str] = field(default_factory=list)
     return_type: str = ""
     description: str = ""
@@ -34,6 +35,7 @@ class BoundFunction:
 @dataclass
 class BoundConstant:
     """A constant bound via addConstant."""
+
     das_name: str
     cpp_type: str
     value: str
@@ -43,6 +45,7 @@ class BoundConstant:
 @dataclass
 class BindingModule:
     """A complete daslang module extracted from C++ source."""
+
     name: str
     description: str = ""
     functions: list[BoundFunction] = field(default_factory=list)
@@ -67,16 +70,92 @@ SECTION_DOCS = {
     "Component field access": "Read and write component fields by byte offset.",
     "Raycasting": "Cast rays from camera through mouse position and intersect with planes.",
     "Logging": "Log messages at various severity levels.",
+    "Time": "Monotonic clock accessible from any system callback.",
+    "Physics": "Drive rigid bodies and character controllers via the Jolt physics engine.",
+    "Audio": "Control playback of entity audio components.",
+    "2D transform": "Get and set 2D local transforms.",
+    "2D camera": "Control 2D orthographic cameras.",
+    "2D sprite": "Control 2D sprite appearance (color, size, flip).",
+    "Lights": "Control light color and intensity at runtime.",
+    "Model instance": "Swap models and material overrides on entities.",
 }
 
 # -- Per-function descriptions (curated) --------------------------------------
 
 FUNCTION_DOCS = {
-    "get_delta_time": "Returns the time elapsed since the last frame, in seconds.",
     "log_info": "Logs a message at info level.",
     "log_debug": "Logs a message at debug level.",
     "log_warn": "Logs a message at warning level.",
     "log_error": "Logs a message at error level.",
+    "get_time": "Returns the elapsed time in seconds since the module was first queried.",
+    "get_elapsed_time": "Returns the elapsed time in seconds since the module was first queried.",
+    "set_rigid_body_linear_velocity": "Sets the rigid body linear velocity (world space).",
+    "get_rigid_body_linear_velocity_x": "Gets the rigid body linear velocity X (world space).",
+    "get_rigid_body_linear_velocity_y": "Gets the rigid body linear velocity Y (world space).",
+    "get_rigid_body_linear_velocity_z": "Gets the rigid body linear velocity Z (world space).",
+    "set_rigid_body_angular_velocity": "Sets the rigid body angular velocity.",
+    "get_rigid_body_angular_velocity_x": "Gets the rigid body angular velocity X.",
+    "get_rigid_body_angular_velocity_y": "Gets the rigid body angular velocity Y.",
+    "get_rigid_body_angular_velocity_z": "Gets the rigid body angular velocity Z.",
+    "apply_impulse": "Applies an impulse to the rigid body.",
+    "apply_force": "Applies a continuous force to the rigid body.",
+    "get_body_position_x": "Gets the rigid body world position X.",
+    "get_body_position_y": "Gets the rigid body world position Y.",
+    "get_body_position_z": "Gets the rigid body world position Z.",
+    "set_character_body_velocity": "Sets the desired velocity of a character body (kinematic controller).",
+    "get_character_body_velocity_x": "Gets the character body desired velocity X.",
+    "get_character_body_velocity_y": "Gets the character body desired velocity Y.",
+    "get_character_body_velocity_z": "Gets the character body desired velocity Z.",
+    "audio_play": "Starts playback of the entity's audio component.",
+    "audio_stop": "Stops playback of the entity's audio component.",
+    "audio_pause": "Pauses playback of the entity's audio component.",
+    "audio_resume": "Resumes playback of the entity's audio component.",
+    "audio_set_volume": "Sets the playback volume (0.0 to 1.0) of the entity's audio component.",
+    "set_position_2d": "Sets the 2D local position.",
+    "get_position_2d_x": "Gets the 2D local position X.",
+    "get_position_2d_y": "Gets the 2D local position Y.",
+    "set_rotation_2d": "Sets the 2D Z rotation in degrees.",
+    "get_rotation_2d": "Gets the 2D Z rotation in degrees.",
+    "set_scale_2d": "Sets the 2D local scale.",
+    "get_scale_2d_x": "Gets the 2D local scale X.",
+    "get_scale_2d_y": "Gets the 2D local scale Y.",
+    "set_camera_2d_zoom": "Sets the 2D camera zoom.",
+    "get_camera_2d_zoom": "Gets the 2D camera zoom.",
+    "set_camera_2d_layer": "Sets the 2D camera layer (render order).",
+    "get_camera_2d_layer": "Gets the 2D camera layer (render order).",
+    "set_sprite_color": "Sets the sprite tint color (RGBA, 0.0 to 1.0).",
+    "get_sprite_color_r": "Gets the sprite tint color R.",
+    "get_sprite_color_g": "Gets the sprite tint color G.",
+    "get_sprite_color_b": "Gets the sprite tint color B.",
+    "get_sprite_color_a": "Gets the sprite tint color A.",
+    "set_sprite_size": "Sets the sprite size in pixels.",
+    "get_sprite_size_x": "Gets the sprite size X in pixels.",
+    "get_sprite_size_y": "Gets the sprite size Y in pixels.",
+    "set_sprite_flip_h": "Sets the sprite horizontal flip.",
+    "get_sprite_flip_h": "Gets the sprite horizontal flip.",
+    "set_sprite_flip_v": "Sets the sprite vertical flip.",
+    "get_sprite_flip_v": "Gets the sprite vertical flip.",
+    "set_point_light_color": "Sets the point light color (RGB, 0.0 to 1.0).",
+    "get_point_light_color_r": "Gets the point light color R.",
+    "get_point_light_color_g": "Gets the point light color G.",
+    "get_point_light_color_b": "Gets the point light color B.",
+    "set_point_light_intensity": "Sets the point light intensity.",
+    "get_point_light_intensity": "Gets the point light intensity.",
+    "set_directional_light_color": "Sets the directional light color (RGB, 0.0 to 1.0).",
+    "get_directional_light_color_r": "Gets the directional light color R.",
+    "get_directional_light_color_g": "Gets the directional light color G.",
+    "get_directional_light_color_b": "Gets the directional light color B.",
+    "set_directional_light_intensity": "Sets the directional light intensity.",
+    "get_directional_light_intensity": "Gets the directional light intensity.",
+    "set_spot_light_color": "Sets the spot light color (RGB, 0.0 to 1.0).",
+    "get_spot_light_color_r": "Gets the spot light color R.",
+    "get_spot_light_color_g": "Gets the spot light color G.",
+    "get_spot_light_color_b": "Gets the spot light color B.",
+    "set_spot_light_intensity": "Sets the spot light intensity.",
+    "get_spot_light_intensity": "Gets the spot light intensity.",
+    "set_model": 'Sets the model on the entity from a resource path (e.g. "res://...").',
+    "set_model_material_override": "Sets a per-instance material override from a resource path.",
+    "set_model_visibility_range": "Sets the model max draw distance in world units (0 = unlimited).",
     "entity_create": "Creates a new empty entity and returns its ID.",
     "entity_destroy": "Destroys an entity and all of its components.",
     "entity_valid": "Returns ``true`` if the entity ID refers to a live entity.",
@@ -123,7 +202,7 @@ FUNCTION_DOCS = {
     "refresh_entities_with_transform": "Populates the entity buffer with all entities that have a Transform.",
     "get_entity_count": "Returns the number of entities in the current iteration buffer.",
     "get_entity_at": "Returns the entity ID at the given index in the iteration buffer.",
-    "get_component_type_id": "Looks up a component type ID by its display name (e.g. ``\"Transform\"``).",
+    "get_component_type_id": 'Looks up a component type ID by its display name (e.g. ``"Transform"``).',
     "refresh_entities_with_component": "Populates the entity buffer with all entities owning the given component type.",
     "get_component_field_f": "Reads a float field from a component at the given byte offset.",
     "set_component_field_f": "Writes a float field to a component at the given byte offset.",
@@ -155,6 +234,7 @@ CPP_TO_DAS_TYPE = {
 
 # Canonical section order for the generated docs
 SECTION_ORDER = [
+    "Component accessors",
     "Logging",
     "Entity operations",
     "Generic component queries",
@@ -172,6 +252,63 @@ SECTION_ORDER = [
     "Raycasting",
 ]
 
+# Curated docs for the component accessor proxy API.
+#
+# The accessor externs (get_transform_accessor, ...) are internal C++
+# bindings; the user-facing entry points are the `get_component(entity, Tag)`
+# overloads and the tag functions defined in weasel_helpers.das.
+COMPONENT_ACCESSOR_DOCS = """\
+Component accessor proxies
+--------------------------
+
+Component data is read and written through live proxy values created with
+``get_component(entity, Tag)``.  The proxy captures the component pointer
+once at call time; every later property access reads or writes the actual
+entity component in place.  Example::
+
+    def on_update (entity : uint) {
+        let t = get_component(entity, transform())
+        t.scale.x = 2.0                    // chained leaf write
+        t.scale = float3(1.0, 2.0, 3.0)    // full-struct write
+        t.position.y = 3.5
+        let sx = t.scale.x                 // chained read
+    }
+
+The available tags and their properties:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Tag function
+     - Proxy type
+     - Properties
+   * - ``transform()``
+     - ``TransformAccessor``
+     - ``position.x/y/z``, ``scale.x/y/z``
+   * - ``transform_2d()``
+     - ``Transform2DAccessor``
+     - ``position.x/y``, ``scale.x/y``, ``rotation``
+   * - ``camera_2d()``
+     - ``Camera2DAccessor``
+     - ``zoom``
+   * - ``sprite_2d()``
+     - ``Sprite2DAccessor``
+     - ``color.x/y/z/w``, ``size.x/y``
+   * - ``point_light()``
+     - ``PointLightAccessor``
+     - ``color.x/y/z``, ``intensity``
+   * - ``directional_light()``
+     - ``DirectionalLightAccessor``
+     - ``color.x/y/z``, ``intensity``
+   * - ``spot_light()``
+     - ``SpotLightAccessor``
+     - ``color.x/y/z``, ``intensity``
+
+A proxy stays valid only while the entity is alive and still has the
+component.  Re-call ``get_component`` after structural changes to the
+entity.
+"""
+
 
 def parse_cpp_function_signatures(source_dir: Path) -> dict[str, tuple[str, str]]:
     """Parse C++ source files to extract function signatures and doc comments.
@@ -187,10 +324,10 @@ def parse_cpp_function_signatures(source_dir: Path) -> dict[str, tuple[str, str]
 
     # Match function definitions: return_type\nfunc_name (args)
     pattern = re.compile(
-        r'^(\w[\w:*&<> ]*)\s*\n'     # return type on previous line
-        r'(wsl_\w+)\s*\('             # function name
-        r'([^)]*)\)',                 # arguments
-        re.MULTILINE
+        r"^(\w[\w:*&<> ]*)\s*\n"  # return type on previous line
+        r"(wsl_\w+)\s*\("  # function name
+        r"([^)]*)\)",  # arguments
+        re.MULTILINE,
     )
 
     for match in pattern.finditer(content):
@@ -201,7 +338,7 @@ def parse_cpp_function_signatures(source_dir: Path) -> dict[str, tuple[str, str]
         # Parse individual arguments
         args = []
         if args_str:
-            for arg in args_str.split(','):
+            for arg in args_str.split(","):
                 arg = arg.strip()
                 # Split on last space to get type and name
                 parts = arg.rsplit(None, 1)
@@ -234,28 +371,28 @@ def parse_binding_registrations(source_dir: Path) -> BindingModule:
     # so we map each wrapper function name to its enclosing section.
     wrapper_sections: dict[str, str] = {}  # cpp_func_name -> section_name
     current_section = ""
-    section_pattern = re.compile(r'//\s*─+\s*(.+?)\s*─+')
+    section_pattern = re.compile(r"//\s*─+\s*(.+?)\s*─+")
 
-    lines = content.split('\n')
+    lines = content.split("\n")
     for line in lines:
         sm = section_pattern.search(line)
         if sm:
             current_section = sm.group(1).strip()
         # Match wrapper function definitions (type on own line, name on next)
-        func_start = re.match(r'^(wsl_\w+)\s*\(', line)
+        func_start = re.match(r"^(wsl_\w+)\s*\(", line)
         if func_start and current_section:
             wrapper_sections[func_start.group(1)] = current_section
 
     # Find all addExtern registrations
     extern_pattern = re.compile(
-        r'addExtern\s*<\s*DAS_BIND_FUN\s*\(\s*(\w+)\s*\)\s*>'
+        r"addExtern\s*<\s*DAS_BIND_FUN\s*\(\s*(\w+)\s*\)\s*>"
         r'\s*\(\s*\*this\s*,\s*lib\s*,\s*"(\w+)"'
-        r'(?:\s*,\s*::das::SideEffects::(\w+))?'
+        r"(?:\s*,\s*::das::SideEffects::(\w+))?"
     )
 
     # Find addConstant registrations
     constant_pattern = re.compile(
-        r'addConstant\s*<\s*(\w[\w<>: ]*)\s*>\s*'
+        r"addConstant\s*<\s*(\w[\w<>: ]*)\s*>\s*"
         r'\(\s*\*this\s*,\s*"(\w+)"\s*,\s*(.+?)\s*\)'
     )
 
@@ -280,7 +417,7 @@ def parse_binding_registrations(source_dir: Path) -> BindingModule:
 
         # Get argument names from the registration
         # Look for ->arg("name") or ->args({"name1", "name2"})
-        remaining = content[match.end():match.end() + 500]
+        remaining = content[match.end() : match.end() + 500]
         arg_names = []
 
         # Match ->arg("name")
@@ -289,9 +426,9 @@ def parse_binding_registrations(source_dir: Path) -> BindingModule:
             arg_names.append(arg_match.group(1))
 
         # Match ->args({"name1", "name2", ...})
-        args_match = re.search(r'->args\s*\(\s*\{([^}]+)\}\s*\)', remaining)
+        args_match = re.search(r"->args\s*\(\s*\{([^}]+)\}\s*\)", remaining)
         if args_match:
-            arg_names = [a.strip().strip('"') for a in args_match.group(1).split(',')]
+            arg_names = [a.strip().strip('"') for a in args_match.group(1).split(",")]
 
         # Get C++ signature for type info
         cpp_ret, cpp_args = cpp_sigs.get(cpp_name, ("", []))
@@ -301,8 +438,15 @@ def parse_binding_registrations(source_dir: Path) -> BindingModule:
         for i, (arg_type, _) in enumerate(cpp_args):
             if i < len(arg_names):
                 # Strip const/ref qualifiers for das type
-                clean_type = arg_type.replace("const ", "").replace(" *", "*").replace("&", "").strip()
-                das_type = CPP_TO_DAS_TYPE.get(clean_type, CPP_TO_DAS_TYPE.get(arg_type, "var"))
+                clean_type = (
+                    arg_type.replace("const ", "")
+                    .replace(" *", "*")
+                    .replace("&", "")
+                    .strip()
+                )
+                das_type = CPP_TO_DAS_TYPE.get(
+                    clean_type, CPP_TO_DAS_TYPE.get(arg_type, "var")
+                )
                 typed_args.append(f"{arg_names[i]} : {das_type}")
 
         func = BoundFunction(
@@ -329,29 +473,33 @@ def parse_binding_registrations(source_dir: Path) -> BindingModule:
                 clean_value = readable
                 break
         # Remove trailing ')' and extra parentheses from static_cast
-        while clean_value.endswith(')'):
+        while clean_value.endswith(")"):
             clean_value = clean_value[:-1]
 
-        module.constants.append(BoundConstant(
-            das_name=das_name,
-            cpp_type=cpp_type,
-            value=clean_value,
-        ))
+        module.constants.append(
+            BoundConstant(
+                das_name=das_name,
+                cpp_type=cpp_type,
+                value=clean_value,
+            )
+        )
 
     # Also parse let constants from weasel_api.das
     das_file = source_dir / "wsl" / "das" / "modules" / "weasel_api" / "weasel_api.das"
     if das_file.exists():
         das_content = das_file.read_text()
-        let_pattern = re.compile(r'let\s+(\w+)\s*:\s*(\w+)\s*=\s*(.+)')
+        let_pattern = re.compile(r"let\s+(\w+)\s*:\s*(\w+)\s*=\s*(.+)")
         for match in let_pattern.finditer(das_content):
             das_name = match.group(1)
             # Skip if already added from C++
             if not any(c.das_name == das_name for c in module.constants):
-                module.constants.append(BoundConstant(
-                    das_name=das_name,
-                    cpp_type=match.group(2),
-                    value=match.group(3).strip(),
-                ))
+                module.constants.append(
+                    BoundConstant(
+                        das_name=das_name,
+                        cpp_type=match.group(2),
+                        value=match.group(3).strip(),
+                    )
+                )
 
     return module
 
@@ -363,23 +511,27 @@ def parse_das_stubs(source_dir: Path) -> dict[str, str]:
     if not das_file.exists():
         return docs
 
-    lines = das_file.read_text().split('\n')
+    lines = das_file.read_text().split("\n")
     pending_comment = ""
 
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith('//'):
-            pending_comment = stripped.lstrip('/ ').strip()
-        elif stripped.startswith('def ') or stripped.startswith('let '):
+        if stripped.startswith("//"):
+            pending_comment = stripped.lstrip("/ ").strip()
+        elif stripped.startswith("def ") or stripped.startswith("let "):
             # Extract name
             parts = stripped.split()
             if len(parts) >= 2:
-                name = parts[1].split('(')[0].split(':')[0]
+                name = parts[1].split("(")[0].split(":")[0]
                 if pending_comment:
                     docs[name] = pending_comment
             pending_comment = ""
         else:
-            if not stripped or stripped.startswith('options') or stripped.startswith('module'):
+            if (
+                not stripped
+                or stripped.startswith("options")
+                or stripped.startswith("module")
+            ):
                 pending_comment = ""
 
     return docs
@@ -408,7 +560,7 @@ def generate_rst(module: BindingModule, output_dir: Path):
 
     # Generate weasel_api.rst
     rst_path = output_dir / f"{module.name}.rst"
-    with open(rst_path, 'w') as f:
+    with open(rst_path, "w") as f:
         f.write(f"{module.name}\n")
         f.write(f"{'=' * len(module.name)}\n\n")
 
@@ -425,6 +577,10 @@ def generate_rst(module: BindingModule, output_dir: Path):
                 f.write(f".. das:data:: {const.das_name}\n\n")
                 f.write(f"   :type: {const.cpp_type}\n\n")
                 f.write(f"   Value: ``{const.value}``\n\n")
+
+        # Write curated component accessor proxy docs
+        f.write(COMPONENT_ACCESSOR_DOCS)
+        f.write("\n")
 
         # Write functions grouped by section
         for section_name in sorted_sections:
@@ -472,7 +628,7 @@ def generate_components_rst(source_dir: Path, output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rst_path = output_dir / "components.rst"
-    with open(rst_path, 'w') as f:
+    with open(rst_path, "w") as f:
         f.write("Components\n")
         f.write("==========\n\n")
         f.write(".. das:module:: weasel_components\n\n")
@@ -492,8 +648,7 @@ def generate_components_rst(source_dir: Path, output_dir: Path):
 
             # Extract component name from meta_info
             name_match = re.search(
-                r'meta_info\s*\{\s*"([^"]+)"\s*,\s*"([^"]*)"',
-                content
+                r'meta_info\s*\{\s*"([^"]+)"\s*,\s*"([^"]*)"', content
             )
             if not name_match:
                 continue
@@ -504,11 +659,11 @@ def generate_components_rst(source_dir: Path, output_dir: Path):
             # Extract field names and descriptions
             fields = []
             field_pattern = re.compile(
-                r'\.data\s*<\s*&\s*\w+::comp::\w+::(\w+)\s*>\s*'
+                r"\.data\s*<\s*&\s*\w+::comp::\w+::(\w+)\s*>\s*"
                 r'\s*\(\s*"[^"]*"_hs\s*\)\s*'
-                r'\.custom\s*<\s*comp::meta_info\s*>\s*'
+                r"\.custom\s*<\s*comp::meta_info\s*>\s*"
                 r'\(\s*meta_info\s*\{\s*"([^"]*)"\s*,\s*"([^"]*)"',
-                re.MULTILINE
+                re.MULTILINE,
             )
 
             for fm in field_pattern.finditer(content):
@@ -545,7 +700,7 @@ def generate_ecs_rst(output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rst_path = output_dir / "weasel_ecs.rst"
-    with open(rst_path, 'w') as f:
+    with open(rst_path, "w") as f:
         f.write("weasel_ecs\n")
         f.write("==========\n\n")
         f.write(".. das:module:: weasel_ecs\n\n")
@@ -562,7 +717,9 @@ def generate_ecs_rst(output_dir: Path):
         f.write("      Called every frame with the delta time in seconds.\n\n")
 
         f.write("   .. das:function:: on_event() : void\n\n")
-        f.write("      Called when an engine event occurs (mouse, keyboard, window).\n\n")
+        f.write(
+            "      Called when an engine event occurs (mouse, keyboard, window).\n\n"
+        )
         f.write("      Use ``get_event_kind()`` and the ``EVENT_*`` constants to\n")
         f.write("      determine the event type.\n\n")
 
@@ -576,13 +733,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate Sphinx .rst docs from Weasel daslang bindings"
     )
+    parser.add_argument("--source", required=True, help="Path to the src/ directory")
     parser.add_argument(
-        "--source", required=True,
-        help="Path to the src/ directory"
-    )
-    parser.add_argument(
-        "--output", required=True,
-        help="Output directory for .rst files"
+        "--output", required=True, help="Output directory for .rst files"
     )
     args = parser.parse_args()
 
@@ -597,7 +750,9 @@ def main():
 
     # Parse bindings from C++ source
     module = parse_binding_registrations(source_dir)
-    print(f"  Found {len(module.functions)} bound functions, {len(module.constants)} constants")
+    print(
+        f"  Found {len(module.functions)} bound functions, {len(module.constants)} constants"
+    )
 
     # Enrich with das stub comments
     das_docs = parse_das_stubs(source_dir)

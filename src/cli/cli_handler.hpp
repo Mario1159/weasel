@@ -3,6 +3,8 @@
 #include <string>
 #include <optional>
 
+#include "wsl/das/das_engine.hpp"
+
 namespace wsl::cli
 {
 

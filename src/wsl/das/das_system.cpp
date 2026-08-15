@@ -52,7 +52,6 @@ das_system::on_update (entt::registry &registry, double dt)
     return;
   }
   wsl_api_set_active_registry (&registry);
-  wsl_api_set_delta_time (dt);
   if (!m_engine.call_void_function_safe (m_script_path, "on_update")) {
     m_has_failed = true;
     wsl::log::cmake ()->error ("das_system::on_update failed: {}",

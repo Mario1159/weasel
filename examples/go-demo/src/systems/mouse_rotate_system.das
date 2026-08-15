@@ -9,21 +9,14 @@ class System : EcsSystem {
     m_accumulated_dy : float = 0.0
 
     def override on_init() : void {
-        refresh_entities_with_transform()
-        var count = get_entity_count()
-        for (i in range(count)) {
-            var e = get_entity_at(uint(i))
-            if (!has_component_t(e, MouseRotate())) continue
-            if (!has_component(TYPE_TRANSFORM(), e)) continue
-
+        query_entities( $(var t : TransformAccessor; var mr : MouseRotate) {
             var yaw = get_rotation_yaw(e)
             var pitch = get_rotation_pitch(e)
 
-            var mr = get_component_t(e, MouseRotate())
             mr.yaw = yaw
             mr.pitch = pitch
             set_component_t(e, mr)
-        }
+        } )
     }
 
     def override on_inactive() : void {
@@ -38,17 +31,11 @@ class System : EcsSystem {
             if (active_cam == 0) return
 
             var fp_active = false
-            refresh_entities_with_transform()
-            var count = get_entity_count()
-            for (i in range(count)) {
-                var e = get_entity_at(uint(i))
-                if (!has_component_t(e, MouseRotate())) continue
-                if (!has_component(TYPE_CAMERA(), e)) continue
-                if (e == active_cam) {
+            query_entities( $(var mr : MouseRotate) {
+                if (has_component(TYPE_CAMERA(), e) && e == active_cam) {
                     fp_active = true
-                    break
                 }
-            }
+            } )
 
             if (!fp_active) return
 
@@ -62,17 +49,11 @@ class System : EcsSystem {
         var fp_active = false
 
         if (active_cam != 0) {
-            refresh_entities_with_transform()
-            var count = get_entity_count()
-            for (i in range(count)) {
-                var e = get_entity_at(uint(i))
-                if (!has_component_t(e, MouseRotate())) continue
-                if (!has_component(TYPE_CAMERA(), e)) continue
-                if (e == active_cam) {
+            query_entities( $(var mr : MouseRotate) {
+                if (has_component(TYPE_CAMERA(), e) && e == active_cam) {
                     fp_active = true
-                    break
                 }
-            }
+            } )
         }
 
         if (!fp_active) {
@@ -83,21 +64,14 @@ class System : EcsSystem {
 
         if (m_accumulated_dx == 0.0 && m_accumulated_dy == 0.0) return
 
-        refresh_entities_with_transform()
-        var count = get_entity_count()
-        for (i in range(count)) {
-            var e = get_entity_at(uint(i))
-            if (!has_component_t(e, MouseRotate())) continue
-            if (!has_component(TYPE_TRANSFORM(), e)) continue
-
-            var mr = get_component_t(e, MouseRotate())
+        query_entities( $(var t : TransformAccessor; var mr : MouseRotate) {
             mr.yaw -= m_accumulated_dx * mr.sensitivity
             mr.pitch -= m_accumulated_dy * mr.sensitivity
             mr.pitch = clamp(mr.pitch, mr.pitch_min, mr.pitch_max)
             set_component_t(e, mr)
 
             set_rotation(e, mr.pitch, mr.yaw, 0.0)
-        }
+        } )
 
         m_accumulated_dx = 0.0
         m_accumulated_dy = 0.0

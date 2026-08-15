@@ -17,6 +17,25 @@ namespace wsl::das
 {
 
 /**
+ * In-process AOT compilation of a .das file.
+ *
+ * Unlike the standalone `daslang -aot` (which resolves `require weasel_api`
+ * to a hand-written stub and emits empty proxy placeholders), this compiles
+ * the script with the engine's real module environment (Module_WeaselApi,
+ * Module_Ecs) loaded. The generated C++ therefore references the real proxy
+ * types and includes the module's aotRequire headers, so it actually runs as
+ * AOT rather than falling back to the interpreter.
+ *
+ * :param input:  Path to the .das file to compile.
+ * :param output: Path to write the generated .das.cpp to.
+ * :param error:  Output error message on failure.
+ * :return: \c true on success, \c false on failure (see error).
+ */
+bool aot_compile_file (const std::string &input, const std::string &output,
+                       std::string &error,
+                       const std::vector<std::string> &module_roots = {});
+
+/**
  * Structured error from a daScript runtime panic.
  *
  * Captured after evalWithCatch when getException() is non-null.

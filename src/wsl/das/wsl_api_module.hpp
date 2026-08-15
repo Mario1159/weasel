@@ -8,6 +8,10 @@ namespace das
 {
 class Module;
 class ModuleGroup;
+class Context;
+struct LineInfoArg;
+template <typename TT> struct TArray;
+template <typename Result, typename... Args> struct TBlock;
 }
 
 namespace wsl
@@ -39,15 +43,6 @@ void wsl_api_set_active_registry (entt::registry *registry);
 /** Sets the current event for the Weasel API module. */
 void wsl_api_set_current_event (const engine_event *ev);
 
-/**
- * Sets the delta time for the current frame (accessible from das via
- * get_delta_time()).
- */
-void wsl_api_set_delta_time (double dt);
-
-/** Returns the delta time for the current frame. */
-float wsl_get_delta_time ();
-
 void wsl_log_info (const char *msg);
 void wsl_log_debug (const char *msg);
 void wsl_log_warn (const char *msg);
@@ -59,8 +54,20 @@ void wsl_log_error (const char *msg);
  */
 uint32_t wsl_get_component_type_id (const char *display_name);
 
-/** Fills the entity buffer with entities that have the given component. */
-void wsl_refresh_entities_with_component (uint32_t type_id);
+uint32_t wsl_get_active_camera ();
+uint32_t wsl_get_event_kind ();
+
+/** Iterates entities owning ALL of the listed component types and invokes `blk`
+ *  with each matching entity id. `type_ids` are stable component type ids (see
+ *  `_get_component_type_id_by_name`). Backs the daslang `query_entities` macro.
+ */
+void each_entity_id_with (const ::das::TArray<uint32_t> &type_ids,
+                          const ::das::TBlock<void, uint32_t> &blk,
+                          ::das::Context *context, ::das::LineInfoArg *at);
+float wsl_get_event_mouse_dx ();
+float wsl_get_event_mouse_dy ();
+bool wsl_has_component (uint32_t type_id, uint32_t entity);
+bool wsl_set_relative_mouse_mode (bool enabled);
 
 /**
  * Reads a float field from a das component on an entity.

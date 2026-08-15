@@ -1,6 +1,8 @@
 options remove_unused_symbols = false
 module weasel_ecs
 
+require weasel_api
+
 // Base class for daslang ECS systems.
 // Systems inherit from this and override the lifecycle methods.
 // C++ calls these methods through the class adapter pattern (tutorial 19).

@@ -2,6 +2,8 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <thread>
 
 #if WEASEL_HAS_DASLANG
 #include "daScript/ast/dyn_modules.h"
@@ -242,6 +244,165 @@ wsl::das::das_engine::initialize_global ()
 namespace wsl::das
 {
 
+bool
+aot_compile_file (const std::string &input, const std::string &output,
+                  std::string &error,
+                  const std::vector<std::string> &module_roots)
+{
+  if (!das_engine::initialize_global ()) {
+    error = "das_engine::initialize_global failed";
+    return false;
+  }
+
+  // Module creation is thread-local in daslang. initialize_global() already
+  // created the builtin modules on the calling (main) thread, so recreating
+  // them here would trip the "Module already created" fatal. Run the AOT
+  // generation on a fresh worker thread (mirroring execute_file), where
+  // ensure_thread_das_environment() sets up the per-thread module
+  // environment exactly once.
+  std::string emitted;
+  std::string local_error;
+  bool ok = false;
+
+  std::thread worker ([&] () {
+    ::das::TextPrinter tout;
+    ::das::smart_ptr<::das::FsFileAccess> faccess;
+    ::das::ModuleGroup module_group;
+    ensure_thread_das_environment (tout, faccess, module_group);
+
+    // Expose the input file's directory and any caller-supplied module roots
+    // so that `require game_module` (a game-specific .das next to the script)
+    // resolves during in-process AOT, exactly as the standalone daslang
+    // resolved it from the input file's directory.
+    if (auto *proj = static_cast<ProjectFsFileAccess *> (faccess.get ())) {
+      auto in_dir = std::filesystem::path (input).parent_path ().string ();
+      if (!in_dir.empty ())
+        proj->addProjectRoot (in_dir, in_dir);
+      for (const auto &root : module_roots)
+        if (!root.empty ())
+          proj->addProjectRoot (root, root);
+    }
+
+    // Compile daslib/aot_cpp.das so we can reuse its `run_aot` emitter, which
+    // performs setAotHashes + aotCpp + registerAotCpp + the file boilerplate
+    // for an already-compiled program. Using it (instead of the file-based
+    // `aot()`) lets us feed OUR program, compiled with the real weasel modules.
+    ::das::CodeOfPolicies aot_tool_policies;
+    aot_tool_policies.version_2_syntax = true;
+    aot_tool_policies.aot_module = true;
+    ::das::ModuleGroup dummy_group;
+    std::string aot_cpp_path = std::string (WEASEL_BUILD_DIR)
+                               + "/_deps/daslang-src/daslib/aot_cpp.das";
+    auto aot_prog = ::das::compileDaScript (
+        aot_cpp_path.c_str (), faccess, tout, dummy_group, aot_tool_policies);
+    if (!aot_prog || aot_prog->failed ()) {
+      local_error = "failed to compile daslib/aot_cpp.das";
+      return;
+    }
+    uint32_t aot_stack = aot_prog->getContextStackSize ();
+    if (aot_stack < 1024 * 1024)
+      aot_stack = 1024 * 1024;
+    auto aot_ctx = std::make_unique<::das::Context> (aot_stack);
+    if (!aot_prog->simulate (*aot_ctx, tout)) {
+      local_error = "failed to simulate daslib/aot_cpp.das";
+      return;
+    }
+    bool is_unique = false;
+    ::das::SimFunction *run_aot_fn
+        = aot_ctx->findFunction ("run_aot", is_unique);
+    if (!run_aot_fn) {
+      local_error = "run_aot not found in daslib/aot_cpp.das";
+      return;
+    }
+
+    // Compile the user script with the REAL module environment so that
+    // `require weasel_api` resolves to Module_WeaselApi (proxy types +
+    // accessors) and the program's aotRequire emits the real proxy includes.
+    ::das::CodeOfPolicies input_policies;
+    input_policies.version_2_syntax = true;
+    // Match `daslang -aot` (getPolicies): compile as an AOT module with
+    // fail_on_lack_of_aot_export so that struct/class constructor ("make")
+    // functions get hash-suffixed C++ names (e.g. `Foo_<hash>` instead of
+    // plain `Foo`). Without this, the emitted constructor `Foo` clashes with
+    // the generated `class Foo` and fails to compile with
+    // "reference to 'Foo' is ambiguous". We deliberately do NOT set
+    // `export_all`: that path emits functions with plain (non-hashed) names
+    // and also emits `main`, which the AOT-consumer build does not want.
+    input_policies.aot_module = true;
+    input_policies.fail_on_lack_of_aot_export = true;
+    // NOTE: simulate the input with aot=FALSE (matching `daslang -aot`, which
+    // compiles/simulates the script normally and only emits AOT in run_aot).
+    // Setting aot=true here would force AOT-link verification during simulate
+    // and fail every weasel_api/weasel_helpers function that has no in-tree
+    // AOT body registered.
+    auto input_prog = ::das::compileDaScript (input.c_str (), faccess, tout,
+                                              module_group, input_policies);
+    if (!input_prog || input_prog->failed ()) {
+      local_error = "failed to compile input script: ";
+      if (input_prog)
+        for (const auto &e : input_prog->errors)
+          local_error += std::string (e.what.c_str ()) + "\n";
+      return;
+    }
+    uint32_t in_stack = input_prog->getContextStackSize ();
+    if (in_stack < 1024 * 1024)
+      in_stack = 1024 * 1024;
+    auto in_ctx = std::make_unique<::das::Context> (in_stack);
+    if (!input_prog->simulate (*in_ctx, tout)) {
+      local_error = "failed to simulate input script: ";
+      for (const auto &e : input_prog->errors)
+        local_error += std::string (e.what.c_str ()) + " | ";
+      return;
+    }
+
+    ::das::CodeOfPolicies run_cop;
+    run_cop.aot_lib = false;
+    run_cop.cross_platform = false;
+    // `run_aot(prog : Program?; var pctx : Context?; ...)`. The first
+    // argument is a raw pointer; the `var` second argument is a pointer-type
+    // parameter passed by reference, i.e. a pointer to the Context* variable
+    // (the daslang compiler inserts this address-of automatically — we must
+    // do it by hand when calling via evalWithCatch).
+    ::das::Context *in_ctx_raw = in_ctx.get ();
+    vec4f aot_args[3];
+    aot_args[0]
+        = cast<char *>::from (reinterpret_cast<char *> (input_prog.get ()));
+    aot_args[1] = cast<char *>::from (reinterpret_cast<char *> (&in_ctx_raw));
+    aot_args[2] = cast<::das::CodeOfPolicies *>::from (&run_cop);
+
+    // evalWithCatch signature is (fnPtr, args, cmres).  A `string` return is
+    // ABI-returned as a char* (no cmres needed), matching daslang's own
+    // `daslang -aot` invocation of run_aot via aot().
+    vec4f ret = aot_ctx->evalWithCatch (run_aot_fn, aot_args);
+    if (const char *ex = aot_ctx->getException ()) {
+      local_error = std::string ("run_aot failed: ") + ex;
+      aot_ctx->clearException ();
+      return;
+    }
+    const char *out = cast<char *>::to (ret);
+    if (!out || !out[0]) {
+      local_error = "aot emission produced empty output";
+      return;
+    }
+    emitted = out;
+    ok = true;
+  });
+  worker.join ();
+
+  if (!ok) {
+    error = local_error;
+    return false;
+  }
+
+  std::ofstream ofs (output, std::ios::binary);
+  if (!ofs) {
+    error = "failed to open output file: " + output;
+    return false;
+  }
+  ofs << emitted;
+  return true;
+}
+
 struct das_engine::impl
 {
   ::das::TextPrinter tout;
@@ -293,6 +454,9 @@ struct das_engine::impl
     policies.no_init_check = true;
     // Use v2 syntax for all .das files (class fields, curly braces, etc.)
     policies.version_2_syntax = true;
+    // Enable RTTI so call-macro expansions can build `type<...>` / `default<>`
+    // nodes (e.g. the `query_entities` macro reconstructs proxy types).
+    policies.rtti = true;
   }
 
   bool

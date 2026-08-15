@@ -8,7 +8,8 @@ list(APPEND WSL_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/editor_app.cpp"
 )
 
-# Editor-specific sources referenced by wsl when WEASEL_BUILD_EDITOR is defined
+# Editor-specific sources are always compiled into wsl (they are guarded
+# internally by the WEASEL_BUILD_EDITOR define).
 list(APPEND WSL_SOURCES
     "${CMAKE_SOURCE_DIR}/src/editor/renderer_imgui.cpp"
     "${CMAKE_SOURCE_DIR}/src/editor/physics_debug_drawer.cpp"

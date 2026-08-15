@@ -127,14 +127,9 @@ class System : EcsSystem {
     m_accumulated_dx : float = 0.0
 
     def override on_init() : void {
-        refresh_entities_with_transform()
-        var count = get_entity_count()
-        for (i in range(count)) {
-            var e = get_entity_at(uint(i))
-            if (!has_component_t(e, MouseRotate())) continue
-            if (!has_component(TYPE_TRANSFORM(), e)) continue
+        query_entities( $(var t : TransformAccessor; var mr : MouseRotate) {
             // initialization logic
-        }
+        } )
     }
 
     def override on_update(dt : float) : void {

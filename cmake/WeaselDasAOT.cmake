@@ -1,65 +1,33 @@
 # cmake/WeaselDasAOT.cmake
 #
-# Provides weasel_aot_das() function for AOT-compiling .das files
-# into C++ source files using the standalone daslang binary.
+# Provides weasel_aot_das() for AOT-compiling .das files into C++ source
+# files using the engine's own module environment (Module_WeaselApi,
+# Module_Ecs) loaded in-process via `weasel-cli aot`.
 #
-# The standalone daslang needs a declarations file (weasel_api.das)
-# in its daslib directory that declares the function signatures.
-# This file is installed alongside the engine.
+# Because the AOT generation runs inside the engine process, `require
+# weasel_api` resolves to the real C++ module (not a hand-written stub), so
+# the emitted C++ references the real proxy types and actually runs as AOT
+# instead of silently falling back to the interpreter.
 
 include(CMakeParseArguments)
 
-# Capture the cmake module directory at file scope.
-# CMAKE_CURRENT_LIST_DIR inside a function() reflects the *caller's* file,
-# not the file where the function is defined.  Store it here while the file
-# is being included so the lookup functions can use the correct base path.
-get_filename_component(_WEASEL_CMAKE_MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
-
-# Find the daslang binary. Searches PATH first, then falls back to
-# the Weasel export variable.
-function(_weasel_find_daslang)
-    if(DASLANG_TOOL)
+# Find the weasel-cli tool. Prefers the in-tree build target; falls back to
+# a installed `weasel-cli` on PATH.
+function(_weasel_find_cli)
+    if(WEASEL_CLI_TOOL)
         return()
     endif()
-    find_program(DASLANG_TOOL daslang)
-    if(NOT DASLANG_TOOL AND DEFINED Weasel_DASLANG_TOOL)
-        set(DASLANG_TOOL "${Weasel_DASLANG_TOOL}")
+    if(TARGET weasel-cli)
+        set(WEASEL_CLI_TOOL "$<TARGET_FILE:weasel-cli>" PARENT_SCOPE)
+        return()
     endif()
-    if(NOT DASLANG_TOOL)
+    find_program(WEASEL_CLI_TOOL weasel-cli)
+    if(NOT WEASEL_CLI_TOOL)
         message(FATAL_ERROR
-            "daslang binary not found on PATH. "
-            "Cannot AOT-compile .das files. "
-            "Install daScript or set Weasel_DASLANG_TOOL.")
+            "weasel-cli not found (build target or on PATH). "
+            "Cannot AOT-compile .das files.")
     endif()
-    set(DASLANG_TOOL "${DASLANG_TOOL}" PARENT_SCOPE)
-endfunction()
-
-# Find the daslib directory for AOT declarations.
-# This is where weasel_api.das lives.
-function(_weasel_find_daslib)
-    if(WEASEL_DASLIB_DIR)
-        return()
-    endif()
-    # Check engine source tree (for in-tree builds)
-    set(_daslib_hint "${_WEASEL_CMAKE_MODULE_DIR}/../_deps/daslang-src/daslib")
-    if(EXISTS "${_daslib_hint}/weasel_api.das")
-        set(WEASEL_DASLIB_DIR "${_daslib_hint}" PARENT_SCOPE)
-        return()
-    endif()
-    # Check installed location (lib/cmake/Weasel/../../../share/weasel/daslib)
-    set(_daslib_hint "${_WEASEL_CMAKE_MODULE_DIR}/../../../share/weasel/daslib")
-    if(EXISTS "${_daslib_hint}/weasel_api.das")
-        set(WEASEL_DASLIB_DIR "${_daslib_hint}" PARENT_SCOPE)
-        return()
-    endif()
-    # Check user's home daslib
-    set(_daslib_hint "$ENV{HOME}/.local/daslib")
-    if(EXISTS "${_daslib_hint}/weasel_api.das")
-        set(WEASEL_DASLIB_DIR "${_daslib_hint}" PARENT_SCOPE)
-        return()
-    endif()
-    message(FATAL_ERROR
-        "weasel_api.das not found. Cannot AOT-compile .das files.")
+    set(WEASEL_CLI_TOOL "${WEASEL_CLI_TOOL}" PARENT_SCOPE)
 endfunction()
 
 # AOT-compile a list of .das files into .cpp files.
@@ -68,7 +36,8 @@ endfunction()
 #     FILES file1.das file2.das ...
 #     OUTPUT_VAR <variable>       # variable name to receive generated .cpp paths
 #     [TARGET <target>]           # custom target name (default: ${PROJECT_NAME}_aot)
-#     [COMPONENTS comp1.das comp2.das ...]  # component files to include in AOT temp dir
+#     [COMPONENTS comp1.das comp2.das ...]  # component files whose directories
+#                                            # are added as `require` search roots
 # )
 function(weasel_aot_das)
     cmake_parse_arguments(AOT "" "OUTPUT_VAR;TARGET" "FILES;COMPONENTS" ${ARGN})
@@ -80,12 +49,36 @@ function(weasel_aot_das)
         message(FATAL_ERROR "weasel_aot_das: OUTPUT_VAR is required")
     endif()
 
-    _weasel_find_daslang()
-    _weasel_find_daslib()
+    _weasel_find_cli()
+
+    # Depend on the actual tool. In an in-tree build `weasel-cli` is a build
+    # target, so depend on its output file (rebuilds the CLI first). In a
+    # standalone build (find_package) it is an installed program, so depend on
+    # the resolved path instead — referencing the bare target name there has no
+    # rule and breaks the build.
+    if(TARGET weasel-cli)
+        set(_CliDep "$<TARGET_FILE:weasel-cli>")
+    else()
+        set(_CliDep "${WEASEL_CLI_TOOL}")
+    endif()
 
     if(NOT AOT_TARGET)
         set(AOT_TARGET ${PROJECT_NAME}_aot)
     endif()
+
+    # Collect unique component directories as `-I` search roots so game
+    # modules (`require mouse_rotate`, etc.) resolve during in-process AOT.
+    set(_IncludeDirs "")
+    foreach(_CompFile IN LISTS AOT_COMPONENTS)
+        get_filename_component(_CompDir "${_CompFile}" DIRECTORY)
+        list(APPEND _IncludeDirs "${_CompDir}")
+    endforeach()
+    list(REMOVE_DUPLICATES _IncludeDirs)
+
+    set(_IncludeArgs "")
+    foreach(_Dir IN LISTS _IncludeDirs)
+        list(APPEND _IncludeArgs "-I" "${_Dir}")
+    endforeach()
 
     set(_GeneratedSrcs "")
     set(_OutputDir "${CMAKE_CURRENT_BINARY_DIR}/das_aot")
@@ -94,46 +87,14 @@ function(weasel_aot_das)
         get_filename_component(_AbsFile "${_DasFile}" ABSOLUTE)
         get_filename_component(_Name "${_DasFile}" NAME_WE)
         set(_OutFile "${_OutputDir}/${_Name}.das.cpp")
-        set(_TmpDir "${_OutputDir}/_tmp_${_Name}")
-
-        # daScript -aot mode only resolves modules from the input file's directory.
-        # Create a temp dir with the input file + weasel_api.das + daslib/weasel_ecs.das
-        # + all project component files (so component types are visible during AOT).
-        set(_CopyComponentCommands "")
-        set(_ComponentDeps "")
-        foreach(_CompFile IN LISTS AOT_COMPONENTS)
-            get_filename_component(_CompAbs "${_CompFile}" ABSOLUTE)
-            get_filename_component(_CompName "${_CompFile}" NAME)
-            list(APPEND _CopyComponentCommands
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${_CompAbs}" "${_TmpDir}/${_CompName}")
-            list(APPEND _ComponentDeps "${_CompAbs}")
-        endforeach()
 
         add_custom_command(
             OUTPUT "${_OutFile}"
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${_TmpDir}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${_AbsFile}" "${_TmpDir}/${_Name}.das"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${WEASEL_DASLIB_DIR}/weasel_api.das"
-                    "${_TmpDir}/weasel_api.das"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${WEASEL_DASLIB_DIR}/weasel_helpers.das"
-                    "${_TmpDir}/weasel_helpers.das"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
-                    "${_TmpDir}/weasel_ecs.das"
-            ${_CopyComponentCommands}
-            COMMAND "${DASLANG_TOOL}" -aot
-                    "${_TmpDir}/${_Name}.das" "${_OutFile}"
-            COMMAND ${CMAKE_COMMAND} -E remove_directory "${_TmpDir}"
-            DEPENDS "${_AbsFile}"
-                    "${WEASEL_DASLIB_DIR}/weasel_api.das"
-                    "${WEASEL_DASLIB_DIR}/weasel_helpers.das"
-                    "${WEASEL_DASLIB_DIR}/weasel_ecs.das"
-                    ${_ComponentDeps}
-            COMMENT "AOT-compiling ${_DasFile} -> ${_Name}.das.cpp"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_OutputDir}"
+            COMMAND "${WEASEL_CLI_TOOL}" aot "${_AbsFile}" "${_OutFile}"
+                    ${_IncludeArgs}
+            DEPENDS "${_AbsFile}" ${AOT_COMPONENTS} "${_CliDep}"
+            COMMENT "AOT-compiling ${_DasFile} -> ${_Name}.das.cpp (in-process, real module)"
             VERBATIM
         )
 

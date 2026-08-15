@@ -14,12 +14,13 @@ file(GLOB_RECURSE SOURCES
     "src/singletons/*.cpp"
 )
 
-# AOT-compile .das files
+# AOT-compile .das files. Only system/entry scripts are AOT-compiled;
+# component .das files define `require`-able modules (e.g. `class MouseRotate`)
+# and are passed as `-I` search roots via COMPONENTS, not compiled standalone.
 file(GLOB_RECURSE DAS_COMPONENTS "src/components/*.das")
 file(GLOB_RECURSE DAS_SYSTEMS "src/systems/*.das")
-set(DAS_SOURCES ${DAS_COMPONENTS} ${DAS_SYSTEMS})
-if(DAS_SOURCES)
-    weasel_aot_das(FILES ${DAS_SOURCES} COMPONENTS ${DAS_COMPONENTS} OUTPUT_VAR AOT_SRCS)
+if(DAS_SYSTEMS)
+    weasel_aot_das(FILES ${DAS_SYSTEMS} COMPONENTS ${DAS_COMPONENTS} OUTPUT_VAR AOT_SRCS)
     list(APPEND SOURCES ${AOT_SRCS})
 endif()
 

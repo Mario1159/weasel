@@ -1,10 +1,13 @@
 #include "wsl_api_module.hpp"
+#include "wsl_api_component_accessors.hpp"
 #include "das_interop.hpp"
 
 #include "daScript/ast/ast.h"
 #include "daScript/ast/ast_handle.h"
 #include "daScript/ast/ast_interop.h"
 #include "daScript/daScriptModule.h"
+#include "daScript/misc/arraytype.h"
+#include "daScript/simulate/aot.h"
 
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/camera.hpp"
@@ -12,18 +15,42 @@
 #include "wsl/comp/world_transform.hpp"
 #include "wsl/comp/component_meta.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/comp/singl/editor_context.hpp"
+#include "wsl/comp/rigid_body.hpp"
+#include "wsl/comp/character_body.hpp"
+#include "wsl/comp/transform_2d.hpp"
+#include "wsl/comp/camera_2d.hpp"
+#include "wsl/comp/sprite_2d.hpp"
+#include "wsl/comp/model_instance_3d.hpp"
+#include "wsl/comp/point_light.hpp"
+#include "wsl/comp/directional_light.hpp"
+#include "wsl/comp/spot_light.hpp"
+#include "wsl/comp/audio.hpp"
 #include "wsl/event.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/ray.hpp"
 #include "wsl/rsc/scene.hpp"
 #include "wsl/rsc/resource_manager.hpp"
-#include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/reg/component_registry.hpp"
+#include "wsl/reg/sig/signal_hub.hpp"
+#include "wsl/phys/physics_engine.hpp"
 
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_keyboard.h>
 #include <entt/core/hashed_string.hpp>
+#include <chrono>
 #include <cstring>
+
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/EActivation.h>
+
+MAKE_TYPE_FACTORY (TransformAccessor, wsl::das::TransformProxy)
+MAKE_TYPE_FACTORY (Transform2DAccessor, wsl::das::Transform2DProxy)
+MAKE_TYPE_FACTORY (Camera2DAccessor, wsl::das::Camera2DProxy)
+MAKE_TYPE_FACTORY (Sprite2DAccessor, wsl::das::Sprite2DProxy)
+MAKE_TYPE_FACTORY (PointLightAccessor, wsl::das::PointLightProxy)
+MAKE_TYPE_FACTORY (DirectionalLightAccessor, wsl::das::DirectionalLightProxy)
+MAKE_TYPE_FACTORY (SpotLightAccessor, wsl::das::SpotLightProxy)
 
 namespace wsl::das
 {
@@ -33,13 +60,426 @@ namespace
 
 entt::registry *g_registry = nullptr;
 const engine_event *g_current_event = nullptr;
-double g_delta_time = 0.0;
 
 entt::registry *
 get_registry ()
 {
   return g_registry;
 }
+
+template <typename T>
+T &
+fallback_value ()
+{
+  static thread_local T value{};
+  return value;
+}
+
+} // anonymous namespace
+
+// ── Component accessor proxy helpers ──
+
+bool
+TransformProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+TransformProxy::bind (comp::transform *component)
+{
+  comp = component;
+}
+
+::das::float3 &
+TransformProxy::position ()
+{
+  return comp ? *reinterpret_cast<::das::float3 *> (&comp->position)
+              : fallback_value<::das::float3> ();
+}
+
+::das::float3 &
+TransformProxy::scale ()
+{
+  return comp ? *reinterpret_cast<::das::float3 *> (&comp->scale)
+              : fallback_value<::das::float3> ();
+}
+
+bool
+Transform2DProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+Transform2DProxy::bind (comp::transform_2d *component)
+{
+  comp = component;
+}
+
+::das::float2 &
+Transform2DProxy::position ()
+{
+  return comp ? *reinterpret_cast<::das::float2 *> (&comp->position)
+              : fallback_value<::das::float2> ();
+}
+
+::das::float2 &
+Transform2DProxy::scale ()
+{
+  return comp ? *reinterpret_cast<::das::float2 *> (&comp->scale)
+              : fallback_value<::das::float2> ();
+}
+
+float &
+Transform2DProxy::rotation ()
+{
+  return comp ? comp->rotation : fallback_value<float> ();
+}
+
+bool
+Camera2DProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+Camera2DProxy::bind (comp::camera_2d *component)
+{
+  comp = component;
+}
+
+float &
+Camera2DProxy::zoom ()
+{
+  return comp ? comp->zoom : fallback_value<float> ();
+}
+
+bool
+Sprite2DProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+Sprite2DProxy::bind (comp::sprite_2d *component)
+{
+  comp = component;
+}
+
+::das::float4 &
+Sprite2DProxy::color ()
+{
+  return comp ? *reinterpret_cast<::das::float4 *> (&comp->color)
+              : fallback_value<::das::float4> ();
+}
+
+::das::float2 &
+Sprite2DProxy::size ()
+{
+  return comp ? *reinterpret_cast<::das::float2 *> (&comp->size)
+              : fallback_value<::das::float2> ();
+}
+
+bool
+PointLightProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+PointLightProxy::bind (comp::point_light *component)
+{
+  comp = component;
+}
+
+::das::float3 &
+PointLightProxy::color ()
+{
+  return comp ? *reinterpret_cast<::das::float3 *> (&comp->color)
+              : fallback_value<::das::float3> ();
+}
+
+float &
+PointLightProxy::intensity ()
+{
+  return comp ? comp->intensity : fallback_value<float> ();
+}
+
+bool
+DirectionalLightProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+DirectionalLightProxy::bind (comp::directional_light *component)
+{
+  comp = component;
+}
+
+::das::float3 &
+DirectionalLightProxy::color ()
+{
+  return comp ? *reinterpret_cast<::das::float3 *> (&comp->color)
+              : fallback_value<::das::float3> ();
+}
+
+float &
+DirectionalLightProxy::intensity ()
+{
+  return comp ? comp->intensity : fallback_value<float> ();
+}
+
+bool
+SpotLightProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+SpotLightProxy::bind (comp::spot_light *component)
+{
+  comp = component;
+}
+
+::das::float3 &
+SpotLightProxy::color ()
+{
+  return comp ? *reinterpret_cast<::das::float3 *> (&comp->color)
+              : fallback_value<::das::float3> ();
+}
+
+float &
+SpotLightProxy::intensity ()
+{
+  return comp ? comp->intensity : fallback_value<float> ();
+}
+
+namespace
+{
+
+struct TransformProxyAnnotation
+    : ::das::ManagedStructureAnnotation<TransformProxy, false, false>
+{
+  explicit TransformProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<TransformProxy, false, false> (
+            "TransformAccessor", lib, "wsl::das::TransformProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (position)> ("position", "position");
+    addProperty<DAS_BIND_MANAGED_PROP (scale)> ("scale", "scale");
+  }
+};
+
+struct Transform2DProxyAnnotation
+    : ::das::ManagedStructureAnnotation<Transform2DProxy, false, false>
+{
+  explicit Transform2DProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<Transform2DProxy, false, false> (
+            "Transform2DAccessor", lib, "wsl::das::Transform2DProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (position)> ("position", "position");
+    addProperty<DAS_BIND_MANAGED_PROP (scale)> ("scale", "scale");
+    addProperty<DAS_BIND_MANAGED_PROP (rotation)> ("rotation", "rotation");
+  }
+};
+
+struct Camera2DProxyAnnotation
+    : ::das::ManagedStructureAnnotation<Camera2DProxy, false, false>
+{
+  explicit Camera2DProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<Camera2DProxy, false, false> (
+            "Camera2DAccessor", lib, "wsl::das::Camera2DProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (zoom)> ("zoom", "zoom");
+  }
+};
+
+struct Sprite2DProxyAnnotation
+    : ::das::ManagedStructureAnnotation<Sprite2DProxy, false, false>
+{
+  explicit Sprite2DProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<Sprite2DProxy, false, false> (
+            "Sprite2DAccessor", lib, "wsl::das::Sprite2DProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
+    addProperty<DAS_BIND_MANAGED_PROP (size)> ("size", "size");
+  }
+};
+
+struct PointLightProxyAnnotation
+    : ::das::ManagedStructureAnnotation<PointLightProxy, false, false>
+{
+  explicit PointLightProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<PointLightProxy, false, false> (
+            "PointLightAccessor", lib, "wsl::das::PointLightProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
+    addProperty<DAS_BIND_MANAGED_PROP (intensity)> ("intensity", "intensity");
+  }
+};
+
+struct DirectionalLightProxyAnnotation
+    : ::das::ManagedStructureAnnotation<DirectionalLightProxy, false, false>
+{
+  explicit DirectionalLightProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<DirectionalLightProxy, false, false> (
+            "DirectionalLightAccessor", lib, "wsl::das::DirectionalLightProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
+    addProperty<DAS_BIND_MANAGED_PROP (intensity)> ("intensity", "intensity");
+  }
+};
+
+struct SpotLightProxyAnnotation
+    : ::das::ManagedStructureAnnotation<SpotLightProxy, false, false>
+{
+  explicit SpotLightProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<SpotLightProxy, false, false> (
+            "SpotLightAccessor", lib, "wsl::das::SpotLightProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
+    addProperty<DAS_BIND_MANAGED_PROP (intensity)> ("intensity", "intensity");
+  }
+};
+
+} // anonymous namespace
+
+void
+register_component_accessors (::das::Module &mod, ::das::ModuleLibrary &lib)
+{
+  mod.addAnnotation (new TransformProxyAnnotation (lib));
+  mod.addAnnotation (new Transform2DProxyAnnotation (lib));
+  mod.addAnnotation (new Camera2DProxyAnnotation (lib));
+  mod.addAnnotation (new Sprite2DProxyAnnotation (lib));
+  mod.addAnnotation (new PointLightProxyAnnotation (lib));
+  mod.addAnnotation (new DirectionalLightProxyAnnotation (lib));
+  mod.addAnnotation (new SpotLightProxyAnnotation (lib));
+
+  addExtern<DAS_BIND_FUN (get_transform_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_transform_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_transform_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_transform_2d_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_transform_2d_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_transform_2d_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_camera_2d_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_camera_2d_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_camera_2d_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_sprite_2d_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_sprite_2d_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_sprite_2d_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_point_light_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_point_light_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_point_light_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_directional_light_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_directional_light_accessor",
+      ::das::SideEffects::accessExternal,
+      "wsl::das::get_directional_light_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_spot_light_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_spot_light_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_spot_light_accessor")
+      ->args ({ "entity", "at" });
+}
+
+TransformProxy
+get_transform_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  TransformProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::transform> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+Transform2DProxy
+get_transform_2d_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  Transform2DProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::transform_2d> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+Camera2DProxy
+get_camera_2d_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  Camera2DProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::camera_2d> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+Sprite2DProxy
+get_sprite_2d_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  Sprite2DProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::sprite_2d> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+PointLightProxy
+get_point_light_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  PointLightProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::point_light> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+DirectionalLightProxy
+get_directional_light_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  DirectionalLightProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::directional_light> (proxy.entity)
+                  : nullptr);
+  return proxy;
+}
+
+SpotLightProxy
+get_spot_light_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  SpotLightProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::spot_light> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+namespace
+{
 
 // ── Entity operations ──
 
@@ -421,180 +861,6 @@ wsl_set_camera_aspect_ratio (uint32_t camera, float aspect)
 
 // ── Transform operations (per-component getters) ──
 
-void
-wsl_set_position (uint32_t entity, float x, float y, float z)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return;
-  }
-  auto &t = reg->get<comp::transform> (e);
-  t.position = glm::vec3 (x, y, z);
-}
-
-void
-wsl_set_rotation_euler (uint32_t entity, float pitch, float yaw, float roll)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return;
-  }
-  auto &t = reg->get<comp::transform> (e);
-  t.set_rotation_xyz (glm::vec3 (pitch, yaw, roll));
-}
-
-void
-wsl_set_scale (uint32_t entity, float x, float y, float z)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return;
-  }
-  auto &t = reg->get<comp::transform> (e);
-  t.scale = glm::vec3 (x, y, z);
-}
-
-float
-wsl_get_position_x (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  return reg->get<comp::transform> (e).position.x ();
-}
-
-float
-wsl_get_position_y (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  return reg->get<comp::transform> (e).position.y ();
-}
-
-float
-wsl_get_position_z (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  return reg->get<comp::transform> (e).position.z ();
-}
-
-float
-wsl_get_rotation_pitch (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  math::vec3f euler = reg->get<comp::transform> (e).get_rotation_xyz ();
-  return euler.x ();
-}
-
-float
-wsl_get_rotation_yaw (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  math::vec3f euler = reg->get<comp::transform> (e).get_rotation_xyz ();
-  return euler.y ();
-}
-
-float
-wsl_get_rotation_roll (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  math::vec3f euler = reg->get<comp::transform> (e).get_rotation_xyz ();
-  return euler.z ();
-}
-
-float
-wsl_get_scale_x (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  return reg->get<comp::transform> (e).scale.x ();
-}
-
-float
-wsl_get_scale_y (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  return reg->get<comp::transform> (e).scale.y ();
-}
-
-float
-wsl_get_scale_z (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return 0.0f;
-  }
-  return reg->get<comp::transform> (e).scale.z ();
-}
-
 // ── Scene operations ──
 
 uint32_t
@@ -809,6 +1075,43 @@ wsl_type_id_world_transform ()
       entt::type_hash<comp::world_transform>::value ());
 }
 
+uint32_t
+wsl_type_id_transform_2d ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::transform_2d>::value ());
+}
+
+uint32_t
+wsl_type_id_camera_2d ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::camera_2d>::value ());
+}
+
+uint32_t
+wsl_type_id_sprite_2d ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::sprite_2d>::value ());
+}
+
+uint32_t
+wsl_type_id_point_light ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::point_light>::value ());
+}
+
+uint32_t
+wsl_type_id_directional_light ()
+{
+  return static_cast<uint32_t> (
+      entt::type_hash<comp::directional_light>::value ());
+}
+
+uint32_t
+wsl_type_id_spot_light ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::spot_light>::value ());
+}
+
 // ── Event query functions ──
 
 uint32_t
@@ -999,42 +1302,55 @@ wsl_get_window_height ()
   return g_window_h;
 }
 
-// ── Entity iteration (global-state) ──
-
-uint32_t g_entity_buffer[512] = {};
-uint32_t g_entity_count = 0;
+// ── Generic entity iteration (DECS-style `query_entities` primitive) ──
 
 void
-wsl_refresh_entities_with_transform ()
+each_entity_id_with (const ::das::TArray<uint32_t> &type_ids,
+                     const ::das::TBlock<void, uint32_t> &blk,
+                     ::das::Context *context, ::das::LineInfoArg *at)
 {
   auto *reg = get_registry ();
-  if (!reg) {
-    g_entity_count = 0;
+  if (!reg || type_ids.size == 0) {
     return;
   }
-  g_entity_count = 0;
-  auto view = reg->view<comp::transform> ();
-  for (auto e : view) {
-    if (g_entity_count >= 512) {
+  // Fast path: if every requested component is a native entt storage, build an
+  // intersection view directly. Das components (e.g. daslang struct world
+  // components) are NOT stored as native entt pools, so `reg->storage(id)` is
+  // null for them and this path is skipped.
+  bool all_native = true;
+  for (uint32_t i = 0; i < type_ids.size; ++i) {
+    if (!reg->storage (entt::id_type{ type_ids[i] })) {
+      all_native = false;
       break;
     }
-    g_entity_buffer[g_entity_count++] = static_cast<uint32_t> (e);
   }
-}
-
-uint32_t
-wsl_get_entity_count ()
-{
-  return g_entity_count;
-}
-
-uint32_t
-wsl_get_entity_at (uint32_t index)
-{
-  if (index >= g_entity_count) {
-    return NULL_ENTITY_ID;
+  if (all_native) {
+    entt::runtime_view view;
+    for (uint32_t i = 0; i < type_ids.size; ++i) {
+      view.iterate (*reg->storage (entt::id_type{ type_ids[i] }));
+    }
+    for (auto e : view) {
+      ::das::das_invoke<void>::invoke<uint32_t> (context, at, blk,
+                                                 static_cast<uint32_t> (e));
+    }
+    return;
   }
-  return g_entity_buffer[index];
+  // Mixed/native+das path: iterate all entities and test each requested
+  // component with `wsl_has_component`, which understands both native entt
+  // storages and das component registrations.
+  for (auto e : reg->storage<entt::entity> ()) {
+    bool matches = true;
+    for (uint32_t i = 0; i < type_ids.size; ++i) {
+      if (!wsl_has_component (type_ids[i], static_cast<uint32_t> (e))) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      ::das::das_invoke<void>::invoke<uint32_t> (context, at, blk,
+                                                 static_cast<uint32_t> (e));
+    }
+  }
 }
 
 // ── Component type lookup ──
@@ -1059,48 +1375,6 @@ wsl_get_component_type_id (const char *display_name)
     return 0;
   }
   return static_cast<uint32_t> (desc->type_id);
-}
-
-// ── Entity iteration by component ──
-
-void
-wsl_refresh_entities_with_component (uint32_t type_id)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    g_entity_count = 0;
-    return;
-  }
-  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    g_entity_count = 0;
-    return;
-  }
-  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-  if (!runtime_ctx) {
-    g_entity_count = 0;
-    return;
-  }
-  auto &comp_reg = runtime_ctx->component_registry ();
-  auto *desc = comp_reg.find_world_component (type_id);
-  if (!desc) {
-    g_entity_count = 0;
-    return;
-  }
-  g_entity_count = 0;
-  for (auto e : reg->storage<entt::entity> ()) {
-    bool has = false;
-    if (desc->is_das_component) {
-      has = comp_reg.das_component_contains (type_id, e);
-    } else if (desc->contains) {
-      has = desc->contains (*reg, e);
-    }
-    if (has) {
-      if (g_entity_count >= 512) {
-        break;
-      }
-      g_entity_buffer[g_entity_count++] = static_cast<uint32_t> (e);
-    }
-  }
 }
 
 // ── Component field access ──
@@ -1190,7 +1464,7 @@ wsl_set_component_field_f (uint32_t entity, uint32_t type_id, int offset,
   std::memcpy (data + offset, &value, sizeof (float));
 }
 
-// ── Generic component type lookup (for get_component<T> / set_component<T>) ──
+// ── Generic component type lookup ──
 
 uint32_t
 wsl_get_component_type_id_by_name (const char *type_name)
@@ -1458,6 +1732,204 @@ wsl_get_hit_z ()
   return g_hit_point[2];
 }
 
+// ── Runtime context / subsystem accessors ──
+
+comp::singl::runtime_context *
+try_get_runtime_context ()
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return nullptr;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return nullptr;
+  }
+  return reg->ctx ().get<comp::singl::runtime_context *> ();
+}
+
+phys::engine *
+try_get_physics_engine ()
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc) {
+    return nullptr;
+  }
+  auto *pm = rc->get_active_physics_manager ();
+  if (!pm) {
+    return nullptr;
+  }
+  return pm->try_engine ();
+}
+
+// ── Time ──
+
+float
+wsl_get_elapsed_time ()
+{
+  static const auto start = std::chrono::steady_clock::now ();
+  return static_cast<float> (
+      std::chrono::duration<double> (std::chrono::steady_clock::now () - start)
+          .count ());
+}
+
+float
+wsl_get_time ()
+{
+  return static_cast<float> (wsl_get_elapsed_time ());
+}
+
+// ── Physics: rigid body ──
+
+void
+wsl_apply_impulse (uint32_t entity, float x, float y, float z)
+{
+  auto *eng = try_get_physics_engine ();
+  auto *reg = get_registry ();
+  if (!eng || !reg) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::rigid_body> (e)) {
+    return;
+  }
+  auto &rb = reg->get<comp::rigid_body> (e);
+  if (rb.body_id.IsInvalid ()) {
+    return;
+  }
+  eng->get_body_interface ().AddImpulse (rb.body_id, JPH::Vec3 (x, y, z));
+  eng->get_body_interface ().ActivateBody (rb.body_id);
+}
+
+void
+wsl_apply_force (uint32_t entity, float x, float y, float z)
+{
+  auto *eng = try_get_physics_engine ();
+  auto *reg = get_registry ();
+  if (!eng || !reg) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::rigid_body> (e)) {
+    return;
+  }
+  auto &rb = reg->get<comp::rigid_body> (e);
+  if (rb.body_id.IsInvalid ()) {
+    return;
+  }
+  eng->get_body_interface ().AddForce (rb.body_id, JPH::Vec3 (x, y, z));
+  eng->get_body_interface ().ActivateBody (rb.body_id);
+}
+
+// ── Audio ──
+
+void
+wsl_audio_play (uint32_t entity)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc) {
+    return;
+  }
+  ::wsl::reg::sig::emit (
+      rc->signal_hub (),
+      comp::audio::play{ static_cast<entt::entity> (entity) });
+}
+
+void
+wsl_audio_stop (uint32_t entity)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc) {
+    return;
+  }
+  ::wsl::reg::sig::emit (
+      rc->signal_hub (),
+      comp::audio::stop{ static_cast<entt::entity> (entity) });
+}
+
+void
+wsl_audio_pause (uint32_t entity)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc) {
+    return;
+  }
+  ::wsl::reg::sig::emit (
+      rc->signal_hub (),
+      comp::audio::pause{ static_cast<entt::entity> (entity) });
+}
+
+void
+wsl_audio_resume (uint32_t entity)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc) {
+    return;
+  }
+  ::wsl::reg::sig::emit (
+      rc->signal_hub (),
+      comp::audio::resume{ static_cast<entt::entity> (entity) });
+}
+
+void
+wsl_audio_set_volume (uint32_t entity, float volume)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc) {
+    return;
+  }
+  ::wsl::reg::sig::emit (
+      rc->signal_hub (),
+      comp::audio::set_volume{ static_cast<entt::entity> (entity), volume });
+}
+
+// ── Model instance ──
+
+void
+wsl_set_model (uint32_t entity, const char *path)
+{
+  auto *rc = try_get_runtime_context ();
+  auto *reg = get_registry ();
+  if (!rc || !reg || !path) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::model_instance_3d> (e)) {
+    return;
+  }
+  reg->get<comp::model_instance_3d> (e).id
+      = rc->resource_manager ().register_model (std::string (path));
+}
+
+void
+wsl_set_model_material_override (uint32_t entity, const char *path)
+{
+  auto *rc = try_get_runtime_context ();
+  auto *reg = get_registry ();
+  if (!rc || !reg || !path) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::model_instance_3d> (e)) {
+    return;
+  }
+  reg->get<comp::model_instance_3d> (e).material_override
+      = rc->resource_manager ().register_material (std::string (path));
+}
+
+void
+wsl_set_model_visibility_range (uint32_t entity, float range)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::model_instance_3d> (e)) {
+    return;
+  }
+  reg->get<comp::model_instance_3d> (e).visibility_range = range;
+}
+
 class Module_WeaselApi : public ::das::Module
 {
 public:
@@ -1465,10 +1937,7 @@ public:
   {
     ::das::ModuleLibrary lib (this);
     lib.addBuiltInModule ();
-
-    addExtern<DAS_BIND_FUN (wsl_get_delta_time)> (
-        *this, lib, "get_delta_time", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_delta_time");
+    register_component_accessors (*this, lib);
 
     // Logging
     addExtern<DAS_BIND_FUN (wsl_log_info)> (*this, lib, "log_info",
@@ -1574,61 +2043,6 @@ public:
         "wsl::das::wsl_remove_component")
         ->args ({ "type_id", "entity" });
 
-    // Transform operations
-    addExtern<DAS_BIND_FUN (wsl_set_position)> (
-        *this, lib, "set_position", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_set_position")
-        ->args ({ "entity", "x", "y", "z" });
-
-    addExtern<DAS_BIND_FUN (wsl_set_rotation_euler)> (
-        *this, lib, "set_rotation", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_set_rotation_euler")
-        ->args ({ "entity", "pitch", "yaw", "roll" });
-
-    addExtern<DAS_BIND_FUN (wsl_set_scale)> (*this, lib, "set_scale",
-                                             ::das::SideEffects::modifyExternal,
-                                             "wsl::das::wsl_set_scale")
-        ->args ({ "entity", "x", "y", "z" });
-
-    addExtern<DAS_BIND_FUN (wsl_get_position_x)> (
-        *this, lib, "get_position_x", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_position_x")
-        ->arg ("entity");
-    addExtern<DAS_BIND_FUN (wsl_get_position_y)> (
-        *this, lib, "get_position_y", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_position_y")
-        ->arg ("entity");
-    addExtern<DAS_BIND_FUN (wsl_get_position_z)> (
-        *this, lib, "get_position_z", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_position_z")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_get_rotation_pitch)> (
-        *this, lib, "get_rotation_pitch", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_rotation_pitch")
-        ->arg ("entity");
-    addExtern<DAS_BIND_FUN (wsl_get_rotation_yaw)> (
-        *this, lib, "get_rotation_yaw", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_rotation_yaw")
-        ->arg ("entity");
-    addExtern<DAS_BIND_FUN (wsl_get_rotation_roll)> (
-        *this, lib, "get_rotation_roll", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_rotation_roll")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_get_scale_x)> (
-        *this, lib, "get_scale_x", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_scale_x")
-        ->arg ("entity");
-    addExtern<DAS_BIND_FUN (wsl_get_scale_y)> (
-        *this, lib, "get_scale_y", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_scale_y")
-        ->arg ("entity");
-    addExtern<DAS_BIND_FUN (wsl_get_scale_z)> (
-        *this, lib, "get_scale_z", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_scale_z")
-        ->arg ("entity");
-
     // Scene operations
     addExtern<DAS_BIND_FUN (wsl_find_entity_by_name)> (
         *this, lib, "find_entity_by_name", ::das::SideEffects::accessExternal,
@@ -1689,6 +2103,30 @@ public:
     addExtern<DAS_BIND_FUN (wsl_type_id_world_transform)> (
         *this, lib, "TYPE_WORLD_TRANSFORM", ::das::SideEffects::none,
         "wsl::das::wsl_type_id_world_transform");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_transform_2d)> (
+        *this, lib, "TYPE_TRANSFORM_2D", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_transform_2d");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_camera_2d)> (
+        *this, lib, "TYPE_CAMERA_2D", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_camera_2d");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_sprite_2d)> (
+        *this, lib, "TYPE_SPRITE_2D", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_sprite_2d");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_point_light)> (
+        *this, lib, "TYPE_POINT_LIGHT", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_point_light");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_directional_light)> (
+        *this, lib, "TYPE_DIRECTIONAL_LIGHT", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_directional_light");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_spot_light)> (
+        *this, lib, "TYPE_SPOT_LIGHT", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_spot_light");
 
     // Event query functions
     addExtern<DAS_BIND_FUN (wsl_get_event_kind)> (
@@ -1803,33 +2241,17 @@ public:
         *this, lib, "get_window_height", ::das::SideEffects::accessExternal,
         "wsl::das::wsl_get_window_height");
 
-    // Entity iteration
-    addExtern<DAS_BIND_FUN (wsl_refresh_entities_with_transform)> (
-        *this, lib, "refresh_entities_with_transform",
-        ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_refresh_entities_with_transform");
-
-    addExtern<DAS_BIND_FUN (wsl_get_entity_count)> (
-        *this, lib, "get_entity_count", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_entity_count");
-
-    addExtern<DAS_BIND_FUN (wsl_get_entity_at)> (
-        *this, lib, "get_entity_at", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_entity_at")
-        ->arg ("index");
-
     // Component type lookup
     addExtern<DAS_BIND_FUN (wsl_get_component_type_id)> (
         *this, lib, "get_component_type_id", ::das::SideEffects::accessExternal,
         "wsl::das::wsl_get_component_type_id")
         ->arg ("display_name");
 
-    // Entity iteration by component
-    addExtern<DAS_BIND_FUN (wsl_refresh_entities_with_component)> (
-        *this, lib, "refresh_entities_with_component",
-        ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_refresh_entities_with_component")
-        ->arg ("type_id");
+    // Generic DECS-style iteration primitive (backs the `query_entities` macro)
+    addExtern<DAS_BIND_FUN (each_entity_id_with)> (
+        *this, lib, "each_entity_id_with", ::das::SideEffects::invoke,
+        "wsl::das::each_entity_id_with")
+        ->args ({ "type_ids", "blk", "context", "at" });
 
     // Component field access
     addExtern<DAS_BIND_FUN (wsl_get_component_field_f)> (
@@ -1933,6 +2355,63 @@ public:
     ::das::addConstant<uint32_t> (*this, "EVENT_KEY_UP",
                                   static_cast<uint32_t> (event_kind::key_up));
 
+    // ── Time ──
+    addExtern<DAS_BIND_FUN (wsl_get_time)> (*this, lib, "get_time",
+                                            ::das::SideEffects::accessExternal,
+                                            "wsl::das::wsl_get_time");
+    addExtern<DAS_BIND_FUN (wsl_get_elapsed_time)> (
+        *this, lib, "get_elapsed_time", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_elapsed_time");
+
+    // ── Physics: rigid body ──
+
+    addExtern<DAS_BIND_FUN (wsl_apply_impulse)> (
+        *this, lib, "apply_impulse", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_apply_impulse")
+        ->args ({ "entity", "x", "y", "z" });
+    addExtern<DAS_BIND_FUN (wsl_apply_force)> (
+        *this, lib, "apply_force", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_apply_force")
+        ->args ({ "entity", "x", "y", "z" });
+
+    // ── Audio ──
+    addExtern<DAS_BIND_FUN (wsl_audio_play)> (
+        *this, lib, "audio_play", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_audio_play")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_audio_stop)> (
+        *this, lib, "audio_stop", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_audio_stop")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_audio_pause)> (
+        *this, lib, "audio_pause", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_audio_pause")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_audio_resume)> (
+        *this, lib, "audio_resume", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_audio_resume")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_audio_set_volume)> (
+        *this, lib, "audio_set_volume", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_audio_set_volume")
+        ->args ({ "entity", "volume" });
+
+    // ── Model instance ──
+    addExtern<DAS_BIND_FUN (wsl_set_model)> (*this, lib, "set_model",
+                                             ::das::SideEffects::modifyExternal,
+                                             "wsl::das::wsl_set_model")
+        ->args ({ "entity", "path" });
+    addExtern<DAS_BIND_FUN (wsl_set_model_material_override)> (
+        *this, lib, "set_model_material_override",
+        ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_model_material_override")
+        ->args ({ "entity", "path" });
+    addExtern<DAS_BIND_FUN (wsl_set_model_visibility_range)> (
+        *this, lib, "set_model_visibility_range",
+        ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_model_visibility_range")
+        ->args ({ "entity", "range" });
+
     // Low-level interop functions (addInterop)
     register_interop_functions (*this);
   }
@@ -1941,6 +2420,7 @@ public:
   aotRequire (::das::TextWriter &tw) const override
   {
     tw << "#include \"wsl/das/wsl_api_module.hpp\"\n";
+    tw << "#include \"wsl/das/wsl_api_component_accessors.hpp\"\n";
     return ::das::ModuleAotType::cpp;
   }
 };
@@ -1978,18 +2458,6 @@ void
 wsl_api_set_current_event (const engine_event *ev)
 {
   g_current_event = ev;
-}
-
-void
-wsl_api_set_delta_time (double dt)
-{
-  g_delta_time = dt;
-}
-
-float
-wsl_get_delta_time ()
-{
-  return static_cast<float> (g_delta_time);
 }
 
 void
