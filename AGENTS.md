@@ -42,6 +42,7 @@ weasel/
 │   └── mcp-server/         # weasel-mcp-server (AI assistant integration)
 └── tests/
     ├── weasel-cli/         # CLI unit tests (doctest)
+    ├── weasel-das/         # Engine daslang component-accessor smoke test (doctest)
     └── mcp-server/         # MCP server unit tests (doctest)
 ```
 
