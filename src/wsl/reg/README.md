@@ -6,7 +6,7 @@ Central registration system for components, singletons, system factories, and si
 
 | Class | Header | Description |
 |-------|--------|-------------|
-| `component_registry` | `component_registry.hpp` | Registers entity-owned world components with metadata, serialization, and generic copy/emplace/remove callbacks. |
+| `component_registry` | `component_registry.hpp` | Registers engine component metadata and scene-local Daslang component pools. |
 | `singleton_registry` | `singleton_registry.hpp` | Registers singleton (registry-scoped) components with serialize/deserialize support. |
 | `system_factory_registry` | `system_factory_registry.hpp` | Maps system names to factory functions for dynamic instantiation in scenes. |
 | `registry_queries` | `registry_queries.hpp` | Cross-concept query interface — find which systems/iterations/signals relate to a given component or entity. |
@@ -14,27 +14,26 @@ Central registration system for components, singletons, system factories, and si
 
 ## Component Types
 
-Components are classified into three kinds for generic dispatch:
+Components are classified into native engine types and Daslang runtime types:
 
 | Kind | Storage | Description |
 |------|---------|-------------|
 | `CPP_NATIVE` | `entt::registry::storage<T>` | Engine-built C++ components (transform, camera, etc.) |
-| `CPP_PROJECT` | `entt::registry::storage<T>` | User-defined C++ components (built by project code) |
-| `DAS_SCRIPT` | `component_registry::m_das_component_data[type_id][entity]` (raw bytes) | daScript-defined components (no C++ backing type) |
+| `DAS_SCRIPT` | Scene-local `das_component_storage` in `registry.ctx()` | Daslang-defined components (no C++ backing type) |
 
-All three are unified through `ComponentTypeInfo`:
+Both kinds are unified through `ComponentTypeInfo`:
 
 ```cpp
 struct ComponentTypeInfo {
     uint64_t type_id;           // Stable type identifier
     ComponentKind kind;         // Storage kind
     size_t struct_size;         // Size in bytes
-    void (*get)(uint32_t entity, void* dest);   // C++ types only
-    void (*set)(uint32_t entity, const void* src); // C++ types only
 };
 ```
 
-Type IDs are stable hashes: `entt::hashed_string` for daScript types (from filename stem), `wsl::comp::stable_type_id<T>()` for C++ types.
+Type IDs are stable hashes: canonical Daslang component identity for script
+types and `wsl::comp::stable_type_id<T>()` for engine types. Native EnTT
+storage IDs are tracked separately from stable serialized IDs.
 
 ## Signal System (`sig/`)
 
@@ -45,7 +44,7 @@ Type IDs are stable hashes: `entt::hashed_string` for daScript types (from filen
 
 ## Runtime Module Loading
 
-`runtime_project_module` handles compilation and loading of both C++ and daScript project code:
+`runtime_project_module` handles discovery and loading of Daslang project code:
 
 ```cpp
 #include <wsl/reg/runtime_project_module.hpp>

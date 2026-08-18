@@ -7,6 +7,7 @@
 #include "wsl/log/log.hpp"
 #include <SDL3/SDL_events.h>
 #include <algorithm>
+#include <cstring>
 #include <entt/core/fwd.hpp>
 #include <entt/core/hashed_string.hpp>
 #include <entt/core/type_info.hpp>
@@ -205,8 +206,12 @@ scene::refresh_system_states ()
 void
 scene::stop_and_clear ()
 {
-  m_registry.clear ();
   shutdown_systems ();
+  if (m_runtime_ctx != nullptr) {
+    m_runtime_ctx->component_registry ().clear_das_component_storage (
+        m_registry);
+  }
+  m_registry.clear ();
   m_initialized = false;
   m_running = false;
   systems.clear ();
@@ -216,8 +221,12 @@ scene::stop_and_clear ()
 void
 scene::clear ()
 {
-  m_registry.clear ();
   shutdown_systems ();
+  if (m_runtime_ctx != nullptr) {
+    m_runtime_ctx->component_registry ().clear_das_component_storage (
+        m_registry);
+  }
+  m_registry.clear ();
   systems.clear ();
   reset_scene_context ();
 }
@@ -225,6 +234,10 @@ scene::clear ()
 void
 scene::clear_registry ()
 {
+  if (m_runtime_ctx != nullptr) {
+    m_runtime_ctx->component_registry ().clear_das_component_storage (
+        m_registry);
+  }
   m_registry.clear ();
   m_entity_names.clear ();
   reset_scene_context ();
@@ -329,7 +342,18 @@ scene::scene (comp::singl::runtime_context *runtime_ctx,
               comp::singl::editor_context *editor_ctx, const std::string &name)
     : m_name (name), m_runtime_ctx (runtime_ctx), m_editor_ctx (editor_ctx)
 {
+  auto destroy_signal = (m_registry.on_destroy<entt::entity>)();
+  (destroy_signal.connect<&scene::on_entity_destroyed>)(this);
   ensure_context_bindings ();
+}
+
+void
+scene::on_entity_destroyed (entt::registry &registry, entt::entity entity)
+{
+  if (m_runtime_ctx != nullptr) {
+    m_runtime_ctx->component_registry ().clear_das_component_entity (registry,
+                                                                     entity);
+  }
 }
 
 void
@@ -428,6 +452,33 @@ scene::copy_entity (scene &src_scene, entt::entity src_entity,
               .invoke (dst_reg, dst_entity, comp_any);
         }
       }
+    }
+  }
+
+  // Daslang components live in registry-local type-erased pools rather than
+  // EnTT typed storages, so copy them explicitly with the owning registries.
+  auto &component_registry = m_runtime_ctx->component_registry ();
+  for (const auto *desc : component_registry.get_world_components (
+           reg::world_component_order::type_id)) {
+    if (desc == nullptr || !desc->is_das_component
+        || !component_registry.das_component_contains (src_reg, desc->type_id,
+                                                       src_entity)) {
+      continue;
+    }
+
+    if (!component_registry.das_component_add (dst_reg, desc->type_id,
+                                               dst_entity)) {
+      continue;
+    }
+
+    const uint8_t *src_data = component_registry.das_component_data (
+        src_reg, desc->type_id, src_entity);
+    uint8_t *dst_data = component_registry.das_component_data (
+        dst_reg, desc->type_id, dst_entity);
+    if (src_data != nullptr && dst_data != nullptr
+        && desc->das_struct_size > 0) {
+      std::memcpy (dst_data, src_data,
+                   static_cast<std::size_t> (desc->das_struct_size));
     }
   }
 

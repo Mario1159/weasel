@@ -1,5 +1,6 @@
 require weasel_api
 require weasel_ecs
+require weasel_helpers
 require math
 
 class System : EcsSystem {
@@ -196,8 +197,9 @@ class System : EcsSystem {
         set_entity_name(new_stone, stone_name)
 
         if (has_component(TYPE_TRANSFORM(), new_stone)) {
-            set_position(new_stone, world_x, 2.21, world_z)
-            set_scale(new_stone, 2.0, 2.0, 2.0)
+            var transform = get_component_or(new_stone, Transform())
+            transform.position = float3(world_x, 2.21, world_z)
+            transform.scale = float3(2.0, 2.0, 2.0)
         }
 
         m_is_black_turn = !m_is_black_turn

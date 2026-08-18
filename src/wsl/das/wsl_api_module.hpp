@@ -59,7 +59,7 @@ uint32_t wsl_get_event_kind ();
 
 /** Iterates entities owning ALL of the listed component types and invokes `blk`
  *  with each matching entity id. `type_ids` are stable component type ids (see
- *  `_get_component_type_id_by_name`). Backs the daslang `query_entities` macro.
+ *  `_get_component_type_id_by_name`). Backs the daslang `query` macro.
  */
 void each_entity_id_with (const ::das::TArray<uint32_t> &type_ids,
                           const ::das::TBlock<void, uint32_t> &blk,
@@ -69,28 +69,7 @@ float wsl_get_event_mouse_dy ();
 bool wsl_has_component (uint32_t type_id, uint32_t entity);
 bool wsl_set_relative_mouse_mode (bool enabled);
 
-/**
- * Reads a float field from a das component on an entity.
- *
- * :param entity: Entity ID.
- * :param type_id: Stable component type ID (from get_component_type_id).
- * :param offset: Byte offset of the field within the component.
- * :return: The float value, or 0.0f on error.
- */
-float wsl_get_component_field_f (uint32_t entity, uint32_t type_id, int offset);
-
-/**
- * Writes a float field to a das component on an entity.
- *
- * :param entity: Entity ID.
- * :param type_id: Stable component type ID (from get_component_type_id).
- * :param offset: Byte offset of the field within the component.
- * :param value: The value to write.
- */
-void wsl_set_component_field_f (uint32_t entity, uint32_t type_id, int offset,
-                                float value);
-
-// ── Generic component type lookup (for get_component<T> / set_component<T>) ──
+// ── Generic component type lookup ──
 
 /**
  * Looks up component type ID by daScript type name.
@@ -99,39 +78,7 @@ void wsl_set_component_field_f (uint32_t entity, uint32_t type_id, int offset,
  */
 uint32_t wsl_get_component_type_id_by_name (const char *type_name);
 
-/**
- * Looks up component kind by daScript type name.
- * :param type_name: The daScript-visible type name.
- * :return: The component kind (0=CPP_NATIVE, 1=CPP_PROJECT, 2=DAS_SCRIPT), or 0
- * if not found.
- */
-int wsl_get_component_kind_by_name (const char *type_name);
-
-/**
- * Looks up component struct size by daScript type name.
- * :param type_name: The daScript-visible type name.
- * :return: The struct size in bytes, or 0 if not found.
- */
-int wsl_get_component_struct_size_by_name (const char *type_name);
-
-/**
- * Type-erased component getter. Fills dest with the component data.
- * :param entity: Entity ID.
- * :param type_id: Stable component type ID.
- * :param kind: Component storage kind (0=CPP_NATIVE, 1=CPP_PROJECT,
- * 2=DAS_SCRIPT). :param dest: Destination buffer to receive the component data.
- */
-void wsl_get_component_into (uint32_t entity, uint32_t type_id, int kind,
-                             void *dest);
-
-/**
- * Type-erased component setter. Writes src to component storage.
- * :param entity: Entity ID.
- * :param type_id: Stable component type ID.
- * :param kind: Component storage kind (0=CPP_NATIVE, 1=CPP_PROJECT,
- * 2=DAS_SCRIPT). :param src: Source buffer containing the component data.
- */
-void wsl_set_component_from (uint32_t entity, uint32_t type_id, int kind,
-                             const void *src);
+/** Returns a pointer to an existing Daslang component payload, or nullptr. */
+void *wsl_get_component_data (uint32_t entity, uint32_t type_id);
 
 } // namespace wsl::das

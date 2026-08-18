@@ -133,6 +133,7 @@ das_system_adapter::on_init (entt::registry &registry)
                               get_name ());
     }
   }
+  wsl_api_set_active_registry (nullptr);
 }
 
 void
@@ -155,6 +156,7 @@ das_system_adapter::on_update (entt::registry &registry, double dt)
                               get_name ());
     }
   }
+  wsl_api_set_active_registry (nullptr);
 }
 
 void
@@ -173,6 +175,7 @@ das_system_adapter::on_inactive (entt::registry &registry)
                               get_name ());
     }
   }
+  wsl_api_set_active_registry (nullptr);
 }
 
 void
@@ -195,6 +198,7 @@ das_system_adapter::on_event (registry_handle reg, const engine_event &ev)
     }
   }
   wsl_api_set_current_event (nullptr);
+  wsl_api_set_active_registry (nullptr);
 }
 
 } // namespace wsl::das

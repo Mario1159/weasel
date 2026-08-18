@@ -830,41 +830,17 @@ file_list::draw (const char *title, bool *p_open,
         if (ImGui::MenuItem ("daslang (.das)")) {
           queue_create_popup (create_kind::das_component, false);
         }
-        if (ImGui::Separator (); false) {
-        }
-        if (ImGui::MenuItem ("C++ Header Only")) {
-          queue_create_popup (create_kind::component, true);
-        }
-        if (ImGui::MenuItem ("C++ Header and Source")) {
-          queue_create_popup (create_kind::component, false);
-        }
         ImGui::EndMenu ();
       }
       if (ImGui::BeginMenu ("Singleton Component")) {
         if (ImGui::MenuItem ("daslang (.das)")) {
           queue_create_popup (create_kind::das_singleton, false);
         }
-        if (ImGui::Separator (); false) {
-        }
-        if (ImGui::MenuItem ("C++ Header Only")) {
-          queue_create_popup (create_kind::singleton, true);
-        }
-        if (ImGui::MenuItem ("C++ Header and Source")) {
-          queue_create_popup (create_kind::singleton, false);
-        }
         ImGui::EndMenu ();
       }
       if (ImGui::BeginMenu ("System")) {
         if (ImGui::MenuItem ("daslang (.das)")) {
           queue_create_popup (create_kind::das_system, false);
-        }
-        if (ImGui::Separator (); false) {
-        }
-        if (ImGui::MenuItem ("C++ Header Only")) {
-          queue_create_popup (create_kind::system, true);
-        }
-        if (ImGui::MenuItem ("C++ Header and Source")) {
-          queue_create_popup (create_kind::system, false);
         }
         ImGui::EndMenu ();
       }

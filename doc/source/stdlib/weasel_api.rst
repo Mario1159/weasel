@@ -420,32 +420,6 @@ Look up component type IDs at runtime.
 
    :returns: uint
 
-Component field access
-----------------------
-
-Read and write component fields by byte offset.
-
-.. das:function:: get_component_field_f(entity : uint, type_id : uint, offset : int) : float
-
-   Reads a float field from a component at the given byte offset.
-
-   :param:
-      entity (uint)
-      type_id (uint)
-      offset (int)
-
-   :returns: float
-
-.. das:function:: set_component_field_f(entity : uint, type_id : uint, offset : int, value : float)
-
-   Writes a float field to a component at the given byte offset.
-
-   :param:
-      entity (uint)
-      type_id (uint)
-      offset (int)
-      value (float)
-
 Model instance
 --------------
 
@@ -650,42 +624,18 @@ Other
 Generic component type lookup
 -----------------------------
 
-.. das:function:: _get_component_type_id_by_name(type_name : var) : uint
-
-   :param:
-      type_name (var)
-
-   :returns: uint
-
-.. das:function:: _get_component_kind_by_name(type_name : var) : int
-
-   :param:
-      type_name (var)
-
-   :returns: int
-
-.. das:function:: _get_component_struct_size_by_name(entity : var) : int
+.. das:function:: _get_component_type_id_by_name(entity : var) : uint
 
    :param:
       entity (var)
 
-   :returns: int
+   :returns: uint
 
-.. das:function:: _get_component_into(entity : uint, type_id : uint, kind : int, dest : void)
-
-   :param:
-      entity (uint)
-      type_id (uint)
-      kind (int)
-      dest (void)
-
-.. das:function:: _set_component_from(entity : uint, type_id : uint, kind : int, src : void)
+.. das:function:: _get_component_data(entity : uint, type_id : uint)
 
    :param:
       entity (uint)
       type_id (uint)
-      kind (int)
-      src (void)
 
 Raycasting (global-state)
 -------------------------

@@ -14,7 +14,7 @@
 
 #include <memory>
 #include <optional>
-#include <unordered_set>
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -32,11 +32,59 @@ enum class ComponentKind
 {
   /** C++ native component (engine-built, stored in EnTT typed storage). */
   CPP_NATIVE,
-  /** C++ project component (built by project code, stored in EnTT typed
-     storage). */
-  CPP_PROJECT,
   /** daScript component (no C++ backing type, raw byte storage). */
   DAS_SCRIPT
+};
+
+/** Scene-local storage for components whose types exist only in Daslang. */
+class das_component_storage
+{
+public:
+  struct default_field
+  {
+    int offset = 0;
+    std::vector<uint8_t> value;
+  };
+
+  struct data_block
+  {
+    std::vector<std::max_align_t> words;
+    std::size_t size = 0;
+
+    uint8_t *
+    data ()
+    {
+      return words.empty () ? nullptr
+                            : reinterpret_cast<uint8_t *> (words.data ());
+    }
+
+    const uint8_t *
+    data () const
+    {
+      return words.empty () ? nullptr
+                            : reinterpret_cast<const uint8_t *> (words.data ());
+    }
+  };
+
+  struct pool
+  {
+    std::size_t size = 0;
+    std::unordered_map<entt::entity, data_block> entries;
+  };
+
+  bool contains (entt::id_type type_id, entt::entity entity) const;
+  bool add (entt::id_type type_id, entt::entity entity, std::size_t size,
+            const std::vector<default_field> &defaults);
+  bool remove (entt::id_type type_id, entt::entity entity);
+  uint8_t *data (entt::id_type type_id, entt::entity entity);
+  const uint8_t *data (entt::id_type type_id, entt::entity entity) const;
+  const pool *find_pool (entt::id_type type_id) const;
+  pool *find_pool (entt::id_type type_id);
+  void clear_entity (entt::entity entity);
+  void clear ();
+
+private:
+  std::unordered_map<entt::id_type, pool> m_pools;
 };
 
 /** Type-erased metadata for a registered component type. */
@@ -48,10 +96,6 @@ struct ComponentTypeInfo
   ComponentKind kind = ComponentKind::DAS_SCRIPT;
   /** Size of the component struct in bytes. */
   size_t struct_size = 0;
-  /** Type-erased getter (C++ types only): copies component data into dest. */
-  void (*get) (uint32_t entity, void *dest) = nullptr;
-  /** Type-erased setter (C++ types only): writes src into component storage. */
-  void (*set) (uint32_t entity, const void *src) = nullptr;
 };
 
 /** Ordering modes for world component descriptor queries. */
@@ -241,49 +285,69 @@ public:
    * Each das component is serialized as a JSON array of objects with fields:
    * type_id (uint), entity (uint), data (hex string).
    */
-  void save_das_components_json (cereal::JSONOutputArchive &archive) const;
+  void save_das_components_json (cereal::JSONOutputArchive &archive,
+                                 entt::registry &registry) const;
 
   /**
    * Loads das component data from a JSON archive.
    *
    * Expects the same format produced by save_das_components_json.
    */
-  void load_das_components_json (cereal::JSONInputArchive &archive);
+  void load_das_components_json (cereal::JSONInputArchive &archive,
+                                 entt::registry &registry);
 
   /**
    * Saves all das component data to a binary archive (for play/stop
    * snapshots).
    */
-  void save_das_components_binary (cereal::BinaryOutputArchive &archive) const;
+  void save_das_components_binary (cereal::BinaryOutputArchive &archive,
+                                   entt::registry &registry) const;
 
   /** Loads das component data from a binary archive (for play/stop snapshots).
    */
-  void load_das_components_binary (cereal::BinaryInputArchive &archive);
+  void load_das_components_binary (cereal::BinaryInputArchive &archive,
+                                   entt::registry &registry);
 
   // ── Das component tracking ──
 
   /** Checks if a das component is present on an entity. */
-  bool das_component_contains (entt::id_type type_id,
+  bool das_component_contains (entt::registry &registry, entt::id_type type_id,
                                entt::entity entity) const;
 
   /** Adds a das component marker to an entity. */
-  bool das_component_add (entt::id_type type_id, entt::entity entity);
+  bool das_component_add (entt::registry &registry, entt::id_type type_id,
+                          entt::entity entity);
 
   /** Removes the das component marker from an entity. */
-  bool das_component_remove (entt::id_type type_id, entt::entity entity);
+  bool das_component_remove (entt::registry &registry, entt::id_type type_id,
+                             entt::entity entity);
 
   /**
    * Returns a mutable pointer to the raw byte storage for a das
    * component on an entity. Allocates storage if not yet present.
    */
-  uint8_t *das_component_data (entt::id_type type_id, entt::entity entity);
+  uint8_t *das_component_data (entt::registry &registry, entt::id_type type_id,
+                               entt::entity entity);
 
   /**
    * Returns a const pointer to the raw byte storage for a das
    * component on an entity, or nullptr if not present.
    */
-  const uint8_t *das_component_data (entt::id_type type_id,
+  const uint8_t *das_component_data (const entt::registry &registry,
+                                     entt::id_type type_id,
                                      entt::entity entity) const;
+
+  /** Returns the scene-local pool for query iteration, or nullptr. */
+  const das_component_storage::pool *
+  das_component_pool (const entt::registry &registry,
+                      entt::id_type type_id) const;
+
+  /** Clears all Daslang component payloads attached to a registry. */
+  void clear_das_component_storage (entt::registry &registry) const;
+
+  /** Removes one entity from all Daslang component pools in a registry. */
+  void clear_das_component_entity (entt::registry &registry,
+                                   entt::entity entity) const;
 
   /** Clears descriptors that belong to runtime project code. */
   void clear_runtime_world_components ();
@@ -346,13 +410,10 @@ public:
    * :param type_id: Stable type identifier.
    * :param kind: Component storage kind.
    * :param struct_size: Size of the component struct in bytes.
-   * :param getter: Type-erased getter function (C++ types only).
-   * :param setter: Type-erased setter function (C++ types only).
    */
-  void register_component_type_info (
-      const std::string &das_type_name, uint64_t type_id, ComponentKind kind,
-      size_t struct_size, void (*getter) (uint32_t, void *) = nullptr,
-      void (*setter) (uint32_t, const void *) = nullptr);
+  void register_component_type_info (const std::string &das_type_name,
+                                     uint64_t type_id, ComponentKind kind,
+                                     size_t struct_size);
 
   /**
    * Looks up component type info by daScript type name.

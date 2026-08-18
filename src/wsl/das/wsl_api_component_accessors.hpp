@@ -38,6 +38,12 @@ static_assert (sizeof (::wsl::math::vec4f) == sizeof (::das::float4)
                    && std::is_trivially_copyable_v<::wsl::math::vec4f>,
                "::wsl::math::vec4f must be layout-identical to das::float4");
 
+static_assert (sizeof (::wsl::math::quatf) == sizeof (::das::float4)
+                   && alignof (::wsl::math::quatf) == alignof (::das::float4)
+                   && std::is_standard_layout_v<::wsl::math::quatf>
+                   && std::is_trivially_copyable_v<::wsl::math::quatf>,
+               "::wsl::math::quatf must be layout-identical to das::float4");
+
 namespace das
 {
 class Module;
@@ -64,6 +70,7 @@ struct TransformProxy
   void bind (comp::transform *component);
 
   ::das::float3 &position ();
+  ::das::float4 &rotation ();
   ::das::float3 &scale ();
 };
 

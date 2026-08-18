@@ -6,7 +6,6 @@
 #include "../../reg/component_registry.hpp"
 #include "../../reg/singleton_registry.hpp"
 #include "../../reg/system_factory_registry.hpp"
-#include "../../reg/runtime_project_module_api.hpp"
 #include "../../reg/runtime_project_module.hpp"
 #include "../../reg/registry_queries.hpp"
 
@@ -44,12 +43,12 @@ class runtime_context : public comp::singleton_component
 {
 public:
   /**
- * Constructs the runtime context.
- * :param name: Window title.
- * :param width: Window width.
- * :param height: Window height.
- * :param engine_res_path: Base path for engine resources.
- */
+   * Constructs the runtime context.
+   * :param name: Window title.
+   * :param width: Window width.
+   * :param height: Window height.
+   * :param engine_res_path: Base path for engine resources.
+   */
   explicit runtime_context (const char *name, int width, int height,
                             const std::string &engine_res_path,
                             bool headless = false);

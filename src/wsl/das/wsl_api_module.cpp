@@ -44,13 +44,13 @@
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/EActivation.h>
 
-MAKE_TYPE_FACTORY (TransformAccessor, wsl::das::TransformProxy)
-MAKE_TYPE_FACTORY (Transform2DAccessor, wsl::das::Transform2DProxy)
-MAKE_TYPE_FACTORY (Camera2DAccessor, wsl::das::Camera2DProxy)
-MAKE_TYPE_FACTORY (Sprite2DAccessor, wsl::das::Sprite2DProxy)
-MAKE_TYPE_FACTORY (PointLightAccessor, wsl::das::PointLightProxy)
-MAKE_TYPE_FACTORY (DirectionalLightAccessor, wsl::das::DirectionalLightProxy)
-MAKE_TYPE_FACTORY (SpotLightAccessor, wsl::das::SpotLightProxy)
+MAKE_TYPE_FACTORY (Transform, wsl::das::TransformProxy)
+MAKE_TYPE_FACTORY (Transform2D, wsl::das::Transform2DProxy)
+MAKE_TYPE_FACTORY (Camera2D, wsl::das::Camera2DProxy)
+MAKE_TYPE_FACTORY (Sprite2D, wsl::das::Sprite2DProxy)
+MAKE_TYPE_FACTORY (PointLight, wsl::das::PointLightProxy)
+MAKE_TYPE_FACTORY (DirectionalLight, wsl::das::DirectionalLightProxy)
+MAKE_TYPE_FACTORY (SpotLight, wsl::das::SpotLightProxy)
 
 namespace wsl::das
 {
@@ -58,7 +58,7 @@ namespace wsl::das
 namespace
 {
 
-entt::registry *g_registry = nullptr;
+thread_local entt::registry *g_registry = nullptr;
 const engine_event *g_current_event = nullptr;
 
 entt::registry *
@@ -96,6 +96,13 @@ TransformProxy::position ()
 {
   return comp ? *reinterpret_cast<::das::float3 *> (&comp->position)
               : fallback_value<::das::float3> ();
+}
+
+::das::float4 &
+TransformProxy::rotation ()
+{
+  return comp ? *reinterpret_cast<::das::float4 *> (&comp->rotation)
+              : fallback_value<::das::float4> ();
 }
 
 ::das::float3 &
@@ -264,9 +271,10 @@ struct TransformProxyAnnotation
 {
   explicit TransformProxyAnnotation (::das::ModuleLibrary &lib)
       : ::das::ManagedStructureAnnotation<TransformProxy, false, false> (
-            "TransformAccessor", lib, "wsl::das::TransformProxy")
+            "Transform", lib, "wsl::das::TransformProxy")
   {
     addProperty<DAS_BIND_MANAGED_PROP (position)> ("position", "position");
+    addProperty<DAS_BIND_MANAGED_PROP (rotation)> ("rotation", "rotation");
     addProperty<DAS_BIND_MANAGED_PROP (scale)> ("scale", "scale");
   }
 };
@@ -276,7 +284,7 @@ struct Transform2DProxyAnnotation
 {
   explicit Transform2DProxyAnnotation (::das::ModuleLibrary &lib)
       : ::das::ManagedStructureAnnotation<Transform2DProxy, false, false> (
-            "Transform2DAccessor", lib, "wsl::das::Transform2DProxy")
+            "Transform2D", lib, "wsl::das::Transform2DProxy")
   {
     addProperty<DAS_BIND_MANAGED_PROP (position)> ("position", "position");
     addProperty<DAS_BIND_MANAGED_PROP (scale)> ("scale", "scale");
@@ -289,7 +297,7 @@ struct Camera2DProxyAnnotation
 {
   explicit Camera2DProxyAnnotation (::das::ModuleLibrary &lib)
       : ::das::ManagedStructureAnnotation<Camera2DProxy, false, false> (
-            "Camera2DAccessor", lib, "wsl::das::Camera2DProxy")
+            "Camera2D", lib, "wsl::das::Camera2DProxy")
   {
     addProperty<DAS_BIND_MANAGED_PROP (zoom)> ("zoom", "zoom");
   }
@@ -300,7 +308,7 @@ struct Sprite2DProxyAnnotation
 {
   explicit Sprite2DProxyAnnotation (::das::ModuleLibrary &lib)
       : ::das::ManagedStructureAnnotation<Sprite2DProxy, false, false> (
-            "Sprite2DAccessor", lib, "wsl::das::Sprite2DProxy")
+            "Sprite2D", lib, "wsl::das::Sprite2DProxy")
   {
     addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
     addProperty<DAS_BIND_MANAGED_PROP (size)> ("size", "size");
@@ -312,7 +320,7 @@ struct PointLightProxyAnnotation
 {
   explicit PointLightProxyAnnotation (::das::ModuleLibrary &lib)
       : ::das::ManagedStructureAnnotation<PointLightProxy, false, false> (
-            "PointLightAccessor", lib, "wsl::das::PointLightProxy")
+            "PointLight", lib, "wsl::das::PointLightProxy")
   {
     addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
     addProperty<DAS_BIND_MANAGED_PROP (intensity)> ("intensity", "intensity");
@@ -324,7 +332,7 @@ struct DirectionalLightProxyAnnotation
 {
   explicit DirectionalLightProxyAnnotation (::das::ModuleLibrary &lib)
       : ::das::ManagedStructureAnnotation<DirectionalLightProxy, false, false> (
-            "DirectionalLightAccessor", lib, "wsl::das::DirectionalLightProxy")
+            "DirectionalLight", lib, "wsl::das::DirectionalLightProxy")
   {
     addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
     addProperty<DAS_BIND_MANAGED_PROP (intensity)> ("intensity", "intensity");
@@ -336,7 +344,7 @@ struct SpotLightProxyAnnotation
 {
   explicit SpotLightProxyAnnotation (::das::ModuleLibrary &lib)
       : ::das::ManagedStructureAnnotation<SpotLightProxy, false, false> (
-            "SpotLightAccessor", lib, "wsl::das::SpotLightProxy")
+            "SpotLight", lib, "wsl::das::SpotLightProxy")
   {
     addProperty<DAS_BIND_MANAGED_PROP (color)> ("color", "color");
     addProperty<DAS_BIND_MANAGED_PROP (intensity)> ("intensity", "intensity");
@@ -550,8 +558,8 @@ wsl_has_component (uint32_t type_id, uint32_t entity)
   if (reg->ctx ().contains<comp::singl::runtime_context *> ()) {
     auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
     if (runtime_ctx) {
-      return runtime_ctx->component_registry ().das_component_contains (type_id,
-                                                                        e);
+      return runtime_ctx->component_registry ().das_component_contains (
+          *reg, type_id, e);
     }
   }
   return false;
@@ -705,7 +713,7 @@ wsl_add_component (uint32_t type_id, uint32_t entity)
     return false;
   }
   if (desc->is_das_component) {
-    return comp_reg.das_component_add (type_id, e);
+    return comp_reg.das_component_add (*reg, type_id, e);
   }
   if (desc->emplace_default) {
     return desc->emplace_default (*reg, e);
@@ -737,7 +745,7 @@ wsl_remove_component (uint32_t type_id, uint32_t entity)
     return false;
   }
   if (desc->is_das_component) {
-    return comp_reg.das_component_remove (type_id, e);
+    return comp_reg.das_component_remove (*reg, type_id, e);
   }
   if (desc->remove) {
     return desc->remove (*reg, e);
@@ -1302,7 +1310,7 @@ wsl_get_window_height ()
   return g_window_h;
 }
 
-// ── Generic entity iteration (DECS-style `query_entities` primitive) ──
+// ── Generic entity iteration (DECS-style `query` primitive) ──
 
 void
 each_entity_id_with (const ::das::TArray<uint32_t> &type_ids,
@@ -1313,42 +1321,75 @@ each_entity_id_with (const ::das::TArray<uint32_t> &type_ids,
   if (!reg || type_ids.size == 0) {
     return;
   }
-  // Fast path: if every requested component is a native entt storage, build an
-  // intersection view directly. Das components (e.g. daslang struct world
-  // components) are NOT stored as native entt pools, so `reg->storage(id)` is
-  // null for them and this path is skipped.
-  bool all_native = true;
+  auto *runtime_ctx = reg->ctx ().contains<comp::singl::runtime_context *> ()
+                          ? reg->ctx ().get<comp::singl::runtime_context *> ()
+                          : nullptr;
+
+  struct candidate
+  {
+    const entt::sparse_set *native = nullptr;
+    const ::wsl::reg::das_component_storage::pool *das = nullptr;
+    std::size_t size = 0;
+  };
+
+  std::vector<candidate> candidates;
+  candidates.reserve (type_ids.size);
+  auto *component_registry
+      = runtime_ctx != nullptr ? &runtime_ctx->component_registry () : nullptr;
+
   for (uint32_t i = 0; i < type_ids.size; ++i) {
-    if (!reg->storage (entt::id_type{ type_ids[i] })) {
-      all_native = false;
-      break;
+    const entt::id_type type_id = entt::id_type{ type_ids[i] };
+    const auto *desc = component_registry != nullptr
+                           ? component_registry->find_world_component (type_id)
+                           : nullptr;
+    candidate term{};
+
+    if (desc != nullptr && desc->is_das_component) {
+      if (component_registry == nullptr) {
+        return;
+      }
+      term.das = component_registry->das_component_pool (*reg, type_id);
+      if (term.das == nullptr) {
+        return;
+      }
+      term.size = term.das->entries.size ();
+    } else {
+      term.native = reg->storage (type_id);
+      if (term.native == nullptr) {
+        return;
+      }
+      term.size = term.native->size ();
+    }
+
+    candidates.push_back (term);
+  }
+
+  std::size_t candidate_index = 0;
+  for (std::size_t i = 1; i < candidates.size (); ++i) {
+    if (candidates[i].size < candidates[candidate_index].size) {
+      candidate_index = i;
     }
   }
-  if (all_native) {
-    entt::runtime_view view;
+
+  auto invoke_if_matching = [&] (entt::entity entity) {
     for (uint32_t i = 0; i < type_ids.size; ++i) {
-      view.iterate (*reg->storage (entt::id_type{ type_ids[i] }));
-    }
-    for (auto e : view) {
-      ::das::das_invoke<void>::invoke<uint32_t> (context, at, blk,
-                                                 static_cast<uint32_t> (e));
-    }
-    return;
-  }
-  // Mixed/native+das path: iterate all entities and test each requested
-  // component with `wsl_has_component`, which understands both native entt
-  // storages and das component registrations.
-  for (auto e : reg->storage<entt::entity> ()) {
-    bool matches = true;
-    for (uint32_t i = 0; i < type_ids.size; ++i) {
-      if (!wsl_has_component (type_ids[i], static_cast<uint32_t> (e))) {
-        matches = false;
-        break;
+      if (!wsl_has_component (type_ids[i], static_cast<uint32_t> (entity))) {
+        return;
       }
     }
-    if (matches) {
-      ::das::das_invoke<void>::invoke<uint32_t> (context, at, blk,
-                                                 static_cast<uint32_t> (e));
+    ::das::das_invoke<void>::invoke<uint32_t> (context, at, blk,
+                                               static_cast<uint32_t> (entity));
+  };
+
+  const candidate &selected = candidates[candidate_index];
+  if (selected.native != nullptr) {
+    for (entt::entity entity : *selected.native) {
+      invoke_if_matching (entity);
+    }
+  } else {
+    for (const auto &[entity, block] : selected.das->entries) {
+      (void)block;
+      invoke_if_matching (entity);
     }
   }
 }
@@ -1377,93 +1418,6 @@ wsl_get_component_type_id (const char *display_name)
   return static_cast<uint32_t> (desc->type_id);
 }
 
-// ── Component field access ──
-
-float
-wsl_get_component_field_f (uint32_t entity, uint32_t type_id, int offset)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return 0.0f;
-  }
-  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    return 0.0f;
-  }
-  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-  if (!runtime_ctx) {
-    return 0.0f;
-  }
-  auto &comp_reg = runtime_ctx->component_registry ();
-  auto *desc = comp_reg.find_world_component (type_id);
-  if (!desc) {
-    return 0.0f;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  bool has = false;
-  if (desc->is_das_component) {
-    has = comp_reg.das_component_contains (type_id, e);
-  } else if (desc->contains) {
-    has = desc->contains (*reg, e);
-  }
-  if (!has) {
-    return 0.0f;
-  }
-  const uint8_t *data = comp_reg.das_component_data (type_id, e);
-  if (!data) {
-    return 0.0f;
-  }
-  if (offset < 0
-      || static_cast<uint32_t> (offset) + sizeof (float)
-             > static_cast<uint32_t> (desc->das_struct_size)) {
-    return 0.0f;
-  }
-  float value = 0.0f;
-  std::memcpy (&value, data + offset, sizeof (float));
-  return value;
-}
-
-void
-wsl_set_component_field_f (uint32_t entity, uint32_t type_id, int offset,
-                           float value)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return;
-  }
-  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    return;
-  }
-  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-  if (!runtime_ctx) {
-    return;
-  }
-  auto &comp_reg = runtime_ctx->component_registry ();
-  auto *desc = comp_reg.find_world_component (type_id);
-  if (!desc) {
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  bool has = false;
-  if (desc->is_das_component) {
-    has = comp_reg.das_component_contains (type_id, e);
-  } else if (desc->contains) {
-    has = desc->contains (*reg, e);
-  }
-  if (!has) {
-    return;
-  }
-  uint8_t *data = comp_reg.das_component_data (type_id, e);
-  if (!data) {
-    return;
-  }
-  if (offset < 0
-      || static_cast<uint32_t> (offset) + sizeof (float)
-             > static_cast<uint32_t> (desc->das_struct_size)) {
-    return;
-  }
-  std::memcpy (data + offset, &value, sizeof (float));
-}
-
 // ── Generic component type lookup ──
 
 uint32_t
@@ -1488,147 +1442,28 @@ wsl_get_component_type_id_by_name (const char *type_name)
   return static_cast<uint32_t> (info->type_id);
 }
 
-int
-wsl_get_component_kind_by_name (const char *type_name)
+void *
+wsl_get_component_data (uint32_t entity, uint32_t type_id)
 {
   auto *reg = get_registry ();
-  if (!reg || !type_name) {
-    return 0;
+  if (!reg || !reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return nullptr;
   }
-  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    return 0;
-  }
+
   auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
   if (!runtime_ctx) {
-    return 0;
+    return nullptr;
   }
-  auto &comp_reg = runtime_ctx->component_registry ();
-  auto *info = comp_reg.find_component_type_info (type_name);
-  if (!info) {
-    return 0;
-  }
-  return static_cast<int> (info->kind);
-}
 
-int
-wsl_get_component_struct_size_by_name (const char *type_name)
-{
-  auto *reg = get_registry ();
-  if (!reg || !type_name) {
-    return 0;
+  const auto *info = runtime_ctx->component_registry ().find_world_component (
+      static_cast<entt::id_type> (type_id));
+  if (!info || !info->is_das_component) {
+    return nullptr;
   }
-  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    return 0;
-  }
-  auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-  if (!runtime_ctx) {
-    return 0;
-  }
-  auto &comp_reg = runtime_ctx->component_registry ();
-  auto *info = comp_reg.find_component_type_info (type_name);
-  if (!info) {
-    return 0;
-  }
-  return static_cast<int> (info->struct_size);
-}
 
-void
-wsl_get_component_into (uint32_t entity, uint32_t type_id, int kind, void *dest)
-{
-  auto *reg = get_registry ();
-  if (!reg || !dest) {
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  auto component_kind = static_cast<reg::ComponentKind> (kind);
-
-  if (component_kind == reg::ComponentKind::DAS_SCRIPT) {
-    // daScript component: memcpy from raw byte storage
-    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-      return;
-    }
-    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-    if (!runtime_ctx) {
-      return;
-    }
-    auto &comp_reg = runtime_ctx->component_registry ();
-    if (!comp_reg.das_component_contains (type_id, e)) {
-      return;
-    }
-    const auto *data = comp_reg.das_component_data (type_id, e);
-    if (!data) {
-      return;
-    }
-    auto *desc = comp_reg.find_world_component (type_id);
-    size_t size = desc ? static_cast<size_t> (desc->das_struct_size) : 0;
-    if (size > 0) {
-      std::memcpy (dest, data, size);
-    }
-  } else {
-    // C++ component: use the accessor from lookup table
-    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-      return;
-    }
-    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-    if (!runtime_ctx) {
-      return;
-    }
-    auto &comp_reg = runtime_ctx->component_registry ();
-    auto *info = comp_reg.find_component_type_info_by_id (type_id);
-    if (info && info->get) {
-      info->get (entity, dest);
-    }
-  }
-}
-
-void
-wsl_set_component_from (uint32_t entity, uint32_t type_id, int kind,
-                        const void *src)
-{
-  auto *reg = get_registry ();
-  if (!reg || !src) {
-    return;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  auto component_kind = static_cast<reg::ComponentKind> (kind);
-
-  if (component_kind == reg::ComponentKind::DAS_SCRIPT) {
-    // daScript component: memcpy to raw byte storage
-    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-      return;
-    }
-    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-    if (!runtime_ctx) {
-      return;
-    }
-    auto &comp_reg = runtime_ctx->component_registry ();
-    if (!comp_reg.das_component_contains (type_id, e)) {
-      return;
-    }
-    auto *data = comp_reg.das_component_data (type_id, e);
-    if (!data) {
-      return;
-    }
-    auto *desc = comp_reg.find_world_component (type_id);
-    size_t size = desc ? static_cast<size_t> (desc->das_struct_size) : 0;
-    if (size > 0) {
-      std::memcpy (data, src, size);
-    }
-  } else {
-    // C++ component: use the accessor from lookup table
-    if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-      return;
-    }
-    auto *runtime_ctx = reg->ctx ().get<comp::singl::runtime_context *> ();
-    if (!runtime_ctx) {
-      return;
-    }
-    auto &comp_reg = runtime_ctx->component_registry ();
-    auto *info = comp_reg.find_component_type_info_by_id (type_id);
-    if (info && info->set) {
-      info->set (entity, src);
-    }
-  }
+  return runtime_ctx->component_registry ().das_component_data (
+      *reg, static_cast<entt::id_type> (type_id),
+      static_cast<entt::entity> (entity));
 }
 
 // ── Raycasting (global-state) ──
@@ -2247,50 +2082,24 @@ public:
         "wsl::das::wsl_get_component_type_id")
         ->arg ("display_name");
 
-    // Generic DECS-style iteration primitive (backs the `query_entities` macro)
+    // Generic query iteration primitive (backs the `query` macro)
     addExtern<DAS_BIND_FUN (each_entity_id_with)> (
         *this, lib, "each_entity_id_with", ::das::SideEffects::invoke,
         "wsl::das::each_entity_id_with")
         ->args ({ "type_ids", "blk", "context", "at" });
 
-    // Component field access
-    addExtern<DAS_BIND_FUN (wsl_get_component_field_f)> (
-        *this, lib, "get_component_field_f", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_component_field_f")
-        ->args ({ "entity", "type_id", "offset" });
-
-    addExtern<DAS_BIND_FUN (wsl_set_component_field_f)> (
-        *this, lib, "set_component_field_f", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_set_component_field_f")
-        ->args ({ "entity", "type_id", "offset", "value" });
-    // Generic component type lookup (for get_component<T> / set_component<T>)
+    // Generic component type lookup and direct payload access
     addExtern<DAS_BIND_FUN (wsl_get_component_type_id_by_name)> (
         *this, lib, "_get_component_type_id_by_name",
         ::das::SideEffects::accessExternal,
         "wsl::das::wsl_get_component_type_id_by_name")
         ->arg ("type_name");
 
-    addExtern<DAS_BIND_FUN (wsl_get_component_kind_by_name)> (
-        *this, lib, "_get_component_kind_by_name",
-        ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_component_kind_by_name")
-        ->arg ("type_name");
+    addExtern<DAS_BIND_FUN (wsl_get_component_data)> (
+        *this, lib, "_get_component_data", ::das::SideEffects::accessExternal,
+        "wsl::das::wsl_get_component_data")
+        ->args ({ "entity", "type_id" });
 
-    addExtern<DAS_BIND_FUN (wsl_get_component_struct_size_by_name)> (
-        *this, lib, "_get_component_struct_size_by_name",
-        ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_component_struct_size_by_name")
-        ->arg ("type_name");
-
-    addExtern<DAS_BIND_FUN (wsl_get_component_into)> (
-        *this, lib, "_get_component_into", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_component_into")
-        ->args ({ "entity", "type_id", "kind", "dest" });
-
-    addExtern<DAS_BIND_FUN (wsl_set_component_from)> (
-        *this, lib, "_set_component_from", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_set_component_from")
-        ->args ({ "entity", "type_id", "kind", "src" });
     // Raycasting
     addExtern<DAS_BIND_FUN (wsl_make_pick_ray)> (
         *this, lib, "make_pick_ray", ::das::SideEffects::modifyExternal,

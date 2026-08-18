@@ -2,7 +2,6 @@
 #include "sig/signal_hub.hpp"
 #include "../rsc/scene.hpp"
 #include "../sys/system.hpp"
-#include "../das/das_system.hpp"
 #include "../das/das_system_adapter.hpp"
 #include "../das/das_engine.hpp"
 #include "../log/log.hpp"
@@ -83,10 +82,7 @@ system_factory_registry::register_cached_runtime_system (
   desc.factory = [display_name = desc.display_name,
                   script_path = std::string (script_path), type_id,
                   &engine] (rsc::scene &) -> std::unique_ptr<sys::ecs_system> {
-    // Check if the script defines a "System" class (class-adapter pattern).
-    // If so, instantiate the class and use das_system_adapter which dispatches
-    // virtual method calls to daslang overrides via the adapter pattern.
-    // Otherwise, fall back to das_system which calls exported free functions.
+    // User systems must use the Daslang class-adapter contract.
     std::string error;
     auto instance = engine.instantiate_class (script_path, "System", error);
     if (instance.ptr && instance.info && instance.ctx) {
@@ -94,8 +90,10 @@ system_factory_registry::register_cached_runtime_system (
           display_name, script_path, engine, type_id, instance.ptr,
           instance.info, instance.ctx);
     }
-    return std::make_unique<das::das_system> (display_name, script_path, engine,
-                                              type_id);
+    wsl::log::cmake ()->error (
+        "Daslang system '{}' must define class System : EcsSystem: {}",
+        script_path, error);
+    return nullptr;
   };
 
   m_type_to_name[desc.type_id] = desc.display_name;

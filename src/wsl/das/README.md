@@ -4,35 +4,23 @@ Embeds the daScript scripting language into the Weasel engine, allowing gameplay
 
 ## Execution Paths
 
-The engine supports two authoring models — C++ and daScript — across three execution paths. All paths converge on the same ECS runtime.
+The engine supports Daslang-authored gameplay components and systems across
+interpretation and AOT execution. Engine built-in components remain C++/EnTT
+types; user runtime C++ components and systems are not supported.
 
 ```
-                          User Code
-                       ┌──────┴──────┐
-                       │             │
-                    C++ files     .das files
-                       │             │
-                ┌──────┴──────┐ ┌────┴────┐
-                │             │ │         │
-            (editor)     (release) (editor) (release/CMake)
-          compile to .so   link   interpret  daslang -aot
-                │             │ │         │     │
-                v             v v         v     v
-           dlopen()     executable  runtime  executable
+                           Daslang source
+                           ┌──────┴──────┐
+                           │             │
+                    interpreted       AOT-generated C++
+                     editor/runtime    CMake build
+                           │             │
+                           └──────┬──────┘
+                                  v
+                           same EnTT runtime
 ```
 
-### Path 1: C++ Compilation (Editor)
-
-Used when the editor loads a project with `.cpp` source files.
-
-1. `write_generated_translation_unit()` generates `runtime_module.generated.cpp` that `#include`s all user headers/sources.
-2. `compile_to_shared_library()` compiles to `runtime_module_cached.so` using flags from `compile_commands.json`.
-3. `dlopen(runtime_module_cached.so)` fires static `registration_hook` constructors that populate component/system/singleton registrations.
-4. `resolve_user_hooks()` resolves `wsl_on_project_init/update/shutdown` weak symbols.
-
-The shared library links against `-lwsl -lSDL3` and syncs EnTT's meta context via `wsl_get_meta_ctx_handle()`.
-
-### Path 2: daScript Interpretation (Editor)
+### Path 1: Daslang Interpretation (Editor)
 
 Used when the editor loads a project with `.das` source files.
 
@@ -47,18 +35,18 @@ Used when the editor loads a project with `.das` source files.
 
 **Critical**: Each compiled program gets its own `Context`. Two programs sharing a Context would double-relocate sim nodes, causing `prefix->magic==0xdeadc0de` assertion failures.
 
-### Path 3: daScript AOT (CMake Build)
+### Path 2: Daslang AOT (CMake Build)
 
 Used when building a standalone release binary via CMake.
 
 1. `CMakeLists.txt` calls `weasel_aot_das()` (from `cmake/WeaselDasAOT.cmake`).
-2. For each `.das` file:
-   - A temp directory `_tmp_${Name}/` is created.
-   - The input file, `weasel_api.das`, `weasel_helpers.das`, `weasel_ecs.das`, and all component `.das` files are copied in.
-   - `daslang -aot input.das output.cpp` compiles to C++.
+2. For each `.das` file, `weasel-cli aot` compiles in-process with the real
+   `Module_WeaselApi` loaded. No fake `weasel_api.das` stub is used.
 3. Generated `.cpp` files are linked into the final executable.
 
-The standalone `daslang` binary has no C++ engine. It compiles against the `.das` stub files only. At link time, the AOT-generated code calls into the engine's `wsl_api_module.hpp` functions.
+The generated C++ links against the same engine binding types and functions
+used by the interpreted path. The original `.das` sources remain available to
+the current runtime loader for program metadata and class-adapter execution.
 
 ## Module System
 
@@ -66,8 +54,7 @@ The standalone `daslang` binary has no C++ engine. It compiles against the `.das
 
 | File | Location | Role |
 |------|----------|------|
-| `weasel_api.das` | `modules/weasel_api/` | AOT stubs — function signatures with `=> 0` or empty bodies for the standalone `daslang -aot` compiler |
-| `weasel_helpers.das` | `modules/` | Generic component helpers (`has_component_t`, `get_component_t`, `set_component_t`) — pure daScript, works in all paths |
+| `weasel_helpers.das` | `modules/` | `get_component_or` built-in views and the `query` macro |
 | `weasel_ecs.das` | `modules/` | Base class `EcsSystem` for system adapters |
 
 ### Module Resolution
@@ -76,15 +63,13 @@ When a `.das` file does `require weasel_api`, the resolution depends on the exec
 
 | Path | Resolution | Generic helpers visible? |
 |------|-----------|------------------------|
-| C++ Compilation (Editor) | C++ `Module_WeaselApi` shadows the file | No — the `.das` file is never compiled |
-| C++ Compilation (Release) | N/A — C++ doesn't use `require` | N/A |
 | daScript Interpretation (Editor) | C++ `Module_WeaselApi` (real bindings) | Yes — via `weasel_helpers.das` |
-| daScript AOT (CMake Build) | Finds `weasel_api.das` as a file | Yes — via `weasel_helpers.das` |
+| daScript AOT (CMake Build) | Real C++ `Module_WeaselApi` in the in-process compiler | Yes — via `weasel_helpers.das` |
 
 The key insight: `weasel_helpers.das` has **no C++ module counterpart**, so there's nothing to shadow it. Both AOT and interpreted modes compile it from the `.das` file directly.
 
 ```
-require weasel_api      → C++ Module_WeaselApi (interpreted) / weasel_api.das (AOT)
+require weasel_api      → C++ Module_WeaselApi (interpreted and AOT)
 require weasel_helpers  → weasel_helpers.das (always from .das file)
 ```
 
@@ -95,7 +80,7 @@ The `ProjectFsFileAccess` class (defined in `das_engine.cpp`) extends `FsFileAcc
 The engine registers the following roots:
 - **daslib**: Built-in daScript modules (`math`, `strings`, etc.)
 - **engine_modules**: `src/wsl/das/modules/` — for `require weasel_helpers`
-- **components**, **systems**, **src**: Project-specific directories (added via `addFsRoot()`)
+- **components**, **systems**: Project-specific directories (added via `addFsRoot()`)
 
 ## Key Files
 
@@ -103,13 +88,12 @@ The engine registers the following roots:
 |------|-------------|
 | `das_engine.hpp/cpp` | `das_engine` class — compiles and executes `.das` files, manages contexts, provides SIGSEGV protection |
 | `wsl_api_module.hpp/cpp` | `Module_WeaselApi` — registers C++ bindings (entity ops, transforms, scene queries, component access) with daScript |
-| `das_ecs_binds.hpp/cpp` | `Module_Ecs` — registers engine component types (transform, camera, etc.) as daScript types |
+| `das_ecs_binds.hpp/cpp` | Native ECS module support used by the Daslang runtime |
 | `das_system_adapter.hpp/cpp` | `das_system_adapter` — dual-inheritance bridge: `ecs_system` (C++) + `EcsSystemAdapter` (daScript class adapter pattern) |
-| `das_system.hpp/cpp` | `das_system` — earlier system implementation using module-level wrapper functions |
+| `das_system_adapter.hpp/cpp` | Daslang class-adapter system bridge |
 | `das_registration.hpp/cpp` | File discovery and registration — compiles `.das` files, extracts struct info, registers components/systems |
 | `das_interop.hpp/cpp` | Low-level `addInterop` functions for runtime type introspection (`describe_type`, `type_name`, etc.) |
-| `modules/weasel_api/weasel_api.das` | AOT stub declarations for the standalone `daslang` compiler |
-| `modules/weasel_helpers.das` | Generic component helpers (type-safe `has/get/set_component_t`) |
+| `modules/weasel_helpers.das` | Built-in component views and the `query` macro |
 | `modules/weasel_ecs.das` | `EcsSystem` base class for system adapters |
 
 ## Writing a daScript System
@@ -127,9 +111,9 @@ class System : EcsSystem {
     m_accumulated_dx : float = 0.0
 
     def override on_init() : void {
-        query_entities( $(var t : TransformAccessor; var mr : MouseRotate) {
+        query() $(t : Transform&; mr : MouseRotate&) {
             // initialization logic
-        } )
+        }
     }
 
     def override on_update(dt : float) : void {
@@ -158,21 +142,24 @@ class System : EcsSystem {
 | `on_event()` | When an SDL event occurs (before `on_update`) |
 | `on_inactive()` | When the system is being shut down or scene is changing |
 
-### Generic Component Helpers
+### Component Access and Queries
 
-The `weasel_helpers.das` module provides type-safe generic functions:
+The `weasel_helpers.das` module provides live built-in views and direct
+references for Daslang components inside queries:
 
 ```das
-// Check if an entity has a component
-if (has_component_t(entity, MouseRotate())) { ... }
+var transform = get_component_or(entity, Transform())
+transform.position.x = 10.0
 
-// Get a typed copy of a component
-var mr = get_component_t(entity, MouseRotate())
-mr.yaw += 1.0
-set_component_t(entity, mr)
+query() $(t : Transform&; mr : MouseRotate&) {
+    t.position.x += 1.0
+    mr.yaw = 5.0
+}
 ```
 
-These work with any registered component type (C++ native, C++ project, or daScript-defined).
+Built-in view properties point directly into EnTT storage. Daslang component
+query references point directly into the scene-local Daslang component pool;
+there is no `set_component_t` write-back step.
 
 ## SIGSEGV Protection
 
@@ -190,12 +177,10 @@ Each compiled program gets its own `Context` because `Context::relocateCode` rel
 
 The engine intentionally does NOT call `require_dynamic_modules` during initialization. It compiles `.das_module` files and stores them in thread-local `ModuleKarma`. When the worker thread later compiles user `.das` files, the compiled modules may be in an inconsistent state across threads, causing corruption (hash set corruption in `buildAccessFlags`, etc.). Instead, modules like `builtin.das` are compiled on-demand by `compileDaScript` on the worker thread.
 
-### Two-File Strategy (weasel_api.das vs weasel_helpers.das)
+### Native module plus helper macro
 
-The generic helpers (`has_component_t`, etc.) are pure daScript functions that call C++ bindings (`_get_component_type_id_by_name`, etc.). They were originally duplicated in each user system file for AOT compatibility.
-
-The two-file strategy separates concerns:
-- `weasel_api.das`: AOT stubs only (no generics) — for the standalone `daslang -aot` compiler
-- `weasel_helpers.das`: Generic helpers — pure daScript, no C++ counterpart, works in both AOT and interpreted modes
-
-This avoids the "C++ module shadows the `.das` file" problem: since `weasel_helpers.das` has no C++ module, there's nothing to shadow it.
+`weasel_api` is the real native module in both interpreted and in-process AOT
+compilation. `weasel_helpers.das` contains only the public `get_component_or`
+overloads and the `query` AST macro. It calls the native module's stable pointer
+and iteration primitives; it does not maintain a parallel component copy or an
+AOT-only stub module.

@@ -455,7 +455,7 @@ struct das_engine::impl
     // Use v2 syntax for all .das files (class fields, curly braces, etc.)
     policies.version_2_syntax = true;
     // Enable RTTI so call-macro expansions can build `type<...>` / `default<>`
-    // nodes (e.g. the `query_entities` macro reconstructs proxy types).
+    // nodes (e.g. the `query` macro reconstructs proxy types).
     policies.rtti = true;
   }
 

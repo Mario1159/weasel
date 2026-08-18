@@ -26,32 +26,21 @@ struct project;
 namespace reg
 {
 
-class dynamic_library;
-
 /**
- * Runtime module loading, code compilation, and registration helpers.
+ * Daslang project loading, metadata caching, and reload helpers.
  *
  * The \c runtime sub-namespace provides:
- * - \c runtime_project_module: builds and loads user-authored
- *   runtime code (headers + sources) by compiling to shared libraries,
- *   and executes daslang files.
- * - \c runtime_registrar (and its alias \c runtime_detail): helper
- *   functions and macro support for registering components, singletons,
- *   and systems from compiled runtime code.
- * - \c runtime_module_registration_context: bundles the three
- *   registration contexts (\c component_registry, \c singleton_registry,
- *   \c system_factory_registry) passed to runtime registration callbacks.
+ * - \c runtime_project_module: discovers and executes user Daslang component
+ *   and system files.
  */
 namespace runtime
 {
 
 /**
- * Builds and loads user-authored runtime code for a project.
+ * Loads user-authored Daslang runtime code for a project.
  *
- * A runtime project module discovers project headers and source files,
- * generates a translation unit that wires up registration hooks, and then
- * compiles it to a shared library (.so/.dylib/.dll) for loading.
- * It also discovers and executes daslang (.das) files.
+ * User C++ runtime sources are rejected. Engine C++ components remain
+ * statically registered by the engine itself.
  */
 class runtime_project_module
 {
@@ -147,35 +136,6 @@ public:
    */
   wsl::das::das_engine *get_das_engine ();
 
-  // User C++ hook function pointer types
-  using hook_init_fn = void (*) (wsl::app &);
-  using hook_update_fn = void (*) (wsl::app &, double);
-  using hook_shutdown_fn = void (*) (wsl::app &);
-
-  /** Returns the resolved user init hook, or nullptr if not available. */
-  hook_init_fn
-  get_hook_init () const
-  {
-    return m_hook_init;
-  }
-
-  /** Returns the resolved user update hook, or nullptr if not available. */
-  hook_update_fn
-  get_hook_update () const
-  {
-    return m_hook_update;
-  }
-
-  /**
-   * Returns the resolved user shutdown hook, or nullptr if not
-   * available.
-   */
-  hook_shutdown_fn
-  get_hook_shutdown () const
-  {
-    return m_hook_shutdown;
-  }
-
   struct cached_das_field
   {
     std::string name;
@@ -252,24 +212,6 @@ private:
   write_generated_translation_unit (const std::filesystem::path &generated_path,
                                     const source_set &sources);
 
-  // ── Shared library cache ──
-  static std::filesystem::path
-  shared_library_path (const std::filesystem::path &project_root);
-
-  static std::filesystem::path
-  source_hash_path (const std::filesystem::path &project_root);
-
-  bool compile_to_shared_library (const std::filesystem::path &generated_path,
-                                  const std::filesystem::path &output_path);
-
-  bool try_load_cached_shared_library (std::size_t current_hash);
-
-  bool read_source_hash (const std::filesystem::path &path,
-                         std::size_t &out_hash) const;
-
-  void write_source_hash (const std::filesystem::path &path,
-                          std::size_t hash) const;
-
   comp::singl::runtime_context *m_runtime_ctx = nullptr;
   std::filesystem::path m_loaded_project_root;
   std::string m_last_status;
@@ -277,16 +219,8 @@ private:
   bool m_metadata_cache_loaded = false;
   std::size_t m_source_hash = 0;
 
-  std::unique_ptr<dynamic_library> m_loaded_library;
   std::unique_ptr<wsl::das::das_engine> m_das_engine;
   std::vector<das_registration> m_das_registrations;
-
-  // User C++ hook function pointers resolved from the loaded shared library
-  hook_init_fn m_hook_init = nullptr;
-  hook_update_fn m_hook_update = nullptr;
-  hook_shutdown_fn m_hook_shutdown = nullptr;
-
-  void resolve_user_hooks ();
 
   std::future<bool> m_async_reload_future;
 };

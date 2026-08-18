@@ -4,19 +4,32 @@ require weasel_helpers
 require math
 require mouse_rotate
 
+def quaternion_from_euler_degrees(pitch : float; yaw : float; roll : float) : float4 {
+    let half_pitch = radians(pitch) * 0.5
+    let half_yaw = radians(yaw) * 0.5
+    let half_roll = radians(roll) * 0.5
+    let cp = cos(half_pitch)
+    let sp = sin(half_pitch)
+    let cy = cos(half_yaw)
+    let sy = sin(half_yaw)
+    let cr = cos(half_roll)
+    let sr = sin(half_roll)
+    return float4(
+        sp * cy * cr + cp * sy * sr,
+        cp * sy * cr - sp * cy * sr,
+        cp * cy * sr - sp * sy * cr,
+        cp * cy * cr + sp * sy * sr)
+}
+
 class System : EcsSystem {
     m_accumulated_dx : float = 0.0
     m_accumulated_dy : float = 0.0
 
     def override on_init() : void {
-        query_entities( $(var t : TransformAccessor; var mr : MouseRotate) {
-            var yaw = get_rotation_yaw(e)
-            var pitch = get_rotation_pitch(e)
-
-            mr.yaw = yaw
-            mr.pitch = pitch
-            set_component_t(e, mr)
-        } )
+        query() $(t : Transform&; mr : MouseRotate&) {
+            mr.yaw = 0.0
+            mr.pitch = 0.0
+        }
     }
 
     def override on_inactive() : void {
@@ -31,11 +44,11 @@ class System : EcsSystem {
             if (active_cam == 0) return
 
             var fp_active = false
-            query_entities( $(var mr : MouseRotate) {
+            query() $(mr : MouseRotate&) {
                 if (has_component(TYPE_CAMERA(), e) && e == active_cam) {
                     fp_active = true
                 }
-            } )
+            }
 
             if (!fp_active) return
 
@@ -49,11 +62,11 @@ class System : EcsSystem {
         var fp_active = false
 
         if (active_cam != 0) {
-            query_entities( $(var mr : MouseRotate) {
+            query() $(mr : MouseRotate&) {
                 if (has_component(TYPE_CAMERA(), e) && e == active_cam) {
                     fp_active = true
                 }
-            } )
+            }
         }
 
         if (!fp_active) {
@@ -64,14 +77,12 @@ class System : EcsSystem {
 
         if (m_accumulated_dx == 0.0 && m_accumulated_dy == 0.0) return
 
-        query_entities( $(var t : TransformAccessor; var mr : MouseRotate) {
+        query() $(t : Transform&; mr : MouseRotate&) {
             mr.yaw -= m_accumulated_dx * mr.sensitivity
             mr.pitch -= m_accumulated_dy * mr.sensitivity
             mr.pitch = clamp(mr.pitch, mr.pitch_min, mr.pitch_max)
-            set_component_t(e, mr)
-
-            set_rotation(e, mr.pitch, mr.yaw, 0.0)
-        } )
+            t.rotation = quaternion_from_euler_degrees(mr.pitch, mr.yaw, 0.0)
+        }
 
         m_accumulated_dx = 0.0
         m_accumulated_dy = 0.0

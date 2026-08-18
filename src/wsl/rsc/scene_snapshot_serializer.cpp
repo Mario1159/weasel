@@ -166,9 +166,11 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
 
   // Save das component data (after regular components, before singletons).
   if constexpr (std::is_same_v<Archive, cereal::BinaryOutputArchive>) {
-    runtime_ctx->component_registry ().save_das_components_binary (archive);
+    runtime_ctx->component_registry ().save_das_components_binary (archive,
+                                                                   registry);
   } else if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-    runtime_ctx->component_registry ().save_das_components_json (archive);
+    runtime_ctx->component_registry ().save_das_components_json (archive,
+                                                                 registry);
   }
 
   for (const reg::singleton_registry::descriptor *desc :
@@ -278,7 +280,8 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   // Load das component data (after regular components, before singletons).
   if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>) {
     try {
-      runtime_ctx->component_registry ().load_das_components_binary (archive);
+      runtime_ctx->component_registry ().load_das_components_binary (archive,
+                                                                     registry);
     } catch (const std::exception &) {
       /* Missing das component data is expected for scenes saved before
          das component persistence was added. */
@@ -286,7 +289,8 @@ scene_snapshot_serializer::load_scene (Archive &archive)
   } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
     wsl::log::rsc ()->trace ("Loading das components");
     try {
-      runtime_ctx->component_registry ().load_das_components_json (archive);
+      runtime_ctx->component_registry ().load_das_components_json (archive,
+                                                                   registry);
     } catch (const std::exception &) {
       /* Missing das component data is expected for scenes saved before
          das component persistence was added. */

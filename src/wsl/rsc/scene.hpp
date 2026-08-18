@@ -36,11 +36,11 @@ class scene
 {
 public:
   /**
- * Constructs a scene with a runtime and optional editor context.
- * :param runtime_ctx: Pointer to the runtime context.
- * :param editor_ctx: Pointer to the editor context.
- * :param name: The name of the scene.
- */
+   * Constructs a scene with a runtime and optional editor context.
+   * :param runtime_ctx: Pointer to the runtime context.
+   * :param editor_ctx: Pointer to the editor context.
+   * :param name: The name of the scene.
+   */
   explicit scene (comp::singl::runtime_context *runtime_ctx,
                   comp::singl::editor_context *editor_ctx,
                   const std::string &name);
@@ -62,20 +62,20 @@ public:
   void set_name (std::string name);
 
   /**
- * Adds a system to the scene.
- * :param T: The type of the system.
- * :param args: Arguments to pass to the system's constructor.
- * :return: Reference to the created system.
- */
+   * Adds a system to the scene.
+   * :param T: The type of the system.
+   * :param args: Arguments to pass to the system's constructor.
+   * :return: Reference to the created system.
+   */
   template <typename T, typename... Args> T &add_system (Args &&...args);
 
   /**
- * Adds a system instance to the scene.
- * :param sys: Unique pointer to the system instance.
- * :param initialize_if_running: Whether to initialize the system if the scene
- * is already running.
- * :return: Reference to the added system.
- */
+   * Adds a system instance to the scene.
+   * :param sys: Unique pointer to the system instance.
+   * :param initialize_if_running: Whether to initialize the system if the scene
+   * is already running.
+   * :return: Reference to the added system.
+   */
   sys::ecs_system &add_system_instance (std::unique_ptr<sys::ecs_system> sys,
                                         bool initialize_if_running = true);
 
@@ -135,15 +135,15 @@ public:
   get_entity_names () const;
 
   /**
- * Copies an entity and its components from another scene to this one.
- * :param src_scene: The source scene.
- * :param src_entity: The source entity to copy.
- * :param dst_parent: Optional parent entity in this scene.
- * :param is_instantiating_prefab: Whether the copy is part of a prefab
- * instantiation.
- * :param prefab_id: The ID of the prefab if applicable.
- * :return: The newly created entity in this scene.
- */
+   * Copies an entity and its components from another scene to this one.
+   * :param src_scene: The source scene.
+   * :param src_entity: The source entity to copy.
+   * :param dst_parent: Optional parent entity in this scene.
+   * :param is_instantiating_prefab: Whether the copy is part of a prefab
+   * instantiation.
+   * :param prefab_id: The ID of the prefab if applicable.
+   * :return: The newly created entity in this scene.
+   */
   entt::entity copy_entity (scene &src_scene, entt::entity src_entity,
                             entt::entity dst_parent = entt::null,
                             bool is_instantiating_prefab = false,
@@ -168,6 +168,7 @@ private:
   void reset_scene_context ();
   void refresh_system_states ();
   void shutdown_systems ();
+  void on_entity_destroyed (entt::registry &registry, entt::entity entity);
   bool is_playing () const;
 
   std::string m_name;

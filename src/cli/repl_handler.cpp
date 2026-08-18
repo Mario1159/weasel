@@ -1689,8 +1689,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     std::filesystem::path base_dir
         = std::filesystem::path (m_current_project->root_path)
           / m_current_project->components_path;
-    std::filesystem::path header_path = base_dir / (file_stem + ".hpp");
-    std::filesystem::path source_path = base_dir / (file_stem + ".cpp");
+    std::filesystem::path das_path = base_dir / (file_stem + ".das");
 
     std::error_code ec;
     std::filesystem::create_directories (base_dir, ec);
@@ -1698,29 +1697,22 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
       m_output << "Could not create target directory.\n";
       return;
     }
-    if (std::filesystem::exists (header_path)
-        || (!header_only && std::filesystem::exists (source_path))) {
-      m_output << "File already exists: " << (file_stem + ".hpp") << "\n";
+    if (std::filesystem::exists (das_path)) {
+      m_output << "File already exists: " << das_path.filename ().string ()
+               << "\n";
       return;
     }
 
-    std::string header_text = make_component_header_template (
-        class_name, display_name, header_only);
-    if (!write_text_file (header_path, header_text)) {
-      m_output << "Failed to write header.\n";
+    std::ostringstream das_text;
+    das_text << "options gen2\nmodule " << file_stem << "\n\n"
+             << "struct " << class_name << " {\n"
+             << "    value : float = 1.0\n"
+             << "}\n";
+    if (!write_text_file (das_path, das_text.str ())) {
+      m_output << "Failed to write Daslang component.\n";
       return;
     }
-    m_output << "Created: " << header_path.string () << "\n";
-
-    if (!header_only) {
-      std::string source_text = make_component_source_template (
-          header_path.filename ().string (), class_name, display_name, false);
-      if (!write_text_file (source_path, source_text)) {
-        m_output << "Failed to write source.\n";
-        return;
-      }
-      m_output << "Created: " << source_path.string () << "\n";
-    }
+    m_output << "Created: " << das_path.string () << "\n";
     return;
   }
 
@@ -2117,8 +2109,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     std::filesystem::path base_dir
         = std::filesystem::path (m_current_project->root_path)
           / m_current_project->singletons_path;
-    std::filesystem::path header_path = base_dir / (file_stem + ".hpp");
-    std::filesystem::path source_path = base_dir / (file_stem + ".cpp");
+    std::filesystem::path das_path = base_dir / (file_stem + ".das");
 
     std::error_code ec;
     std::filesystem::create_directories (base_dir, ec);
@@ -2126,29 +2117,22 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "Could not create target directory.\n";
       return;
     }
-    if (std::filesystem::exists (header_path)
-        || (!header_only && std::filesystem::exists (source_path))) {
-      m_output << "File already exists: " << (file_stem + ".hpp") << "\n";
+    if (std::filesystem::exists (das_path)) {
+      m_output << "File already exists: " << das_path.filename ().string ()
+               << "\n";
       return;
     }
 
-    std::string header_text = make_singleton_header_template (
-        class_name, display_name, header_only);
-    if (!write_text_file (header_path, header_text)) {
-      m_output << "Failed to write header.\n";
+    std::ostringstream das_text;
+    das_text << "options gen2\nmodule " << file_stem << "\n\n"
+             << "struct " << class_name << " {\n"
+             << "    value : float = 1.0\n"
+             << "}\n";
+    if (!write_text_file (das_path, das_text.str ())) {
+      m_output << "Failed to write Daslang singleton.\n";
       return;
     }
-    m_output << "Created: " << header_path.string () << "\n";
-
-    if (!header_only) {
-      std::string source_text = make_component_source_template (
-          header_path.filename ().string (), class_name, display_name, true);
-      if (!write_text_file (source_path, source_text)) {
-        m_output << "Failed to write source.\n";
-        return;
-      }
-      m_output << "Created: " << source_path.string () << "\n";
-    }
+    m_output << "Created: " << das_path.string () << "\n";
     return;
   }
 
@@ -2549,8 +2533,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
     std::filesystem::path base_dir
         = std::filesystem::path (m_current_project->root_path)
           / m_current_project->systems_path;
-    std::filesystem::path header_path = base_dir / (file_stem + ".hpp");
-    std::filesystem::path source_path = base_dir / (file_stem + ".cpp");
+    std::filesystem::path das_path = base_dir / (file_stem + ".das");
 
     std::error_code ec;
     std::filesystem::create_directories (base_dir, ec);
@@ -2558,29 +2541,23 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "Could not create target directory.\n";
       return;
     }
-    if (std::filesystem::exists (header_path)
-        || (!header_only && std::filesystem::exists (source_path))) {
-      m_output << "File already exists: " << (file_stem + ".hpp") << "\n";
+    if (std::filesystem::exists (das_path)) {
+      m_output << "File already exists: " << das_path.filename ().string ()
+               << "\n";
       return;
     }
 
-    std::string header_text
-        = make_system_header_template (class_name, display_name, header_only);
-    if (!write_text_file (header_path, header_text)) {
-      m_output << "Failed to write header.\n";
+    std::ostringstream das_text;
+    das_text << "options gen2\nrequire weasel_ecs\nrequire weasel_helpers\n\n"
+             << "class System : EcsSystem {\n"
+             << "    def override on_update(dt : float) : void {\n"
+             << "    }\n"
+             << "}\n";
+    if (!write_text_file (das_path, das_text.str ())) {
+      m_output << "Failed to write Daslang system.\n";
       return;
     }
-    m_output << "Created: " << header_path.string () << "\n";
-
-    if (!header_only) {
-      std::string source_text = make_system_source_template (
-          header_path.filename ().string (), class_name, display_name);
-      if (!write_text_file (source_path, source_text)) {
-        m_output << "Failed to write source.\n";
-        return;
-      }
-      m_output << "Created: " << source_path.string () << "\n";
-    }
+    m_output << "Created: " << das_path.string () << "\n";
   } else if (tokens[1] == "add") {
     if (tokens.size () < 3) {
       m_output << "Usage: sys add <name>\n";

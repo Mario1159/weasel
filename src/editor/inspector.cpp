@@ -565,7 +565,7 @@ inspector::draw_entity_inspector (entt::entity entity)
       auto &comp_reg = m_runtime_ctx->component_registry ();
       if (const auto *desc = comp_reg.find (component_to_remove);
           desc != nullptr && desc->is_das_component) {
-        comp_reg.das_component_remove (component_to_remove, entity);
+        comp_reg.das_component_remove (reg, component_to_remove, entity);
       }
     }
   }
@@ -578,7 +578,7 @@ inspector::draw_entity_inspector (entt::entity entity)
       if (desc == nullptr || !desc->is_das_component) {
         continue;
       }
-      if (!comp_reg.das_component_contains (desc->type_id, entity)) {
+      if (!comp_reg.das_component_contains (reg, desc->type_id, entity)) {
         continue;
       }
 
@@ -593,7 +593,8 @@ inspector::draw_entity_inspector (entt::entity entity)
 
       if (hdr.expanded) {
         if (component_to_remove != desc->type_id) {
-          uint8_t *data = comp_reg.das_component_data (desc->type_id, entity);
+          uint8_t *data
+              = comp_reg.das_component_data (reg, desc->type_id, entity);
 
           for (std::size_t fi = 0; fi < desc->das_fields.size (); ++fi) {
             const auto &field = desc->das_fields[fi];
@@ -1441,7 +1442,7 @@ inspector::draw_add_component_ui (entt::entity entity)
       }
 
       if (desc->is_das_component) {
-        if (comp_reg.das_component_contains (desc->type_id, entity)) {
+        if (comp_reg.das_component_contains (reg, desc->type_id, entity)) {
           continue;
         }
       } else if ((desc->contains != nullptr) && desc->contains (reg, entity)) {
@@ -1465,7 +1466,7 @@ inspector::draw_add_component_ui (entt::entity entity)
     if (ImGui::Button ("Add")) {
       if (const auto *desc = comp_reg.find (selected_type); desc != nullptr) {
         if (desc->is_das_component) {
-          comp_reg.das_component_add (selected_type, entity);
+          comp_reg.das_component_add (reg, selected_type, entity);
         } else if (desc->emplace_default != nullptr) {
           desc->emplace_default (reg, entity);
         }

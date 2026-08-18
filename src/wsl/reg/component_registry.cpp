@@ -14,6 +14,138 @@ namespace wsl
 namespace reg
 {
 
+namespace
+{
+
+das_component_storage &
+storage_for (entt::registry &registry)
+{
+  if (!registry.ctx ().contains<das_component_storage> ()) {
+    registry.ctx ().emplace<das_component_storage> ();
+  }
+  return registry.ctx ().get<das_component_storage> ();
+}
+
+const das_component_storage *
+try_storage_for (const entt::registry &registry)
+{
+  if (!registry.ctx ().contains<das_component_storage> ()) {
+    return nullptr;
+  }
+  return &registry.ctx ().get<das_component_storage> ();
+}
+
+} // namespace
+
+bool
+das_component_storage::contains (entt::id_type type_id,
+                                 entt::entity entity) const
+{
+  const pool *component_pool = find_pool (type_id);
+  return component_pool != nullptr
+         && component_pool->entries.find (entity)
+                != component_pool->entries.end ();
+}
+
+bool
+das_component_storage::add (entt::id_type type_id, entt::entity entity,
+                            std::size_t size,
+                            const std::vector<default_field> &defaults)
+{
+  pool &component_pool = m_pools[type_id];
+  if (component_pool.size != 0 && component_pool.size != size) {
+    return false;
+  }
+  component_pool.size = size;
+
+  auto [it, inserted] = component_pool.entries.try_emplace (entity);
+  if (!inserted) {
+    return false;
+  }
+
+  data_block &block = it->second;
+  block.size = size;
+  const std::size_t word_count
+      = (size + sizeof (std::max_align_t) - 1) / sizeof (std::max_align_t);
+  block.words.resize (word_count);
+  if (size > 0) {
+    std::memset (block.data (), 0, size);
+  }
+
+  for (const default_field &field : defaults) {
+    if (field.offset < 0 || field.value.empty ()) {
+      continue;
+    }
+    const std::size_t offset = static_cast<std::size_t> (field.offset);
+    if (offset > size || field.value.size () > size - offset) {
+      continue;
+    }
+    std::memcpy (block.data () + offset, field.value.data (),
+                 field.value.size ());
+  }
+
+  return true;
+}
+
+bool
+das_component_storage::remove (entt::id_type type_id, entt::entity entity)
+{
+  pool *component_pool = find_pool (type_id);
+  return component_pool != nullptr
+         && component_pool->entries.erase (entity) != 0;
+}
+
+uint8_t *
+das_component_storage::data (entt::id_type type_id, entt::entity entity)
+{
+  pool *component_pool = find_pool (type_id);
+  if (component_pool == nullptr) {
+    return nullptr;
+  }
+  auto it = component_pool->entries.find (entity);
+  return it == component_pool->entries.end () ? nullptr : it->second.data ();
+}
+
+const uint8_t *
+das_component_storage::data (entt::id_type type_id, entt::entity entity) const
+{
+  const pool *component_pool = find_pool (type_id);
+  if (component_pool == nullptr) {
+    return nullptr;
+  }
+  auto it = component_pool->entries.find (entity);
+  return it == component_pool->entries.end () ? nullptr : it->second.data ();
+}
+
+const das_component_storage::pool *
+das_component_storage::find_pool (entt::id_type type_id) const
+{
+  auto it = m_pools.find (type_id);
+  return it == m_pools.end () ? nullptr : &it->second;
+}
+
+das_component_storage::pool *
+das_component_storage::find_pool (entt::id_type type_id)
+{
+  auto it = m_pools.find (type_id);
+  return it == m_pools.end () ? nullptr : &it->second;
+}
+
+void
+das_component_storage::clear_entity (entt::entity entity)
+{
+  for (auto &[type_id, component_pool] : m_pools) {
+    (void)type_id;
+    component_pool.entries.erase (entity);
+  }
+}
+
+void
+das_component_storage::clear ()
+{
+  m_pools.clear ();
+}
+
 void
 component_registry::register_cached_runtime_world_component (
     entt::id_type type_id, std::string_view type_name,
@@ -38,90 +170,95 @@ component_registry::register_cached_runtime_world_component (
 }
 
 bool
-component_registry::das_component_contains (entt::id_type type_id,
+component_registry::das_component_contains (entt::registry &registry,
+                                            entt::id_type type_id,
                                             entt::entity entity) const
 {
-  auto it = m_das_component_state.find (type_id);
-  if (it == m_das_component_state.end ()) {
-    return false;
-  }
-  return it->second.count (entity) != 0;
+  const das_component_storage *storage = try_storage_for (registry);
+  return storage != nullptr && storage->contains (type_id, entity);
 }
 
 bool
-component_registry::das_component_add (entt::id_type type_id,
+component_registry::das_component_add (entt::registry &registry,
+                                       entt::id_type type_id,
                                        entt::entity entity)
 {
-  if (das_component_contains (type_id, entity)) {
+  if (das_component_contains (registry, type_id, entity)) {
     return false;
   }
-  m_das_component_state[type_id].insert (entity);
 
   // Allocate storage for the component data, applying default values
   // from the daScript struct definition when available.
   const auto *desc = find_world_component (type_id);
-  int size = (desc && desc->das_struct_size > 0) ? desc->das_struct_size : 64;
-  auto &data = m_das_component_data[type_id][entity];
-  data.assign (static_cast<std::size_t> (size), 0);
-
-  if (desc) {
-    for (const auto &f : desc->das_fields) {
-      if (!f.default_value.empty () && f.offset >= 0
-          && f.offset + static_cast<int> (f.default_value.size ()) <= size) {
-        std::memcpy (data.data () + f.offset, f.default_value.data (),
-                     f.default_value.size ());
-      }
-    }
+  if (desc == nullptr || desc->das_struct_size <= 0) {
+    return false;
   }
-  return true;
+
+  std::vector<das_component_storage::default_field> defaults;
+  defaults.reserve (desc->das_fields.size ());
+  for (const auto &field : desc->das_fields) {
+    defaults.push_back ({ field.offset, field.default_value });
+  }
+  return storage_for (registry).add (
+      type_id, entity, static_cast<std::size_t> (desc->das_struct_size),
+      defaults);
 }
 
 bool
-component_registry::das_component_remove (entt::id_type type_id,
+component_registry::das_component_remove (entt::registry &registry,
+                                          entt::id_type type_id,
                                           entt::entity entity)
 {
-  auto it = m_das_component_state.find (type_id);
-  if (it == m_das_component_state.end ()) {
-    return false;
-  }
-  bool removed = it->second.erase (entity) > 0;
-  if (removed) {
-    auto data_it = m_das_component_data.find (type_id);
-    if (data_it != m_das_component_data.end ()) {
-      data_it->second.erase (entity);
-    }
-  }
-  return removed;
+  das_component_storage *storage
+      = registry.ctx ().contains<das_component_storage> ()
+            ? &registry.ctx ().get<das_component_storage> ()
+            : nullptr;
+  return storage != nullptr && storage->remove (type_id, entity);
 }
 
 uint8_t *
-component_registry::das_component_data (entt::id_type type_id,
+component_registry::das_component_data (entt::registry &registry,
+                                        entt::id_type type_id,
                                         entt::entity entity)
 {
-  auto data_it = m_das_component_data.find (type_id);
-  if (data_it == m_das_component_data.end ()) {
+  if (!registry.ctx ().contains<das_component_storage> ()) {
     return nullptr;
   }
-  auto ent_it = data_it->second.find (entity);
-  if (ent_it == data_it->second.end ()) {
-    return nullptr;
-  }
-  return ent_it->second.data ();
+  return registry.ctx ().get<das_component_storage> ().data (type_id, entity);
 }
 
 const uint8_t *
-component_registry::das_component_data (entt::id_type type_id,
+component_registry::das_component_data (const entt::registry &registry,
+                                        entt::id_type type_id,
                                         entt::entity entity) const
 {
-  auto data_it = m_das_component_data.find (type_id);
-  if (data_it == m_das_component_data.end ()) {
-    return nullptr;
+  const das_component_storage *storage = try_storage_for (registry);
+  return storage == nullptr ? nullptr : storage->data (type_id, entity);
+}
+
+const das_component_storage::pool *
+component_registry::das_component_pool (const entt::registry &registry,
+                                        entt::id_type type_id) const
+{
+  const das_component_storage *storage = try_storage_for (registry);
+  return storage == nullptr ? nullptr : storage->find_pool (type_id);
+}
+
+void
+component_registry::clear_das_component_storage (entt::registry &registry) const
+{
+  if (registry.ctx ().contains<das_component_storage> ()) {
+    registry.ctx ().get<das_component_storage> ().clear ();
   }
-  auto ent_it = data_it->second.find (entity);
-  if (ent_it == data_it->second.end ()) {
-    return nullptr;
+}
+
+void
+component_registry::clear_das_component_entity (entt::registry &registry,
+                                                entt::entity entity) const
+{
+  if (registry.ctx ().contains<das_component_storage> ()) {
+    registry.ctx ().get<das_component_storage> ().clear_entity (entity);
   }
-  return ent_it->second.data ();
 }
 
 const component_registry::descriptor *
@@ -315,14 +452,15 @@ namespace
 {
 
 std::string
-bytes_to_hex (const std::vector<uint8_t> &bytes)
+bytes_to_hex (const uint8_t *bytes, std::size_t size)
 {
   static constexpr char hex_chars[] = "0123456789abcdef";
   std::string result;
-  result.reserve (bytes.size () * 2);
-  for (uint8_t b : bytes) {
-    result.push_back (hex_chars[b >> 4]);
-    result.push_back (hex_chars[b & 0x0F]);
+  result.reserve (size * 2);
+  for (std::size_t i = 0; i < size; ++i) {
+    const uint8_t byte = bytes[i];
+    result.push_back (hex_chars[byte >> 4]);
+    result.push_back (hex_chars[byte & 0x0F]);
   }
   return result;
 }
@@ -353,7 +491,7 @@ hex_to_bytes (const std::string &hex)
 
 void
 component_registry::save_das_components_json (
-    cereal::JSONOutputArchive &archive) const
+    cereal::JSONOutputArchive &archive, entt::registry &registry) const
 {
   // Build a flat list of all das component entries.
   struct das_entry
@@ -364,11 +502,22 @@ component_registry::save_das_components_json (
   };
   std::vector<das_entry> entries;
 
-  for (const auto &[type_id, entity_map] : m_das_component_data) {
-    for (const auto &[entity, data] : entity_map) {
-      entries.push_back ({ static_cast<uint32_t> (type_id),
-                           static_cast<uint32_t> (entt::to_integral (entity)),
-                           bytes_to_hex (data) });
+  const das_component_storage *storage = try_storage_for (registry);
+  if (storage != nullptr) {
+    for (const auto *desc :
+         get_world_components (world_component_order::type_id)) {
+      if (desc == nullptr || !desc->is_das_component) {
+        continue;
+      }
+      const auto *component_pool = storage->find_pool (desc->type_id);
+      if (component_pool == nullptr) {
+        continue;
+      }
+      for (const auto &[entity, block] : component_pool->entries) {
+        entries.push_back ({ static_cast<uint32_t> (desc->type_id),
+                             static_cast<uint32_t> (entt::to_integral (entity)),
+                             bytes_to_hex (block.data (), block.size) });
+      }
     }
   }
 
@@ -383,7 +532,8 @@ component_registry::save_das_components_json (
 }
 
 void
-component_registry::load_das_components_json (cereal::JSONInputArchive &archive)
+component_registry::load_das_components_json (cereal::JSONInputArchive &archive,
+                                              entt::registry &registry)
 {
   std::size_t count = 0;
   archive (cereal::make_nvp ("das_component_count", count));
@@ -404,13 +554,13 @@ component_registry::load_das_components_json (cereal::JSONInputArchive &archive)
     if (!contains_world_component (tid)) {
       register_cached_runtime_world_component (tid, "unknown", "unknown");
     }
-    if (!das_component_contains (tid, entity)) {
-      das_component_add (tid, entity);
+    if (!das_component_contains (registry, tid, entity)) {
+      das_component_add (registry, tid, entity);
     }
 
     // Overwrite with saved data.
     std::vector<uint8_t> data = hex_to_bytes (data_hex);
-    uint8_t *dest = das_component_data (tid, entity);
+    uint8_t *dest = das_component_data (registry, tid, entity);
     if (dest) {
       const descriptor *desc = find_world_component (tid);
       std::size_t copy_size
@@ -424,29 +574,48 @@ component_registry::load_das_components_json (cereal::JSONInputArchive &archive)
 
 void
 component_registry::save_das_components_binary (
-    cereal::BinaryOutputArchive &archive) const
+    cereal::BinaryOutputArchive &archive, entt::registry &registry) const
 {
   // Count total entries.
   std::size_t count = 0;
-  for (const auto &[type_id, entity_map] : m_das_component_data) {
-    count += entity_map.size ();
+  const das_component_storage *storage = try_storage_for (registry);
+  if (storage != nullptr) {
+    for (const auto *desc :
+         get_world_components (world_component_order::type_id)) {
+      if (desc == nullptr || !desc->is_das_component) {
+        continue;
+      }
+      if (const auto *component_pool = storage->find_pool (desc->type_id)) {
+        count += component_pool->entries.size ();
+      }
+    }
   }
   archive (count);
 
-  for (const auto &[type_id, entity_map] : m_das_component_data) {
-    for (const auto &[entity, data] : entity_map) {
-      auto tid = static_cast<uint32_t> (type_id);
-      auto ent = static_cast<uint32_t> (entt::to_integral (entity));
-      auto data_size = static_cast<uint32_t> (data.size ());
-      archive (tid, ent, data_size);
-      archive (cereal::binary_data (data.data (), data.size ()));
+  if (storage != nullptr) {
+    for (const auto *desc :
+         get_world_components (world_component_order::type_id)) {
+      if (desc == nullptr || !desc->is_das_component) {
+        continue;
+      }
+      const auto *component_pool = storage->find_pool (desc->type_id);
+      if (component_pool == nullptr) {
+        continue;
+      }
+      for (const auto &[entity, block] : component_pool->entries) {
+        auto tid = static_cast<uint32_t> (desc->type_id);
+        auto ent = static_cast<uint32_t> (entt::to_integral (entity));
+        auto data_size = static_cast<uint32_t> (block.size);
+        archive (tid, ent, data_size);
+        archive (cereal::binary_data (block.data (), block.size));
+      }
     }
   }
 }
 
 void
 component_registry::load_das_components_binary (
-    cereal::BinaryInputArchive &archive)
+    cereal::BinaryInputArchive &archive, entt::registry &registry)
 {
   std::size_t count = 0;
   archive (count);
@@ -464,12 +633,12 @@ component_registry::load_das_components_binary (
     if (!contains_world_component (tid)) {
       register_cached_runtime_world_component (tid, "unknown", "unknown");
     }
-    if (!das_component_contains (tid, entity)) {
-      das_component_add (tid, entity);
+    if (!das_component_contains (registry, tid, entity)) {
+      das_component_add (registry, tid, entity);
     }
 
     // Overwrite with saved data.
-    uint8_t *dest = das_component_data (tid, entity);
+    uint8_t *dest = das_component_data (registry, tid, entity);
     if (dest && data_size > 0) {
       std::vector<uint8_t> data (data_size);
       archive (cereal::binary_data (data.data (), data_size));
@@ -512,9 +681,6 @@ component_registry::clear_runtime_world_components ()
       m_display_name_to_stable.erase (it->second.display_name);
     }
     m_descriptors.erase (type_id);
-    // Also clear the das component state and data for this type.
-    m_das_component_state.erase (type_id);
-    m_das_component_data.erase (type_id);
   }
 
   for (entt::id_type const internal_id : runtime_internal_ids) {
@@ -543,15 +709,11 @@ component_registry::clear_runtime_world_components ()
 void
 component_registry::register_component_type_info (
     const std::string &das_type_name, uint64_t type_id, ComponentKind kind,
-    size_t struct_size, void (*getter) (uint32_t, void *),
-    void (*setter) (uint32_t, const void *))
+    size_t struct_size)
 {
-  m_type_info_by_name[das_type_name]
-      = ComponentTypeInfo{ .type_id = type_id,
-                           .kind = kind,
-                           .struct_size = struct_size,
-                           .get = getter,
-                           .set = setter };
+  m_type_info_by_name[das_type_name] = ComponentTypeInfo{
+    .type_id = type_id, .kind = kind, .struct_size = struct_size
+  };
   m_type_id_to_name[type_id] = das_type_name;
 }
 
@@ -563,6 +725,25 @@ component_registry::find_component_type_info (
   if (it != m_type_info_by_name.end ()) {
     return &it->second;
   }
+
+  std::string normalized = das_type_name;
+  if (normalized.ends_with (" const")) {
+    normalized.resize (normalized.size () - 6);
+    it = m_type_info_by_name.find (normalized);
+    if (it != m_type_info_by_name.end ()) {
+      return &it->second;
+    }
+  }
+
+  const std::size_t separator = normalized.rfind ("::");
+  if (separator != std::string::npos) {
+    normalized.erase (0, separator + 2);
+    it = m_type_info_by_name.find (normalized);
+    if (it != m_type_info_by_name.end ()) {
+      return &it->second;
+    }
+  }
+
   return nullptr;
 }
 
