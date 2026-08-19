@@ -41,6 +41,22 @@ open_tracy ()
   std::system ("tracy -a localhost &");
 }
 
+// Select the Game View tab in the central dock node. Called once when a project
+// is loaded, because hiding the Welcome tab otherwise leaves ImGui's fallback
+// (last tab in the group) selected.
+static void
+select_game_view_tab ()
+{
+  ImGuiWindow *game_view = ImGui::FindWindowByName ("Game View");
+  ImGuiDockNode *node = game_view ? game_view->DockNode : nullptr;
+  if (node && node->TabBar) {
+    node->SelectedTabId = game_view->ID;
+    node->TabBar->SelectedTabId = game_view->ID;
+    node->TabBar->NextSelectedTabId = game_view->ID;
+    ImGui::SetWindowFocus ("Game View");
+  }
+}
+
 static void
 open_gf2 ()
 {
@@ -185,6 +201,7 @@ editor::root::draw (entt::registry &registry,
       runtime_ctx.editor_ctx ()->pending_project_load (*m_dialog_result);
       update_recent_projects (*m_dialog_result);
       m_show_welcome = false;
+      select_game_view_tab ();
       wsl::log::editor ()->debug ("Editor: queued load_project for {}",
                                   *m_dialog_result);
     } else if (m_current_dialog_mode == dialog_mode::select_folder) {
@@ -238,6 +255,7 @@ editor::root::draw (entt::registry &registry,
   }
 
   draw_status_bar ();
+
 }
 
 void
@@ -1050,6 +1068,7 @@ editor::root::draw_welcome_tab ()
           m_runtime_ctx->editor_ctx ()->pending_project_load (path);
           update_recent_projects (path);
           m_show_welcome = false;
+          select_game_view_tab ();
         }
 
         if (ImGui::IsItemHovered ()) {
