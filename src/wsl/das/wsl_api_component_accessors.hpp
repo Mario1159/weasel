@@ -1,15 +1,25 @@
 #pragma once
 
+#include "wsl/comp/area3d.hpp"
+#include "wsl/comp/audio.hpp"
 #include "wsl/comp/camera_2d.hpp"
+#include "wsl/comp/character_body.hpp"
 #include "wsl/comp/directional_light.hpp"
+#include "wsl/comp/hierarchy.hpp"
+#include "wsl/comp/model_instance_3d.hpp"
 #include "wsl/comp/point_light.hpp"
+#include "wsl/comp/prefab_instance.hpp"
+#include "wsl/comp/rigid_body.hpp"
 #include "wsl/comp/spot_light.hpp"
 #include "wsl/comp/sprite_2d.hpp"
+#include "wsl/comp/subviewport.hpp"
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/transform_2d.hpp"
+#include "wsl/comp/world_transform.hpp"
 #include "wsl/math/vector.hpp"
 
 #include <daScript/misc/vectypes.h>
+#include <daScript/simulate/runtime_matrices.h>
 
 #include <entt/entt.hpp>
 
@@ -161,6 +171,168 @@ DirectionalLightProxy get_directional_light_accessor (uint32_t entity,
                                                       = nullptr);
 SpotLightProxy get_spot_light_accessor (uint32_t entity,
                                         ::das::LineInfoArg *at = nullptr);
+
+struct HierarchyProxy
+{
+  entt::entity entity;
+  comp::hierarchy *comp;
+
+  bool valid () const;
+  void bind (comp::hierarchy *component);
+
+  uint32_t &parent ();
+  uint32_t &first ();
+  uint32_t &next ();
+};
+
+struct WorldTransformProxy
+{
+  entt::entity entity;
+  comp::world_transform *comp;
+
+  bool valid () const;
+  void bind (comp::world_transform *component);
+
+  ::das::float4x4 &matrix ();
+};
+
+struct RigidBodyProxy
+{
+  entt::entity entity;
+  comp::rigid_body *comp;
+
+  bool valid () const;
+  void bind (comp::rigid_body *component);
+
+  int32_t &shape ();
+  ::das::float3 &position ();
+  ::das::float4 &rotation ();
+  ::das::float3 &half_extents ();
+  float &radius ();
+  bool &dynamic ();
+  float &friction ();
+  float &restitution ();
+};
+
+struct CharacterBodyProxy
+{
+  entt::entity entity;
+  comp::character_body *comp;
+
+  bool valid () const;
+  void bind (comp::character_body *component);
+
+  float &height ();
+  float &radius ();
+  ::das::float3 &desired_velocity ();
+};
+
+struct ModelInstance3DProxy
+{
+  entt::entity entity;
+  comp::model_instance_3d *comp;
+
+  bool valid () const;
+  void bind (comp::model_instance_3d *component);
+
+  uint32_t &model_id ();
+  uint32_t &scene_index ();
+  uint32_t &material_override ();
+  float &mip_lod_bias ();
+  float &geometry_lod_bias ();
+  float &visibility_range ();
+};
+
+struct Area3DProxy
+{
+  entt::entity entity;
+  comp::area *comp;
+
+  bool valid () const;
+  void bind (comp::area *component);
+
+  int32_t &shape ();
+  ::das::float3 &position ();
+  ::das::float4 &rotation ();
+  ::das::float3 &half_extents ();
+  float &radius ();
+};
+
+struct AudioProxy
+{
+  entt::entity entity;
+  comp::audio *comp;
+
+  bool valid () const;
+  void bind (comp::audio *component);
+
+  uint32_t &audio_resource ();
+  bool &loop ();
+  bool &play_on_start ();
+  float &volume ();
+  bool &playing ();
+};
+
+struct PrefabInstanceProxy
+{
+  entt::entity entity;
+  comp::prefab_instance *comp;
+
+  bool valid () const;
+  void bind (comp::prefab_instance *component);
+
+  uint32_t &prefab_id ();
+  uint32_t &prefab_entity ();
+};
+
+struct SubviewportProxy
+{
+  entt::entity entity;
+  comp::subviewport *comp;
+
+  bool valid () const;
+  void bind (comp::subviewport *component);
+
+  float &x ();
+  float &y ();
+  float &width ();
+  float &height ();
+  bool &clear_color ();
+  bool &clear_depth ();
+  float &clear_r ();
+  float &clear_g ();
+  float &clear_b ();
+  float &clear_a ();
+  uint32_t &camera_2d ();
+  uint32_t &camera_3d ();
+  ::das::float2 &world_quad_size ();
+  ::das::float2 &container_size ();
+  ::das::float2 &container_position ();
+  ::das::float2 &virtual_size ();
+  bool &render_2d_only ();
+};
+
+HierarchyProxy get_hierarchy_accessor (uint32_t entity,
+                                       ::das::LineInfoArg *at = nullptr);
+WorldTransformProxy get_world_transform_accessor (uint32_t entity,
+                                                  ::das::LineInfoArg *at
+                                                  = nullptr);
+RigidBodyProxy get_rigid_body_accessor (uint32_t entity,
+                                        ::das::LineInfoArg *at = nullptr);
+CharacterBodyProxy
+get_character_body_accessor (uint32_t entity, ::das::LineInfoArg *at = nullptr);
+ModelInstance3DProxy get_model_instance_3d_accessor (uint32_t entity,
+                                                     ::das::LineInfoArg *at
+                                                     = nullptr);
+Area3DProxy get_area_3d_accessor (uint32_t entity,
+                                  ::das::LineInfoArg *at = nullptr);
+AudioProxy get_audio_accessor (uint32_t entity,
+                               ::das::LineInfoArg *at = nullptr);
+PrefabInstanceProxy get_prefab_instance_accessor (uint32_t entity,
+                                                  ::das::LineInfoArg *at
+                                                  = nullptr);
+SubviewportProxy get_subviewport_accessor (uint32_t entity,
+                                           ::das::LineInfoArg *at = nullptr);
 
 void register_component_accessors (::das::Module &mod,
                                    ::das::ModuleLibrary &lib);

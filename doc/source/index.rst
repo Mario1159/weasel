@@ -36,5 +36,6 @@ Quick Example
 
     def on_update(dt : float)
         let e = entity_create()
-        add_transform(e)
-        set_position(e, 1.0, 2.0, 3.0)
+        add_component(e, Transform())
+        let t = get_component_or(e, Transform())
+        t.position = float3(1.0, 2.0, 3.0)

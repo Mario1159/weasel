@@ -51,12 +51,33 @@ MAKE_TYPE_FACTORY (Sprite2D, wsl::das::Sprite2DProxy)
 MAKE_TYPE_FACTORY (PointLight, wsl::das::PointLightProxy)
 MAKE_TYPE_FACTORY (DirectionalLight, wsl::das::DirectionalLightProxy)
 MAKE_TYPE_FACTORY (SpotLight, wsl::das::SpotLightProxy)
+MAKE_TYPE_FACTORY (Hierarchy, wsl::das::HierarchyProxy)
+MAKE_TYPE_FACTORY (WorldTransform, wsl::das::WorldTransformProxy)
+MAKE_TYPE_FACTORY (RigidBody, wsl::das::RigidBodyProxy)
+MAKE_TYPE_FACTORY (CharacterBody, wsl::das::CharacterBodyProxy)
+MAKE_TYPE_FACTORY (ModelInstance3D, wsl::das::ModelInstance3DProxy)
+MAKE_TYPE_FACTORY (Area3D, wsl::das::Area3DProxy)
+MAKE_TYPE_FACTORY (Audio, wsl::das::AudioProxy)
+MAKE_TYPE_FACTORY (PrefabInstance, wsl::das::PrefabInstanceProxy)
+MAKE_TYPE_FACTORY (Subviewport, wsl::das::SubviewportProxy)
 
 namespace wsl::das
 {
 
 namespace
 {
+
+// Tracks nested `query` iteration so structural mutations (add/remove
+// component, entity destroy) can be rejected while references into the
+// candidate pools are live. A query may mutate component fields in place, but
+// must not add/remove components or destroy entities.
+thread_local int g_query_depth = 0;
+
+struct query_depth_guard
+{
+  query_depth_guard () { ++g_query_depth; }
+  ~query_depth_guard () { --g_query_depth; }
+};
 
 thread_local entt::registry *g_registry = nullptr;
 const engine_event *g_current_event = nullptr;
@@ -263,6 +284,434 @@ SpotLightProxy::intensity ()
   return comp ? comp->intensity : fallback_value<float> ();
 }
 
+bool
+HierarchyProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+HierarchyProxy::bind (comp::hierarchy *component)
+{
+  comp = component;
+}
+
+uint32_t &
+HierarchyProxy::parent ()
+{
+  return comp ? reinterpret_cast<uint32_t &> (comp->parent)
+              : fallback_value<uint32_t> ();
+}
+
+uint32_t &
+HierarchyProxy::first ()
+{
+  return comp ? reinterpret_cast<uint32_t &> (comp->first)
+              : fallback_value<uint32_t> ();
+}
+
+uint32_t &
+HierarchyProxy::next ()
+{
+  return comp ? reinterpret_cast<uint32_t &> (comp->next)
+              : fallback_value<uint32_t> ();
+}
+
+bool
+WorldTransformProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+WorldTransformProxy::bind (comp::world_transform *component)
+{
+  comp = component;
+}
+
+::das::float4x4 &
+WorldTransformProxy::matrix ()
+{
+  return comp ? reinterpret_cast<::das::float4x4 &> (comp->value ())
+              : fallback_value<::das::float4x4> ();
+}
+
+bool
+RigidBodyProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+RigidBodyProxy::bind (comp::rigid_body *component)
+{
+  comp = component;
+}
+
+int32_t &
+RigidBodyProxy::shape ()
+{
+  return comp ? reinterpret_cast<int32_t &> (comp->shape)
+              : fallback_value<int32_t> ();
+}
+
+::das::float3 &
+RigidBodyProxy::position ()
+{
+  return comp ? reinterpret_cast<::das::float3 &> (comp->position)
+              : fallback_value<::das::float3> ();
+}
+
+::das::float4 &
+RigidBodyProxy::rotation ()
+{
+  return comp ? reinterpret_cast<::das::float4 &> (comp->rotation)
+              : fallback_value<::das::float4> ();
+}
+
+::das::float3 &
+RigidBodyProxy::half_extents ()
+{
+  return comp ? reinterpret_cast<::das::float3 &> (comp->half_extents)
+              : fallback_value<::das::float3> ();
+}
+
+float &
+RigidBodyProxy::radius ()
+{
+  return comp ? comp->radius : fallback_value<float> ();
+}
+
+bool &
+RigidBodyProxy::dynamic ()
+{
+  return comp ? comp->dynamic : fallback_value<bool> ();
+}
+
+float &
+RigidBodyProxy::friction ()
+{
+  return comp ? comp->friction : fallback_value<float> ();
+}
+
+float &
+RigidBodyProxy::restitution ()
+{
+  return comp ? comp->restitution : fallback_value<float> ();
+}
+
+bool
+CharacterBodyProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+CharacterBodyProxy::bind (comp::character_body *component)
+{
+  comp = component;
+}
+
+float &
+CharacterBodyProxy::height ()
+{
+  return comp ? comp->height : fallback_value<float> ();
+}
+
+float &
+CharacterBodyProxy::radius ()
+{
+  return comp ? comp->radius : fallback_value<float> ();
+}
+
+::das::float3 &
+CharacterBodyProxy::desired_velocity ()
+{
+  return comp ? reinterpret_cast<::das::float3 &> (comp->desired_velocity)
+              : fallback_value<::das::float3> ();
+}
+
+bool
+ModelInstance3DProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+ModelInstance3DProxy::bind (comp::model_instance_3d *component)
+{
+  comp = component;
+}
+
+uint32_t &
+ModelInstance3DProxy::model_id ()
+{
+  return comp ? comp->id.value : fallback_value<uint32_t> ();
+}
+
+uint32_t &
+ModelInstance3DProxy::scene_index ()
+{
+  return comp ? comp->scene_index : fallback_value<uint32_t> ();
+}
+
+uint32_t &
+ModelInstance3DProxy::material_override ()
+{
+  return comp ? comp->material_override.value : fallback_value<uint32_t> ();
+}
+
+float &
+ModelInstance3DProxy::mip_lod_bias ()
+{
+  return comp ? comp->mip_lod_bias : fallback_value<float> ();
+}
+
+float &
+ModelInstance3DProxy::geometry_lod_bias ()
+{
+  return comp ? comp->geometry_lod_bias : fallback_value<float> ();
+}
+
+float &
+ModelInstance3DProxy::visibility_range ()
+{
+  return comp ? comp->visibility_range : fallback_value<float> ();
+}
+
+bool
+Area3DProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+Area3DProxy::bind (comp::area *component)
+{
+  comp = component;
+}
+
+int32_t &
+Area3DProxy::shape ()
+{
+  return comp ? reinterpret_cast<int32_t &> (comp->shape)
+              : fallback_value<int32_t> ();
+}
+
+::das::float3 &
+Area3DProxy::position ()
+{
+  return comp ? reinterpret_cast<::das::float3 &> (comp->position)
+              : fallback_value<::das::float3> ();
+}
+
+::das::float4 &
+Area3DProxy::rotation ()
+{
+  return comp ? reinterpret_cast<::das::float4 &> (comp->rotation)
+              : fallback_value<::das::float4> ();
+}
+
+::das::float3 &
+Area3DProxy::half_extents ()
+{
+  return comp ? reinterpret_cast<::das::float3 &> (comp->half_extents)
+              : fallback_value<::das::float3> ();
+}
+
+float &
+Area3DProxy::radius ()
+{
+  return comp ? comp->radius : fallback_value<float> ();
+}
+
+bool
+AudioProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+AudioProxy::bind (comp::audio *component)
+{
+  comp = component;
+}
+
+uint32_t &
+AudioProxy::audio_resource ()
+{
+  return comp ? comp->audio_resource.value : fallback_value<uint32_t> ();
+}
+
+bool &
+AudioProxy::loop ()
+{
+  return comp ? comp->loop : fallback_value<bool> ();
+}
+
+bool &
+AudioProxy::play_on_start ()
+{
+  return comp ? comp->play_on_start : fallback_value<bool> ();
+}
+
+float &
+AudioProxy::volume ()
+{
+  return comp ? comp->volume : fallback_value<float> ();
+}
+
+bool &
+AudioProxy::playing ()
+{
+  return comp ? comp->playing : fallback_value<bool> ();
+}
+
+bool
+PrefabInstanceProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+PrefabInstanceProxy::bind (comp::prefab_instance *component)
+{
+  comp = component;
+}
+
+uint32_t &
+PrefabInstanceProxy::prefab_id ()
+{
+  return comp ? comp->prefab_id.value : fallback_value<uint32_t> ();
+}
+
+uint32_t &
+PrefabInstanceProxy::prefab_entity ()
+{
+  return comp ? reinterpret_cast<uint32_t &> (comp->prefab_entity)
+              : fallback_value<uint32_t> ();
+}
+
+bool
+SubviewportProxy::valid () const
+{
+  return comp != nullptr;
+}
+
+void
+SubviewportProxy::bind (comp::subviewport *component)
+{
+  comp = component;
+}
+
+float &
+SubviewportProxy::x ()
+{
+  return comp ? comp->x : fallback_value<float> ();
+}
+
+float &
+SubviewportProxy::y ()
+{
+  return comp ? comp->y : fallback_value<float> ();
+}
+
+float &
+SubviewportProxy::width ()
+{
+  return comp ? comp->width : fallback_value<float> ();
+}
+
+float &
+SubviewportProxy::height ()
+{
+  return comp ? comp->height : fallback_value<float> ();
+}
+
+bool &
+SubviewportProxy::clear_color ()
+{
+  return comp ? comp->clear_color : fallback_value<bool> ();
+}
+
+bool &
+SubviewportProxy::clear_depth ()
+{
+  return comp ? comp->clear_depth : fallback_value<bool> ();
+}
+
+float &
+SubviewportProxy::clear_r ()
+{
+  return comp ? comp->clear_r : fallback_value<float> ();
+}
+
+float &
+SubviewportProxy::clear_g ()
+{
+  return comp ? comp->clear_g : fallback_value<float> ();
+}
+
+float &
+SubviewportProxy::clear_b ()
+{
+  return comp ? comp->clear_b : fallback_value<float> ();
+}
+
+float &
+SubviewportProxy::clear_a ()
+{
+  return comp ? comp->clear_a : fallback_value<float> ();
+}
+
+uint32_t &
+SubviewportProxy::camera_2d ()
+{
+  return comp ? reinterpret_cast<uint32_t &> (comp->camera_2d.value)
+              : fallback_value<uint32_t> ();
+}
+
+uint32_t &
+SubviewportProxy::camera_3d ()
+{
+  return comp ? reinterpret_cast<uint32_t &> (comp->camera_3d.value)
+              : fallback_value<uint32_t> ();
+}
+
+::das::float2 &
+SubviewportProxy::world_quad_size ()
+{
+  return comp ? reinterpret_cast<::das::float2 &> (comp->world_quad_size)
+              : fallback_value<::das::float2> ();
+}
+
+::das::float2 &
+SubviewportProxy::container_size ()
+{
+  return comp ? reinterpret_cast<::das::float2 &> (comp->container_size)
+              : fallback_value<::das::float2> ();
+}
+
+::das::float2 &
+SubviewportProxy::container_position ()
+{
+  return comp ? reinterpret_cast<::das::float2 &> (comp->container_position)
+              : fallback_value<::das::float2> ();
+}
+
+::das::float2 &
+SubviewportProxy::virtual_size ()
+{
+  return comp ? reinterpret_cast<::das::float2 &> (comp->virtual_size)
+              : fallback_value<::das::float2> ();
+}
+
+bool &
+SubviewportProxy::render_2d_only ()
+{
+  return comp ? comp->render_2d_only : fallback_value<bool> ();
+}
+
 namespace
 {
 
@@ -351,6 +800,165 @@ struct SpotLightProxyAnnotation
   }
 };
 
+struct HierarchyProxyAnnotation
+    : ::das::ManagedStructureAnnotation<HierarchyProxy, false, false>
+{
+  explicit HierarchyProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<HierarchyProxy, false, false> (
+            "Hierarchy", lib, "wsl::das::HierarchyProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (parent)> ("parent", "parent");
+    addProperty<DAS_BIND_MANAGED_PROP (first)> ("first", "first");
+    addProperty<DAS_BIND_MANAGED_PROP (next)> ("next", "next");
+  }
+};
+
+struct WorldTransformProxyAnnotation
+    : ::das::ManagedStructureAnnotation<WorldTransformProxy, false, false>
+{
+  explicit WorldTransformProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<WorldTransformProxy, false, false> (
+            "WorldTransform", lib, "wsl::das::WorldTransformProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (matrix)> ("matrix", "matrix");
+  }
+};
+
+struct RigidBodyProxyAnnotation
+    : ::das::ManagedStructureAnnotation<RigidBodyProxy, false, false>
+{
+  explicit RigidBodyProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<RigidBodyProxy, false, false> (
+            "RigidBody", lib, "wsl::das::RigidBodyProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (shape)> ("shape", "shape");
+    addProperty<DAS_BIND_MANAGED_PROP (position)> ("position", "position");
+    addProperty<DAS_BIND_MANAGED_PROP (rotation)> ("rotation", "rotation");
+    addProperty<DAS_BIND_MANAGED_PROP (half_extents)> ("half_extents",
+                                                       "half_extents");
+    addProperty<DAS_BIND_MANAGED_PROP (radius)> ("radius", "radius");
+    addProperty<DAS_BIND_MANAGED_PROP (dynamic)> ("dynamic", "dynamic");
+    addProperty<DAS_BIND_MANAGED_PROP (friction)> ("friction", "friction");
+    addProperty<DAS_BIND_MANAGED_PROP (restitution)> ("restitution",
+                                                      "restitution");
+  }
+};
+
+struct CharacterBodyProxyAnnotation
+    : ::das::ManagedStructureAnnotation<CharacterBodyProxy, false, false>
+{
+  explicit CharacterBodyProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<CharacterBodyProxy, false, false> (
+            "CharacterBody", lib, "wsl::das::CharacterBodyProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (height)> ("height", "height");
+    addProperty<DAS_BIND_MANAGED_PROP (radius)> ("radius", "radius");
+    addProperty<DAS_BIND_MANAGED_PROP (desired_velocity)> ("desired_velocity",
+                                                           "desired_velocity");
+  }
+};
+
+struct ModelInstance3DProxyAnnotation
+    : ::das::ManagedStructureAnnotation<ModelInstance3DProxy, false, false>
+{
+  explicit ModelInstance3DProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<ModelInstance3DProxy, false, false> (
+            "ModelInstance3D", lib, "wsl::das::ModelInstance3DProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (model_id)> ("model_id", "model_id");
+    addProperty<DAS_BIND_MANAGED_PROP (scene_index)> ("scene_index",
+                                                      "scene_index");
+    addProperty<DAS_BIND_MANAGED_PROP (material_override)> (
+        "material_override", "material_override");
+    addProperty<DAS_BIND_MANAGED_PROP (mip_lod_bias)> ("mip_lod_bias",
+                                                       "mip_lod_bias");
+    addProperty<DAS_BIND_MANAGED_PROP (geometry_lod_bias)> (
+        "geometry_lod_bias", "geometry_lod_bias");
+    addProperty<DAS_BIND_MANAGED_PROP (visibility_range)> ("visibility_range",
+                                                           "visibility_range");
+  }
+};
+
+struct Area3DProxyAnnotation
+    : ::das::ManagedStructureAnnotation<Area3DProxy, false, false>
+{
+  explicit Area3DProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<Area3DProxy, false, false> (
+            "Area3D", lib, "wsl::das::Area3DProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (shape)> ("shape", "shape");
+    addProperty<DAS_BIND_MANAGED_PROP (position)> ("position", "position");
+    addProperty<DAS_BIND_MANAGED_PROP (rotation)> ("rotation", "rotation");
+    addProperty<DAS_BIND_MANAGED_PROP (half_extents)> ("half_extents",
+                                                       "half_extents");
+    addProperty<DAS_BIND_MANAGED_PROP (radius)> ("radius", "radius");
+  }
+};
+
+struct AudioProxyAnnotation
+    : ::das::ManagedStructureAnnotation<AudioProxy, false, false>
+{
+  explicit AudioProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<AudioProxy, false, false> (
+            "Audio", lib, "wsl::das::AudioProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (audio_resource)> ("audio_resource",
+                                                         "audio_resource");
+    addProperty<DAS_BIND_MANAGED_PROP (loop)> ("loop", "loop");
+    addProperty<DAS_BIND_MANAGED_PROP (play_on_start)> ("play_on_start",
+                                                        "play_on_start");
+    addProperty<DAS_BIND_MANAGED_PROP (volume)> ("volume", "volume");
+    addProperty<DAS_BIND_MANAGED_PROP (playing)> ("playing", "playing");
+  }
+};
+
+struct PrefabInstanceProxyAnnotation
+    : ::das::ManagedStructureAnnotation<PrefabInstanceProxy, false, false>
+{
+  explicit PrefabInstanceProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<PrefabInstanceProxy, false, false> (
+            "PrefabInstance", lib, "wsl::das::PrefabInstanceProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (prefab_id)> ("prefab_id", "prefab_id");
+    addProperty<DAS_BIND_MANAGED_PROP (prefab_entity)> ("prefab_entity",
+                                                        "prefab_entity");
+  }
+};
+
+struct SubviewportProxyAnnotation
+    : ::das::ManagedStructureAnnotation<SubviewportProxy, false, false>
+{
+  explicit SubviewportProxyAnnotation (::das::ModuleLibrary &lib)
+      : ::das::ManagedStructureAnnotation<SubviewportProxy, false, false> (
+            "Subviewport", lib, "wsl::das::SubviewportProxy")
+  {
+    addProperty<DAS_BIND_MANAGED_PROP (x)> ("x", "x");
+    addProperty<DAS_BIND_MANAGED_PROP (y)> ("y", "y");
+    addProperty<DAS_BIND_MANAGED_PROP (width)> ("width", "width");
+    addProperty<DAS_BIND_MANAGED_PROP (height)> ("height", "height");
+    addProperty<DAS_BIND_MANAGED_PROP (clear_color)> ("clear_color",
+                                                      "clear_color");
+    addProperty<DAS_BIND_MANAGED_PROP (clear_depth)> ("clear_depth",
+                                                      "clear_depth");
+    addProperty<DAS_BIND_MANAGED_PROP (clear_r)> ("clear_r", "clear_r");
+    addProperty<DAS_BIND_MANAGED_PROP (clear_g)> ("clear_g", "clear_g");
+    addProperty<DAS_BIND_MANAGED_PROP (clear_b)> ("clear_b", "clear_b");
+    addProperty<DAS_BIND_MANAGED_PROP (clear_a)> ("clear_a", "clear_a");
+    addProperty<DAS_BIND_MANAGED_PROP (camera_2d)> ("camera_2d", "camera_2d");
+    addProperty<DAS_BIND_MANAGED_PROP (camera_3d)> ("camera_3d", "camera_3d");
+    addProperty<DAS_BIND_MANAGED_PROP (world_quad_size)> ("world_quad_size",
+                                                          "world_quad_size");
+    addProperty<DAS_BIND_MANAGED_PROP (container_size)> ("container_size",
+                                                         "container_size");
+    addProperty<DAS_BIND_MANAGED_PROP (container_position)> (
+        "container_position", "container_position");
+    addProperty<DAS_BIND_MANAGED_PROP (virtual_size)> ("virtual_size",
+                                                       "virtual_size");
+    addProperty<DAS_BIND_MANAGED_PROP (render_2d_only)> ("render_2d_only",
+                                                         "render_2d_only");
+  }
+};
+
 } // anonymous namespace
 
 void
@@ -363,6 +971,15 @@ register_component_accessors (::das::Module &mod, ::das::ModuleLibrary &lib)
   mod.addAnnotation (new PointLightProxyAnnotation (lib));
   mod.addAnnotation (new DirectionalLightProxyAnnotation (lib));
   mod.addAnnotation (new SpotLightProxyAnnotation (lib));
+  mod.addAnnotation (new HierarchyProxyAnnotation (lib));
+  mod.addAnnotation (new WorldTransformProxyAnnotation (lib));
+  mod.addAnnotation (new RigidBodyProxyAnnotation (lib));
+  mod.addAnnotation (new CharacterBodyProxyAnnotation (lib));
+  mod.addAnnotation (new ModelInstance3DProxyAnnotation (lib));
+  mod.addAnnotation (new Area3DProxyAnnotation (lib));
+  mod.addAnnotation (new AudioProxyAnnotation (lib));
+  mod.addAnnotation (new PrefabInstanceProxyAnnotation (lib));
+  mod.addAnnotation (new SubviewportProxyAnnotation (lib));
 
   addExtern<DAS_BIND_FUN (get_transform_accessor),
             ::das::SimNode_ExtFuncCallAndCopyOrMove> (
@@ -405,6 +1022,64 @@ register_component_accessors (::das::Module &mod, ::das::ModuleLibrary &lib)
             ::das::SimNode_ExtFuncCallAndCopyOrMove> (
       mod, lib, "get_spot_light_accessor", ::das::SideEffects::accessExternal,
       "wsl::das::get_spot_light_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_hierarchy_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_hierarchy_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_hierarchy_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_world_transform_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_world_transform_accessor",
+      ::das::SideEffects::accessExternal,
+      "wsl::das::get_world_transform_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_rigid_body_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_rigid_body_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_rigid_body_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_character_body_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_character_body_accessor",
+      ::das::SideEffects::accessExternal,
+      "wsl::das::get_character_body_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_model_instance_3d_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_model_instance_3d_accessor",
+      ::das::SideEffects::accessExternal,
+      "wsl::das::get_model_instance_3d_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_area_3d_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_area_3d_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_area_3d_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_audio_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_audio_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_audio_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_prefab_instance_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_prefab_instance_accessor",
+      ::das::SideEffects::accessExternal,
+      "wsl::das::get_prefab_instance_accessor")
+      ->args ({ "entity", "at" });
+
+  addExtern<DAS_BIND_FUN (get_subviewport_accessor),
+            ::das::SimNode_ExtFuncCallAndCopyOrMove> (
+      mod, lib, "get_subviewport_accessor", ::das::SideEffects::accessExternal,
+      "wsl::das::get_subviewport_accessor")
       ->args ({ "entity", "at" });
 }
 
@@ -486,6 +1161,109 @@ get_spot_light_accessor (uint32_t entity, ::das::LineInfoArg *at)
   return proxy;
 }
 
+HierarchyProxy
+get_hierarchy_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  HierarchyProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::hierarchy> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+WorldTransformProxy
+get_world_transform_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  WorldTransformProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::world_transform> (proxy.entity)
+                  : nullptr);
+  return proxy;
+}
+
+RigidBodyProxy
+get_rigid_body_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  RigidBodyProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::rigid_body> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+CharacterBodyProxy
+get_character_body_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  CharacterBodyProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::character_body> (proxy.entity)
+                  : nullptr);
+  return proxy;
+}
+
+ModelInstance3DProxy
+get_model_instance_3d_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  ModelInstance3DProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::model_instance_3d> (proxy.entity)
+                  : nullptr);
+  return proxy;
+}
+
+Area3DProxy
+get_area_3d_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  Area3DProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::area> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+AudioProxy
+get_audio_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  AudioProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::audio> (proxy.entity) : nullptr);
+  return proxy;
+}
+
+PrefabInstanceProxy
+get_prefab_instance_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  PrefabInstanceProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::prefab_instance> (proxy.entity)
+                  : nullptr);
+  return proxy;
+}
+
+SubviewportProxy
+get_subviewport_accessor (uint32_t entity, ::das::LineInfoArg *at)
+{
+  (void)at;
+  SubviewportProxy proxy{};
+  proxy.entity = static_cast<entt::entity> (entity);
+  auto *reg = get_registry ();
+  proxy.bind (reg ? reg->try_get<comp::subviewport> (proxy.entity) : nullptr);
+  return proxy;
+}
+
 namespace
 {
 
@@ -502,8 +1280,14 @@ wsl_entity_create ()
 }
 
 void
-wsl_entity_destroy (uint32_t entity)
+wsl_entity_destroy (uint32_t entity, ::das::Context *context,
+                    ::das::LineInfoArg *at)
 {
+  if (g_query_depth > 0) {
+    context->throw_error_at (
+        at, "cannot entity_destroy during a query; structural mutations are "
+            "not allowed while component references are live");
+  }
   auto *reg = get_registry ();
   if (!reg) {
     return;
@@ -565,133 +1349,17 @@ wsl_has_component (uint32_t type_id, uint32_t entity)
   return false;
 }
 
-// ── Per-component add/remove ──
-
-bool
-wsl_add_transform (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || reg->all_of<comp::transform> (e)) {
-    return false;
-  }
-  reg->emplace<comp::transform> (e);
-  return true;
-}
-
-bool
-wsl_remove_transform (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::transform> (e)) {
-    return false;
-  }
-  reg->remove<comp::transform> (e);
-  return true;
-}
-
-bool
-wsl_add_camera (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || reg->all_of<comp::camera> (e)) {
-    return false;
-  }
-  reg->emplace<comp::camera> (e);
-  return true;
-}
-
-bool
-wsl_remove_camera (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::camera> (e)) {
-    return false;
-  }
-  reg->remove<comp::camera> (e);
-  return true;
-}
-
-bool
-wsl_add_hierarchy (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || reg->all_of<comp::hierarchy> (e)) {
-    return false;
-  }
-  reg->emplace<comp::hierarchy> (e);
-  return true;
-}
-
-bool
-wsl_remove_hierarchy (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::hierarchy> (e)) {
-    return false;
-  }
-  reg->remove<comp::hierarchy> (e);
-  return true;
-}
-
-bool
-wsl_add_world_transform (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || reg->all_of<comp::world_transform> (e)) {
-    return false;
-  }
-  reg->emplace<comp::world_transform> (e);
-  return true;
-}
-
-bool
-wsl_remove_world_transform (uint32_t entity)
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return false;
-  }
-  auto e = static_cast<entt::entity> (entity);
-  if (!reg->valid (e) || !reg->all_of<comp::world_transform> (e)) {
-    return false;
-  }
-  reg->remove<comp::world_transform> (e);
-  return true;
-}
-
 // ── Generic component add/remove ──
 
 bool
-wsl_add_component (uint32_t type_id, uint32_t entity)
+wsl_add_component (uint32_t type_id, uint32_t entity, ::das::Context *context,
+                   ::das::LineInfoArg *at)
 {
+  if (g_query_depth > 0) {
+    context->throw_error_at (
+        at, "cannot add_component during a query; structural mutations are "
+            "not allowed while component references are live");
+  }
   auto *reg = get_registry ();
   if (!reg) {
     return false;
@@ -722,8 +1390,14 @@ wsl_add_component (uint32_t type_id, uint32_t entity)
 }
 
 bool
-wsl_remove_component (uint32_t type_id, uint32_t entity)
+wsl_remove_component (uint32_t type_id, uint32_t entity,
+                      ::das::Context *context, ::das::LineInfoArg *at)
 {
+  if (g_query_depth > 0) {
+    context->throw_error_at (
+        at, "cannot remove_component during a query; structural mutations are "
+            "not allowed while component references are live");
+  }
   auto *reg = get_registry ();
   if (!reg) {
     return false;
@@ -1120,6 +1794,51 @@ wsl_type_id_spot_light ()
   return static_cast<uint32_t> (entt::type_hash<comp::spot_light>::value ());
 }
 
+uint32_t
+wsl_type_id_rigid_body ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::rigid_body>::value ());
+}
+
+uint32_t
+wsl_type_id_character_body ()
+{
+  return static_cast<uint32_t> (
+      entt::type_hash<comp::character_body>::value ());
+}
+
+uint32_t
+wsl_type_id_model_instance_3d ()
+{
+  return static_cast<uint32_t> (
+      entt::type_hash<comp::model_instance_3d>::value ());
+}
+
+uint32_t
+wsl_type_id_area_3d ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::area>::value ());
+}
+
+uint32_t
+wsl_type_id_audio ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::audio>::value ());
+}
+
+uint32_t
+wsl_type_id_prefab_instance ()
+{
+  return static_cast<uint32_t> (
+      entt::type_hash<comp::prefab_instance>::value ());
+}
+
+uint32_t
+wsl_type_id_subviewport ()
+{
+  return static_cast<uint32_t> (entt::type_hash<comp::subviewport>::value ());
+}
+
 // ── Event query functions ──
 
 uint32_t
@@ -1382,6 +2101,7 @@ each_entity_id_with (const ::das::TArray<uint32_t> &type_ids,
   };
 
   const candidate &selected = candidates[candidate_index];
+  query_depth_guard guard;
   if (selected.native != nullptr) {
     for (entt::entity entity : *selected.native) {
       invoke_if_matching (entity);
@@ -1802,8 +2522,7 @@ public:
 
     addExtern<DAS_BIND_FUN (wsl_entity_destroy)> (
         *this, lib, "entity_destroy", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_entity_destroy")
-        ->arg ("entity");
+        "wsl::das::wsl_entity_destroy");
 
     addExtern<DAS_BIND_FUN (wsl_entity_valid)> (
         *this, lib, "entity_valid", ::das::SideEffects::accessExternal,
@@ -1825,58 +2544,14 @@ public:
         "wsl::das::wsl_has_component")
         ->args ({ "type_id", "entity" });
 
-    // Per-component add/remove
-    addExtern<DAS_BIND_FUN (wsl_add_transform)> (
-        *this, lib, "add_transform", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_add_transform")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_remove_transform)> (
-        *this, lib, "remove_transform", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_remove_transform")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_add_camera)> (
-        *this, lib, "add_camera", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_add_camera")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_remove_camera)> (
-        *this, lib, "remove_camera", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_remove_camera")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_add_hierarchy)> (
-        *this, lib, "add_hierarchy", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_add_hierarchy")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_remove_hierarchy)> (
-        *this, lib, "remove_hierarchy", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_remove_hierarchy")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_add_world_transform)> (
-        *this, lib, "add_world_transform", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_add_world_transform")
-        ->arg ("entity");
-
-    addExtern<DAS_BIND_FUN (wsl_remove_world_transform)> (
-        *this, lib, "remove_world_transform",
-        ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_remove_world_transform")
-        ->arg ("entity");
-
     // Generic component add/remove
     addExtern<DAS_BIND_FUN (wsl_add_component)> (
         *this, lib, "add_component", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_add_component")
-        ->args ({ "type_id", "entity" });
+        "wsl::das::wsl_add_component");
 
     addExtern<DAS_BIND_FUN (wsl_remove_component)> (
         *this, lib, "remove_component", ::das::SideEffects::modifyExternal,
-        "wsl::das::wsl_remove_component")
-        ->args ({ "type_id", "entity" });
+        "wsl::das::wsl_remove_component");
 
     // Scene operations
     addExtern<DAS_BIND_FUN (wsl_find_entity_by_name)> (
@@ -1962,6 +2637,34 @@ public:
     addExtern<DAS_BIND_FUN (wsl_type_id_spot_light)> (
         *this, lib, "TYPE_SPOT_LIGHT", ::das::SideEffects::none,
         "wsl::das::wsl_type_id_spot_light");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_rigid_body)> (
+        *this, lib, "TYPE_RIGID_BODY", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_rigid_body");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_character_body)> (
+        *this, lib, "TYPE_CHARACTER_BODY", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_character_body");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_model_instance_3d)> (
+        *this, lib, "TYPE_MODEL_INSTANCE_3D", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_model_instance_3d");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_area_3d)> (
+        *this, lib, "TYPE_AREA_3D", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_area_3d");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_audio)> (*this, lib, "TYPE_AUDIO",
+                                                 ::das::SideEffects::none,
+                                                 "wsl::das::wsl_type_id_audio");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_prefab_instance)> (
+        *this, lib, "TYPE_PREFAB_INSTANCE", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_prefab_instance");
+
+    addExtern<DAS_BIND_FUN (wsl_type_id_subviewport)> (
+        *this, lib, "TYPE_SUBVIEWPORT", ::das::SideEffects::none,
+        "wsl::das::wsl_type_id_subviewport");
 
     // Event query functions
     addExtern<DAS_BIND_FUN (wsl_get_event_kind)> (

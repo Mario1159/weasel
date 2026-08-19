@@ -167,83 +167,6 @@ Generic queries that work with any component type.
 
    :returns: bool
 
-Per-component add/remove
-------------------------
-
-Add or remove specific components from entities.
-
-.. das:function:: add_transform(entity : uint) : bool
-
-   Adds a Transform component to the entity.
-
-   :param:
-      entity (uint)
-
-   :returns: bool
-
-.. das:function:: remove_transform(entity : uint) : bool
-
-   Removes the Transform component from the entity.
-
-   :param:
-      entity (uint)
-
-   :returns: bool
-
-.. das:function:: add_camera(entity : uint) : bool
-
-   Adds a Camera component to the entity.
-
-   :param:
-      entity (uint)
-
-   :returns: bool
-
-.. das:function:: remove_camera(entity : uint) : bool
-
-   Removes the Camera component from the entity.
-
-   :param:
-      entity (uint)
-
-   :returns: bool
-
-.. das:function:: add_hierarchy(entity : uint) : bool
-
-   Adds a Hierarchy component to the entity.
-
-   :param:
-      entity (uint)
-
-   :returns: bool
-
-.. das:function:: remove_hierarchy(entity : uint) : bool
-
-   Removes the Hierarchy component from the entity.
-
-   :param:
-      entity (uint)
-
-   :returns: bool
-
-.. das:function:: add_world_transform(entity : uint) : bool
-
-   Adds a World Transform component to the entity.
-
-   :param:
-      entity (uint)
-
-   :returns: bool
-
-.. das:function:: remove_world_transform(type_id : uint) : bool
-
-   Removes the World Transform component from the entity.
-
-   :param:
-      type_id (uint)
-
-   :returns: bool
-
 Scene operations
 ----------------
 
@@ -334,6 +257,34 @@ Stable type IDs for built-in component types.
    :returns: uint
 
 .. das:function:: TYPE_SPOT_LIGHT() : uint
+
+   :returns: uint
+
+.. das:function:: TYPE_RIGID_BODY() : uint
+
+   :returns: uint
+
+.. das:function:: TYPE_CHARACTER_BODY() : uint
+
+   :returns: uint
+
+.. das:function:: TYPE_MODEL_INSTANCE_3D() : uint
+
+   :returns: uint
+
+.. das:function:: TYPE_AREA_3D() : uint
+
+   :returns: uint
+
+.. das:function:: TYPE_AUDIO() : uint
+
+   :returns: uint
+
+.. das:function:: TYPE_PREFAB_INSTANCE() : uint
+
+   :returns: uint
+
+.. das:function:: TYPE_SUBVIEWPORT() : uint
 
    :returns: uint
 
@@ -480,19 +431,18 @@ Swap models and material overrides on entities.
 Generic component add/remove
 ----------------------------
 
-.. das:function:: add_component(type_id : uint, entity : uint) : bool
+.. das:function:: add_component(name : uint) : bool
 
    :param:
-      type_id (uint)
-      entity (uint)
+      name (uint)
 
    :returns: bool
 
-.. das:function:: remove_component(type_id : uint, entity : uint) : bool
+.. das:function:: remove_component(entity : uint, name : uint) : bool
 
    :param:
-      type_id (uint)
       entity (uint)
+      name (uint)
 
    :returns: bool
 

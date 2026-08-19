@@ -16,8 +16,9 @@ Create a ``my_system.das`` file:
 
     def on_update(dt : float)
         let e = entity_create()
-        add_transform(e)
-        set_position(e, 0.0, 1.0, 0.0)
+        add_component(e, Transform())
+        let t = get_component_or(e, Transform())
+        t.position = float3(0.0, 1.0, 0.0)
         log_info("Created entity at y=1")
 
     def on_event()
@@ -55,10 +56,11 @@ Transforms
 
 .. code-block:: cpp
 
-    add_transform(e)                  // Add transform component
-    set_position(e, x, y, z)         // Set world position
-    set_rotation(e, pitch, yaw, roll) // Set rotation in degrees
-    set_scale(e, x, y, z)            // Set scale
+    add_component(e, Transform())      // Add transform component
+    let t = get_component_or(e, Transform())
+    t.position = float3(x, y, z)       // Set world position
+    t.scale = float3(x, y, z)          // Set scale
+    t.rotation = float4(0.0, 0.0, 0.0, 1.0)  // Set rotation (quaternion)
 
 Component System
 ----------------
@@ -66,7 +68,7 @@ Component System
 .. code-block:: cpp
 
     let tid = get_component_type_id("Transform")  // Lookup type ID
-    let has = has_component(tid, e)               // Check ownership
+    let has = has_component(e, Transform())        // Check ownership (typed)
     add_camera(e)                                 // Add camera component
     remove_camera(e)                              // Remove camera component
 

@@ -8,6 +8,7 @@
 #include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/directional_light.hpp"
 #include "wsl/comp/point_light.hpp"
+#include "wsl/comp/rigid_body.hpp"
 #include "wsl/comp/spot_light.hpp"
 #include "wsl/comp/sprite_2d.hpp"
 #include "wsl/comp/transform.hpp"
@@ -16,6 +17,8 @@
 #include "wsl/reg/component_registry.hpp"
 #include "wsl/math/vector.hpp"
 #include "wsl/log/log.hpp"
+#include "wsl/rsc/scene.hpp"
+#include "wsl/rsc/scene_snapshot_serializer.hpp"
 
 #include <cmath>
 #include <cstring>
@@ -479,6 +482,8 @@ run_mixed_query ()
     return false;
   }
 
+  wsl::log::init ();
+
   auto script
       = std::filesystem::temp_directory_path () / "weasel_mixed_query.das";
   {
@@ -551,6 +556,713 @@ TEST_CASE ("mixed query mutates native and Daslang storage in place")
   wsl::log::init ();
   bool ok = false;
   std::thread worker ([&] { ok = run_mixed_query (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// Generic Daslang-component accessor (`get_component_or` value copy),
+// `has_component` / `add_component` / `remove_component` typed overloads.
+static const char *const k_generic_das_das = R"DAS(
+options gen2
+module mouse_rotate
+require weasel_api
+require weasel_helpers
+
+struct MouseRotate {
+    yaw : float = 11.0
+}
+
+def accessor_test() : void {
+    // Present: the C++ harness wrote 42.0 into the live pool bytes, so the
+    // accessor must return the pooled value, not the daslang default (11.0).
+    var p = get_component_or(0u, MouseRotate())
+    assert(p.yaw == 42.0)
+    // Absent: must return the daslang default without inserting a component.
+    var a = get_component_or(1u, MouseRotate())
+    assert(a.yaw == 11.0)
+    let hp = has_component(0u, MouseRotate())
+    assert(hp)
+    let ha = has_component(1u, MouseRotate())
+    assert(!ha)
+    let added = add_component(2u, MouseRotate())
+    assert(added)
+    let h2 = has_component(2u, MouseRotate())
+    assert(h2)
+    let removed = remove_component(2u, MouseRotate())
+    assert(removed)
+    let h3 = has_component(2u, MouseRotate())
+    assert(!h3)
+}
+)DAS";
+
+static bool
+run_generic_das_accessor ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+
+  wsl::log::init ();
+
+  auto script
+      = std::filesystem::temp_directory_path () / "weasel_generic_das.das";
+  {
+    std::ofstream out (script);
+    out << k_generic_das_das;
+  }
+
+  if (!engine.execute_file (script.string ())) {
+    std::fprintf (stderr, "generic das execute failed: %s\n",
+                  engine.last_error ().c_str ());
+    return false;
+  }
+
+  auto info = engine.get_struct_info (script, "MouseRotate");
+  if (info.size_of <= 0 || info.fields.empty ()) {
+    return false;
+  }
+
+  wsl::comp::singl::runtime_context runtime ("DasTest", 0, 0, "", true);
+  const entt::id_type type_id = entt::hashed_string{ "mouse_rotate" }.value ();
+  std::vector<wsl::reg::component_registry::descriptor::das_field> fields;
+  for (const auto &field : info.fields) {
+    fields.push_back ({ field.name, field.type_name, field.offset, field.size,
+                        field.kind, field.default_value });
+  }
+  runtime.component_registry ().register_cached_runtime_world_component (
+      type_id, "mouse_rotate", "Mouse Rotate", info.size_of,
+      std::move (fields));
+  runtime.component_registry ().register_component_type_info (
+      "mouse_rotate::MouseRotate const", type_id,
+      wsl::reg::ComponentKind::DAS_SCRIPT,
+      static_cast<std::size_t> (info.size_of));
+
+  entt::registry reg;
+  reg.ctx ().emplace<wsl::comp::singl::runtime_context *> (&runtime);
+  const entt::entity present = reg.create ();
+  const entt::entity absent = reg.create ();
+  const entt::entity managed = reg.create ();
+  if (present != entt::entity{ 0 } || absent != entt::entity{ 1 }
+      || managed != entt::entity{ 2 }) {
+    return false;
+  }
+  if (!runtime.component_registry ().das_component_add (reg, type_id,
+                                                        present)) {
+    return false;
+  }
+  // Overwrite the pooled default (11.0) with a distinct value to prove the
+  // accessor reads live pool bytes rather than the daslang default.
+  auto *data = runtime.component_registry ().das_component_data (reg, type_id,
+                                                                 present);
+  if (data == nullptr) {
+    return false;
+  }
+  const float distinct = 42.0f;
+  std::memcpy (data + info.fields[0].offset, &distinct, sizeof (distinct));
+
+  wsl::das::wsl_api_set_active_registry (&reg);
+  if (!engine.call_void_function_safe (script, "accessor_test")) {
+    std::fprintf (stderr, "generic das call failed: %s\n",
+                  engine.last_error ().c_str ());
+    return false;
+  }
+  return true;
+}
+
+TEST_CASE ("generic Daslang component get_component_or and typed ops")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_generic_das_accessor (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// Structural mutation inside a `query` must be rejected (the query holds live
+// component references into the candidate pools).
+static const char *const k_query_guard_das = R"DAS(
+options gen2
+require weasel_api
+require weasel_helpers
+
+def mutate_in_query() : void {
+    query() $(t : Transform&) {
+        entity_destroy(e)
+    }
+}
+)DAS";
+
+static bool
+run_query_mutation_guard ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+
+  entt::registry reg;
+  auto e0 = reg.create ();
+  reg.emplace<wsl::comp::transform> (e0);
+  auto e1 = reg.create ();
+  reg.emplace<wsl::comp::transform> (e1);
+  wsl::das::wsl_api_set_active_registry (&reg);
+
+  auto script
+      = std::filesystem::temp_directory_path () / "weasel_query_guard.das";
+  {
+    std::ofstream out (script);
+    out << k_query_guard_das;
+  }
+
+  if (!engine.execute_file (script.string ())) {
+    return false;
+  }
+  // The structural mutation must panic, so the call must report failure.
+  bool called = engine.call_void_function_safe (script, "mutate_in_query");
+  return !called;
+}
+
+TEST_CASE ("structural mutation inside query is rejected")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_query_mutation_guard (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// --- §9.1 test matrix ----------------------------------------------------
+
+// Registers a `mouse_rotate::MouseRotate` Daslang component descriptor into the
+// given runtime_context (mirrors what the editor does at runtime). Returns the
+// type id, or 0 on failure.
+static entt::id_type
+register_mouse_rotate (wsl::das::das_engine &engine,
+                       const std::filesystem::path &script,
+                       wsl::comp::singl::runtime_context &runtime)
+{
+  const entt::id_type type_id = entt::hashed_string{ "mouse_rotate" }.value ();
+  auto info = engine.get_struct_info (script, "MouseRotate");
+  if (info.size_of <= 0 || info.fields.empty ()) {
+    return 0;
+  }
+  std::vector<wsl::reg::component_registry::descriptor::das_field> fields;
+  for (const auto &field : info.fields) {
+    fields.push_back ({ field.name, field.type_name, field.offset, field.size,
+                        field.kind, field.default_value });
+  }
+  runtime.component_registry ().register_cached_runtime_world_component (
+      type_id, "mouse_rotate", "Mouse Rotate", info.size_of,
+      std::move (fields));
+  runtime.component_registry ().register_component_type_info (
+      "mouse_rotate::MouseRotate const", type_id,
+      wsl::reg::ComponentKind::DAS_SCRIPT,
+      static_cast<std::size_t> (info.size_of));
+  return type_id;
+}
+
+// §9.1 test 1: large query (>512 entities). Guards the smallest-pool iteration
+// against the fixed 512-entity scratch buffer — every matching entity must be
+// visited exactly once.
+static const char *const k_large_query_das = R"DAS(
+options gen2
+require weasel_api
+require weasel_helpers
+
+def large_query_test() : void {
+    var count = 0
+    query() $(t : Transform&) {
+        count += 1
+        t.scale.x += 1.0
+    }
+    assert(count == 600)
+}
+)DAS";
+
+static bool
+run_large_query ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+
+  entt::registry reg;
+  const int n = 600;
+  for (int i = 0; i < n; ++i) {
+    auto e = reg.create ();
+    reg.emplace<wsl::comp::transform> (e).scale
+        = wsl::math::vec3f{ 1.0f, 1.0f, 1.0f };
+  }
+  wsl::das::wsl_api_set_active_registry (&reg);
+
+  auto script
+      = std::filesystem::temp_directory_path () / "weasel_large_query.das";
+  {
+    std::ofstream out (script);
+    out << k_large_query_das;
+  }
+
+  if (!engine.execute_file (script.string ())) {
+    return false;
+  }
+  if (!engine.call_void_function_safe (script.string (), "large_query_test")) {
+    return false;
+  }
+
+  bool ok = true;
+  auto view = reg.view<wsl::comp::transform> ();
+  ok = ok && (static_cast<int> (view.size ()) == n);
+  for (auto e : view) {
+    ok = ok
+         && std::fabs (view.get<wsl::comp::transform> (e).scale.x () - 2.0f)
+                < 1e-5f;
+  }
+  return ok;
+}
+
+TEST_CASE ("large query visits every matching entity (>512)")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_large_query (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// §9.1 test 4: scene isolation. The same entity integer (0) in two different
+// scenes must reference independent Daslang component storage.
+static const char *const k_scene_iso_das = R"DAS(
+options gen2
+module mouse_rotate
+require weasel_api
+require weasel_helpers
+
+struct MouseRotate { yaw : float = 0.0 }
+
+def iso_test() : void {
+    var p = get_component_or(0u, MouseRotate())
+    assert(p.yaw == 7.0)
+    var none = get_component_or(1u, MouseRotate())
+    assert(none.yaw == 0.0)
+}
+)DAS";
+
+static bool
+run_scene_isolation ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+
+  wsl::log::init ();
+
+  auto script
+      = std::filesystem::temp_directory_path () / "weasel_scene_iso.das";
+  {
+    std::ofstream out (script);
+    out << k_scene_iso_das;
+  }
+  if (!engine.execute_file (script.string ())) {
+    return false;
+  }
+
+  wsl::comp::singl::runtime_context runtimeA ("DasA", 0, 0, "", true);
+  wsl::comp::singl::runtime_context runtimeB ("DasB", 0, 0, "", true);
+  const entt::id_type type_id
+      = register_mouse_rotate (engine, script, runtimeA);
+  if (type_id == 0) {
+    return false;
+  }
+  if (register_mouse_rotate (engine, script, runtimeB) == 0) {
+    return false;
+  }
+
+  entt::registry regA;
+  regA.ctx ().emplace<wsl::comp::singl::runtime_context *> (&runtimeA);
+  auto a0 = regA.create ();
+  auto a1 = regA.create ();
+  if (a0 != entt::entity{ 0 } || a1 != entt::entity{ 1 }) {
+    return false;
+  }
+  if (!runtimeA.component_registry ().das_component_add (regA, type_id, a0)) {
+    return false;
+  }
+  auto *dataA
+      = runtimeA.component_registry ().das_component_data (regA, type_id, a0);
+  if (dataA == nullptr) {
+    return false;
+  }
+  const float yaw = 7.0f;
+  std::memcpy (dataA, &yaw, sizeof (yaw));
+
+  entt::registry regB;
+  regB.ctx ().emplace<wsl::comp::singl::runtime_context *> (&runtimeB);
+  auto b0 = regB.create ();
+  if (b0 != entt::entity{ 0 }) {
+    return false;
+  }
+
+  wsl::das::wsl_api_set_active_registry (&regA);
+  if (!engine.call_void_function_safe (script, "iso_test")) {
+    return false;
+  }
+
+  // Scene B must have NO Daslang component data for entity 0 even though scene
+  // A stored yaw=7 there under the same integer id.
+  auto *dataB
+      = runtimeB.component_registry ().das_component_data (regB, type_id, b0);
+  auto *dataAa
+      = runtimeA.component_registry ().das_component_data (regA, type_id, a0);
+  return dataB == nullptr && dataAa != nullptr;
+}
+
+TEST_CASE ("Daslang component storage is scene-isolated")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_scene_isolation (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// §9.1 test 6: entity-generation recycling cleanup. Destroying an entity must
+// drop its Daslang component data so a recycled id does not carry stale bytes.
+static const char *const k_recycle_das = R"DAS(
+options gen2
+module mouse_rotate
+require weasel_api
+require weasel_helpers
+
+struct MouseRotate { yaw : float = 0.0 }
+
+def recycle_test() : void {
+    var p = get_component_or(0u, MouseRotate())
+    assert(p.yaw == 9.0)
+}
+)DAS";
+
+static bool
+run_entity_recycle ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+
+  wsl::log::init ();
+
+  auto script = std::filesystem::temp_directory_path () / "weasel_recycle.das";
+  {
+    std::ofstream out (script);
+    out << k_recycle_das;
+  }
+  if (!engine.execute_file (script.string ())) {
+    return false;
+  }
+
+  wsl::comp::singl::runtime_context runtime ("DasTest", 0, 0, "", true);
+  const entt::id_type type_id = register_mouse_rotate (engine, script, runtime);
+  if (type_id == 0) {
+    return false;
+  }
+
+  entt::registry reg;
+  reg.ctx ().emplace<wsl::comp::singl::runtime_context *> (&runtime);
+  auto e0 = reg.create ();
+  if (e0 != entt::entity{ 0 }) {
+    return false;
+  }
+  if (!runtime.component_registry ().das_component_add (reg, type_id, e0)) {
+    return false;
+  }
+  auto *data
+      = runtime.component_registry ().das_component_data (reg, type_id, e0);
+  if (data == nullptr) {
+    return false;
+  }
+  const float yaw = 9.0f;
+  std::memcpy (data, &yaw, sizeof (yaw));
+
+  wsl::das::wsl_api_set_active_registry (&reg);
+  if (!engine.call_void_function_safe (script, "recycle_test")) {
+    return false;
+  }
+
+  // Destroy and recycle the entity id; stale Daslang data must be gone.
+  reg.destroy (e0);
+  auto e_new = reg.create ();
+  auto *after
+      = runtime.component_registry ().das_component_data (reg, type_id, e_new);
+  return after == nullptr;
+}
+
+TEST_CASE ("destroyed entity releases Daslang component data on recycle")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_entity_recycle (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// §9.1 test 13 (partial): failure diagnostics. Invalid entity ids and empty
+// queries must degrade gracefully (default value / false / zero count) rather
+// than panic or crash.
+static const char *const k_diag_das = R"DAS(
+options gen2
+module mouse_rotate
+require weasel_api
+require weasel_helpers
+
+struct MouseRotate { yaw : float = 0.0 }
+
+def diag_test() : void {
+    let h = has_component(99999u, MouseRotate())
+    assert(!h)
+    var d = get_component_or(99999u, MouseRotate())
+    assert(d.yaw == 0.0)
+    var count = 0
+    query() $(t : Transform&) { count += 1 }
+    assert(count == 0)
+}
+)DAS";
+
+static bool
+run_failure_diag ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+
+  wsl::log::init ();
+
+  auto script = std::filesystem::temp_directory_path () / "weasel_diag.das";
+  {
+    std::ofstream out (script);
+    out << k_diag_das;
+  }
+  if (!engine.execute_file (script.string ())) {
+    return false;
+  }
+
+  wsl::comp::singl::runtime_context runtime ("DasTest", 0, 0, "", true);
+  if (register_mouse_rotate (engine, script, runtime) == 0) {
+    return false;
+  }
+  entt::registry reg;
+  reg.ctx ().emplace<wsl::comp::singl::runtime_context *> (&runtime);
+  wsl::das::wsl_api_set_active_registry (&reg);
+
+  return engine.call_void_function_safe (script, "diag_test");
+}
+
+TEST_CASE ("invalid entity and empty query degrade gracefully")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_failure_diag (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// §9.1 (Phase 2): a newly-added built-in view proxy must read/write the live
+// component and mutate it in place through a query, exactly like the original
+// seven built-ins.
+static const char *const k_builtin_view_das = R"DAS(
+options gen2
+require weasel_api
+require weasel_helpers
+
+def builtin_view_test() : void {
+    var rb = get_component_or(0u, RigidBody())
+    rb.friction = 0.9
+    assert(rb.friction == 0.9)
+    query() $(r : RigidBody&) {
+        r.friction = 0.5
+        r.half_extents = float3(2.0, 3.0, 4.0)
+    }
+    assert(rb.friction == 0.5)
+}
+)DAS";
+
+static bool
+run_builtin_view ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+
+  entt::registry reg;
+  auto e0 = reg.create ();
+  reg.emplace<wsl::comp::rigid_body> (e0).friction = 0.2f;
+  wsl::das::wsl_api_set_active_registry (&reg);
+
+  auto script
+      = std::filesystem::temp_directory_path () / "weasel_builtin_view.das";
+  {
+    std::ofstream out (script);
+    out << k_builtin_view_das;
+  }
+
+  if (!engine.execute_file (script.string ())) {
+    return false;
+  }
+  if (!engine.call_void_function_safe (script, "builtin_view_test")) {
+    return false;
+  }
+
+  const auto &rb = reg.get<wsl::comp::rigid_body> (e0);
+  bool ok = std::fabs (rb.friction - 0.5f) < 1e-5f;
+  ok = ok && std::fabs (rb.half_extents.x () - 2.0f) < 1e-5f;
+  ok = ok && std::fabs (rb.half_extents.y () - 3.0f) < 1e-5f;
+  ok = ok && std::fabs (rb.half_extents.z () - 4.0f) < 1e-5f;
+  return ok;
+}
+
+TEST_CASE ("built-in view proxy (RigidBody) mutates in place")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_builtin_view (); });
+  worker.join ();
+  CHECK (ok);
+}
+
+// §9.1 test 10: copy and snapshot round-trip. Verifies that a Daslang component
+// is copied by `scene::copy_entity` and survives scene snapshot save/load (both
+// binary and JSON) through `scene_snapshot_serializer`.
+static const char *const k_copy_snap_das = R"DAS(
+options gen2
+module mouse_rotate
+require weasel_api
+require weasel_helpers
+
+struct MouseRotate { yaw : float = 0.0 }
+)DAS";
+
+static bool
+run_copy_snapshot ()
+{
+  wsl::das::das_engine engine;
+  if (!engine.initialize ()) {
+    return false;
+  }
+  wsl::log::init ();
+
+  auto script
+      = std::filesystem::temp_directory_path () / "weasel_copy_snap.das";
+  {
+    std::ofstream out (script);
+    out << k_copy_snap_das;
+  }
+  if (!engine.execute_file (script.string ())) {
+    return false;
+  }
+
+  wsl::comp::singl::runtime_context runtime ("DasTest", 0, 0, "", true);
+  const entt::id_type type_id = register_mouse_rotate (engine, script, runtime);
+  if (type_id == 0) {
+    return false;
+  }
+
+  wsl::rsc::scene src_scene (&runtime, nullptr, "src");
+  wsl::rsc::scene dst_scene (&runtime, nullptr, "dst");
+
+  // Populate a source entity with a Daslang component carrying a distinct
+  // value.
+  const entt::entity src_e = src_scene.get_registry ().create ();
+  if (!runtime.component_registry ().das_component_add (
+          src_scene.get_registry (), type_id, src_e)) {
+    return false;
+  }
+  auto *src_data = runtime.component_registry ().das_component_data (
+      src_scene.get_registry (), type_id, src_e);
+  if (src_data == nullptr) {
+    return false;
+  }
+  const float k_value = 7.5f;
+  std::memcpy (src_data, &k_value, sizeof (k_value));
+
+  // `scene::copy_entity` must copy the Daslang pool bytes into the destination.
+  const entt::entity dst_e = dst_scene.copy_entity (src_scene, src_e);
+  if (dst_e == entt::null) {
+    return false;
+  }
+  auto *dst_data = runtime.component_registry ().das_component_data (
+      dst_scene.get_registry (), type_id, dst_e);
+  if (dst_data == nullptr) {
+    return false;
+  }
+  float copied = 0.0f;
+  std::memcpy (&copied, dst_data, sizeof (copied));
+  if (std::fabs (copied - k_value) > 1e-5f) {
+    return false;
+  }
+
+  // Snapshot round-trip (binary): save the source scene and reload it into a
+  // fresh scene; the Daslang component data must survive.
+  wsl::rsc::scene bin_scene (&runtime, nullptr, "bin");
+  {
+    wsl::rsc::io::scene_snapshot_serializer ser (&runtime, src_scene);
+    std::string bin;
+    if (!ser.save_to_binary_string (bin)) {
+      return false;
+    }
+    wsl::rsc::io::scene_snapshot_serializer loader (&runtime, bin_scene);
+    if (!loader.load_from_binary_string (bin)) {
+      return false;
+    }
+  }
+  auto *bin_data = runtime.component_registry ().das_component_data (
+      bin_scene.get_registry (), type_id, src_e);
+  if (bin_data == nullptr) {
+    return false;
+  }
+  float bin_val = 0.0f;
+  std::memcpy (&bin_val, bin_data, sizeof (bin_val));
+  if (std::fabs (bin_val - k_value) > 1e-5f) {
+    return false;
+  }
+
+  // Snapshot round-trip (JSON): save to a file and load into another fresh
+  // scene; the Daslang component data must survive.
+  wsl::rsc::scene json_scene (&runtime, nullptr, "json");
+  {
+    auto json_path
+        = std::filesystem::temp_directory_path () / "weasel_copy_snap.json";
+    wsl::rsc::io::scene_snapshot_serializer ser (&runtime, src_scene);
+    if (!ser.save_json (json_path.string ())) {
+      return false;
+    }
+    wsl::rsc::io::scene_snapshot_serializer loader (&runtime, json_scene);
+    if (!loader.load_json (json_path.string ())) {
+      return false;
+    }
+  }
+  auto *json_data = runtime.component_registry ().das_component_data (
+      json_scene.get_registry (), type_id, src_e);
+  if (json_data == nullptr) {
+    return false;
+  }
+  float json_val = 0.0f;
+  std::memcpy (&json_val, json_data, sizeof (json_val));
+  if (std::fabs (json_val - k_value) > 1e-5f) {
+    return false;
+  }
+
+  return true;
+}
+
+TEST_CASE ("Daslang component copy and snapshot round-trip")
+{
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] { ok = run_copy_snapshot (); });
   worker.join ();
   CHECK (ok);
 }
