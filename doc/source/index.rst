@@ -3,9 +3,15 @@ Weasel Engine Documentation
 
 .. toctree::
    :maxdepth: 2
-   :caption: Getting Started
+   :caption: Manual
 
-   getting_started
+   manual/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Tutorials
+
+   tutorials/index
 
 .. toctree::
    :maxdepth: 2
