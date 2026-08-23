@@ -33,6 +33,7 @@
 #include "wsl/reg/component_registry.hpp"
 #include "wsl/event/event_hub.hpp"
 #include "wsl/phys/physics_engine.hpp"
+#include "das_system_adapter.hpp"
 #include "wsl_event_binds.hpp"
 
 #include <SDL3/SDL_mouse.h>
@@ -2349,6 +2350,194 @@ wsl_event_disconnect (const char *event_name, const char *system_name,
   return rc->event_hub ().disconnect (event_id, sd->type_id, handler_name);
 }
 
+// ── Name-keyed event declaration / emission ──
+
+/**
+ * Declares the caller-named system as an emitter of an event type.
+ *
+ * The event may be C++-defined (declared through the regular hooks) or
+ * script-defined: an unknown name synthesizes a name-hashed id whose payload
+ * size latches on first emit.
+ */
+static bool
+wsl_event_declare_source (const char *event_name, const char *system_name)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc || !event_name || !system_name) {
+    return false;
+  }
+
+  auto &hub = rc->event_hub ();
+  if (hub.db == nullptr) {
+    return false;
+  }
+
+  std::string event_type_name;
+  std::size_t event_size = 0;
+
+  entt::id_type event_id = resolve_event_type_id (event_name);
+  if (event_id != 0) {
+    const auto it = hub.db->entries.find (event_id);
+    if (it == hub.db->entries.end ()) {
+      return false;
+    }
+    event_type_name = it->second.type_name;
+    event_size = it->second.size;
+  } else {
+    // Script-defined event type: synthesize a stable id from the name. The
+    // payload size latches on first emit.
+    event_id = entt::id_type{ entt::hashed_string (event_name) };
+    event_type_name = event_name;
+  }
+
+  const auto *sd = rc->system_factory_registry ().find_system (system_name);
+  if (sd == nullptr) {
+    wsl::log::sys ()->error ("event_declare_source: unknown system '{}'",
+                             system_name);
+    return false;
+  }
+
+  // When called from inside a daScript system, record the declaration on the
+  // adapter so it survives register_debug_metadata() wipe passes.
+  auto *adapter = das_system_adapter::current ();
+  if (adapter != nullptr && adapter->get_name () == system_name) {
+    return adapter->add_script_event_source (event_id, event_type_name,
+                                             event_size);
+  }
+
+  hub.declare_event_source_by_id (event_id, event_type_name, sd->type_id,
+                                  sd->type_name, event_size);
+  return true;
+}
+
+/**
+ * Declares a class method of the calling daScript system as a connectable
+ * event handler. The method is resolved by name at dispatch time and must
+ * accept the event payload struct as its single argument.
+ */
+static bool
+wsl_event_declare_sink (const char *event_name, const char *system_name,
+                        const char *handler_name)
+{
+  auto *adapter = das_system_adapter::current ();
+  if (adapter == nullptr) {
+    wsl::log::sys ()->error (
+        "event_declare_sink: can only be called from inside a daScript "
+        "system lifecycle call");
+    return false;
+  }
+
+  if (!event_name || !system_name || !handler_name) {
+    return false;
+  }
+
+  if (adapter->get_name () != system_name) {
+    wsl::log::sys ()->error (
+        "event_declare_sink: owner '{}' does not match the calling script "
+        "system '{}'",
+        system_name, adapter->get_name ());
+    return false;
+  }
+  std::string event_type_name = event_name;
+  entt::id_type event_id = resolve_event_type_id (event_name);
+  if (event_id == 0) {
+    // Script-defined event type: synthesize a name-hashed id (mirrors
+    // event_declare_source).
+    event_id = entt::id_type{ entt::hashed_string (event_name) };
+  } else if (auto *rc = try_get_runtime_context (); rc && rc->event_hub ().db) {
+    const auto entry_it = rc->event_hub ().db->entries.find (event_id);
+    if (entry_it != rc->event_hub ().db->entries.end ()) {
+      event_type_name = entry_it->second.type_name;
+    }
+  }
+
+  // Ensure the event is resolvable by name even when the sink is declared
+  // before the source: event_connect resolves ids through the source entries.
+  // The minimal entry has no owner, so wipe passes keep it.
+  if (auto *rc = try_get_runtime_context (); rc && rc->event_hub ().db) {
+    auto &entries = rc->event_hub ().db->entries;
+    if (entries.find (event_id) == entries.end ()) {
+      ::wsl::event::event_source_debug_entry entry{};
+      entry.type_id = event_id;
+      entry.type_name = event_type_name;
+      entries.emplace (event_id, std::move (entry));
+    }
+  }
+
+  if (!adapter->has_method (handler_name)) {
+    wsl::log::sys ()->error (
+        "event_declare_sink: method '{}' not found on script system '{}'",
+        handler_name, system_name);
+    return false;
+  }
+
+  return adapter->add_script_event_sink (event_id, event_type_name,
+                                         handler_name);
+}
+
+/**
+ * Emits a registered event from a daScript struct payload.
+ *
+ * The payload is accepted as ``anyArgument``; it must be a structure whose
+ * size matches the registered C++ event type. Bytes are dispatched directly
+ * to connected sinks (no intermediate copy).
+ */
+static vec4f
+wsl_event_emit (::das::Context &, ::das::SimNode_CallBase *call, vec4f *args)
+{
+  const char *event_name = ::das::cast<char *>::to (args[0]);
+
+  auto *rc = try_get_runtime_context ();
+  if (!rc || !event_name) {
+    return v_zero ();
+  }
+
+  ::das::TypeInfo *ti = call->types[1];
+  if (ti == nullptr || ti->type != ::das::Type::tStructure) {
+    wsl::log::sys ()->error (
+        "event_emit: payload for '{}' must be a structure type", event_name);
+    return v_zero ();
+  }
+
+  const std::size_t payload_size
+      = static_cast<std::size_t> (::das::getTypeSize (ti));
+  const void *data = ::das::cast<void *>::to (args[1]);
+
+  auto &hub = rc->event_hub ();
+  if (hub.db == nullptr) {
+    return v_zero ();
+  }
+
+  entt::id_type event_id = resolve_event_type_id (event_name);
+  auto it = hub.db->entries.find (event_id);
+  if (it == hub.db->entries.end ()) {
+    // Undeclared event: register it on first emit as a script-defined type
+    // (mirrors message_post's first-use registration).
+    if (event_id == 0) {
+      event_id = entt::id_type{ entt::hashed_string (event_name) };
+    }
+    it = hub.db->entries
+             .emplace (event_id, ::wsl::event::event_source_debug_entry{})
+             .first;
+    it->second.type_id = event_id;
+    it->second.type_name = event_name;
+  }
+
+  if (it->second.size == 0) {
+    // Script-defined event: first emit latches the payload layout so later
+    // emits and sink wiring validate against it.
+    it->second.size = payload_size;
+  } else if (it->second.size != payload_size) {
+    wsl::log::sys ()->error (
+        "event_emit: payload size mismatch for '{}' (expected {}, got {})",
+        event_name, it->second.size, payload_size);
+    return v_zero ();
+  }
+
+  hub.dispatch_by_id (event_id, data);
+  return v_zero ();
+}
+
 void
 wsl_audio_play (uint32_t entity)
 {
@@ -2832,6 +3021,19 @@ public:
     addExtern<DAS_BIND_FUN (wsl_event_disconnect)> (
         *this, lib, "event_disconnect", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_event_disconnect")
+        ->args ({ "event_name", "system_name", "handler_name" });
+
+    addExtern<DAS_BIND_FUN (wsl_event_declare_source)> (
+        *this, lib, "event_declare_source", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_event_declare_source")
+        ->args ({ "event_name", "system_name" });
+    addInterop<wsl_event_emit, void, const char *, vec4f> (
+        *this, lib, "event_emit", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_event_emit")
+        ->args ({ "event_name", "payload" });
+    addExtern<DAS_BIND_FUN (wsl_event_declare_sink)> (
+        *this, lib, "event_declare_sink", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_event_declare_sink")
         ->args ({ "event_name", "system_name", "handler_name" });
 
     // ── Model instance ──

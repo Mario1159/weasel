@@ -627,8 +627,8 @@ Physics: rigid body
       y (float)
       z (float)
 
-Event runtime wiring
---------------------
+Name-keyed event declaration / emission
+---------------------------------------
 
 .. das:function:: audio_play(entity : uint)
 
@@ -665,6 +665,22 @@ Event runtime wiring
    :param:
       entity (uint)
       volume (float)
+
+.. das:function:: event_declare_source(event_name : var, system_name : var)
+
+   :param:
+      event_name (var)
+      system_name (var)
+
+.. das:function:: event_declare_sink(event_name : var, system_name : var, handler_name : var)
+
+   :param:
+      event_name (var)
+      system_name (var)
+      handler_name (var)
+
+Event runtime wiring
+--------------------
 
 .. das:function:: event_connect(event_name : var, system_name : var, handler_name : var)
 

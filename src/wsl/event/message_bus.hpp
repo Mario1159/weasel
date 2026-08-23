@@ -73,6 +73,42 @@ public:
     std::memcpy (buf.bytes.data () + offset, &event, sizeof (Event));
   }
 
+  /**
+   * Type-erased variant of :cpp:func:`post` for name-keyed bindings.
+   *
+   * The element size latches on the first post for a type. A later post whose
+   * payload size differs from the latched element size is rejected to protect
+   * the buffer from silent corruption.
+   *
+   * :param type_id: Stable message type identifier.
+   * :param data: Payload bytes to copy.
+   * :param size: Payload size in bytes.
+   * :return: ``true`` if the message was queued, ``false`` when the size does
+   *   not match a previously latched element size.
+   */
+  bool
+  post_erased (entt::id_type type_id, const void *data, std::size_t size)
+  {
+    if (data == nullptr || size == 0) {
+      return false;
+    }
+
+    std::lock_guard<std::mutex> lock (m_mutex);
+    detail::erased_buffer &buf = m_pending[type_id];
+    if (buf.element_size == 0) {
+      buf.element_size = size;
+    }
+
+    if (buf.element_size != size) {
+      return false;
+    }
+
+    const std::size_t offset = buf.bytes.size ();
+    buf.bytes.resize (offset + size);
+    std::memcpy (buf.bytes.data () + offset, data, size);
+    return true;
+  }
+
   /** Returns a typed reader bound to this bus. */
   template <typename Event>
   message_reader<Event>

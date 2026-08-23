@@ -81,6 +81,8 @@ struct event_source_debug_entry
 {
   entt::id_type type_id{};
   std::string type_name;
+  /** Payload size in bytes (``sizeof (Signal)``); 0 when unknown. */
+  std::size_t size = 0;
   std::size_t listener_count = 0;
   std::size_t emit_count = 0;
   entt::id_type owner_system_type_id{};
@@ -195,9 +197,63 @@ struct event_debug_db
     event_source_debug_entry &entry = entries[event_type_id];
     entry.type_id = event_type_id;
     entry.type_name = std::string (entt::type_name<Signal> ().value ());
+    entry.size = sizeof (Signal);
     entry.owner_system_type_id = comp::stable_type_id<OwnerSystem> ();
     entry.owner_system_type_name
         = std::string (entt::type_name<OwnerSystem> ().value ());
+  }
+
+  /**
+   * Type-erased variant of :cpp:func:`declare_event_source`.
+   *
+   * :param event_type_id: Stable event type identifier.
+   * :param event_type_name: Reflected event type name.
+   * :param owner_system_type_id: Stable identifier of the owning system.
+   * :param owner_system_type_name: Reflected name of the owning system.
+   * :param event_size: Payload size in bytes; used by byte-level emitters.
+   */
+  void
+  declare_event_source_by_id (entt::id_type event_type_id,
+                              std::string_view event_type_name,
+                              entt::id_type owner_system_type_id,
+                              std::string_view owner_system_type_name,
+                              std::size_t event_size)
+  {
+    event_source_debug_entry &entry = entries[event_type_id];
+    entry.type_id = event_type_id;
+    entry.type_name = std::string (event_type_name);
+    entry.size = event_size;
+    entry.owner_system_type_id = owner_system_type_id;
+    entry.owner_system_type_name = std::string (owner_system_type_name);
+  }
+
+  /**
+   * Type-erased variant of :cpp:func:`declare_event_sink` for the debug
+   * database only (runtime registration lives on :cpp:struct:`event_hub`).
+   */
+  void
+  declare_event_sink_by_id (entt::id_type event_type_id,
+                            std::string_view event_type_name,
+                            entt::id_type system_type_id,
+                            std::string_view system_type_name,
+                            const char *handler_name)
+  {
+    const std::string name = handler_name != nullptr ? handler_name : "";
+
+    std::erase_if (event_sinks, [event_type_id, system_type_id,
+                                 &name] (const event_sink_debug_entry &entry) {
+      return entry.event_type_id == event_type_id
+             && entry.system_type_id == system_type_id
+             && entry.handler_name == name;
+    });
+
+    event_sink_debug_entry entry;
+    entry.event_type_id = event_type_id;
+    entry.event_type_name = std::string (event_type_name);
+    entry.system_type_id = system_type_id;
+    entry.system_type_name = std::string (system_type_name);
+    entry.handler_name = name;
+    event_sinks.push_back (std::move (entry));
   }
 
   template <typename OwnerSystem>
@@ -497,6 +553,99 @@ struct event_hub
     }
   }
 
+  /** Type-erased variant of :cpp:func:`note_emit`. */
+  void
+  note_emit (entt::id_type type_id, std::string_view type_name)
+  {
+    if (db != nullptr) {
+      db->note_emit (type_id, type_name);
+    }
+  }
+
+  /**
+   * Declares an event owned by a system-like type using pre-resolved ids.
+   * Mirrors :cpp:func:`declare_event_source` for name-keyed bindings.
+   *
+   * :param event_type_id: Stable event type identifier.
+   * :param event_type_name: Reflected event type name.
+   * :param owner_system_type_id: Stable identifier of the owning system.
+   * :param owner_system_type_name: Reflected name of the owning system.
+   * :param event_size: Payload size in bytes.
+   */
+  void
+  declare_event_source_by_id (entt::id_type event_type_id,
+                              std::string_view event_type_name,
+                              entt::id_type owner_system_type_id,
+                              std::string_view owner_system_type_name,
+                              std::size_t event_size)
+  {
+    if (db != nullptr) {
+      db->declare_event_source_by_id (event_type_id, event_type_name,
+                                      owner_system_type_id,
+                                      owner_system_type_name, event_size);
+    }
+
+    std::erase_if (registered_signal_sources,
+                   [event_type_id] (const registered_event_source &entry) {
+                     return entry.event_type_id == event_type_id;
+                   });
+
+    registered_event_source source;
+    source.event_type_id = event_type_id;
+    source.event_type_name = std::string (event_type_name);
+    source.owner_system_type_id = owner_system_type_id;
+    source.owner_system_type_name = std::string (owner_system_type_name);
+    registered_signal_sources.push_back (std::move (source));
+  }
+
+  /**
+   * Registers a connectable handler for an event using pre-resolved ids.
+   * Mirrors :cpp:func:`declare_event_sink` for name-keyed bindings.
+   *
+   * :param event_type_id: Stable event type identifier.
+   * :param event_type_name: Reflected event type name.
+   * :param system_type_id: Stable identifier of the owning system.
+   * :param system_type_name: Reflected name of the owning system.
+   * :param handler_name: Connectable handler name.
+   * :param invoke: Handler thunk invoked on dispatch.
+   * :param owner: Captured owner instance, or ``nullptr`` to resolve the
+   *   owner through ``resolve_system_by_type`` at dispatch time.
+   */
+  void
+  declare_event_sink_by_id (entt::id_type event_type_id,
+                            std::string_view event_type_name,
+                            entt::id_type system_type_id,
+                            std::string_view system_type_name,
+                            const char *handler_name, handler_invoke_fn invoke,
+                            void *owner = nullptr)
+  {
+    if (db != nullptr) {
+      db->declare_event_sink_by_id (event_type_id, event_type_name,
+                                    system_type_id, system_type_name,
+                                    handler_name);
+    }
+
+    const std::string name = handler_name != nullptr ? handler_name : "";
+
+    std::erase_if (registered_event_sinks,
+                   [event_type_id, system_type_id,
+                    &name] (const registered_event_sink &entry) {
+                     return entry.event_type_id == event_type_id
+                            && entry.system_type_id == system_type_id
+                            && entry.handler_name == name;
+                   });
+
+    registered_event_sink handler;
+    handler.event_type_id = event_type_id;
+    handler.event_type_name = std::string (event_type_name);
+    handler.system_type_id = system_type_id;
+    handler.system_type_name = std::string (system_type_name);
+    handler.handler_name = name;
+    handler.invoke = invoke;
+    handler.owner_ptr = owner;
+    registered_event_sinks.push_back (std::move (handler));
+  }
+
   template <typename Signal, typename OwnerSystem>
   void
   declare_event_source ()
@@ -702,6 +851,55 @@ struct event_hub
       }
 
       connection.invoke (owner, *registry, &event);
+    }
+  }
+
+  /**
+   * Type-erased dispatch for byte-level payloads.
+   *
+   * Behaves like :cpp:func:`dispatch<Signal>` but skips the
+   * ``entt::dispatcher`` leg (which requires the concrete C++ type) and only
+   * runs the connected-handler loop.
+   *
+   * :param event_type_id: Stable event type identifier.
+   * :param data: Payload bytes; must match the registered event size.
+   */
+  void
+  dispatch_by_id (entt::id_type event_type_id, const void *data)
+  {
+    if (db != nullptr) {
+      auto it = db->entries.find (event_type_id);
+      if (it != db->entries.end ()) {
+        db->note_emit (event_type_id, it->second.type_name);
+      }
+    }
+
+    if (!resolve_active_registry || !resolve_system_by_type) {
+      return;
+    }
+
+    entt::registry *registry = resolve_active_registry ();
+    if (registry == nullptr) {
+      return;
+    }
+
+    for (const connected_sink &connection : connected_handlers) {
+      if (connection.event_type_id != event_type_id
+          || connection.invoke == nullptr) {
+        continue;
+      }
+
+      void *owner = connection.owner_ptr;
+      if (owner == nullptr) {
+        ::wsl::sys::ecs_system *system
+            = resolve_system_by_type (connection.system_type_id);
+        if (system == nullptr) {
+          continue;
+        }
+        owner = system;
+      }
+
+      connection.invoke (owner, *registry, data);
     }
   }
 };

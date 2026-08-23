@@ -4,6 +4,7 @@
 #include "wsl/event/message_bus.hpp"
 #include "wsl/input.hpp"
 #include "wsl/comp/component_meta.hpp"
+#include "wsl/log/log.hpp"
 
 #include "daScript/ast/ast.h"
 #include "daScript/ast/ast_handle.h"
@@ -12,7 +13,12 @@
 #include "daScript/misc/arraytype.h"
 #include "daScript/simulate/aot.h"
 
+#include <entt/core/hashed_string.hpp>
+#include <algorithm>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 // ── Proxy value types exposed to Daslang ──
 // Scripts read engine input messages through these value structs. Each holds a
@@ -218,8 +224,231 @@ MAKE_TYPE_FACTORY (TextInput, wsl::das::TextInputMsg)
 MAKE_TYPE_FACTORY (WindowResized, wsl::das::WindowResizedMsg)
 MAKE_TYPE_FACTORY (QuitRequested, wsl::das::QuitRequestedMsg)
 
+namespace wsl::das
+{
+
+// ── Name-keyed message registry ──
+
 namespace
 {
+
+struct message_type_record
+{
+  entt::id_type id = 0;
+  std::size_t size = 0;
+};
+
+std::unordered_map<std::string, message_type_record> &
+message_type_registry ()
+{
+  static std::unordered_map<std::string, message_type_record> registry;
+  return registry;
+}
+
+const message_type_record *
+find_message_type (const char *name)
+{
+  if (name == nullptr) {
+    return nullptr;
+  }
+
+  auto &registry = message_type_registry ();
+  const auto it = registry.find (name);
+  return it == registry.end () ? nullptr : &it->second;
+}
+
+// ── Name-keyed message API (post / count / for_each) ──
+
+/**
+ * Posts a message payload from a daScript struct. Unknown names are
+ * registered on first use with a name-hashed id and the posted struct's
+ * size, which makes purely script-defined message types work without any
+ * C++ counterpart.
+ */
+vec4f
+wsl_message_post (::das::Context &, ::das::SimNode_CallBase *call, vec4f *args)
+{
+  using namespace ::das;
+
+  const char *name = cast<char *>::to (args[0]);
+  auto *bus = wsl::das::wsl_api_get_active_message_bus ();
+  if (name == nullptr || bus == nullptr) {
+    return v_zero ();
+  }
+
+  TypeInfo *ti = call->types[1];
+  if (ti == nullptr || ti->type != Type::tStructure) {
+    wsl::log::sys ()->error (
+        "message_post: payload for '{}' must be a structure type", name);
+    return v_zero ();
+  }
+
+  const void *data = cast<void *>::to (args[1]);
+  const std::size_t size = static_cast<std::size_t> (getTypeSize (ti));
+
+  auto &registry = message_type_registry ();
+  entt::id_type id = 0;
+
+  const auto it = registry.find (name);
+  if (it != registry.end ()) {
+    if (it->second.size != 0 && it->second.size != size) {
+      wsl::log::sys ()->error (
+          "message_post: payload size mismatch for '{}' (expected {}, got {})",
+          name, it->second.size, size);
+      return v_zero ();
+    }
+    id = it->second.id;
+  } else {
+    // Script-defined message type: latch id and layout on first post.
+    id = entt::id_type{ entt::hashed_string (name) };
+    registry.emplace (name, message_type_record{ id, size });
+  }
+
+  if (!bus->post_erased (id, data, size)) {
+    wsl::log::sys ()->error ("message_post: rejected post for '{}'", name);
+  }
+
+  return v_zero ();
+}
+
+int
+wsl_message_count (const char *name)
+{
+  auto *record = find_message_type (name);
+  auto *bus = wsl::das::wsl_api_get_active_message_bus ();
+  if (record == nullptr || bus == nullptr) {
+    return 0;
+  }
+
+  auto *buf = bus->find_published (record->id);
+  if (buf == nullptr || buf->bytes.empty () || buf->element_size == 0) {
+    return 0;
+  }
+
+  return static_cast<int> (buf->bytes.size () / buf->element_size);
+}
+void
+wsl_message_for_each (const char *name, const ::das::TBlock<void, vec4f> &blk,
+                      ::das::Context *context, ::das::LineInfoArg *at)
+{
+  auto *record = find_message_type (name);
+  auto *bus = wsl::das::wsl_api_get_active_message_bus ();
+  if (record == nullptr || bus == nullptr || context == nullptr) {
+    return;
+  }
+
+  auto *buf = bus->find_published (record->id);
+  if (buf == nullptr || buf->bytes.empty () || buf->element_size == 0) {
+    return;
+  }
+
+  const std::size_t count = buf->bytes.size () / buf->element_size;
+  for (std::size_t i = 0; i < count; ++i) {
+    void *element = buf->bytes.data () + i * buf->element_size;
+    // Struct payloads pass by reference through the daslang ABI; a raw
+    // pointer in the argument slot is what a struct block parameter expects.
+    ::das::das_invoke<void>::invoke<void *> (context, at, blk, element);
+  }
+}
+
+// ── Script message subscriptions ──
+
+struct das_subscription
+{
+  entt::id_type id = 0;
+  std::string name;
+  ::das::Func fn;
+  ::das::Context *ctx = nullptr;
+  // The bus owns its callback forever; this token lets a removed
+  // subscription neuter it instead of leaving a dangling context pointer.
+  std::shared_ptr<void> token;
+};
+
+std::vector<das_subscription> &
+subscription_registry ()
+{
+  static std::vector<das_subscription> subscriptions;
+  return subscriptions;
+}
+
+bool
+wsl_message_subscribe (const char *name, ::das::Func fn,
+                       ::das::Context *context)
+{
+  auto *bus = wsl::das::wsl_api_get_active_message_bus ();
+  if (name == nullptr || bus == nullptr || context == nullptr
+      || fn.PTR == nullptr) {
+    return false;
+  }
+
+  const message_type_record *record = find_message_type (name);
+  entt::id_type id = 0;
+  if (record != nullptr) {
+    id = record->id;
+  } else {
+    // Subscribing to an unknown name is allowed: the id latches so posts
+    // from the same name resolve to the same subscription channel.
+    id = entt::id_type{ entt::hashed_string (name) };
+    register_message_type (name, id, 0);
+  }
+
+  auto token = std::make_shared<int> (0);
+
+  das_subscription sub{ id, name, fn, context, token };
+  subscription_registry ().push_back (std::move (sub));
+
+  const std::weak_ptr<void> weak_token = token;
+  entt::id_type captured_id = id;
+  bus->subscribe (
+      [captured_id, weak_token, fn, context] (const wsl::event::message &m) {
+        if (weak_token.expired () || m.type_id != captured_id
+            || m.data == nullptr) {
+          return;
+        }
+        ::das::das_invoke_function<void>::invoke<void *> (
+            context, nullptr, fn, const_cast<void *> (m.data));
+      });
+
+  return true;
+}
+
+bool
+wsl_message_unsubscribe (const char *name, ::das::Context *context)
+{
+  if (name == nullptr || context == nullptr) {
+    return false;
+  }
+
+  auto &subs = subscription_registry ();
+  std::erase_if (subs, [name, context] (const das_subscription &s) {
+    return s.name == name && s.ctx == context;
+  });
+  return true;
+}
+
+} // namespace
+
+void
+wsl_api_on_context_destroyed (::das::Context *context)
+{
+  if (context == nullptr) {
+    return;
+  }
+
+  auto &subs = subscription_registry ();
+  std::erase_if (
+      subs, [context] (const das_subscription &s) { return s.ctx == context; });
+}
+
+void
+register_message_type (const char *name, entt::id_type id, std::size_t size)
+{
+  if (name == nullptr) {
+    return;
+  }
+  message_type_registry ().insert_or_assign (name,
+                                             message_type_record{ id, size });
+}
 
 template <typename Pod>
 size_t
@@ -503,6 +732,35 @@ void
 register_event_message_bindings (::das::Module &module,
                                  ::das::ModuleLibrary &lib)
 {
+  // Register the built-in input messages so name-keyed APIs can address
+  // them (post/count/for_each) with engine-consistent type ids.
+  register_message_type ("mouse_motion",
+                         wsl::comp::stable_type_id<wsl::input::mouse_motion> (),
+                         sizeof (wsl::input::mouse_motion));
+  register_message_type ("mouse_button",
+                         wsl::comp::stable_type_id<wsl::input::mouse_button> (),
+                         sizeof (wsl::input::mouse_button));
+  register_message_type ("mouse_wheel",
+                         wsl::comp::stable_type_id<wsl::input::mouse_wheel> (),
+                         sizeof (wsl::input::mouse_wheel));
+  register_message_type ("key_pressed",
+                         wsl::comp::stable_type_id<wsl::input::key_pressed> (),
+                         sizeof (wsl::input::key_pressed));
+  register_message_type ("key_released",
+                         wsl::comp::stable_type_id<wsl::input::key_released> (),
+                         sizeof (wsl::input::key_released));
+  register_message_type ("text_input",
+                         wsl::comp::stable_type_id<wsl::input::text_input> (),
+                         sizeof (wsl::input::text_input));
+  register_message_type (
+      "window_resized",
+      wsl::comp::stable_type_id<wsl::input::window_resized> (),
+      sizeof (wsl::input::window_resized));
+  register_message_type (
+      "quit_requested",
+      wsl::comp::stable_type_id<wsl::input::quit_requested> (),
+      sizeof (wsl::input::quit_requested));
+
   module.addAnnotation (new MouseMotionMsgAnnotation (lib));
   module.addAnnotation (new MouseButtonMsgAnnotation (lib));
   module.addAnnotation (new MouseWheelMsgAnnotation (lib));
@@ -588,6 +846,32 @@ register_event_message_bindings (::das::Module &module,
       module, lib, "quit_requested_at", ::das::SideEffects::accessExternal,
       "wsl::das::wsl_quit_requested_at")
       ->args ({ "index" });
+
+  // ── Name-keyed message API ──
+  addInterop<wsl_message_post, bool, const char *, vec4f> (
+      module, lib, "message_post", ::das::SideEffects::modifyExternal,
+      "wsl::das::wsl_message_post")
+      ->args ({ "name", "payload" });
+
+  addExtern<DAS_BIND_FUN (wsl_message_count)> (
+      module, lib, "message_count", ::das::SideEffects::accessExternal,
+      "wsl::das::wsl_message_count")
+      ->arg ("name");
+
+  addExtern<DAS_BIND_FUN (wsl_message_for_each)> (
+      module, lib, "for_each_message", ::das::SideEffects::invoke,
+      "wsl::das::wsl_message_for_each")
+      ->args ({ "name", "block", "context", "at" });
+
+  addExtern<DAS_BIND_FUN (wsl_message_subscribe)> (
+      module, lib, "message_subscribe", ::das::SideEffects::modifyExternal,
+      "wsl::das::wsl_message_subscribe")
+      ->args ({ "name", "fn", "context" });
+
+  addExtern<DAS_BIND_FUN (wsl_message_unsubscribe)> (
+      module, lib, "message_unsubscribe", ::das::SideEffects::modifyExternal,
+      "wsl::das::wsl_message_unsubscribe")
+      ->args ({ "name", "context" });
 }
 
 } // namespace wsl::das

@@ -19,6 +19,11 @@ namespace wsl::event
 class message_bus;
 }
 
+namespace wsl::comp::singl
+{
+class runtime_context;
+}
+
 namespace wsl::das
 {
 
@@ -29,6 +34,9 @@ struct Entity
 };
 
 constexpr uint32_t NULL_ENTITY_ID = 0xFFFFFFFFu;
+
+/** Returns the active runtime context, or nullptr when unavailable. */
+comp::singl::runtime_context *try_get_runtime_context ();
 
 /** Registers the Weasel API module with the daslang engine. */
 void register_wsl_api_module (::das::ModuleGroup &module_group);

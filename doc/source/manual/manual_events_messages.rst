@@ -38,34 +38,60 @@ The typed payloads are ``MouseMotion``, ``MouseButton``, ``MouseWheel``,
 ``KeyPressed``, ``KeyReleased``, ``TextInput``, ``WindowResized`` and
 ``QuitRequested``.
 
-.. note:: Custom (user-defined) messages are defined, posted and pulled in C++;
-   only the built-in input messages above are directly readable from Daslang.
+For any *other* message type -- engine or user-defined -- the name-keyed API
+works uniformly: ``message_post``, ``message_count`` and
+``for_each_message`` address messages by string name.
 
-Defining a message (C++)
-------------------------
+Defining a message
+------------------
 
-.. note:: Messages are C++ structs; there is no Daslang equivalent for *defining*
-   a new message type. The engine's own input messages are posted by the SDL
-   poll boundary and pulled from Daslang via the accessors above.
+A message is a plain Weasel data struct. No registration is required. Message
+types can originate on **either side**, and each side mirrors the other's
+layout:
 
-A message is a plain Weasel data struct. No registration is required:
+.. code-block:: das
+
+    // Daslang: script-defined or mirror of the C++ struct below
+    struct PlayerDied {
+        who : uint    // entt::entity as int
+        cause : int
+    }
 
 .. code-block:: cpp
 
+   // C++: the canonical declaration mirrored above
    struct PlayerDied {
      entt::entity who;
      int          cause;
    };
 
-Posting (C++)
---------------
+The engine's own input messages are posted by the SDL poll boundary and pulled
+from Daslang via the accessors above. Posting a Daslang struct under a new
+name registers that layout on first use, so purely script-defined message
+types need no C++ counterpart.
 
-.. note:: Posting is a C++-only operation; there is no Daslang ``post`` for
-   arbitrary messages.
+Posting
+-------
 
-The :cpp:any:`wsl::event::message_bus` is a singleton on the active
-:cpp:any:`wsl::comp::runtime_context`. Post from anywhere -- a system update, an
-async task, etc. Posting is thread-safe:
+From Daslang, post by message name with a struct mirroring the payload:
+
+.. code-block:: das
+
+    def override on_update(dt : float) : void {
+        var msg : PlayerDied
+        msg.who  = m_player_id
+        msg.cause = 0
+        message_post("PlayerDied", msg)
+    }
+
+Posting under an unknown name registers it on first use (name-hashed id plus
+the posted struct's size), so purely script-defined message types work without
+any C++ counterpart. The post is rejected when the struct's size does not match
+the registered layout.
+
+In C++, post through the :cpp:any:`wsl::event::message_bus` -- a singleton on
+the active :cpp:any:`wsl::comp::runtime_context`, reachable from anywhere (a
+system update, an async task, etc.). Posting is thread-safe:
 
 .. code-block:: cpp
 
@@ -76,22 +102,26 @@ async task, etc. Posting is thread-safe:
    }
 
 Pulling with a reader
-------------------------
+---------------------
 
-Daslang first (the built-in pull accessors shown above). For a C++-defined
-message, each consuming system holds one ``message_reader<T>`` per message type
-and pulls it during its own update. The reader keeps its own cursor, so multiple
-systems holding a reader for the same type each receive every message exactly
-once:
+From Daslang, pull by name with ``message_count`` and ``for_each_message``,
+which mirrors the built-in accessors but works for every registered message
+type:
 
 .. code-block:: das
 
-   def on_update(dt : float) {
-       for i in range(mouse_button_count()) {
-           let e = mouse_button_at(i)
-           log_info("click at {e.x},{e.y}")
-       }
-   }
+    def override on_update(dt : float) : void {
+        if (message_count("PlayerDied") > 0) {
+            for_each_message("PlayerDied") $(d : PlayerDied&) {
+                log_info("player died: {d.who}")
+            }
+        }
+    }
+
+In C++, each consuming system holds one ``message_reader<T>`` per message type
+and pulls it during its own update. The reader keeps its own cursor, so
+multiple systems holding a reader for the same type each receive every message
+exactly once:
 
 .. code-block:: cpp
 
@@ -106,8 +136,9 @@ once:
 The engine's own input types (``key_pressed``, ``key_released``, ``text_input``,
 ``mouse_motion``, ``mouse_button``, ``mouse_wheel``, ``window_resized``,
 ``quit_requested``) are posted by the SDL poll boundary translator and pulled the
-same way. A catch-all ``message_reader<message>`` is available for debug/logging
-systems that genuinely need every type.
+same way -- through the typed accessors shown above, or generically via
+``for_each_message("key_pressed") ...``. A catch-all ``message_reader<message>``
+is available for debug/logging systems that genuinely need every type.
 
 Frame lifecycle
 ---------------
@@ -126,14 +157,33 @@ buffer, so a system reads exactly that frame's messages once.
    message_bus.drain(registry);               // publish pending -> reader buffers
        └─ each system pulls its message_reader<T> during its own update
 
-Non-system consumers (C++)
---------------------------
-
-.. note:: ``subscribe`` callbacks are a C++-only API.
+Non-system consumers
+--------------------
 
 For consumers that are not systems (e.g. the application or runtime context
-handling window/quit), use a typed or catch-all ``subscribe`` callback instead of a
-reader:
+handling window/quit), use a ``subscribe`` callback instead of a reader.
+
+From Daslang, subscribe a **no-capture script function** by message name.
+Callbacks fire during the per-frame drain on the main thread:
+
+.. code-block:: das
+
+    def on_window_resized(ev : WindowResized) : void {
+        log_info("window resized")
+    }
+
+    def override on_init() : void {
+        message_subscribe("window_resized", @@on_window_resized)
+        // later: message_unsubscribe("window_resized")
+    }
+
+The handler receives the posted payload as a single struct argument whose
+layout must match the message type. Subscriptions live until
+``message_unsubscribe`` or until the subscribing script program's context is
+destroyed (e.g. when the program is recompiled), at which point they are
+dropped automatically.
+
+In C++, use a typed or catch-all ``subscribe`` callback:
 
 .. code-block:: cpp
 

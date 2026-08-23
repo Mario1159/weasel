@@ -11,6 +11,7 @@
 #include "daScript/daScript.h"
 #include "wsl_api_module.hpp"
 #include "das_ecs_binds.hpp"
+#include "wsl_event_binds.hpp"
 #include "../log/log.hpp"
 
 #include <signal.h>
@@ -523,6 +524,14 @@ struct das_engine::impl
     // Merge this program's functions into fn_lookup, each paired with its
     // owning context.
     auto *raw_ctx = ctx.get ();
+
+    // If this path is re-executed, the previous context dies here; drop any
+    // message subscriptions bound to it before it goes away.
+    if (auto old_it = program_contexts.find (path);
+        old_it != program_contexts.end () && old_it->second) {
+      wsl::das::wsl_api_on_context_destroyed (old_it->second.get ());
+    }
+
     program_contexts[path] = std::move (ctx);
     compiled_programs[path] = program;
 
@@ -1062,6 +1071,11 @@ struct das_engine::impl
     // access). Do NOT call Module::Shutdown() here — it was never called
     // per-engine instance. Module::Initialize/Shutdown is managed globally on
     // the main thread via initialize_global().
+    for (auto &kv : program_contexts) {
+      if (kv.second) {
+        wsl::das::wsl_api_on_context_destroyed (kv.second.get ());
+      }
+    }
     fn_lookup.clear ();
     file_fn_lookup.clear ();
     program_contexts.clear ();

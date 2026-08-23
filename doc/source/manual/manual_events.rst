@@ -27,6 +27,12 @@ game events travel through one pipeline:
    emit()  ──► event_hub  ──► connected event_sinks           (explicit, immediate)
    post()  ──► message_bus ── drain() ──► typed reader buffers ──► systems pull via message_reader<T>
 
+Every operation in both models is available from C++ **and** from Daslang.
+Scripts address event and message types by string name (e.g.
+``event_emit("PlayerHit", hit)``, ``message_post("PlayerDied", msg)``) with a
+Daslang struct mirroring the payload layout; see the two subpages for the full
+API surface on each side.
+
 .. toctree::
    :maxdepth: 1
 
