@@ -8,7 +8,7 @@
 #include <entt/entity/fwd.hpp>
 #include <string>
 
-#include "wsl/reg/sig/signal_hub.hpp"
+#include "wsl/event/event_hub.hpp"
 #include "wsl/comp/singl/ui_manager.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
@@ -22,19 +22,13 @@ namespace sys
 {
 
 void
-render_ui_system::register_signals (reg::sig::signal_hub &hub)
+render_ui_system::register_event_sources (event::event_hub &hub)
 {
   (void)hub;
 }
 
 void
-render_ui_system::register_event_handlers (reg::sig::signal_hub &hub)
-{
-  wsl::reg::sig::declare_handler<render_ui_system> (hub, "on_event");
-}
-
-void
-render_ui_system::register_iterations (reg::sig::signal_hub &hub)
+render_ui_system::register_iterations (event::event_hub &hub)
 {
   (void)hub;
 }
@@ -168,10 +162,10 @@ render_ui_system::on_render_record_draw_cmd (entt::registry &registry)
 }
 
 void
-render_ui_system::on_event (registry_handle reg, const engine_event &ev)
+render_ui_system::handle_sdl_event (entt::registry &registry,
+                                    const engine_event &ev)
 {
 
-  auto &registry = *reg;
   auto &ctx = registry.ctx ();
   if (!ctx.template contains<comp::singl::runtime_context *> ()
       || !ctx.template contains<comp::singl::ui_manager *> ()) {

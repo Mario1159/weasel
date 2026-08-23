@@ -94,9 +94,6 @@ public:
   /** Updates all active systems in the scene. */
   void update (double dt);
 
-  /** Forwards an engine event to all active systems in the scene. */
-  void handle_events (const wsl::engine_event &e);
-
   /** Shuts down all systems and clears the registry. */
   void stop_and_clear ();
 

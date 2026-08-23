@@ -16,7 +16,8 @@
 #include "../../phys/physics_engine.hpp"
 #include "../../events.hpp"
 #include "../../input.hpp"
-#include "../../reg/sig/signal_hub.hpp"
+#include "../../event/event_hub.hpp"
+#include "../../event/message_bus.hpp"
 #include "rendering_manager.hpp"
 #include "ui_manager.hpp"
 #include "physics_manager.hpp"
@@ -175,35 +176,35 @@ public:
   {
     return m_system_factory_registry;
   }
-  reg::sig::signal_debug_db const &
-  signal_db () const
+  event::event_debug_db const &
+  event_db () const
   {
-    return m_signal_db;
+    return m_event_db;
   }
-  reg::sig::signal_debug_db &
-  signal_db ()
+  event::event_debug_db &
+  event_db ()
   {
-    return m_signal_db;
+    return m_event_db;
   }
-  entt::dispatcher const &
-  dispatcher () const
+  event::event_hub const &
+  event_hub () const
   {
-    return m_dispatcher;
+    return m_event_hub;
   }
-  entt::dispatcher &
-  dispatcher ()
+  event::event_hub &
+  event_hub ()
   {
-    return m_dispatcher;
+    return m_event_hub;
   }
-  reg::sig::signal_hub const &
-  signal_hub () const
+  event::message_bus const &
+  message_bus () const
   {
-    return m_signal_hub;
+    return m_message_bus;
   }
-  reg::sig::signal_hub &
-  signal_hub ()
+  event::message_bus &
+  message_bus ()
   {
-    return m_signal_hub;
+    return m_message_bus;
   }
   reg::registry_queries const &
   reg_queries () const
@@ -336,9 +337,9 @@ private:
   reg::component_registry m_component_registry;
   reg::singleton_registry m_singleton_registry;
   reg::system_factory_registry m_system_factory_registry;
-  reg::sig::signal_debug_db m_signal_db;
-  entt::dispatcher m_dispatcher;
-  reg::sig::signal_hub m_signal_hub;
+  event::event_debug_db m_event_db;
+  event::event_hub m_event_hub;
+  event::message_bus m_message_bus;
   reg::registry_queries m_reg_queries;
   reg::runtime::runtime_project_module m_runtime_project_module;
 

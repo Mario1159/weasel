@@ -1,6 +1,6 @@
 #include "audio_system.hpp"
 #include "../comp/audio.hpp"
-#include "reg/sig/signal_hub.hpp"
+#include "event/event_hub.hpp"
 #include "../comp/singl/runtime_context.hpp"
 #include "sys/system.hpp"
 #include <SDL3_mixer/SDL_mixer.h>
@@ -19,67 +19,47 @@ audio_system::audio_system (const std::string &name) : ecs_system_t (name) {}
 audio_system::~audio_system () { stop_all_loops (); }
 
 void
-audio_system::register_signals (reg::sig::signal_hub &hub)
+audio_system::register_event_sources (event::event_hub &hub)
 {
-  hub.declare_signal<comp::audio::play, audio_system, comp::audio> (
-      +[] (const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::play *> (sig)->entity;
-      });
-  hub.declare_signal<comp::audio::stop, audio_system, comp::audio> (
-      +[] (const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::stop *> (sig)->entity;
-      });
-  hub.declare_signal<comp::audio::pause, audio_system, comp::audio> (
-      +[] (const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::pause *> (sig)->entity;
-      });
-  hub.declare_signal<comp::audio::resume, audio_system, comp::audio> (
-      +[] (const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::resume *> (sig)->entity;
-      });
-  hub.declare_signal<comp::audio::set_volume, audio_system, comp::audio> (
-      +[] (const void *sig) -> entt::entity {
-        return static_cast<const comp::audio::set_volume *> (sig)->entity;
-      });
+  hub.declare_event_source<comp::audio::play, audio_system> ();
+  hub.declare_event_source<comp::audio::stop, audio_system> ();
+  hub.declare_event_source<comp::audio::pause, audio_system> ();
+  hub.declare_event_source<comp::audio::resume, audio_system> ();
+  hub.declare_event_source<comp::audio::set_volume, audio_system> ();
 }
 
 void
-audio_system::register_event_handlers (reg::sig::signal_hub &hub)
+audio_system::register_event_sinks (event::event_hub &hub)
 {
-  hub.declare_connectable_handler<comp::audio::play, audio_system,
-                                  comp::audio> (
-      "on_play", +[] (sys::ecs_system &sys, entt::registry &reg,
-                      entt::entity ent, const void *sig) {
-        static_cast<audio_system &> (sys).on_play (
-            reg, ent, *static_cast<const comp::audio::play *> (sig));
+  hub.declare_event_sink<comp::audio::play, audio_system> (
+      "on_play", +[] (void *owner, entt::registry &reg, const void *sig) {
+        const auto &event = *static_cast<const comp::audio::play *> (sig);
+        static_cast<audio_system &> (*static_cast<sys::ecs_system *> (owner))
+            .on_play (reg, event.entity, event);
       });
-  hub.declare_connectable_handler<comp::audio::stop, audio_system,
-                                  comp::audio> (
-      "on_stop", +[] (sys::ecs_system &sys, entt::registry &reg,
-                      entt::entity ent, const void *sig) {
-        static_cast<audio_system &> (sys).on_stop (
-            reg, ent, *static_cast<const comp::audio::stop *> (sig));
+  hub.declare_event_sink<comp::audio::stop, audio_system> (
+      "on_stop", +[] (void *owner, entt::registry &reg, const void *sig) {
+        const auto &event = *static_cast<const comp::audio::stop *> (sig);
+        static_cast<audio_system &> (*static_cast<sys::ecs_system *> (owner))
+            .on_stop (reg, event.entity, event);
       });
-  hub.declare_connectable_handler<comp::audio::pause, audio_system,
-                                  comp::audio> (
-      "on_pause", +[] (sys::ecs_system &sys, entt::registry &reg,
-                       entt::entity ent, const void *sig) {
-        static_cast<audio_system &> (sys).on_pause (
-            reg, ent, *static_cast<const comp::audio::pause *> (sig));
+  hub.declare_event_sink<comp::audio::pause, audio_system> (
+      "on_pause", +[] (void *owner, entt::registry &reg, const void *sig) {
+        const auto &event = *static_cast<const comp::audio::pause *> (sig);
+        static_cast<audio_system &> (*static_cast<sys::ecs_system *> (owner))
+            .on_pause (reg, event.entity, event);
       });
-  hub.declare_connectable_handler<comp::audio::resume, audio_system,
-                                  comp::audio> (
-      "on_resume", +[] (sys::ecs_system &sys, entt::registry &reg,
-                        entt::entity ent, const void *sig) {
-        static_cast<audio_system &> (sys).on_resume (
-            reg, ent, *static_cast<const comp::audio::resume *> (sig));
+  hub.declare_event_sink<comp::audio::resume, audio_system> (
+      "on_resume", +[] (void *owner, entt::registry &reg, const void *sig) {
+        const auto &event = *static_cast<const comp::audio::resume *> (sig);
+        static_cast<audio_system &> (*static_cast<sys::ecs_system *> (owner))
+            .on_resume (reg, event.entity, event);
       });
-  hub.declare_connectable_handler<comp::audio::set_volume, audio_system,
-                                  comp::audio> (
-      "on_set_volume", +[] (sys::ecs_system &sys, entt::registry &reg,
-                            entt::entity ent, const void *sig) {
-        static_cast<audio_system &> (sys).on_set_volume (
-            reg, ent, *static_cast<const comp::audio::set_volume *> (sig));
+  hub.declare_event_sink<comp::audio::set_volume, audio_system> (
+      "on_set_volume", +[] (void *owner, entt::registry &reg, const void *sig) {
+        const auto &event = *static_cast<const comp::audio::set_volume *> (sig);
+        static_cast<audio_system &> (*static_cast<sys::ecs_system *> (owner))
+            .on_set_volume (reg, event.entity, event);
       });
 }
 

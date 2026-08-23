@@ -117,13 +117,10 @@ class System : EcsSystem {
     }
 
     def override on_update(dt : float) : void {
-        // per-frame update
-    }
-
-    def override on_event() : void {
-        var kind = get_event_kind()
-        if (kind == EVENT_MOUSE_MOTION) {
-            m_accumulated_dx += get_event_mouse_dx()
+        // per-frame update; read input via the pull-only message bus, e.g.
+        for i in range(mouse_motion_count()) {
+            var m = mouse_motion_at(i)
+            m_accumulated_dx += m.xrel
         }
     }
 

@@ -31,7 +31,7 @@ namespace reg
  *
  * The \c runtime sub-namespace provides:
  * - \c runtime_project_module: discovers and executes user Daslang component
- *   and system files.
+ * and system files.
  */
 namespace runtime
 {

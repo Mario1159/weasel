@@ -328,7 +328,7 @@ inspector::draw_system_inspector (wsl::sys::ecs_system *system)
   ImGui::TextUnformatted ("Iterations");
   ImGui::PopFont ();
 
-  auto &db = m_runtime_ctx->signal_db ();
+  auto &db = m_runtime_ctx->event_db ();
   const entt::id_type sys_tid = system->get_type_id ();
 
   bool any = false;

@@ -10,11 +10,10 @@ subsystem available to authors building games and applications with Weasel.
    manual_the_weasel_toolkit
    manual_projects
    manual_ecs_fundamentals
-   manual_signals
+   manual_events
    manual_application_build_playback
    manual_daslang_quick_start_guide
    manual_ecs_programming
-   manual_signal_programming
    manual_input
    manual_scene_and_prefabs
    manual_resources

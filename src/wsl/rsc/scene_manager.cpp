@@ -106,9 +106,8 @@ rsc::scene_manager::set_active (scene *scene_ptr)
     }
   }
 
-  m_main_world.get_runtime_context ()
-      ->dispatcher ()
-      .trigger<wsl::event::scene_changed> ({ old_scene, m_active_scene });
+  m_main_world.get_runtime_context ()->event_hub ().dispatch (
+      wsl::event::scene_changed{ old_scene, m_active_scene });
 }
 
 rsc::scene &
@@ -217,14 +216,6 @@ rsc::scene_manager::update (double dt)
 {
   if (m_active_scene != nullptr) {
     m_active_scene->update (dt);
-  }
-}
-
-void
-rsc::scene_manager::handle_events (const wsl::engine_event &event)
-{
-  if (m_active_scene != nullptr) {
-    m_active_scene->handle_events (event);
   }
 }
 

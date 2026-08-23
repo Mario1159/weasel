@@ -4,7 +4,7 @@
 #include "../comp/character_body.hpp"
 #include "../comp/hierarchy.hpp"
 #include "../comp/rigid_body.hpp"
-#include "reg/sig/signal_hub.hpp"
+#include "event/event_hub.hpp"
 #include "../comp/transform.hpp"
 #include "../comp/world_transform.hpp"
 
@@ -102,31 +102,25 @@ physics_system::get_registry_physics_manager (entt::registry &registry)
 }
 
 void
-physics_system::register_signals (reg::sig::signal_hub &hub)
+physics_system::register_event_sources (event::event_hub &hub)
 {
   // these signal types may still live in component namespaces,
   // but ownership is now explicitly the physics system.
-  hub.declare_signal<comp::area::entered, physics_system, comp::area> (
-      +[] (const void *sig) -> entt::entity {
-        return static_cast<const comp::area::entered *> (sig)->area_entity;
-      });
-  hub.declare_signal<comp::area::exited, physics_system, comp::area> (
-      +[] (const void *sig) -> entt::entity {
-        return static_cast<const comp::area::exited *> (sig)->area_entity;
-      });
+  hub.declare_event_source<comp::area::entered, physics_system> ();
+  hub.declare_event_source<comp::area::exited, physics_system> ();
 }
 
 void
-physics_system::register_event_handlers (reg::sig::signal_hub &hub)
+physics_system::register_event_sinks (event::event_hub &hub)
 {
   // add declarations here later if you connect dispatcher sinks for this
-  // system reg::sig::declare_handler<physics_system>(hub,
+  // system event::declare_handler<physics_system>(hub,
   // "on_some_event");
   (void)hub;
 }
 
 void
-physics_system::register_iterations (reg::sig::signal_hub &hub)
+physics_system::register_iterations (event::event_hub &hub)
 {
   clear_registered_iterations ();
 
@@ -489,12 +483,12 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
     }
 
     if (ev.entered) {
-      wsl::reg::sig::emit<comp::area::entered> (
-          runtime.signal_hub (),
+      wsl::event::emit<comp::area::entered> (
+          runtime.event_hub (),
           comp::area::entered{ area_ent, other_ent, ev.other });
     } else {
-      wsl::reg::sig::emit<comp::area::exited> (
-          runtime.signal_hub (),
+      wsl::event::emit<comp::area::exited> (
+          runtime.event_hub (),
           comp::area::exited{ area_ent, other_ent, ev.other });
     }
   }

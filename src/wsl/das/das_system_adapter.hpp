@@ -50,7 +50,6 @@ public:
   void on_init (entt::registry &registry) override;
   void on_update (entt::registry &registry, double dt) override;
   void on_inactive (entt::registry &registry) override;
-  void on_event (registry_handle registry, const engine_event &ev) override;
 
   bool
   has_failed () const override

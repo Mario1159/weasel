@@ -62,7 +62,6 @@ scene.init();
 
 while (running) {
     scene.update(dt);
-    scene.handle_events(event);
 }
 
 scene.stop_and_clear();

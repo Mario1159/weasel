@@ -731,7 +731,6 @@ write_text_file (const std::filesystem::path &path, std::string_view text)
   return output.good ();
 }
 
-
 } // namespace
 
 // -------- command_executor implementation --------
@@ -2135,11 +2134,11 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
   const std::string &sub = tokens[1];
 
   if (sub == "ls") {
-    if (m_rtc.signal_db ().entries.empty ()) {
-      m_output << "No signals declared.\n";
+    if (m_rtc.event_db ().entries.empty ()) {
+      m_output << "No events declared.\n";
       return;
     }
-    for (const auto &kv : m_rtc.signal_db ().entries) {
+    for (const auto &kv : m_rtc.event_db ().entries) {
       const auto &entry = kv.second;
       m_output << entry.type_name << " (owner=" << entry.owner_system_type_name
                << ") listeners=" << entry.listener_count
@@ -2149,27 +2148,27 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
   }
 
   if (sub == "handlers") {
-    if (m_rtc.signal_db ().connectable_handlers.empty ()) {
+    if (m_rtc.event_db ().event_sinks.empty ()) {
       m_output << "No connectable handlers declared.\n";
       return;
     }
-    for (const auto &h : m_rtc.signal_db ().connectable_handlers) {
-      m_output << h.signal_type_name << " -> " << h.system_type_name
+    for (const auto &h : m_rtc.event_db ().event_sinks) {
+      m_output << h.event_type_name << " -> " << h.system_type_name
                << "::" << h.handler_name << "\n";
     }
     return;
   }
 
   if (sub == "connections") {
-    auto conns = m_rtc.signal_hub ().get_all_connections ();
+    auto conns = m_rtc.event_hub ().get_all_connections ();
     if (conns.empty ()) {
-      m_output << "No signal connections.\n";
+      m_output << "No event connections.\n";
       return;
     }
     for (const auto &c : conns) {
-      std::string signal_name = std::to_string (c.signal_type_id);
-      auto it = m_rtc.signal_db ().entries.find (c.signal_type_id);
-      if (it != m_rtc.signal_db ().entries.end ())
+      std::string signal_name = std::to_string (c.event_type_id);
+      auto it = m_rtc.event_db ().entries.find (c.event_type_id);
+      if (it != m_rtc.event_db ().entries.end ())
         signal_name = it->second.type_name;
 
       std::string system_name = "<unknown>";
@@ -2178,17 +2177,15 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
         system_name = sd->display_name;
 
       m_output << signal_name << " -> " << system_name << "::" << c.handler_name
-               << " (src=" << (uint64_t)c.source_entity
-               << ", tgt=" << (uint64_t)c.target_entity << ")\n";
+               << "\n";
     }
     return;
   }
 
   if (sub == "connect" || sub == "disconnect") {
-    // Usage: sig connect <signal> <system> <handler> [src_entity] [tgt_entity]
+    // Usage: sig connect <event> <system> <handler>
     if (tokens.size () < 5) {
-      m_output << "Usage: sig " << sub
-               << " <signal> <system> <handler> [src] [tgt]\n";
+      m_output << "Usage: sig " << sub << " <signal> <system> <handler>\n";
       return;
     }
 
@@ -2196,9 +2193,9 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
     const std::string &system_arg = tokens[3];
     const std::string &handler_arg = tokens[4];
 
-    // Resolve signal type id by full or simple name
+    // Resolve event type id by full or simple name
     entt::id_type signal_id = 0;
-    for (const auto &kv : m_rtc.signal_db ().entries) {
+    for (const auto &kv : m_rtc.event_db ().entries) {
       const auto &entry = kv.second;
       if (entry.type_name == signal_arg) {
         signal_id = kv.first;
@@ -2215,7 +2212,7 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
       }
     }
     if (signal_id == 0) {
-      m_output << "Unknown signal: " << signal_arg << "\n";
+      m_output << "Unknown event: " << signal_arg << "\n";
       return;
     }
 
@@ -2235,31 +2232,12 @@ command_executor::cmd_sig (const std::vector<std::string> &tokens)
       return;
     }
 
-    entt::entity src = entt::null;
-    entt::entity tgt = entt::null;
-    if (tokens.size () >= 6) {
-      try {
-        uint64_t v = std::stoull (tokens[5]);
-        src = (entt::entity)v;
-      } catch (...) {
-      }
-    }
-    if (tokens.size () >= 7) {
-      try {
-        uint64_t v = std::stoull (tokens[6]);
-        tgt = (entt::entity)v;
-      } catch (...) {
-      }
-    }
-
     bool ok = false;
     if (sub == "connect") {
-      ok = m_rtc.signal_hub ().connect (signal_id, system_id, handler_arg, src,
-                                        tgt);
+      ok = m_rtc.event_hub ().connect (signal_id, system_id, handler_arg);
       m_output << (ok ? "Connected." : "Failed to connect.") << "\n";
     } else {
-      ok = m_rtc.signal_hub ().disconnect (signal_id, system_id, handler_arg,
-                                           src, tgt);
+      ok = m_rtc.event_hub ().disconnect (signal_id, system_id, handler_arg);
       m_output << (ok ? "Disconnected." : "Failed to disconnect.") << "\n";
     }
     return;

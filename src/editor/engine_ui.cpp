@@ -1,7 +1,7 @@
 #include "engine_ui.hpp"
 
 #include "wsl/log/log.hpp"
-#include "wsl/reg/sig/signal_hub.hpp"
+#include "wsl/event/event_hub.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "renderer_imgui.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
@@ -24,9 +24,9 @@ engine_ui::engine_ui (wsl::comp::singl::runtime_context *runtime_ctx,
 }
 
 void
-engine_ui::register_signals (wsl::reg::sig::signal_hub &hub)
+engine_ui::register_event_sources (wsl::event::event_hub &hub)
 {
-  hub.declare_signal<game_focus_toggled, engine_ui> ();
+  hub.declare_event_source<game_focus_toggled, engine_ui> ();
 }
 
 void
@@ -63,8 +63,8 @@ engine_ui::handle_event (const wsl::engine_event &event)
                                     !m_game_focus);
     SDL_ShowCursor ();
 
-    wsl::reg::sig::emit<game_focus_toggled> (
-        m_runtime_ctx->signal_hub (), game_focus_toggled{ m_game_focus });
+    wsl::event::emit<game_focus_toggled> (
+        m_runtime_ctx->event_hub (), game_focus_toggled{ m_game_focus });
     return;
   }
 

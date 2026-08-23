@@ -3,28 +3,11 @@ Weasel Engine Documentation
 
 .. toctree::
    :maxdepth: 2
-   :caption: Manual
+   :numbered:
 
    manual/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Tutorials
-
    tutorials/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: daslang API Reference
-
-   stdlib/weasel_api
-   stdlib/weasel_ecs
-   stdlib/components
-
-.. toctree::
-   :maxdepth: 2
-   :caption: C++ API Reference
-
+   stdlib/index
    cpp/index
 
 The Weasel engine exposes its API to daScript through two modules:

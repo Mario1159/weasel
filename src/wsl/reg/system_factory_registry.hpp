@@ -24,11 +24,11 @@ namespace reg
 namespace sig
 {
 struct system_iteration_debug_entry;
-struct signal_hub;
+struct event_hub;
 } // namespace sig
 
 /** Forward-declaration of system iteration descriptor. */
-using system_iteration_descriptor = sig::system_iteration_debug_entry;
+using system_iteration_descriptor = event::system_iteration_debug_entry;
 
 /** Ordering modes for registered system descriptors. */
 enum class system_order
@@ -109,9 +109,9 @@ public:
  * :param hub: Pointer to the engine signal hub.
  */
   void
-  set_signal_hub (sig::signal_hub *hub)
+  set_event_hub (event::event_hub *hub)
   {
-    m_signal_hub = hub;
+    m_event_hub = hub;
   }
 
   /**
@@ -334,7 +334,7 @@ private:
   std::unordered_map<std::string, system_descriptor> m_factories;
   std::unordered_map<entt::id_type, std::string> m_type_to_name;
   std::unordered_map<std::string, std::string> m_type_name_to_display_name;
-  sig::signal_hub *m_signal_hub = nullptr;
+  event::event_hub *m_event_hub = nullptr;
 };
 
 template <typename T>

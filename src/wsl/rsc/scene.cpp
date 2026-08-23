@@ -98,11 +98,10 @@ scene::on_system_added (sys::ecs_system &system)
     return;
   }
 
-  m_runtime_ctx->signal_hub ().clear_system_declarations (
-      system.get_type_id ());
-  system.register_signals (m_runtime_ctx->signal_hub ());
-  system.register_event_handlers (m_runtime_ctx->signal_hub ());
-  system.register_iterations (m_runtime_ctx->signal_hub ());
+  m_runtime_ctx->event_hub ().clear_system_declarations (system.get_type_id ());
+  system.register_event_sources (m_runtime_ctx->event_hub ());
+  system.register_event_sinks (m_runtime_ctx->event_hub ());
+  system.register_iterations (m_runtime_ctx->event_hub ());
 }
 
 void
@@ -145,24 +144,6 @@ scene::update (double dt)
     }
 
     sys->update (&m_registry, dt);
-  }
-}
-
-void
-scene::handle_events (const wsl::engine_event &e)
-{
-  if (!m_initialized) {
-    return;
-  }
-
-  wsl::registry_handle reg (m_registry);
-
-  for (std::unique_ptr<sys::ecs_system> &sys : systems) {
-    if (!sys) {
-      continue;
-    }
-
-    sys->event_handler (reg, e);
   }
 }
 

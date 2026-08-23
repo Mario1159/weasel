@@ -36,27 +36,6 @@ class System : EcsSystem {
         set_relative_mouse_mode(false)
     }
 
-    def override on_event() : void {
-        var kind = get_event_kind()
-
-        if (kind == EVENT_MOUSE_MOTION) {
-            var active_cam = get_active_camera()
-            if (active_cam == 0) return
-
-            var fp_active = false
-            query() $(mr : MouseRotate&) {
-                if (has_component(TYPE_CAMERA(), e) && e == active_cam) {
-                    fp_active = true
-                }
-            }
-
-            if (!fp_active) return
-
-            m_accumulated_dx += get_event_mouse_dx()
-            m_accumulated_dy += get_event_mouse_dy()
-        }
-    }
-
     def override on_update(dt : float) : void {
         var active_cam = get_active_camera()
         var fp_active = false
@@ -73,6 +52,11 @@ class System : EcsSystem {
             m_accumulated_dx = 0.0
             m_accumulated_dy = 0.0
             return
+        }
+
+        for (i in range(mouse_motion_count())) {
+            m_accumulated_dx += float(mouse_motion_at(i).xrel)
+            m_accumulated_dy += float(mouse_motion_at(i).yrel)
         }
 
         if (m_accumulated_dx == 0.0 && m_accumulated_dy == 0.0) return

@@ -14,9 +14,9 @@ template <typename TT> struct TArray;
 template <typename Result, typename... Args> struct TBlock;
 }
 
-namespace wsl
+namespace wsl::event
 {
-class engine_event;
+class message_bus;
 }
 
 namespace wsl::das
@@ -40,8 +40,8 @@ void register_wsl_api_module (::das::ModuleGroup &module_group);
 /** Sets the active registry for the Weasel API module. */
 void wsl_api_set_active_registry (entt::registry *registry);
 
-/** Sets the current event for the Weasel API module. */
-void wsl_api_set_current_event (const engine_event *ev);
+/** Returns the message bus of the active runtime context, or nullptr. */
+wsl::event::message_bus *wsl_api_get_active_message_bus ();
 
 void wsl_log_info (const char *msg);
 void wsl_log_debug (const char *msg);
@@ -55,7 +55,6 @@ void wsl_log_error (const char *msg);
 uint32_t wsl_get_component_type_id (const char *display_name);
 
 uint32_t wsl_get_active_camera ();
-uint32_t wsl_get_event_kind ();
 
 /** Iterates entities owning ALL of the listed component types and invokes `blk`
  *  with each matching entity id. `type_ids` are stable component type ids (see

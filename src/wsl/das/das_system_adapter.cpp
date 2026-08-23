@@ -178,27 +178,4 @@ das_system_adapter::on_inactive (entt::registry &registry)
   wsl_api_set_active_registry (nullptr);
 }
 
-void
-das_system_adapter::on_event (registry_handle reg, const engine_event &ev)
-{
-  if (!m_class_ptr || !m_ctx) {
-    return;
-  }
-  if (m_has_failed) {
-    return;
-  }
-  wsl_api_set_active_registry (reg.get ());
-  wsl_api_set_current_event (&ev);
-  if (auto fn = get_on_event (m_class_ptr)) {
-    if (!safe_invoke (m_ctx, "on_event", m_script_path,
-                      [&] () { invoke_on_event (m_ctx, fn, m_class_ptr); })) {
-      m_has_failed = true;
-      wsl::log::sys ()->warn ("System '{}' marked as failed, will be skipped",
-                              get_name ());
-    }
-  }
-  wsl_api_set_current_event (nullptr);
-  wsl_api_set_active_registry (nullptr);
-}
-
 } // namespace wsl::das

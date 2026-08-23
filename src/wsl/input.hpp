@@ -1,6 +1,6 @@
 #pragma once
 
-#include "reg/sig/signal_hub.hpp"
+#include "event/event_hub.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
@@ -33,9 +33,9 @@ public:
   SDL_Keycode keycode = SDLK_UNKNOWN;
 
   /**
- * Checks if this binding uses scancode (physical key location).
- * :return: `true` if scancode is set, otherwise `false`.
- */
+   * Checks if this binding uses scancode (physical key location).
+   * :return: `true` if scancode is set, otherwise `false`.
+   */
   constexpr bool
   is_scancode () const
   {
@@ -43,9 +43,9 @@ public:
   }
 
   /**
- * Checks if this binding uses keycode (specific symbol).
- * :return: `true` if keycode is set, otherwise `false`.
- */
+   * Checks if this binding uses keycode (specific symbol).
+   * :return: `true` if keycode is set, otherwise `false`.
+   */
   constexpr bool
   is_keycode () const
   {
@@ -53,10 +53,10 @@ public:
   }
 
   /**
- * Checks if this binding matches a keyboard event.
- * :param e: keyboard event to check.
- * :return: `true` if the event matches this binding, otherwise `false`.
- */
+   * Checks if this binding matches a keyboard event.
+   * :param e: keyboard event to check.
+   * :return: `true` if the event matches this binding, otherwise `false`.
+   */
   bool
   matches_event (const SDL_KeyboardEvent &e) const
   {
@@ -78,9 +78,9 @@ public:
   }
 
   /**
- * Gets a human-readable name for this binding.
- * :return: Pointer to a null-terminated string with the key name.
- */
+   * Gets a human-readable name for this binding.
+   * :return: Pointer to a null-terminated string with the key name.
+   */
   [[nodiscard]] const char *
   get_name () const
   {
@@ -113,10 +113,10 @@ public:
   explicit keyboard_state () = default;
 
   /**
- * Refreshes the keyboard state from SDL.
- *
- * Call this once per frame before checking input state.
- */
+   * Refreshes the keyboard state from SDL.
+   *
+   * Call this once per frame before checking input state.
+   */
   void
   refresh ()
   {
@@ -124,10 +124,10 @@ public:
   }
 
   /**
- * Checks if a scancode key is currently pressed.
- * :param scancode: SDL scancode to check.
- * :return: `true` if the key is pressed, otherwise `false`.
- */
+   * Checks if a scancode key is currently pressed.
+   * :param scancode: SDL scancode to check.
+   * :return: `true` if the key is pressed, otherwise `false`.
+   */
   [[nodiscard]] bool
   is_down (SDL_Scancode scancode) const
   {
@@ -138,10 +138,10 @@ public:
   }
 
   /**
- * Checks if a key binding is currently pressed.
- * :param binding: key binding to check.
- * :return: `true` if the key is pressed, otherwise `false`.
- */
+   * Checks if a key binding is currently pressed.
+   * :param binding: key binding to check.
+   * :return: `true` if the key is pressed, otherwise `false`.
+   */
   [[nodiscard]] bool
   is_down (key_binding binding) const
   {
@@ -149,14 +149,14 @@ public:
   }
 
   /**
- * Gets a directional axis from two opposing scancodes.
- *
- * Example: get_axis(SDL_SCANCODE_W, SDL_SCANCODE_S) returns 1 when W
- * is pressed, -1 when S is pressed, or 0 when neither or both are pressed.
- * :param positive: scancode for positive direction.
- * :param negative: scancode for negative direction.
- * :return: -1, 0, or 1 depending on which keys are pressed.
- */
+   * Gets a directional axis from two opposing scancodes.
+   *
+   * Example: get_axis(SDL_SCANCODE_W, SDL_SCANCODE_S) returns 1 when W
+   * is pressed, -1 when S is pressed, or 0 when neither or both are pressed.
+   * :param positive: scancode for positive direction.
+   * :param negative: scancode for negative direction.
+   * :return: -1, 0, or 1 depending on which keys are pressed.
+   */
   [[nodiscard]] int
   get_axis (SDL_Scancode positive, SDL_Scancode negative) const
   {
@@ -171,11 +171,11 @@ public:
   }
 
   /**
- * Gets a directional axis from two key bindings.
- * :param positive: key binding for positive direction.
- * :param negative: key binding for negative direction.
- * :return: -1, 0, or 1 depending on which keys are pressed.
- */
+   * Gets a directional axis from two key bindings.
+   * :param positive: key binding for positive direction.
+   * :param negative: key binding for negative direction.
+   * :return: -1, 0, or 1 depending on which keys are pressed.
+   */
   [[nodiscard]] int
   get_axis (const key_binding &positive, const key_binding &negative) const
   {
@@ -207,7 +207,7 @@ struct key_released
 /** Event emitted when text input is received. */
 struct text_input
 {
-  std::string text;
+  char text[256];
 };
 
 /** Event emitted when the mouse moves. */
@@ -236,6 +236,19 @@ struct mouse_wheel
   bool flipped;
 };
 
+/** Event emitted when the application window is resized. */
+struct window_resized
+{
+  int width;
+  int height;
+};
+
+/** Event emitted when a quit has been requested (e.g. window close). */
+struct quit_requested
+{
+  bool requested;
+};
+
 /**
  * Input system that processes SDL events and updates input state.
  *
@@ -246,30 +259,28 @@ class input_system
 {
 public:
   /**
- * Constructs an input system.
- * :param hub: signal hub for emitting input events.
- */
-  explicit input_system (reg::sig::signal_hub &hub);
+   * Constructs an input system.
+   * :param hub: signal hub for emitting input events.
+   */
+  explicit input_system (event::event_hub &hub);
 
   /**
- * Processes an SDL event.
- * :param event: SDL event to process.
- */
-  void
-  process_event (const SDL_Event &event);
+   * Processes an SDL event.
+   * :param event: SDL event to process.
+   */
+  void process_event (const SDL_Event &event);
 
   /**
- * Refreshes the keyboard state.
- *
- * Call this once per frame before checking keyboard state.
- */
-  void
-  refresh ();
+   * Refreshes the keyboard state.
+   *
+   * Call this once per frame before checking keyboard state.
+   */
+  void refresh ();
 
   /**
- * Gets the current keyboard state.
- * :return: Reference to the keyboard state.
- */
+   * Gets the current keyboard state.
+   * :return: Reference to the keyboard state.
+   */
   keyboard_state &
   get_keyboard_state ()
   {
@@ -277,9 +288,9 @@ public:
   }
 
   /**
- * Gets the current keyboard state.
- * :return: Const reference to the keyboard state.
- */
+   * Gets the current keyboard state.
+   * :return: Const reference to the keyboard state.
+   */
   const keyboard_state &
   get_keyboard_state () const
   {
@@ -287,7 +298,7 @@ public:
   }
 
 private:
-  reg::sig::signal_hub &m_hub;
+  event::event_hub &m_hub;
   keyboard_state m_keyboard_state;
 };
 

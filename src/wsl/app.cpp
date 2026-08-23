@@ -16,6 +16,7 @@
 #include "wsl/comp/singl/rendering_manager.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/singl/ui_manager.hpp"
+#include "wsl/input.hpp"
 #include "wsl/comp/spot_light.hpp"
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/world_transform.hpp"
@@ -41,6 +42,75 @@
 #include <entt/meta/factory.hpp>
 #include <memory>
 #include <string>
+#include <cstring>
+
+namespace
+{
+
+/**
+ * SDL poll-boundary translator: converts a raw SDL event into Weasel engine
+ * message structs and posts them onto the message bus. This is the ONLY place
+ * that touches SDL input; everything downstream consumes engine message types.
+ */
+void
+post_input_to_bus (wsl::event::message_bus &bus, const SDL_Event &e)
+{
+  switch (e.type) {
+  case SDL_EVENT_KEY_DOWN: {
+    const auto &k = e.key;
+    bus.post<wsl::input::key_pressed> ({ k.scancode, k.key, k.mod, k.repeat });
+    break;
+  }
+  case SDL_EVENT_KEY_UP: {
+    const auto &k = e.key;
+    bus.post<wsl::input::key_released> ({ k.scancode, k.key, k.mod });
+    break;
+  }
+  case SDL_EVENT_TEXT_INPUT: {
+    wsl::input::text_input evt{};
+    std::strncpy (evt.text, e.text.text, sizeof (evt.text) - 1);
+    evt.text[sizeof (evt.text) - 1] = '\0';
+    bus.post<wsl::input::text_input> (evt);
+    break;
+  }
+  case SDL_EVENT_MOUSE_MOTION: {
+    const auto &m = e.motion;
+    bus.post<wsl::input::mouse_motion> (
+        { static_cast<int> (m.x), static_cast<int> (m.y),
+          static_cast<int> (m.xrel), static_cast<int> (m.yrel) });
+    break;
+  }
+  case SDL_EVENT_MOUSE_BUTTON_DOWN:
+  case SDL_EVENT_MOUSE_BUTTON_UP: {
+    const auto &b = e.button;
+    bus.post<wsl::input::mouse_button> (
+        { b.button, e.type == SDL_EVENT_MOUSE_BUTTON_DOWN,
+          static_cast<int> (b.x), static_cast<int> (b.y) });
+    break;
+  }
+  case SDL_EVENT_MOUSE_WHEEL: {
+    const auto &w = e.wheel;
+    bus.post<wsl::input::mouse_wheel> (
+        { static_cast<int> (w.x), static_cast<int> (w.y),
+          w.direction == SDL_MOUSEWHEEL_FLIPPED });
+    break;
+  }
+  case SDL_EVENT_WINDOW_RESIZED: {
+    bus.post<wsl::input::window_resized> (
+        { static_cast<int> (e.window.data1),
+          static_cast<int> (e.window.data2) });
+    break;
+  }
+  case SDL_EVENT_QUIT: {
+    bus.post<wsl::input::quit_requested> ({ true });
+    break;
+  }
+  default:
+    break;
+  }
+}
+
+} // namespace
 
 namespace wsl
 {
@@ -238,6 +308,7 @@ app::run ()
     SDL_Event e;
     while (SDL_PollEvent (&e) != 0) {
       wsl::engine_event we (e);
+      post_input_to_bus (m_runtime_context->message_bus (), e);
       if (we.kind () == event_kind::quit) {
         quit = true;
       }
@@ -247,8 +318,11 @@ app::run ()
           && e.window.type == SDL_EVENT_WINDOW_RESIZED) {
         m_runtime_context->window ().on_resize ();
       }
-      m_runtime_context->scene_manager ().handle_events (we);
       on_event (we);
+    }
+
+    if (auto *scene = m_runtime_context->scene_manager ().get_active ()) {
+      m_runtime_context->message_bus ().drain (scene->get_registry ());
     }
 
     // "Update" sub-frame: physics, ECS systems, etc. Closes before

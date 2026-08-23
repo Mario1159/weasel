@@ -1,7 +1,7 @@
-#include "signal_inspector.hpp"
+#include "event_inspector.hpp"
 
 #include "editor/ecs_inspector_utils.hpp"
-#include "wsl/reg/sig/signal_hub.hpp"
+#include "wsl/event/event_hub.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "renderer_imgui.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
@@ -12,7 +12,6 @@
 #include <cctype>
 #include <cstdint>
 #include <entt/core/fwd.hpp>
-#include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <imgui.h>
 #include <string>
@@ -33,7 +32,6 @@ draw_hsplitter (const char *id, float &top_height, float /*min_top*/,
 {
   ImGui::InvisibleButton (id, ImVec2 (-1, thickness));
 
-  // Nice cursor while hovering
   if (ImGui::IsItemHovered ()) {
     ImGui::SetMouseCursor (ImGuiMouseCursor_ResizeNS);
   }
@@ -42,7 +40,6 @@ draw_hsplitter (const char *id, float &top_height, float /*min_top*/,
     top_height += ImGui::GetIO ().MouseDelta.y;
   }
 
-  // Draw the splitter bar
   ImU32 col = ImGui::GetColorU32 (ImGuiCol_Separator);
   if (ImGui::IsItemHovered () || ImGui::IsItemActive ()) {
     col = ImGui::GetColorU32 (ImGuiCol_SeparatorHovered);
@@ -73,7 +70,7 @@ text_match (const char *text, const char *filter)
   return t.find (f) != std::string::npos;
 }
 
-signal_inspector::signal_inspector (
+event_inspector::event_inspector (
     wsl::comp::singl::runtime_context *runtime_ctx,
     wsl::comp::singl::editor_context *editor_ctx, ecs_selection *selection)
     : m_runtime_ctx (runtime_ctx), m_editor_ctx (editor_ctx),
@@ -81,50 +78,40 @@ signal_inspector::signal_inspector (
 {
 }
 
-static std::vector<const wsl::reg::sig::signal_debug_entry *>
-collect_signals_for_system (const wsl::reg::registry_queries &queries,
-                            entt::id_type system_type_id,
-                            const char *search_filter)
+static std::vector<const wsl::event::event_hub::registered_event_source *>
+collect_event_sources_for_system (const wsl::reg::registry_queries &queries,
+                                  entt::id_type system_type_id,
+                                  const char *search_filter)
 {
-  auto sigs = queries.find_signals_owned_by_system (system_type_id);
-  std::vector<const wsl::reg::sig::signal_debug_entry *> out;
+  auto sigs = queries.find_event_sources_owned_by_system (system_type_id);
+  std::vector<const wsl::event::event_hub::registered_event_source *> out;
 
   for (const auto *e : sigs) {
-    if (text_match (e->type_name.c_str (), search_filter)) {
+    if (text_match (e->event_type_name.c_str (), search_filter)) {
       out.push_back (e);
     }
   }
 
   std::sort (out.begin (), out.end (), [] (const auto *a, const auto *b) {
-    return a->type_name < b->type_name;
+    return a->event_type_name < b->event_type_name;
   });
 
   return out;
 }
 
-static std::vector<const wsl::reg::sig::signal_connection_debug_entry *>
-collect_signal_connections (const wsl::reg::registry_queries &queries,
-                            entt::id_type signal_type_id,
-                            entt::entity source_entity)
+static std::vector<const wsl::event::event_connection_debug_entry *>
+collect_event_connections (const wsl::reg::registry_queries &queries,
+                           entt::id_type event_type_id)
 {
-  auto connections = queries.find_connections_for_signal (signal_type_id);
-  std::vector<const wsl::reg::sig::signal_connection_debug_entry *> out;
+  auto connections = queries.find_connections_for_event (event_type_id);
+  std::vector<const wsl::event::event_connection_debug_entry *> out;
 
   for (const auto *connection : connections) {
-    if (source_entity != entt::null && connection->source_entity != entt::null
-        && connection->source_entity != source_entity) {
-      continue;
-    }
-
     out.push_back (connection);
   }
 
   std::sort (out.begin (), out.end (), [] (const auto *a, const auto *b) {
     if (a->handler_name == b->handler_name) {
-      if (a->system_type_name == b->system_type_name) {
-        return static_cast<uint32_t> (a->target_entity)
-               < static_cast<uint32_t> (b->target_entity);
-      }
       return a->system_type_name < b->system_type_name;
     }
     return a->handler_name < b->handler_name;
@@ -134,17 +121,18 @@ collect_signal_connections (const wsl::reg::registry_queries &queries,
 }
 
 static void
-draw_signal_table (
+draw_event_source_table (
     const char *table_id,
-    const std::vector<const wsl::reg::sig::signal_debug_entry *> &sigs,
-    entt::id_type &selected_signal_type,
+    const std::vector<const wsl::event::event_hub::registered_event_source *>
+        &sigs,
+    wsl::event::event_debug_db *db, entt::id_type &selected_signal_type,
     entt::id_type &connect_requested_signal_type)
 {
   if (ImGui::BeginTable (table_id, 3,
                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
                              | ImGuiTableFlags_SizingStretchProp
                              | ImGuiTableFlags_Resizable)) {
-    ImGui::TableSetupColumn ("Signal");
+    ImGui::TableSetupColumn ("Event");
     ImGui::TableSetupColumn ("Listeners");
     ImGui::TableSetupColumn ("Emits");
     ImGui::TableHeadersRow ();
@@ -153,27 +141,27 @@ draw_signal_table (
       ImGui::TableNextRow ();
       ImGui::TableNextColumn ();
 
-      const bool is_selected = (selected_signal_type == e->type_id);
+      const bool is_selected = (selected_signal_type == e->event_type_id);
       std::string const label
-          = e->type_name + "##sig_" + std::to_string (e->type_id);
+          = e->event_type_name + "##sig_" + std::to_string (e->event_type_id);
 
       if (ImGui::Selectable (label.c_str (), is_selected,
                              ImGuiSelectableFlags_SpanAllColumns
                                  | ImGuiSelectableFlags_AllowOverlap)) {
-        selected_signal_type = e->type_id;
+        selected_signal_type = e->event_type_id;
       }
 
       if (ImGui::IsItemClicked (ImGuiMouseButton_Right)) {
-        selected_signal_type = e->type_id;
+        selected_signal_type = e->event_type_id;
       }
 
       const std::string popup_id
-          = "signal_row_context_" + std::to_string (e->type_id);
+          = "signal_row_context_" + std::to_string (e->event_type_id);
       if (ImGui::BeginPopupContextItem (popup_id.c_str ())) {
-        selected_signal_type = e->type_id;
+        selected_signal_type = e->event_type_id;
 
-        if (ImGui::Button ("Connect Signal")) {
-          connect_requested_signal_type = e->type_id;
+        if (ImGui::Button ("Connect Event")) {
+          connect_requested_signal_type = e->event_type_id;
           ImGui::CloseCurrentPopup ();
         }
 
@@ -181,10 +169,20 @@ draw_signal_table (
       }
 
       ImGui::TableNextColumn ();
-      ImGui::Text ("%zu", e->listener_count);
+      if (db != nullptr) {
+        auto it = db->entries.find (e->event_type_id);
+        if (it != db->entries.end ()) {
+          ImGui::Text ("%zu", it->second.listener_count);
+        }
+      }
 
       ImGui::TableNextColumn ();
-      ImGui::Text ("%zu", e->emit_count);
+      if (db != nullptr) {
+        auto it = db->entries.find (e->event_type_id);
+        if (it != db->entries.end ()) {
+          ImGui::Text ("%zu", it->second.emit_count);
+        }
+      }
     }
 
     ImGui::EndTable ();
@@ -192,38 +190,39 @@ draw_signal_table (
 }
 
 static void
-draw_entity_signal_tree (
-    wsl::rsc::scene &scene, entt::registry &registry,
+draw_entity_event_tree (
     const wsl::reg::registry_queries &queries,
-    const std::vector<const wsl::reg::sig::signal_debug_entry *> &sigs,
-    entt::entity source_entity, entt::id_type &selected_signal_type,
+    const std::vector<const wsl::event::event_hub::registered_event_source *>
+        &sigs,
+    entt::id_type &selected_signal_type,
     entt::id_type &connect_requested_signal_type)
 {
   for (const auto *signal : sigs) {
     const auto connections
-        = collect_signal_connections (queries, signal->type_id, source_entity);
+        = collect_event_connections (queries, signal->event_type_id);
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (selected_signal_type == signal->type_id) {
+    if (selected_signal_type == signal->event_type_id) {
       flags |= ImGuiTreeNodeFlags_Selected;
     }
 
-    const std::string tree_id = signal->type_name + "##entity_signal_tree_"
-                                + std::to_string (signal->type_id);
+    const std::string tree_id = signal->event_type_name
+                                + "##entity_signal_tree_"
+                                + std::to_string (signal->event_type_id);
     const bool open = ImGui::TreeNodeEx (tree_id.c_str (), flags, "%s",
-                                         signal->type_name.c_str ());
+                                         signal->event_type_name.c_str ());
 
     if (ImGui::IsItemClicked ()) {
-      selected_signal_type = signal->type_id;
+      selected_signal_type = signal->event_type_id;
     }
 
     const std::string popup_id
-        = "entity_signal_context_" + std::to_string (signal->type_id);
+        = "entity_signal_context_" + std::to_string (signal->event_type_id);
     if (ImGui::BeginPopupContextItem (popup_id.c_str ())) {
-      selected_signal_type = signal->type_id;
+      selected_signal_type = signal->event_type_id;
 
-      if (ImGui::Button ("Connect Signal")) {
-        connect_requested_signal_type = signal->type_id;
+      if (ImGui::Button ("Connect Event")) {
+        connect_requested_signal_type = signal->event_type_id;
         ImGui::CloseCurrentPopup ();
       }
 
@@ -234,38 +233,11 @@ draw_entity_signal_tree (
       continue;
     }
 
-    // Explicit connections
     for (const auto *connection : connections) {
-      const bool has_target = connection->target_entity != entt::null;
       std::string label = connection->handler_name + "  ["
                           + connection->system_type_name + "]";
-      if (has_target) {
-        label += " -> " + scene.get_entity_name (connection->target_entity)
-                 + " ("
-                 + std::to_string (
-                     static_cast<uint32_t> (connection->target_entity))
-                 + ")";
-      }
-
       ImGui::BulletText ("%s", label.c_str ());
-
-      if (connection->source_entity == entt::null) {
-        ImGui::SameLine ();
-        ImGui::TextDisabled ("(global)");
-      }
     }
-
-    // Automatic (potential) handlers
-    for (const auto *h : queries.find_event_handlers_using_world_component (
-             0)) { // This is tricky,
-                   // find_event_handlers_using_world_component(0) doesn't exist
-      // Actually, we can get all connectable handlers from signal_hub if we
-      // want, but let's just stick to what registry_queries offers.
-    }
-
-    // For now, let's just show explicit connections in the tree.
-    // The previous implementation was poking signal_db.connectable_handlers
-    // directly.
 
     if (connections.empty ()) {
       ImGui::TextDisabled ("No connected handlers.");
@@ -280,12 +252,13 @@ draw_system_handlers_table (const wsl::reg::registry_queries &queries,
                             entt::id_type system_type_id,
                             const char *search_filter)
 {
-  if (ImGui::BeginTable ("system_handlers_table", 2,
+  if (ImGui::BeginTable ("system_handlers_table", 3,
                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
                              | ImGuiTableFlags_SizingStretchProp
                              | ImGuiTableFlags_Resizable)) {
     ImGui::TableSetupColumn ("Handler");
-    ImGui::TableSetupColumn ("Type");
+    ImGui::TableSetupColumn ("System");
+    ImGui::TableSetupColumn ("Kind");
     ImGui::TableHeadersRow ();
 
     for (const auto *h :
@@ -298,75 +271,75 @@ draw_system_handlers_table (const wsl::reg::registry_queries &queries,
       ImGui::TableNextColumn ();
       ImGui::TextUnformatted (h->handler_name.c_str ());
       ImGui::TableNextColumn ();
+      ImGui::TextUnformatted (h->system_type_name.c_str ());
+      ImGui::TableNextColumn ();
       ImGui::TextDisabled ("Global");
     }
 
-    // Note: registry_queries currently only returns system_handler_debug_entry
-    // for owned handlers. Connectable handlers are a different type.
-    // In a mature refactor, we'd unified these in registry_queries.
+    for (const auto *h :
+         queries.find_event_sinks_owned_by_system (system_type_id)) {
+      if (!text_match (h->handler_name.c_str (), search_filter)) {
+        continue;
+      }
+
+      ImGui::TableNextRow ();
+      ImGui::TableNextColumn ();
+      ImGui::TextUnformatted (h->handler_name.c_str ());
+      ImGui::TableNextColumn ();
+      ImGui::TextUnformatted (h->system_type_name.c_str ());
+      ImGui::TableNextColumn ();
+      ImGui::TextDisabled ("Connectable");
+    }
 
     ImGui::EndTable ();
   }
 }
 
 void
-signal_inspector::open_signal_connection_modal (entt::id_type signal_type,
-                                                entt::entity source_entity)
+event_inspector::open_signal_connection_modal (entt::id_type signal_type)
 {
   m_connect_signal_type = signal_type;
   m_selected_signal_type = signal_type;
   m_connect_handler_system_type = 0;
-  m_connect_source_entity = source_entity;
-  m_connect_target_entity = entt::null;
   m_connect_handler_name.clear ();
   m_connect_modal_error.clear ();
   m_connect_handler_search[0] = '\0';
-  m_connect_entity_search[0] = '\0';
   m_request_open_connect_modal = true;
 }
 
 void
-signal_inspector::draw_signal_connection_modal (entt::registry &registry)
+event_inspector::draw_signal_connection_modal (entt::registry & /*registry*/)
 {
   if (m_request_open_connect_modal) {
-    ImGui::OpenPopup ("Connect Signal");
+    ImGui::OpenPopup ("Connect Event");
     m_request_open_connect_modal = false;
   }
 
   ImGui::SetNextWindowSize (ImVec2 (560.0F, 0.0F), ImGuiCond_FirstUseEver);
-  if (!ImGui::BeginPopupModal ("Connect Signal", nullptr,
+  if (!ImGui::BeginPopupModal ("Connect Event", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
     return;
   }
 
-  auto *scene = m_runtime_ctx->scene_manager ().get_active ();
+  auto &hub = m_runtime_ctx->event_hub ();
+  auto *db = hub.db;
   auto &queries = m_runtime_ctx->reg_queries ();
 
-  // We need to find the signal entry. registry_queries could have a find_signal
-  // method. For now, we'll poke signal_hub.db if needed, but the goal is to
-  // avoid it.
-  const wsl::reg::sig::signal_debug_entry *signal_entry = nullptr;
-  if (m_runtime_ctx->signal_hub ().db != nullptr) {
-    auto it
-        = m_runtime_ctx->signal_hub ().db->entries.find (m_connect_signal_type);
-    if (it != m_runtime_ctx->signal_hub ().db->entries.end ()) {
+  const wsl::event::event_source_debug_entry *signal_entry = nullptr;
+  if (db != nullptr) {
+    auto it = db->entries.find (m_connect_signal_type);
+    if (it != db->entries.end ()) {
       signal_entry = &it->second;
     }
   }
 
-  if ((scene == nullptr) || (signal_entry == nullptr)) {
-    ImGui::TextDisabled ("Select a valid signal before creating a connection.");
+  if (signal_entry == nullptr) {
+    ImGui::TextDisabled ("Select a valid event before creating a connection.");
   } else {
-    ImGui::Text ("Signal: %s", signal_entry->type_name.c_str ());
+    ImGui::Text ("Event: %s", signal_entry->type_name.c_str ());
     if (!signal_entry->owner_system_type_name.empty ()) {
       ImGui::TextDisabled ("Owner: %s",
                            signal_entry->owner_system_type_name.c_str ());
-    }
-    if (m_connect_source_entity != entt::null) {
-      const std::string &source_name
-          = scene->get_entity_name (m_connect_source_entity);
-      ImGui::TextDisabled ("Source Entity: %s (%u)", source_name.c_str (),
-                           static_cast<uint32_t> (m_connect_source_entity));
     }
 
     ImGui::Separator ();
@@ -375,24 +348,20 @@ signal_inspector::draw_signal_connection_modal (entt::registry &registry)
         "##ConnectHandlerSearch", "Search event handlers...",
         m_connect_handler_search, IM_ARRAYSIZE (m_connect_handler_search));
 
-    // collect_connectable_handlers should be in queries
-    std::vector<const wsl::reg::sig::signal_connectable_handler_debug_entry *>
-        handlers;
-    if (m_runtime_ctx->signal_hub ().db != nullptr) {
-      for (auto &h : m_runtime_ctx->signal_hub ().db->connectable_handlers) {
-        if (h.signal_type_id == m_connect_signal_type) {
-          const std::string search_text
-              = h.handler_name + " " + h.system_type_name;
-          if (text_match (search_text.c_str (), m_connect_handler_search)) {
-            handlers.push_back (&h);
-          }
+    std::vector<const wsl::event::event_hub::registered_event_sink *> handlers;
+    for (const auto &h : hub.registered_event_sinks) {
+      if (h.event_type_id == m_connect_signal_type) {
+        const std::string search_text
+            = h.handler_name + " " + h.system_type_name;
+        if (text_match (search_text.c_str (), m_connect_handler_search)) {
+          handlers.push_back (&h);
         }
       }
     }
 
     ImGui::BeginChild ("ConnectHandlersList", ImVec2 (520.0F, 180.0F), 1);
     if (handlers.empty ()) {
-      ImGui::TextDisabled ("No connectable handlers match this signal.");
+      ImGui::TextDisabled ("No connectable handlers match this event.");
     } else {
       for (const auto *handler : handlers) {
         const bool is_selected
@@ -402,29 +371,25 @@ signal_inspector::draw_signal_connection_modal (entt::registry &registry)
         std::string label
             = handler->handler_name + "  [" + handler->system_type_name + "]";
         label += "##connect_handler_" + std::to_string (handler->system_type_id)
-                 + "_" + std::to_string (handler->signal_type_id);
+                 + "_" + std::to_string (handler->event_type_id);
 
         if (ImGui::Selectable (label.c_str (), is_selected)) {
           m_connect_handler_system_type = handler->system_type_id;
           m_connect_handler_name = handler->handler_name;
-          m_connect_target_entity = entt::null;
           m_connect_modal_error.clear ();
         }
       }
     }
     ImGui::EndChild ();
 
-    // Finding the selected handler entry
-    const wsl::reg::sig::signal_connectable_handler_debug_entry
-        *selected_handler = nullptr;
-    if (m_runtime_ctx->signal_hub ().db != nullptr) {
-      for (auto &h : m_runtime_ctx->signal_hub ().db->connectable_handlers) {
-        if (h.signal_type_id == m_connect_signal_type
-            && h.system_type_id == m_connect_handler_system_type
-            && h.handler_name == m_connect_handler_name) {
-          selected_handler = &h;
-          break;
-        }
+    const wsl::event::event_hub::registered_event_sink *selected_handler
+        = nullptr;
+    for (const auto &h : hub.registered_event_sinks) {
+      if (h.event_type_id == m_connect_signal_type
+          && h.system_type_id == m_connect_handler_system_type
+          && h.handler_name == m_connect_handler_name) {
+        selected_handler = &h;
+        break;
       }
     }
 
@@ -434,63 +399,6 @@ signal_inspector::draw_signal_connection_modal (entt::registry &registry)
                    selected_handler->handler_name.c_str ());
       ImGui::TextDisabled ("System: %s",
                            selected_handler->system_type_name.c_str ());
-
-      if (!selected_handler->component_types.empty ()) {
-        ImGui::TextUnformatted ("Required Components:");
-        for (const auto &component : selected_handler->component_types) {
-          ImGui::BulletText ("%s", component.type_name.c_str ());
-        }
-      }
-
-      if (selected_handler->entity_matches != nullptr) {
-        ImGui::Spacing ();
-        ImGui::TextUnformatted ("Target Entity");
-        ImGui::InputTextWithHint (
-            "##ConnectEntitySearch", "Search matching entities...",
-            m_connect_entity_search, IM_ARRAYSIZE (m_connect_entity_search));
-
-        // collect_matching_entities_for_handler
-        std::vector<entt::entity> entities;
-        for (auto ent : registry.view<entt::entity> ()) {
-          if (selected_handler->matches_entity (registry, ent)) {
-            const std::string &entity_name = scene->get_entity_name (ent);
-            if (text_match (entity_name.c_str (), m_connect_entity_search)) {
-              entities.push_back (ent);
-            }
-          }
-        }
-        std::sort (entities.begin (), entities.end (),
-                   [&] (entt::entity a, entt::entity b) {
-                     return scene->get_entity_name (a)
-                            < scene->get_entity_name (b);
-                   });
-
-        if (m_connect_target_entity != entt::null
-            && !selected_handler->matches_entity (registry,
-                                                  m_connect_target_entity)) {
-          m_connect_target_entity = entt::null;
-        }
-
-        ImGui::BeginChild ("ConnectEntitiesList", ImVec2 (520.0F, 160.0F), 1);
-        if (entities.empty ()) {
-          ImGui::TextDisabled ("No entities match this handler.");
-        } else {
-          for (entt::entity const entity : entities) {
-            const bool is_selected = m_connect_target_entity == entity;
-            std::string label
-                = scene->get_entity_name (entity) + " ("
-                  + std::to_string (static_cast<uint32_t> (entity)) + ")";
-            label += "##connect_entity_"
-                     + std::to_string (static_cast<uint32_t> (entity));
-
-            if (ImGui::Selectable (label.c_str (), is_selected)) {
-              m_connect_target_entity = entity;
-              m_connect_modal_error.clear ();
-            }
-          }
-        }
-        ImGui::EndChild ();
-      }
     }
   }
 
@@ -500,41 +408,22 @@ signal_inspector::draw_signal_connection_modal (entt::registry &registry)
                         m_connect_modal_error.c_str ());
   }
 
-  // We need selected_handler here too.
-  const wsl::reg::sig::signal_connectable_handler_debug_entry *selected_handler
-      = nullptr;
-  if (m_runtime_ctx->signal_hub ().db != nullptr) {
-    for (auto &h : m_runtime_ctx->signal_hub ().db->connectable_handlers) {
-      if (h.signal_type_id == m_connect_signal_type
-          && h.system_type_id == m_connect_handler_system_type
-          && h.handler_name == m_connect_handler_name) {
-        selected_handler = &h;
-        break;
-      }
-    }
-  }
-
   const bool can_connect
-      = (signal_entry != nullptr) && (selected_handler != nullptr)
-        && ((selected_handler->entity_matches == nullptr)
-            || (m_connect_target_entity != entt::null
-                && selected_handler->matches_entity (registry,
-                                                     m_connect_target_entity)));
+      = (signal_entry != nullptr) && (!m_connect_handler_name.empty ());
 
   if (!can_connect) {
     ImGui::BeginDisabled ();
   }
 
   if (ImGui::Button ("Connect")) {
-    if (m_runtime_ctx->signal_hub ().connect (
-            m_connect_signal_type, m_connect_handler_system_type,
-            m_connect_handler_name, m_connect_source_entity,
-            m_connect_target_entity)) {
+    if (m_runtime_ctx->event_hub ().connect (m_connect_signal_type,
+                                             m_connect_handler_system_type,
+                                             m_connect_handler_name)) {
       m_connect_modal_error.clear ();
       ImGui::CloseCurrentPopup ();
     } else {
-      m_connect_modal_error = "Could not create the signal connection with "
-                              "the current selection.";
+      m_connect_modal_error = "Could not create the event connection with the "
+                              "current selection.";
     }
   }
 
@@ -553,14 +442,14 @@ signal_inspector::draw_signal_connection_modal (entt::registry &registry)
 }
 
 void
-signal_inspector::draw ()
+event_inspector::draw ()
 {
   if (m_runtime_ctx == nullptr) {
     return;
   }
 
   ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts ().bold);
-  const bool open = ImGui::Begin ("Signals");
+  const bool open = ImGui::Begin ("Events");
   ImGui::PopFont ();
 
   if (!open) {
@@ -572,7 +461,7 @@ signal_inspector::draw ()
   if (scene == nullptr) {
     draw_centered_icon (
         m_editor_ctx, m_editor_ctx->icon_signal (), 128.0F,
-        "Signals are the heartbeat of your game,\nMonitor and debug events as "
+        "Events are the heartbeat of your game,\nMonitor and debug events as "
         "they flow through the system.");
     ImGui::End ();
     return;
@@ -580,6 +469,7 @@ signal_inspector::draw ()
 
   auto &registry = scene->get_registry ();
   auto &queries = m_runtime_ctx->reg_queries ();
+  auto *db = m_runtime_ctx->event_hub ().db;
   entt::id_type connect_requested_signal_type = 0;
 
   const bool has_system
@@ -606,19 +496,21 @@ signal_inspector::draw ()
     ImGui::TextDisabled ("%s", sys->get_type_name ());
     ImGui::Separator ();
 
-    ImGui::TextUnformatted ("System Signals");
-    ImGui::InputTextWithHint ("##SysSigSearch", "Search system signals...",
+    ImGui::TextUnformatted ("System Events");
+    ImGui::InputTextWithHint ("##SysSigSearch", "Search system events...",
                               sys_sig_search, IM_ARRAYSIZE (sys_sig_search));
 
     ImGui::BeginChild ("SystemSignalsRegion", ImVec2 (0, system_signals_h), 1);
 
     {
-      auto sigs = collect_signals_for_system (queries, sys_tid, sys_sig_search);
+      auto sigs
+          = collect_event_sources_for_system (queries, sys_tid, sys_sig_search);
       if (sigs.empty ()) {
-        ImGui::TextDisabled ("No signals declared for this system.");
+        ImGui::TextDisabled ("No events declared for this system.");
       } else {
-        draw_signal_table ("system_signals_table", sigs, m_selected_signal_type,
-                           connect_requested_signal_type);
+        draw_event_source_table ("system_signals_table", sigs, db,
+                                 m_selected_signal_type,
+                                 connect_requested_signal_type);
       }
     }
 
@@ -635,8 +527,8 @@ signal_inspector::draw ()
     ImGui::BeginChild ("SystemHandlersRegion", ImVec2 (0, 0), 1);
 
     bool has_any_handler
-        = !queries.find_event_handlers_owned_by_system (sys_tid).empty ();
-    // We should also check connectable handlers in a unified way
+        = !queries.find_event_handlers_owned_by_system (sys_tid).empty ()
+          || !queries.find_event_sinks_owned_by_system (sys_tid).empty ();
 
     if (!has_any_handler) {
       ImGui::TextDisabled ("No handlers declared for this system.");
@@ -663,7 +555,7 @@ signal_inspector::draw ()
                               "Search matching systems...", entity_sys_search,
                               IM_ARRAYSIZE (entity_sys_search));
     ImGui::InputTextWithHint (
-        "##EntitySignalSearch", "Search signals inside expanded systems...",
+        "##EntitySignalSearch", "Search events inside expanded systems...",
         entity_sig_search, IM_ARRAYSIZE (entity_sig_search));
     ImGui::Separator ();
 
@@ -685,15 +577,14 @@ signal_inspector::draw ()
 
       if (ImGui::TreeNodeEx (label.c_str (),
                              ImGuiTreeNodeFlags_SpanAvailWidth)) {
-        auto sigs = collect_signals_for_system (queries, sys_desc->type_id,
-                                                entity_sig_search);
+        auto sigs = collect_event_sources_for_system (
+            queries, sys_desc->type_id, entity_sig_search);
 
         if (sigs.empty ()) {
-          ImGui::TextDisabled ("No signals declared for this system.");
+          ImGui::TextDisabled ("No events declared for this system.");
         } else {
-          draw_entity_signal_tree (*scene, registry, queries, sigs, ent,
-                                   m_selected_signal_type,
-                                   connect_requested_signal_type);
+          draw_entity_event_tree (queries, sigs, m_selected_signal_type,
+                                  connect_requested_signal_type);
         }
 
         ImGui::TreePop ();
@@ -701,13 +592,7 @@ signal_inspector::draw ()
     }
 
     if (connect_requested_signal_type != 0) {
-      const entt::entity source_entity
-          = m_runtime_ctx->signal_hub ().has_signal_source (
-                connect_requested_signal_type)
-                ? ent
-                : entt::null;
-      open_signal_connection_modal (connect_requested_signal_type,
-                                    source_entity);
+      open_signal_connection_modal (connect_requested_signal_type);
     }
     draw_signal_connection_modal (registry);
 

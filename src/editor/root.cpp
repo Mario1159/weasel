@@ -72,7 +72,7 @@ editor::root::root (wsl::comp::singl::runtime_context *runtime_ctx,
       m_ecs_inspector_window (runtime_ctx, editor_ctx, m_selection),
       m_resource_inspector_window (runtime_ctx, editor_ctx),
       m_game_view_window (runtime_ctx, editor_ctx),
-      m_signal_inspector_window (runtime_ctx, editor_ctx, &m_selection),
+      m_event_inspector_window (runtime_ctx, editor_ctx, &m_selection),
       m_build_inspector_window (runtime_ctx, editor_ctx),
       m_shader_graph_editor (runtime_ctx, editor_ctx)
 {
@@ -160,8 +160,8 @@ editor::root::draw (entt::registry &registry,
     m_chat_panel.draw ("Agent", &m_show_agent);
   }
 
-  if (m_show_signal_inspector) {
-    m_signal_inspector_window.draw ();
+  if (m_show_event_inspector) {
+    m_event_inspector_window.draw ();
   }
 
   if (m_show_build_inspector) {
@@ -255,7 +255,6 @@ editor::root::draw (entt::registry &registry,
   }
 
   draw_status_bar ();
-
 }
 
 void
@@ -296,7 +295,7 @@ editor::root::build_default_dock_layout (ImGuiID dockspace_id)
   ImGui::DockBuilderDockWindow ("Agent", dock_bottom);
   ImGui::DockBuilderDockWindow ("Welcome", dock_main);
   ImGui::DockBuilderDockWindow ("Game View", dock_main);
-  ImGui::DockBuilderDockWindow ("Signals", dock_right);
+  ImGui::DockBuilderDockWindow ("Events", dock_left);
   ImGui::DockBuilderDockWindow ("Build", dock_right);
   ImGui::DockBuilderDockWindow ("Text Editor", dock_main);
   ImGui::DockBuilderDockWindow ("Shader Graph", dock_main);
@@ -456,7 +455,7 @@ editor::root::draw_main_menu ()
     ImGui::MenuItem ("Console", nullptr, &m_show_new_console);
     ImGui::MenuItem ("Agent", nullptr, &m_show_agent);
     ImGui::MenuItem ("Game View", nullptr, &m_show_game_view);
-    ImGui::MenuItem ("Signals", nullptr, &m_show_signal_inspector);
+    ImGui::MenuItem ("Events", nullptr, &m_show_event_inspector);
     ImGui::MenuItem ("Build", nullptr, &m_show_build_inspector);
     ImGui::MenuItem ("Text Editor", nullptr, &m_show_text_editor);
     ImGui::MenuItem ("Files", nullptr, &m_show_file_list);

@@ -22,8 +22,8 @@ public:
   void on_init (entt::registry &registry) override;
   void on_inactive (entt::registry &registry) override;
 
-  void register_signals (reg::sig::signal_hub &hub) override;
-  void register_event_handlers (reg::sig::signal_hub &hub) override;
+  void register_event_sources (event::event_hub &hub) override;
+  void register_event_sinks (event::event_hub &hub) override;
 
   // Event handlers
   void on_play (entt::registry &registry, entt::entity entity,

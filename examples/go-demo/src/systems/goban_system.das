@@ -18,38 +18,36 @@ class System : EcsSystem {
         set_relative_mouse_mode(false)
     }
 
-    def override on_event() : void {
-        var kind = get_event_kind()
-
-        if (kind == EVENT_KEY_DOWN) {
-            var scancode = get_event_key_scancode()
-            if (scancode == SDL_SCANCODE_ESCAPE) {
+    // Input is read from the pull-only message bus each frame (the
+    // `on_event` callback was removed in favour of `mouse_button_at`,
+    // `key_pressed_at`, ... accessors).
+    def process_input() : void {
+        for (i in range(key_pressed_count())) {
+            if (key_pressed_at(i).scancode == uint(SDL_SCANCODE_ESCAPE)) {
                 refresh_cameras()
                 var active = get_active_camera()
                 if (active == m_goban_camera) {
                     switch_to_camera(m_fp_camera)
                 }
             }
-        } elif (kind == EVENT_MOUSE_BUTTON_DOWN) {
-            var btn = get_event_mouse_button()
+        }
 
-            if (btn == int(SDL_BUTTON_LEFT)) {
+        for (i in range(mouse_button_count())) {
+            if (!mouse_button_at(i).down) continue
+
+            if (mouse_button_at(i).button == int(SDL_BUTTON_LEFT)) {
                 refresh_cameras()
                 var active = get_active_camera()
                 if (active != m_goban_camera) {
                     switch_to_camera(m_goban_camera)
                 } else {
-                    var mx = get_event_mouse_x()
-                    var my = get_event_mouse_y()
-                    place_stone_at(mx, my)
+                    place_stone_at(mouse_button_at(i).x, mouse_button_at(i).y)
                 }
-            } elif (btn == int(SDL_BUTTON_RIGHT)) {
+            } elif (mouse_button_at(i).button == int(SDL_BUTTON_RIGHT)) {
                 refresh_cameras()
                 var active = get_active_camera()
                 if (active == m_goban_camera) {
-                    var mx = get_event_mouse_x()
-                    var my = get_event_mouse_y()
-                    remove_stone_at(mx, my)
+                    remove_stone_at(mouse_button_at(i).x, mouse_button_at(i).y)
                 }
             }
         }
@@ -57,6 +55,7 @@ class System : EcsSystem {
 
     def override on_update(dt : float) : void {
         refresh_cameras()
+        process_input()
 
         var active = get_active_camera()
         var on_fp = (active == m_fp_camera)

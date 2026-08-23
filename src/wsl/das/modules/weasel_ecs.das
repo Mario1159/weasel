@@ -22,10 +22,6 @@ require weasel_api
 //           // per-frame update code
 //       }
 //
-//       def override on_event() : void {
-//           // event handling code
-//       }
-//
 //       def override on_inactive() : void {
 //           // cleanup code
 //       }
@@ -33,10 +29,21 @@ require weasel_api
 //
 // The C++ engine detects the "System" class and instantiates it via the
 // class adapter, which dispatches virtual method calls to these overrides.
+//
+// Input is delivered through the pull-only message bus, not a per-event
+// callback. Read engine input each frame via the `mouse_motion_at`,
+// `key_pressed_at`, `text_input_at`, ... accessors (see `weasel_api`),
+// e.g.:
+//
+//       def override on_update(dt : float) : void {
+//           for i in range(mouse_motion_count()) {
+//               var m = mouse_motion_at(i)
+//               m_accumulated_dx += m.xrel
+//           }
+//       }
 
 class EcsSystem {
     def on_init() : void { }
     def on_update(dt : float) : void { }
-    def on_event() : void { }
     def on_inactive() : void { }
 }

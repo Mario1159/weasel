@@ -12,7 +12,7 @@
 #include "game_view.hpp"
 #include "input_map_inspector.hpp"
 #include "resource_inspector.hpp"
-#include "signal_inspector.hpp"
+#include "event_inspector.hpp"
 #include "build_inspector.hpp"
 #include "system_inspector.hpp"
 #include "text_editor.hpp"
@@ -57,7 +57,7 @@ private:
   resource_inspector m_resource_inspector_window;
   game_view m_game_view_window;
   input_map_inspector m_input_map_window;
-  signal_inspector m_signal_inspector_window;
+  event_inspector m_event_inspector_window;
   build_inspector m_build_inspector_window;
   text_editor m_text_editor_window;
   file_list m_file_list_window;
@@ -71,7 +71,7 @@ private:
   bool m_show_input_map = true;
   bool m_show_new_console = true;
   bool m_show_agent = true;
-  bool m_show_signal_inspector = true;
+  bool m_show_event_inspector = true;
   bool m_show_build_inspector = true;
   bool m_show_text_editor = true;
   bool m_show_file_list = true;

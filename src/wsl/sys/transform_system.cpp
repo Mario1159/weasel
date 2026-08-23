@@ -4,7 +4,7 @@
 #include "../comp/transform.hpp"
 #include "../comp/transform_2d.hpp"
 #include "../comp/world_transform.hpp"
-#include "reg/sig/signal_hub.hpp"
+#include "event/event_hub.hpp"
 #include "wsl/log/log.hpp"
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
@@ -54,19 +54,19 @@ transform_system::update_world_recursive (
 }
 
 void
-transform_system::register_signals (reg::sig::signal_hub &hub)
+transform_system::register_event_sources (event::event_hub &hub)
 {
   (void)hub;
 }
 
 void
-transform_system::register_event_handlers (reg::sig::signal_hub &hub)
+transform_system::register_event_sinks (event::event_hub &hub)
 {
   (void)hub;
 }
 
 void
-transform_system::register_iterations (reg::sig::signal_hub &hub)
+transform_system::register_iterations (event::event_hub &hub)
 {
   clear_registered_iterations ();
 

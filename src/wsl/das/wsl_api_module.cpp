@@ -26,14 +26,14 @@
 #include "wsl/comp/directional_light.hpp"
 #include "wsl/comp/spot_light.hpp"
 #include "wsl/comp/audio.hpp"
-#include "wsl/event.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/ray.hpp"
 #include "wsl/rsc/scene.hpp"
 #include "wsl/rsc/resource_manager.hpp"
 #include "wsl/reg/component_registry.hpp"
-#include "wsl/reg/sig/signal_hub.hpp"
+#include "wsl/event/event_hub.hpp"
 #include "wsl/phys/physics_engine.hpp"
+#include "wsl_event_binds.hpp"
 
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_keyboard.h>
@@ -80,7 +80,6 @@ struct query_depth_guard
 };
 
 thread_local entt::registry *g_registry = nullptr;
-const engine_event *g_current_event = nullptr;
 
 entt::registry *
 get_registry ()
@@ -1839,105 +1838,6 @@ wsl_type_id_subviewport ()
   return static_cast<uint32_t> (entt::type_hash<comp::subviewport>::value ());
 }
 
-// ── Event query functions ──
-
-uint32_t
-wsl_get_event_kind ()
-{
-  if (!g_current_event) {
-    return 0;
-  }
-  return static_cast<uint32_t> (g_current_event->kind ());
-}
-
-float
-wsl_get_event_mouse_dx ()
-{
-  if (!g_current_event
-      || g_current_event->kind () != event_kind::mouse_motion) {
-    return 0.0f;
-  }
-  return static_cast<float> (g_current_event->as_mouse_motion ().xrel);
-}
-
-float
-wsl_get_event_mouse_dy ()
-{
-  if (!g_current_event
-      || g_current_event->kind () != event_kind::mouse_motion) {
-    return 0.0f;
-  }
-  return static_cast<float> (g_current_event->as_mouse_motion ().yrel);
-}
-
-int
-wsl_get_event_mouse_x ()
-{
-  if (!g_current_event
-      || (g_current_event->kind () != event_kind::mouse_button_down
-          && g_current_event->kind () != event_kind::mouse_button_up)) {
-    return 0;
-  }
-  return g_current_event->as_mouse_button ().x;
-}
-
-int
-wsl_get_event_mouse_y ()
-{
-  if (!g_current_event
-      || (g_current_event->kind () != event_kind::mouse_button_down
-          && g_current_event->kind () != event_kind::mouse_button_up)) {
-    return 0;
-  }
-  return g_current_event->as_mouse_button ().y;
-}
-
-uint32_t
-wsl_get_event_mouse_button ()
-{
-  if (!g_current_event
-      || (g_current_event->kind () != event_kind::mouse_button_down
-          && g_current_event->kind () != event_kind::mouse_button_up)) {
-    return 0;
-  }
-  return g_current_event->as_mouse_button ().button;
-}
-
-// ── Keyboard event functions ──
-
-int
-wsl_get_event_key_scancode ()
-{
-  if (!g_current_event
-      || (g_current_event->kind () != event_kind::key_down
-          && g_current_event->kind () != event_kind::key_up)) {
-    return 0;
-  }
-  return static_cast<int> (g_current_event->as_keyboard ().scancode);
-}
-
-int
-wsl_get_event_key_keycode ()
-{
-  if (!g_current_event
-      || (g_current_event->kind () != event_kind::key_down
-          && g_current_event->kind () != event_kind::key_up)) {
-    return 0;
-  }
-  return static_cast<int> (g_current_event->as_keyboard ().key);
-}
-
-bool
-wsl_get_event_key_repeat ()
-{
-  if (!g_current_event
-      || (g_current_event->kind () != event_kind::key_down
-          && g_current_event->kind () != event_kind::key_up)) {
-    return false;
-  }
-  return g_current_event->as_keyboard ().repeat;
-}
-
 // ── Keyboard state ──
 
 bool
@@ -2377,6 +2277,78 @@ wsl_apply_force (uint32_t entity, float x, float y, float z)
 
 // ── Audio ──
 
+// ── Event runtime wiring ──
+
+static entt::id_type
+resolve_event_type_id (const std::string &name)
+{
+  auto *rc = try_get_runtime_context ();
+  if (rc == nullptr || rc->event_hub ().db == nullptr) {
+    return 0;
+  }
+
+  for (auto &kv : rc->event_hub ().db->entries) {
+    const auto &entry = kv.second;
+    if (entry.type_name == name) {
+      return kv.first;
+    }
+
+    auto pos = entry.type_name.rfind ("::");
+    std::string simple = (pos == std::string::npos)
+                             ? entry.type_name
+                             : entry.type_name.substr (pos + 2);
+    if (simple == name) {
+      return kv.first;
+    }
+  }
+
+  return 0;
+}
+
+static bool
+wsl_event_connect (const char *event_name, const char *system_name,
+                   const char *handler_name)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc || !event_name || !system_name || !handler_name) {
+    return false;
+  }
+
+  const entt::id_type event_id = resolve_event_type_id (event_name);
+  if (event_id == 0) {
+    return false;
+  }
+
+  const auto *sd = rc->system_factory_registry ().find_system (system_name);
+  if (sd == nullptr) {
+    return false;
+  }
+
+  return rc->event_hub ().connect (event_id, sd->type_id, handler_name);
+}
+
+static bool
+wsl_event_disconnect (const char *event_name, const char *system_name,
+                      const char *handler_name)
+{
+  auto *rc = try_get_runtime_context ();
+  if (!rc || !event_name || !system_name || !handler_name) {
+    return false;
+  }
+
+  const entt::id_type event_id = resolve_event_type_id (event_name);
+  if (event_id == 0) {
+    return false;
+  }
+
+  const auto *sd = rc->system_factory_registry ().find_system (system_name);
+  if (sd == nullptr) {
+    return false;
+  }
+
+  return rc->event_hub ().disconnect (event_id, sd->type_id, handler_name);
+}
+
 void
 wsl_audio_play (uint32_t entity)
 {
@@ -2384,9 +2356,8 @@ wsl_audio_play (uint32_t entity)
   if (!rc) {
     return;
   }
-  ::wsl::reg::sig::emit (
-      rc->signal_hub (),
-      comp::audio::play{ static_cast<entt::entity> (entity) });
+  ::wsl::event::emit (rc->event_hub (),
+                      comp::audio::play{ static_cast<entt::entity> (entity) });
 }
 
 void
@@ -2396,9 +2367,8 @@ wsl_audio_stop (uint32_t entity)
   if (!rc) {
     return;
   }
-  ::wsl::reg::sig::emit (
-      rc->signal_hub (),
-      comp::audio::stop{ static_cast<entt::entity> (entity) });
+  ::wsl::event::emit (rc->event_hub (),
+                      comp::audio::stop{ static_cast<entt::entity> (entity) });
 }
 
 void
@@ -2408,9 +2378,8 @@ wsl_audio_pause (uint32_t entity)
   if (!rc) {
     return;
   }
-  ::wsl::reg::sig::emit (
-      rc->signal_hub (),
-      comp::audio::pause{ static_cast<entt::entity> (entity) });
+  ::wsl::event::emit (rc->event_hub (),
+                      comp::audio::pause{ static_cast<entt::entity> (entity) });
 }
 
 void
@@ -2420,8 +2389,8 @@ wsl_audio_resume (uint32_t entity)
   if (!rc) {
     return;
   }
-  ::wsl::reg::sig::emit (
-      rc->signal_hub (),
+  ::wsl::event::emit (
+      rc->event_hub (),
       comp::audio::resume{ static_cast<entt::entity> (entity) });
 }
 
@@ -2432,8 +2401,8 @@ wsl_audio_set_volume (uint32_t entity, float volume)
   if (!rc) {
     return;
   }
-  ::wsl::reg::sig::emit (
-      rc->signal_hub (),
+  ::wsl::event::emit (
+      rc->event_hub (),
       comp::audio::set_volume{ static_cast<entt::entity> (entity), volume });
 }
 
@@ -2666,46 +2635,6 @@ public:
         *this, lib, "TYPE_SUBVIEWPORT", ::das::SideEffects::none,
         "wsl::das::wsl_type_id_subviewport");
 
-    // Event query functions
-    addExtern<DAS_BIND_FUN (wsl_get_event_kind)> (
-        *this, lib, "get_event_kind", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_kind");
-
-    addExtern<DAS_BIND_FUN (wsl_get_event_mouse_dx)> (
-        *this, lib, "get_event_mouse_dx", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_mouse_dx");
-
-    addExtern<DAS_BIND_FUN (wsl_get_event_mouse_dy)> (
-        *this, lib, "get_event_mouse_dy", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_mouse_dy");
-
-    addExtern<DAS_BIND_FUN (wsl_get_event_mouse_x)> (
-        *this, lib, "get_event_mouse_x", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_mouse_x");
-
-    addExtern<DAS_BIND_FUN (wsl_get_event_mouse_y)> (
-        *this, lib, "get_event_mouse_y", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_mouse_y");
-
-    addExtern<DAS_BIND_FUN (wsl_get_event_mouse_button)> (
-        *this, lib, "get_event_mouse_button",
-        ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_mouse_button");
-
-    // Keyboard event functions
-    addExtern<DAS_BIND_FUN (wsl_get_event_key_scancode)> (
-        *this, lib, "get_event_key_scancode",
-        ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_key_scancode");
-
-    addExtern<DAS_BIND_FUN (wsl_get_event_key_keycode)> (
-        *this, lib, "get_event_key_keycode", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_key_keycode");
-
-    addExtern<DAS_BIND_FUN (wsl_get_event_key_repeat)> (
-        *this, lib, "get_event_key_repeat", ::das::SideEffects::accessExternal,
-        "wsl::das::wsl_get_event_key_repeat");
-
     // Keyboard state
     addExtern<DAS_BIND_FUN (wsl_is_key_pressed)> (
         *this, lib, "is_key_pressed", ::das::SideEffects::accessExternal,
@@ -2851,21 +2780,6 @@ public:
     ::das::addConstant<uint32_t> (*this, "SDL_BUTTON_LEFT", 1);
     ::das::addConstant<uint32_t> (*this, "SDL_BUTTON_RIGHT", 3);
     ::das::addConstant<int32_t> (*this, "SDL_SCANCODE_ESCAPE", 41);
-    ::das::addConstant<uint32_t> (
-        *this, "EVENT_MOUSE_MOTION",
-        static_cast<uint32_t> (event_kind::mouse_motion));
-    ::das::addConstant<uint32_t> (
-        *this, "EVENT_MOUSE_BUTTON_DOWN",
-        static_cast<uint32_t> (event_kind::mouse_button_down));
-    ::das::addConstant<uint32_t> (
-        *this, "EVENT_MOUSE_BUTTON_UP",
-        static_cast<uint32_t> (event_kind::mouse_button_up));
-    ::das::addConstant<uint32_t> (*this, "EVENT_QUIT",
-                                  static_cast<uint32_t> (event_kind::quit));
-    ::das::addConstant<uint32_t> (*this, "EVENT_KEY_DOWN",
-                                  static_cast<uint32_t> (event_kind::key_down));
-    ::das::addConstant<uint32_t> (*this, "EVENT_KEY_UP",
-                                  static_cast<uint32_t> (event_kind::key_up));
 
     // ── Time ──
     addExtern<DAS_BIND_FUN (wsl_get_time)> (*this, lib, "get_time",
@@ -2907,6 +2821,18 @@ public:
         *this, lib, "audio_set_volume", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_audio_set_volume")
         ->args ({ "entity", "volume" });
+
+    // ── Event runtime wiring ──
+    register_event_message_bindings (*this, lib);
+
+    addExtern<DAS_BIND_FUN (wsl_event_connect)> (
+        *this, lib, "event_connect", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_event_connect")
+        ->args ({ "event_name", "system_name", "handler_name" });
+    addExtern<DAS_BIND_FUN (wsl_event_disconnect)> (
+        *this, lib, "event_disconnect", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_event_disconnect")
+        ->args ({ "event_name", "system_name", "handler_name" });
 
     // ── Model instance ──
     addExtern<DAS_BIND_FUN (wsl_set_model)> (*this, lib, "set_model",
@@ -2966,10 +2892,18 @@ wsl_api_set_active_registry (entt::registry *registry)
   g_registry = registry;
 }
 
-void
-wsl_api_set_current_event (const engine_event *ev)
+wsl::event::message_bus *
+wsl_api_get_active_message_bus ()
 {
-  g_current_event = ev;
+  if (g_registry == nullptr) {
+    return nullptr;
+  }
+  if (g_registry->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return &g_registry->ctx ()
+                .get<comp::singl::runtime_context *> ()
+                ->message_bus ();
+  }
+  return nullptr;
 }
 
 void

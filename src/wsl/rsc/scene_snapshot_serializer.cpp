@@ -125,7 +125,7 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
         static_cast<uint32_t> (entt::to_integral (entry.first)), entry.second);
   }
 
-  header.connections = runtime_ctx->signal_hub ().get_all_connections ();
+  header.connections = runtime_ctx->event_hub ().get_all_connections ();
 
   for (const resource_ref &ref : scene_ref.get_load_list ()) {
     std::string path = runtime_ctx->resource_manager ().get_path (ref);
@@ -207,7 +207,7 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   wsl::log::rsc ()->trace ("Loading scene");
   scene_ref.stop_and_clear ();
-  runtime_ctx->signal_hub ().clear_connections ();
+  runtime_ctx->event_hub ().clear_connections ();
 
   scene_header header;
   wsl::log::rsc ()->trace ("Loading header");
@@ -225,8 +225,8 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   wsl::log::rsc ()->debug (
       "Registered {} connectable handlers",
-      runtime_ctx->signal_hub ().db
-          ? runtime_ctx->signal_hub ().db->connectable_handlers.size ()
+      runtime_ctx->event_hub ().db
+          ? runtime_ctx->event_hub ().db->event_sinks.size ()
           : 0);
 
   reg::system_factory_registry &factory
@@ -340,17 +340,15 @@ scene_snapshot_serializer::load_scene (Archive &archive)
 
   wsl::log::rsc ()->trace ("Restoring {} connections",
                            header.connections.size ());
-  // runtime_ctx->signal_hub().clear_connections (); // DON'T CLEAR ALL,
+  // runtime_ctx->event_hub().clear_connections (); // DON'T CLEAR ALL,
   // additive or handled by scene replacement
   for (const auto &conn : header.connections) {
-    if (!runtime_ctx->signal_hub ().connect (
-            conn.signal_type_id, conn.system_type_id, conn.handler_name,
-            conn.source_entity, conn.target_entity,
-            &scene_ref.get_registry ())) {
+    if (!runtime_ctx->event_hub ().connect (
+            conn.event_type_id, conn.system_type_id, conn.handler_name)) {
       wsl::log::rsc ()->warn (
           "Failed to connect signal {} to system {} handler {} "
           "during scene load",
-          conn.signal_type_id, conn.system_type_id, conn.handler_name);
+          conn.event_type_id, conn.system_type_id, conn.handler_name);
     }
   }
 

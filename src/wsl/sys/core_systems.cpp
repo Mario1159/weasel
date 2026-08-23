@@ -98,20 +98,19 @@ core_systems::register_debug_metadata ()
       continue;
     }
 
-    m_runtime_ctx->signal_hub ().clear_system_declarations (
-        sys->get_type_id ());
-    sys->register_signals (m_runtime_ctx->signal_hub ());
-    sys->register_event_handlers (m_runtime_ctx->signal_hub ());
-    sys->register_iterations (m_runtime_ctx->signal_hub ());
+    m_runtime_ctx->event_hub ().clear_system_declarations (sys->get_type_id ());
+    sys->register_event_sources (m_runtime_ctx->event_hub ());
+    sys->register_event_sinks (m_runtime_ctx->event_hub ());
+    sys->register_iterations (m_runtime_ctx->event_hub ());
   }
 
   if (rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ()) {
     for (auto &sys : scene->systems) {
-      m_runtime_ctx->signal_hub ().clear_system_declarations (
+      m_runtime_ctx->event_hub ().clear_system_declarations (
           sys->get_type_id ());
-      sys->register_signals (m_runtime_ctx->signal_hub ());
-      sys->register_event_handlers (m_runtime_ctx->signal_hub ());
-      sys->register_iterations (m_runtime_ctx->signal_hub ());
+      sys->register_event_sources (m_runtime_ctx->event_hub ());
+      sys->register_event_sinks (m_runtime_ctx->event_hub ());
+      sys->register_iterations (m_runtime_ctx->event_hub ());
     }
   }
 }
@@ -306,34 +305,6 @@ core_systems::update (double dt)
   wsl::log::sys ()->trace ("Update: {} active systems, dt={}s, scene='{}'",
                            active_count, dt,
                            scene ? scene->get_name ().c_str () : "(none)");
-}
-
-void
-core_systems::event_handler (const engine_event &e)
-{
-  ZoneScopedN ("core_systems::event_handler");
-
-  sync_activation ();
-
-  rsc::scene *scene = m_runtime_ctx->scene_manager ().get_active ();
-  entt::registry &registry
-      = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
-
-  registry_handle reg (registry);
-
-  for (sys::ecs_system *sys : to_vec ()) {
-    if (sys == nullptr) {
-      continue;
-    }
-
-    sys->event_handler (reg, e);
-  }
-
-  if (scene != nullptr) {
-    for (auto &sys : scene->systems) {
-      sys->event_handler (reg, e);
-    }
-  }
 }
 
 void

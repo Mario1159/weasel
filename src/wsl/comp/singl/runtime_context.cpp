@@ -105,10 +105,9 @@ comp::singl::runtime_context::sdl_init_guard::~sdl_init_guard ()
 comp::singl::runtime_context::runtime_context (
     const char *name, int width, int height, const std::string &engine_res_path,
     bool headless)
-    : m_world (this), m_scene_manager (m_world),
-      m_signal_hub (m_dispatcher, m_signal_db),
+    : m_world (this), m_scene_manager (m_world), m_event_hub (m_event_db),
       m_reg_queries (m_component_registry, m_system_factory_registry,
-                     m_signal_hub),
+                     m_event_hub),
       m_runtime_project_module (this), sdl_init_guard_ (headless),
       m_render_ctx (headless), m_resource_manager (this, engine_res_path),
       m_resource_manager_view (&m_resource_manager),
@@ -117,18 +116,18 @@ comp::singl::runtime_context::runtime_context (
       m_ui_manager (m_render_ctx, m_window, &m_resource_manager),
       m_headless (headless)
 {
-  m_system_factory_registry.set_signal_hub (&m_signal_hub);
+  m_system_factory_registry.set_event_hub (&m_event_hub);
   if (!headless)
     wsl::log::core ()->trace ("GPU device status: {}",
                               (void *)m_render_ctx.gpu_device);
   m_current_input_map = &m_app_input_map;
 
-  m_signal_hub.resolve_active_registry = [this] () -> entt::registry * {
+  m_event_hub.resolve_active_registry = [this] () -> entt::registry * {
     auto *scene = m_scene_manager.get_active ();
     return scene ? &scene->get_registry () : nullptr;
   };
 
-  m_signal_hub.resolve_system_by_type
+  m_event_hub.resolve_system_by_type
       = [this] (entt::id_type system_type_id) -> sys::ecs_system * {
     if (auto *scene = m_scene_manager.get_active ()) {
       for (sys::ecs_system *system : scene->get_systems ()) {
@@ -149,8 +148,23 @@ comp::singl::runtime_context::runtime_context (
     return nullptr;
   };
 
-  m_dispatcher.sink<wsl::event::scene_changed> ()
-      .connect<&runtime_context::on_scene_changed> (this);
+  // Fold the editor-wide `scene_changed` event onto the observer event hub
+  // (single eventing mechanism). Declare the source (emitted by
+  // `scene_manager`) and a sink owned directly by `runtime_context`; the
+  // handler is invoked via a captured `void *` owner, so no `ecs_system`
+  // inheritance is required.
+  m_event_hub
+      .declare_event_source<wsl::event::scene_changed, rsc::scene_manager> ();
+  m_event_hub.declare_event_sink<wsl::event::scene_changed, runtime_context> (
+      "on_scene_changed",
+      +[] (void *owner, entt::registry &, const void *ev) {
+        static_cast<runtime_context *> (owner)->on_scene_changed (
+            *static_cast<const wsl::event::scene_changed *> (ev));
+      },
+      this);
+  m_event_hub.connect (comp::stable_type_id<wsl::event::scene_changed> (),
+                       comp::stable_type_id<runtime_context> (),
+                       "on_scene_changed");
 
   // Register core system factories so CLI can discover them via `sys avail`,
   // even in headless mode.  The actual system instances are only created

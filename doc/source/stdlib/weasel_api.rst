@@ -24,42 +24,6 @@ Constants
 
    Value: ``41``
 
-.. das:data:: EVENT_MOUSE_MOTION
-
-   :type: uint32_t
-
-   Value: ``2 (mouse_motion``
-
-.. das:data:: EVENT_MOUSE_BUTTON_DOWN
-
-   :type: uint32_t
-
-   Value: ``3 (mouse_button_down``
-
-.. das:data:: EVENT_MOUSE_BUTTON_UP
-
-   :type: uint32_t
-
-   Value: ``4 (mouse_button_up``
-
-.. das:data:: EVENT_QUIT
-
-   :type: uint32_t
-
-   Value: ``0 (quit``
-
-.. das:data:: EVENT_KEY_DOWN
-
-   :type: uint32_t
-
-   Value: ``static_cast<uint32_t> (event_kind::key_down``
-
-.. das:data:: EVENT_KEY_UP
-
-   :type: uint32_t
-
-   Value: ``static_cast<uint32_t> (event_kind::key_up``
-
 Component accessor proxies
 --------------------------
 
@@ -288,47 +252,6 @@ Stable type IDs for built-in component types.
 
    :returns: uint
 
-Event query functions
----------------------
-
-Query input events (mouse motion, button clicks).
-
-.. das:function:: get_event_kind() : uint
-
-   Returns the type of the current event (see EVENT_* constants).
-
-   :returns: uint
-
-.. das:function:: get_event_mouse_dx() : float
-
-   Returns the horizontal mouse delta for mouse motion events.
-
-   :returns: float
-
-.. das:function:: get_event_mouse_dy() : float
-
-   Returns the vertical mouse delta for mouse motion events.
-
-   :returns: float
-
-.. das:function:: get_event_mouse_x() : int
-
-   Returns the mouse X position for button events.
-
-   :returns: int
-
-.. das:function:: get_event_mouse_y() : int
-
-   Returns the mouse Y position for button events.
-
-   :returns: int
-
-.. das:function:: get_event_mouse_button() : uint
-
-   Returns which mouse button was pressed/released.
-
-   :returns: uint
-
 SDL window operations
 ---------------------
 
@@ -466,21 +389,6 @@ Editor viewport (global-state)
 .. das:function:: get_editor_img_size_y() : float
 
    :returns: float
-
-Keyboard event functions
-------------------------
-
-.. das:function:: get_event_key_scancode() : int
-
-   :returns: int
-
-.. das:function:: get_event_key_keycode() : int
-
-   :returns: int
-
-.. das:function:: get_event_key_repeat() : bool
-
-   :returns: bool
 
 Keyboard state
 --------------
@@ -719,10 +627,8 @@ Physics: rigid body
       y (float)
       z (float)
 
-Audio
------
-
-Control playback of entity audio components.
+Event runtime wiring
+--------------------
 
 .. das:function:: audio_play(entity : uint)
 
@@ -759,4 +665,18 @@ Control playback of entity audio components.
    :param:
       entity (uint)
       volume (float)
+
+.. das:function:: event_connect(event_name : var, system_name : var, handler_name : var)
+
+   :param:
+      event_name (var)
+      system_name (var)
+      handler_name (var)
+
+.. das:function:: event_disconnect(event_name : var, system_name : var, handler_name : var)
+
+   :param:
+      event_name (var)
+      system_name (var)
+      handler_name (var)
 

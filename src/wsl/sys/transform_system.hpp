@@ -20,9 +20,9 @@ public:
     set_relationships ({}, {});
   }
 
-  void register_signals (reg::sig::signal_hub &hub) override;
-  void register_event_handlers (reg::sig::signal_hub &hub) override;
-  void register_iterations (reg::sig::signal_hub &hub) override;
+  void register_event_sources (event::event_hub &hub) override;
+  void register_event_sinks (event::event_hub &hub) override;
+  void register_iterations (event::event_hub &hub) override;
 
   void on_update (entt::registry &registry, double dt) override;
   void on_editor_update (entt::registry &registry, double dt) override;

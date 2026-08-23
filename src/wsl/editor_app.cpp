@@ -53,6 +53,15 @@ void
 editor_app::on_event (const wsl::engine_event &e)
 {
   m_ui_layer->handle_event (e);
+
+  auto &cs = m_runtime_context->core_systems ();
+  if (cs != nullptr) {
+    if (cs->render_ui_sys != nullptr) {
+      if (auto *scene = m_runtime_context->scene_manager ().get_active ()) {
+        cs->render_ui_sys->handle_sdl_event (scene->get_registry (), e);
+      }
+    }
+  }
 }
 
 void

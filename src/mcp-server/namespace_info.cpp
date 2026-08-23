@@ -171,9 +171,9 @@ System dependencies and conflicts (prevent incompatible systems):
   Provides automatic type ID and typed iteration registration:
 
   template <typename... Components, typename Fn>
-  void register_iteration(signal_hub&, const char* name, Fn&& fn);
+  void register_iteration(event_hub&, const char* name, Fn&& fn);
 
-  This declares a typed system iteration visible to the signal hub.
+  This declares a typed system iteration visible to the event hub.
 
 ── Built-in Systems ──
 
@@ -270,7 +270,6 @@ the factory registry to register and create them:
 
     while (running) {
         systems.update(dt);
-        systems.event_handler(event);
         systems.render(window, callbacks);
     }
 
@@ -340,7 +339,6 @@ A scene owns an entt::registry + a list of systems:
   scene.init();
 
   scene.update(dt);
-  scene.handle_events(event);
   scene.stop_and_clear();
 
 scene_manager handles scene activation, prefab instantiation, and
@@ -634,7 +632,7 @@ Designed for seamless interop between GLM, Jolt Physics, and ImGui.
     { "reg",
       { "reg – Registry & Registration Infrastructure",
         "Central registration for components, singletons, systems, and "
-        "signals. Enables serialization, editor reflection, and dynamic "
+        "events. Enables serialization, editor reflection, and dynamic "
         "queries.",
 
         R"doc(== wsl::reg — Registry & Registration ==
@@ -691,25 +689,29 @@ and runtime code. It makes the engine introspectable and extensible.
 
 ── registry_queries (registry_queries.hpp) ──
 
-  Cross-concept query interface:
+   Cross-concept query interface:
     • get_matching_iterations(registry, entity) — systems that process this entity
     • get_matching_systems(registry, entity) — systems relevant to this entity
-    • get_related_signals(registry, entity) — signals touching this entity
-    • find_signals_using_world_component(component_id)
-    • find_systems_using_world_component(component_id)
-    • find_connections_for_signal(signal_id)
+    • find_event_sources_owned_by_system(system_id) — event sources an emitter declares
+    • find_event_sinks_owned_by_system(system_id) — event sinks a handler declares
+    • find_connections_for_event(event_id)
     • find_connections_for_system(system_id)
 
-── Signal System (sig/signal_hub.hpp) ──
+── Signal System (event/event_hub.hpp) ──
 
-  signal_hub is the central pub/sub hub:
-    • declare_signal<OwnerSystem, Components...>(name)
-    • declare_iteration<OwnerSystem, Components...>(name)
-    • connect(source_signal, target_handler)
-    • emit(signal_type, registry)
+  The observer event hub (renamed from "signal hub"); events carry no
+  component/entity relation — entity identity lives in the event payload:
+    • declare_event_source<Event, EmitterSystem>() — declare an emitter (one owner)
+    • declare_event_sink<Event, HandlerSystem>(name, invoke) — declare a handler
+    • event_source<Event, EmitterSystem>{hub}.emit(args...) — fire to connected sinks
+    • event_source<Event, Emitter>.add_listener(event_sink<Event, Handler>) — connect
+    • event_hub.connect(event_type_id, system_type_id, handler_name) — runtime connect
+    • wsl::event::emit(hub, Event{...}) — free emit helper
 
-  Used internally by ecs_system_t::register_iteration() and by
-  the editor for event-driven workflows.
+  Buffered / message events live in a separate, pull-only subsystem
+  (event/message_bus.hpp): post<T>(...) enqueues; message_reader<T> pulls each
+  frame after message_bus.drain(registry). Used internally by
+  ecs_system_t::register_iteration() and by the editor event inspector.
 
 ── Detail (detail/registry_helpers.hpp) ──
 

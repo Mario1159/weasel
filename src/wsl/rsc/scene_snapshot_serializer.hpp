@@ -56,7 +56,7 @@ struct scene_header
   /** List of entity names and their serialized IDs. */
   std::vector<std::pair<uint32_t, std::string>> entity_names;
   /** Signal connections between entities and systems. */
-  std::vector<reg::sig::signal_connection_data> connections;
+  std::vector<event::event_connection_data> connections;
   /** Resources that should be automatically loaded with the scene. */
   std::vector<resource_ref_serialized> autoload;
   /** The active camera entity in this scene. */

@@ -1,10 +1,8 @@
 #pragma once
 
-#include "../reg/sig/signal_hub.hpp"
+#include "../event/event_hub.hpp"
 #include "../comp/component_meta.hpp"
-#include "wsl/event.hpp"
 #include "wsl/log/log.hpp"
-#include "wsl/reg/registry_handle.hpp"
 
 #include "entt/entity/fwd.hpp"
 #include <entt/entt.hpp>
@@ -41,15 +39,15 @@ public:
   virtual const char *get_type_name () const = 0;
 
   virtual void
-  register_signals (reg::sig::signal_hub &)
+  register_event_sources (event::event_hub &)
   {
   }
   virtual void
-  register_event_handlers (reg::sig::signal_hub &)
+  register_event_sinks (event::event_hub &)
   {
   }
   virtual void
-  register_iterations (reg::sig::signal_hub &)
+  register_iterations (event::event_hub &)
   {
   }
 
@@ -67,10 +65,6 @@ public:
   }
   virtual void
   on_editor_update (entt::registry &, double /*dt*/)
-  {
-  }
-  virtual void
-  on_event (registry_handle, const engine_event &)
   {
   }
 
@@ -205,17 +199,6 @@ public:
 
     if (m_editor_active && (registry != nullptr)) {
       on_editor_update (*registry, dt);
-    }
-  }
-
-  void
-  event_handler (registry_handle reg, const engine_event &ev)
-  {
-    ZoneScopedN ("sys::event_handler");
-    ZoneText (m_name.data (), m_name.size ());
-
-    if (m_active && reg.valid ()) {
-      on_event (reg, ev);
     }
   }
 
@@ -385,7 +368,7 @@ public:
 protected:
   template <typename... Components, typename Fn>
   void
-  register_iteration (reg::sig::signal_hub &hub, const char *iteration_name,
+  register_iteration (event::event_hub &hub, const char *iteration_name,
                       Fn &&fn)
   {
     hub.template declare_iteration<Derived, Components...> (iteration_name);

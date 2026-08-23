@@ -35,12 +35,13 @@ Type IDs are stable hashes: canonical Daslang component identity for script
 types and `wsl::comp::stable_type_id<T>()` for engine types. Native EnTT
 storage IDs are tracked separately from stable serialized IDs.
 
-## Signal System (`sig/`)
+## Event System (`event/`)
 
 | Class | Header | Description |
 |-------|--------|-------------|
-| `signal_hub` | `sig/signal_hub.hpp` | Central hub for declaring signals, iterations, and event handlers. Supports typed signal emission and connection. |
-| `signal_hub_fwd` | `sig/signal_hub_fwd.hpp` | Forward declarations for signal types. |
+| `event_hub` | `event/event_hub.hpp` | Central hub for declaring observer events, iterations, and event handlers. Supports typed event emission and explicit runtime connection. Events are type-level: entity identity lives in the event payload, not the connection. |
+| `event_hub_fwd` | `event/event_hub_fwd.hpp` | Forward declarations for event types. |
+| `event_source` / `event_sink` | `event/event_hub.hpp` | Non-owning typed handles; `add_listener`/`remove_listener` forward to `event_hub::connect`/`disconnect`. |
 
 ## Runtime Module Loading
 

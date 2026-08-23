@@ -1,7 +1,7 @@
 #pragma once
 
 #include "root.hpp"
-#include "wsl/reg/sig/signal_hub.hpp"
+#include "wsl/event/event_hub.hpp"
 #include "wsl/editor/editor_ui_layer_interface.hpp"
 
 #include <entt/entity/fwd.hpp>
@@ -27,7 +27,7 @@ public:
   engine_ui (wsl::comp::singl::runtime_context *runtime_ctx,
              wsl::comp::singl::editor_context *editor_ctx);
 
-  static void register_signals (wsl::reg::sig::signal_hub &hub);
+  static void register_event_sources (wsl::event::event_hub &hub);
   void initialize () override;
   void set_console_command_handler (
       std::function<std::string (const std::string &)> handler) override;

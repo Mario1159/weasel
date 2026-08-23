@@ -42,7 +42,6 @@ systems.init(runtime_ctx, editor_ctx);
 
 // Per-frame
 systems.update(dt);
-systems.event_handler(sdl_event);
 systems.render(window, callbacks);
 ```
 

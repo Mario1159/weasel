@@ -1,5 +1,5 @@
 #include "system_factory_registry.hpp"
-#include "sig/signal_hub.hpp"
+#include "event/event_hub.hpp"
 #include "../rsc/scene.hpp"
 #include "../sys/system.hpp"
 #include "../das/das_system_adapter.hpp"
@@ -237,12 +237,12 @@ system_factory_registry::get_system_iterations (
     entt::id_type system_type_id) const
 {
   std::vector<const system_iteration_descriptor *> result;
-  if (m_signal_hub == nullptr || m_signal_hub->db == nullptr) {
+  if (m_event_hub == nullptr || m_event_hub->db == nullptr) {
     return result;
   }
 
-  for (const sig::system_iteration_debug_entry &iteration :
-       m_signal_hub->db->system_iterations) {
+  for (const event::system_iteration_debug_entry &iteration :
+       m_event_hub->db->system_iterations) {
     if (iteration.system_type_id == system_type_id) {
       result.push_back (&iteration);
     }
@@ -256,12 +256,12 @@ system_factory_registry::find_iterations_using_world_component (
     entt::id_type component_type_id) const
 {
   std::vector<const system_iteration_descriptor *> result;
-  if (m_signal_hub == nullptr || m_signal_hub->db == nullptr) {
+  if (m_event_hub == nullptr || m_event_hub->db == nullptr) {
     return result;
   }
 
-  for (const sig::system_iteration_debug_entry &iteration :
-       m_signal_hub->db->system_iterations) {
+  for (const event::system_iteration_debug_entry &iteration :
+       m_event_hub->db->system_iterations) {
     if (iteration.has_component (component_type_id)) {
       result.push_back (&iteration);
     }

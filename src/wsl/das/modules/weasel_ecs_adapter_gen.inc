@@ -23,22 +23,19 @@ protected:
   enum {
     __fn_on_init = 0,
     __fn_on_update = 1,
-    __fn_on_event = 2,
-    __fn_on_inactive = 3,
+    __fn_on_inactive = 2,
   };
 
-protected:
-  static inline int _das_class_method_offset[4];
+ protected:
+  static inline int _das_class_method_offset[3];
 
-public:
+ public:
   EcsSystemAdapter ( const StructInfo * info ) {
     if ( _das_class_method_offset[__fn_on_init] == 0 ) {
       _das_class_method_offset[__fn_on_init]
         = adapt_field_offset("on_init", info);
       _das_class_method_offset[__fn_on_update]
         = adapt_field_offset("on_update", info);
-      _das_class_method_offset[__fn_on_event]
-        = adapt_field_offset("on_event", info);
       _das_class_method_offset[__fn_on_inactive]
         = adapt_field_offset("on_inactive", info);
     }
@@ -66,18 +63,6 @@ public:
       Func __funcCall__, void * self, float dt ) {
     das_invoke_function<void>::invoke<void *, float>(
         __context__, nullptr, __funcCall__, self, dt);
-  }
-
-  // ── on_event() ──
-
-  static __forceinline Func get_on_event ( void * self ) {
-    return getDasClassMethod(self, _das_class_method_offset[__fn_on_event]);
-  }
-
-  static __forceinline void invoke_on_event ( Context * __context__,
-      Func __funcCall__, void * self ) {
-    das_invoke_function<void>::invoke<void *>(
-        __context__, nullptr, __funcCall__, self);
   }
 
   // ── on_inactive() ──

@@ -55,7 +55,6 @@ public:
   void set_editor_ctx (comp::singl::editor_context *editor_ctx);
   void sync_activation ();
   void update (double dt);
-  void event_handler (const engine_event &e);
   void render (wsl::gfx::render_window &window,
                const render_callbacks &callbacks = {});
 

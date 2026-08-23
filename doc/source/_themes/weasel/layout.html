@@ -140,6 +140,12 @@
     {%- endif %}
 {%- endblock %}
 {%- block extrahead %} {% endblock %}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Spline+Sans:wght@400;500;600&display=swap" />
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   </head>
   {%- block body_tag %}<body>{% endblock %}
 {%- block header %}{% endblock %}
@@ -193,17 +199,6 @@
 {%- endmacro %}
 
 {%- block footer %}
-    <div class="footer" role="contentinfo">
-    {%- if show_copyright %}
-        {{- copyright_block() -}}
-    {%- endif %}
-    {%- if last_updated %}
-      {% trans last_updated=last_updated|e %}Last updated on {{ last_updated }}.{% endtrans %}
-    {%- endif %}
-    {%- if show_sphinx %}
-      {% trans sphinx_version=sphinx_version|e %}Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> {{ sphinx_version }}.{% endtrans %}
-    {%- endif %}
-    </div>
 {%- endblock %}
   </body>
 </html>

@@ -27,9 +27,9 @@ public:
   explicit physics_system (const std::string &name);
   ~physics_system () override;
 
-  void register_signals (reg::sig::signal_hub &hub) override;
-  void register_event_handlers (reg::sig::signal_hub &hub) override;
-  void register_iterations (reg::sig::signal_hub &hub) override;
+  void register_event_sources (event::event_hub &hub) override;
+  void register_event_sinks (event::event_hub &hub) override;
+  void register_iterations (event::event_hub &hub) override;
 
   void on_init (entt::registry &registry) override;
   void on_inactive (entt::registry &registry) override;

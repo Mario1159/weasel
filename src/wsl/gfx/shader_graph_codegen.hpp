@@ -19,9 +19,9 @@ namespace gfx
  *
  * Emits a complete fragment shader that conforms to the engine's binding
  * conventions:
- *   - Material UBO at b0, space3
- *   - Textures at tN, space2
- *   - Samplers at sN, space2
+ * - Material UBO at b0, space3
+ * - Textures at tN, space2
+ * - Samplers at sN, space2
  */
 class shader_graph_codegen
 {
@@ -35,14 +35,14 @@ public:
   shader_reflection build_reflection () const;
 
   /**
- * Supply the shared PBR module source (pbr_common.slang).
- *
- *  When set, the generated fragment shader includes the engine's full PBR
- *  lighting (directional / clustered point / spot lights, IBL, shadows,
- *  SSAO, bloom) so shader-graph materials are lit identically to the
- *  standard cube.frag material. The source is inlined at the top of the
- *  generated shader so no runtime include path is required.
- */
+   * Supply the shared PBR module source (pbr_common.slang).
+   *
+   *  When set, the generated fragment shader includes the engine's full PBR
+   *  lighting (directional / clustered point / spot lights, IBL, shadows,
+   *  SSAO, bloom) so shader-graph materials are lit identically to the
+   *  standard cube.frag material. The source is inlined at the top of the
+   *  generated shader so no runtime include path is required.
+   */
   void
   set_pbr_common_source (const std::string &source)
   {

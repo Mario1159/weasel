@@ -1226,7 +1226,7 @@ rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
     }
 
     m_runtime_ctx->world ().clear ();
-    m_runtime_ctx->signal_hub ().clear_connections ();
+    m_runtime_ctx->event_hub ().clear_connections ();
   }
 
   if (restore_builtin_defaults) {

@@ -675,8 +675,12 @@ endif()
 # Create an interface target for doctest headers (if not already defined by daslang)
 if(NOT TARGET doctest)
   add_library(doctest INTERFACE)
-  target_include_directories(doctest INTERFACE ${doctest_SOURCE_DIR})
 endif()
+# The single-header lives at <doctest-src>/doctest/doctest.h, but some test
+# files include it as "doctest.h" and others as "doctest/doctest.h". Expose
+# both layout variants so either include style resolves.
+target_include_directories(doctest INTERFACE
+    ${doctest_SOURCE_DIR} ${doctest_SOURCE_DIR}/doctest)
 
 # Add doctest-based tests for the CLI handler
 add_executable(weasel_cli_tests
@@ -695,15 +699,23 @@ add_executable(weasel_mcp_server_tests
 target_link_libraries(weasel_mcp_server_tests PRIVATE mcp_server_lib doctest)
 doctest_discover_tests(weasel_mcp_server_tests)
 
-# Engine daslang component-accessors smoke test. Runs only when daslang is
-# enabled in the build (the weasel_daslang target exists).
-if(TARGET weasel_daslang)
-  add_executable(weasel_das_tests
-      "${CMAKE_SOURCE_DIR}/tests/weasel-das/test_component_accessors.cpp"
+  # Engine daslang component-accessors smoke test. Runs only when daslang is
+  # enabled in the build (the weasel_daslang target exists).
+  if(TARGET weasel_daslang)
+    add_executable(weasel_das_tests
+        "${CMAKE_SOURCE_DIR}/tests/weasel-das/test_component_accessors.cpp"
+    )
+    target_link_libraries(weasel_das_tests PRIVATE wsl doctest)
+    doctest_discover_tests(weasel_das_tests)
+  endif()
+
+  # Engine core unit tests (event hub + message bus). Always available since
+  # they only depend on the `wsl` core library.
+  add_executable(weasel_core_tests
+      "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_event_bus.cpp"
   )
-  target_link_libraries(weasel_das_tests PRIVATE wsl doctest)
-  doctest_discover_tests(weasel_das_tests)
-endif()
+  target_link_libraries(weasel_core_tests PRIVATE wsl doctest)
+  doctest_discover_tests(weasel_core_tests)
 
 # --- Installation ---
 # Only install our own targets/resources.  CPM dependencies (slang,
