@@ -617,6 +617,17 @@ cli_handler::parse (int argc, char **argv)
     reg.emplace<wsl::comp::camera> (cam_entity);
     scene.camera = cam_entity;
 
+    // Sunlight
+    auto sun_entity = reg.create ();
+    scene.set_entity_name (sun_entity, "Sunlight");
+    reg.emplace<wsl::comp::hierarchy> (sun_entity);
+    auto &sun_transform = reg.emplace<wsl::comp::transform> (
+        sun_entity, glm::vec3 (0.0F, 5.0F, 0.0F));
+    sun_transform.set_rotation_xyz (wsl::math::vec3f{ 145.0F, -45.0F, 180.0F });
+    reg.emplace<wsl::comp::world_transform> (sun_entity).value ()
+        = sun_transform.model ();
+    reg.emplace<wsl::comp::directional_light> (sun_entity);
+
     for (const auto &sys_name : cs_systems) {
       rtc.system_factory_registry ().register_system (
           sys_name.c_str (), [sys_name] (wsl::rsc::scene &) {

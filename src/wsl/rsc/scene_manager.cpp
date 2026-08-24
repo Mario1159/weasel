@@ -7,6 +7,7 @@
 #include "../comp/singl/runtime_context.hpp"
 #include "../comp/singl/ui_manager.hpp"
 #include "../comp/transform.hpp"
+#include "../comp/directional_light.hpp"
 #include "../comp/world_transform.hpp"
 #include "comp/component_meta.hpp"
 #include "rsc/resource_ref.hpp"
@@ -165,6 +166,17 @@ rsc::scene_manager::create_default_scene (const std::string &name,
   cam_world_transform.value () = cam_transform.model ();
   reg.emplace<comp::camera> (cam_entity);
   new_scene.camera = cam_entity;
+
+  // Sunlight
+  auto sun_entity = reg.create ();
+  new_scene.set_entity_name (sun_entity, "Sunlight");
+  reg.emplace<comp::hierarchy> (sun_entity);
+  auto &sun_transform
+      = reg.emplace<comp::transform> (sun_entity, glm::vec3 (0.0F, 5.0F, 0.0F));
+  sun_transform.set_rotation_xyz (math::vec3f{ 145.0F, -45.0F, 180.0F });
+  reg.emplace<comp::world_transform> (sun_entity).value ()
+      = sun_transform.model ();
+  reg.emplace<comp::directional_light> (sun_entity);
 
   return new_scene;
 }

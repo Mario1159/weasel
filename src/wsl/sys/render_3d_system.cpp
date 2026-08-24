@@ -1,5 +1,6 @@
 #include "render_3d_system.hpp"
 
+#include "../comp/directional_light.hpp"
 #include "../comp/singl/editor_context.hpp"
 #include "../comp/singl/runtime_context.hpp"
 #include "comp/camera.hpp"
@@ -152,6 +153,72 @@ render_3d_system::on_render_record_draw_cmd (entt::registry &registry)
             push_line (quad[i], quad[(i + 1) % 4]);
             push_line (origin, quad[i]);
           }
+        }
+
+        // Draw directional light gizmos: a '+' at the light origin (like the
+        // camera origin point) plus an arrow pointing where the light shines
+        // (editor-only). Direction matches the lighting system: -Z of the
+        // entity transform.
+        glm::vec4 const light_default_color = glm::vec4 (
+            255.0F / 255.0F, 230.0F / 255.0F, 120.0F / 255.0F, 1.0F);
+
+        auto light_view
+            = registry.view<comp::world_transform, comp::directional_light> ();
+        for (entt::entity const entity : light_view) {
+          const comp::world_transform &wt
+              = light_view.get<comp::world_transform> (entity);
+          glm::mat4 const wtm = wt.value ();
+
+          glm::vec3 const origin = glm::vec3 (wtm[3]);
+
+          // Light direction: -Z of the transform (same as lighting_system).
+          glm::vec3 dir = -glm::normalize (glm::vec3 (wtm[2]));
+          if (!std::isfinite (dir.x)) {
+            dir = glm::vec3 (0.0F, 0.0F, -1.0F);
+          }
+
+          // Orthonormal basis around the direction for the arrow head.
+          glm::vec3 side_guess = glm::normalize (glm::vec3 (wtm[0]));
+          if (!std::isfinite (side_guess.x)
+              || glm::length (glm::cross (side_guess, dir)) < 1e-4F) {
+            side_guess = glm::vec3 (0.0F, 1.0F, 0.0F);
+          }
+          glm::vec3 const side = glm::normalize (glm::cross (side_guess, dir));
+          glm::vec3 const up = glm::normalize (glm::cross (dir, side));
+
+          float const view_distance
+              = glm::distance (renderer->camera_position (), origin);
+          float const origin_extent
+              = glm::clamp (view_distance * 0.12F, 0.08F, 0.35F);
+          float const shaft = glm::clamp (view_distance * 0.30F, 0.60F, 4.0F);
+          float const head = shaft * 0.22F;
+
+          glm::vec4 const col = (entity == editor_ctx.selected_entity ())
+                                    ? selected_color
+                                    : light_default_color;
+
+          auto push_light_line
+              = [&lines, col] (const glm::vec3 &a, const glm::vec3 &b) {
+                  lines.push_back (gfx::scene_renderer::debug_vertex{ a, col });
+                  lines.push_back (gfx::scene_renderer::debug_vertex{ b, col });
+                };
+
+          // '+' at the light origin.
+          push_light_line (origin - side * origin_extent,
+                           origin + side * origin_extent);
+          push_light_line (origin - up * origin_extent,
+                           origin + up * origin_extent);
+          push_light_line (origin - dir * origin_extent,
+                           origin + dir * origin_extent);
+
+          // Arrow along the light direction with a 4-line star head.
+          glm::vec3 const tip = origin + dir * shaft;
+          glm::vec3 const base = tip - dir * head;
+          push_light_line (origin, tip);
+          push_light_line (tip, base + side * head);
+          push_light_line (tip, base - side * head);
+          push_light_line (tip, base + up * head);
+          push_light_line (tip, base - up * head);
         }
 
         if (!lines.empty ()) {

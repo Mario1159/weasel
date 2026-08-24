@@ -22,6 +22,7 @@
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/hierarchy.hpp"
 #include "wsl/comp/transform.hpp"
+#include "wsl/comp/directional_light.hpp"
 #include "wsl/comp/world_transform.hpp"
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/model_instance_3d.hpp"
@@ -106,6 +107,17 @@ rsc::project_loader::create (const project &proj) const
     cam_world_transform.value () = cam_transform.model ();
     reg.emplace<comp::camera> (cam_entity);
     temp_scene.camera = cam_entity;
+
+    // Add a default directional light entity
+    auto sun_entity = reg.create ();
+    temp_scene.set_entity_name (sun_entity, "Sunlight");
+    reg.emplace<comp::hierarchy> (sun_entity);
+    auto &sun_transform = reg.emplace<comp::transform> (
+        sun_entity, glm::vec3 (0.0F, 5.0F, 0.0F));
+    sun_transform.set_rotation_xyz (wsl::math::vec3f{ 145.0F, -45.0F, 180.0F });
+    reg.emplace<comp::world_transform> (sun_entity).value ()
+        = sun_transform.model ();
+    reg.emplace<comp::directional_light> (sun_entity);
 
     io::scene_snapshot_serializer const serializer (m_runtime_ctx, temp_scene);
     serializer.save_json (scene_file.string ());
