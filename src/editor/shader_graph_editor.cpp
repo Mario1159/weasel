@@ -877,7 +877,8 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
 wsl::rsc::material_id
 shader_graph_editor::create_material_from_graph (const std::string &name)
 {
-  if (!m_runtime_ctx || m_preview_program_id.value == 0) {
+  if (!m_runtime_ctx
+      || m_preview_program_id.value == wsl::rsc::no_resource_id) {
     return wsl::rsc::material_id{};
   }
 

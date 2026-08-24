@@ -714,6 +714,7 @@ doctest_discover_tests(weasel_mcp_server_tests)
   add_executable(weasel_core_tests
       "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_event_bus.cpp"
       "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_acp_client.cpp"
+      "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_resource_ids.cpp"
   )
   target_link_libraries(weasel_core_tests PRIVATE wsl doctest)
   doctest_discover_tests(weasel_core_tests)

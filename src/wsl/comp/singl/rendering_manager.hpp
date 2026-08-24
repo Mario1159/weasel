@@ -288,8 +288,12 @@ struct rendering_manager : singleton_component
   serialize (Archive &archive)
   {
     rendering_manager def{};
-    serialize_field_if_diff (archive, "skybox", skybox.value,
-                             def.skybox.value);
+    serialize_field_if_diff (archive, "skybox", skybox.value, def.skybox.value);
+    if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
+                                    Archive>) {
+      // Older scenes stored ``0`` for "no skybox".
+      rsc::normalize_resource_id (skybox.value);
+    }
     serialize_field_if_diff (archive, "skybox_rotation", skybox_rotation,
                              def.skybox_rotation);
     serialize_field_if_diff (archive, "clear_color", clear_color,

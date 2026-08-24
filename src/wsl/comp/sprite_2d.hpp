@@ -12,7 +12,7 @@ namespace wsl::comp
 struct sprite_2d : world_component
 {
   /** Image resource to display. */
-  wsl::rsc::image_id image = wsl::rsc::image_id{ 0 };
+  wsl::rsc::image_id image{};
 
   /** Size of the sprite in pixels (before transform scaling). */
   math::vec2f size{ 100.0F, 100.0F };
@@ -39,8 +39,7 @@ struct sprite_2d : world_component
   serialize (Archive &archive)
   {
     sprite_2d const def{};
-    serialize_field_if_diff (archive, "image", image.value,
-                             def.image.value);
+    serialize_field_if_diff (archive, "image", image.value, def.image.value);
     serialize_field_if_diff (archive, "size", size, def.size);
     serialize_field_if_diff (archive, "color", color, def.color);
     serialize_field_if_diff (archive, "uv_offset", uv_offset, def.uv_offset);

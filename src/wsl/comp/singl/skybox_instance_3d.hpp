@@ -46,8 +46,12 @@ public:
   serialize (Archive &archive)
   {
     skybox_instance_3d def{};
-    serialize_field_if_diff (archive, "cubemap_id", id.value,
-                             def.id.value);
+    serialize_field_if_diff (archive, "cubemap_id", id.value, def.id.value);
+    if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
+                                    Archive>) {
+      // Older scenes stored ``0`` for "no cubemap".
+      rsc::normalize_resource_id (id.value);
+    }
   }
 };
 

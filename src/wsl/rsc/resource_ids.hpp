@@ -16,11 +16,33 @@ class runtime_context;
 namespace rsc
 {
 
+/**
+ * Sentinel stored in a resource id when it references nothing.
+ *
+ * Must match the sentinel used by the editor UI ("None" entries) and
+ * by component serialization. Never use ``0``: default-constructed ids
+ * used to initialize to zero, which made unset resources render as
+ * ``(00000000)`` instead of "None".
+ */
+inline constexpr entt::id_type no_resource_id = entt::null;
+
+/**
+ * Maps the legacy zero sentinel found in older project files to
+ * :cpp:member:`no_resource_id`.
+ */
+inline void
+normalize_resource_id (entt::id_type &value)
+{
+  if (value == 0) {
+    value = no_resource_id;
+  }
+}
+
 /** Unique identifier for a 3D model resource. */
 struct model_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const model_id &other) const
   {
@@ -35,7 +57,7 @@ struct model_id
 struct image_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const image_id &other) const
   {
@@ -50,7 +72,7 @@ struct image_id
 struct cubemap_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const cubemap_id &other) const
   {
@@ -62,7 +84,7 @@ struct cubemap_id
 struct scene_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const scene_id &other) const
   {
@@ -74,7 +96,7 @@ struct scene_id
 struct audio_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const audio_id &other) const
   {
@@ -89,7 +111,7 @@ struct audio_id
 struct ui_layout_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const ui_layout_id &other) const
   {
@@ -101,7 +123,7 @@ struct ui_layout_id
 struct font_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const font_id &other) const
   {
@@ -113,7 +135,7 @@ struct font_id
 struct shader_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const shader_id &other) const
   {
@@ -125,7 +147,7 @@ struct shader_id
 struct shader_program_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const shader_program_id &other) const
   {
@@ -137,7 +159,7 @@ struct shader_program_id
 struct material_id
 {
   /** The hashed identifier value. */
-  entt::id_type value{ 0 };
+  entt::id_type value{ no_resource_id };
   bool
   operator== (const material_id &other) const
   {
@@ -169,6 +191,9 @@ void
 serialize (Archive &ar, model_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -176,6 +201,9 @@ void
 serialize (Archive &ar, image_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -183,6 +211,9 @@ void
 serialize (Archive &ar, cubemap_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -190,6 +221,9 @@ void
 serialize (Archive &ar, scene_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -197,6 +231,9 @@ void
 serialize (Archive &ar, audio_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -204,6 +241,9 @@ void
 serialize (Archive &ar, ui_layout_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -211,6 +251,9 @@ void
 serialize (Archive &ar, font_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -218,6 +261,9 @@ void
 serialize (Archive &ar, shader_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -225,6 +271,9 @@ void
 serialize (Archive &ar, shader_program_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 template <class Archive>
@@ -232,6 +281,9 @@ void
 serialize (Archive &ar, material_id &id)
 {
   ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
 }
 
 } // namespace rsc
