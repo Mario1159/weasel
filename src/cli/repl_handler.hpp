@@ -25,6 +25,13 @@ public:
 
   void set_auto_save (bool enabled);
 
+  /** True when commands are forwarded to a live editor instance. */
+  bool
+  editor_connected () const
+  {
+    return m_editor_client.is_connected ();
+  }
+
 private:
   void ensure_local_executor ();
 

@@ -109,6 +109,26 @@ private:
     std::string client_project = read_line (client_fd);
     wsl::log::net ()->debug ("Received project: {}", client_project);
 
+    // Discovery query: report our project so path-less clients can attach,
+    // then fall through to the regular validation with their reply.
+    if (client_project == wsl::net::command_protocol::HANDSHAKE_QUERY) {
+      if (m_project_path.empty ()) {
+        write_all (
+            client_fd,
+            std::string (wsl::net::command_protocol::HANDSHAKE_NO_PROJECT)
+                + "\n");
+        close (client_fd);
+        return;
+      }
+
+      write_all (
+          client_fd,
+          std::string (wsl::net::command_protocol::HANDSHAKE_PROJECT_PREFIX)
+              + m_project_path + "\n");
+      client_project = read_line (client_fd);
+      wsl::log::net ()->debug ("Discovery reply project: {}", client_project);
+    }
+
     // Validate project match
     if (client_project != m_project_path) {
       std::string response

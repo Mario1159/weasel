@@ -27,7 +27,9 @@ main (int argc, char **argv)
     if (!repl.prepare (result.project_to_load, result.scene_to_load)) {
       return 1;
     }
-    if (!result.attach) {
+    // One-shot commands autosave unless they really run inside a live editor.
+    // A --attach run that fell back to standalone behaves like a local run.
+    if (!repl.editor_connected ()) {
       repl.set_auto_save (true);
     }
     repl.execute_command (*result.command);

@@ -3327,7 +3327,9 @@ repl_handler::set_auto_save (bool enabled)
 void
 repl_handler::ensure_local_executor ()
 {
-  if (m_attach || m_local_executor) {
+  // Created lazily on first use, including in attach mode that fell back to
+  // standalone when no editor instance was found.
+  if (m_local_executor) {
     return;
   }
 
@@ -3344,49 +3346,62 @@ repl_handler::prepare (std::optional<std::string> initial_project,
 {
   if (m_attach) {
     if (!m_editor_client.is_connected ()) {
-      if (!initial_project) {
-        std::cerr << "Error: --attach requires --project to be specified.\n";
-        return false;
-      }
+      std::optional<std::string> target_project;
 
-      std::filesystem::path proj_path (*initial_project);
-      wsl::log::cli ()->info ("Initial project path: {}", proj_path.string ());
-      if (proj_path.filename ().string () == "wslpro.json") {
-        proj_path = proj_path.parent_path ();
-        wsl::log::cli ()->info ("Detected wslpro.json, using parent: {}",
+      if (initial_project) {
+        std::filesystem::path proj_path (*initial_project);
+        wsl::log::cli ()->info ("Initial project path: {}",
                                 proj_path.string ());
-      }
-
-      std::string abs_project_path
-          = std::filesystem::weakly_canonical (proj_path).string ();
-      wsl::log::cli ()->info ("Attaching to project at: {}", abs_project_path);
-      if (!m_editor_client.connect (abs_project_path)) {
-        wsl::log::cli ()->error (
-            "Failed to connect to editor server for project: {}",
-            *initial_project);
-        wsl::log::cli ()->error (
-            "Make sure the editor is running with the same project loaded");
-        return false;
-      }
-      wsl::log::cli ()->info ("Connected to editor server for project: {}",
-                              *initial_project);
-    }
-
-    if (initial_scene) {
-      auto response = m_editor_client.execute_command (
-          build_repl_command ({ "scene", "load", *initial_scene }));
-      if (!response || command_failed (*response)) {
-        if (response && !response->empty ()) {
-          wsl::log::cli ()->error ("{}", *response);
-          if (response->back () != '\n') {
-            std::cerr << '\n';
-          }
+        if (proj_path.filename ().string () == "wslpro.json") {
+          proj_path = proj_path.parent_path ();
+          wsl::log::cli ()->info ("Detected wslpro.json, using parent: {}",
+                                  proj_path.string ());
         }
-        return false;
+
+        target_project
+            = std::filesystem::weakly_canonical (proj_path).string ();
+        wsl::log::cli ()->info ("Attaching to project at: {}", *target_project);
+      } else {
+        wsl::log::cli ()->info (
+            "No --project given, looking for a running editor instance...");
+      }
+
+      if (!m_editor_client.connect (target_project)) {
+        // Graceful degradation: attach is best-effort. Warn and continue
+        // standalone so commands still run against a local runtime context.
+        if (target_project) {
+          wsl::log::cli ()->warn (
+              "No running editor found for project '{}' — continuing "
+              "standalone",
+              *target_project);
+        } else {
+          wsl::log::cli ()->warn (
+              "No running editor instance found — continuing standalone");
+        }
+      } else {
+        wsl::log::cli ()->info ("Connected to editor server for project: {}",
+                                m_editor_client.connected_project ());
       }
     }
 
-    return true;
+    if (m_editor_client.is_connected ()) {
+      if (initial_scene) {
+        auto response = m_editor_client.execute_command (
+            build_repl_command ({ "scene", "load", *initial_scene }));
+        if (!response || command_failed (*response)) {
+          if (response && !response->empty ()) {
+            wsl::log::cli ()->error ("{}", *response);
+            if (response->back () != '\n') {
+              std::cerr << '\n';
+            }
+          }
+          return false;
+        }
+      }
+
+      return true;
+    }
+    // Not connected: fall through to the standalone path below.
   }
 
   ensure_local_executor ();

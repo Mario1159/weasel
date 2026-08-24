@@ -100,14 +100,19 @@ handle_get_quick_start (const mcp::json &params)
          "Level1\n\n";
   oss << "3. Validate a project:\n";
   oss << "   weasel-cli validate-project ./mygame/wslpro.json\n\n";
-  oss << "4. One-shot scripting (auto-save):\n";
-  oss << "   weasel-cli --project ./mygame/wslpro.json --scene Level1 \\\n";
-  oss << "       ent new Player\n";
-  oss << "   weasel-cli --project ./mygame/wslpro.json --scene Level1 \\\n";
-  oss << "       comp add 0 rigid_body\n";
-  oss << "   Each mutation command auto-saves the scene to disk. No \\\n";
-  oss << "   explicit save needed.\n\n";
+  oss << "4. One-shot scripting (PREFERRED form, auto-save):\n";
+  oss << "   weasel-cli -a ent new Player\n";
+  oss << "   weasel-cli -a comp add 0 rigid_body\n";
+  oss << "   Always prefer -a: it attaches to the first running editor\n";
+  oss << "   instance and uses its open project. When no editor is running\n";
+  oss << "   it warns and falls back to standalone execution; add --project\n";
+  oss << "   <path> to select the project for the standalone run:\n";
+  oss << "   weasel-cli -a --project ./mygame/wslpro.json --scene Level1 \\\n";
+  oss << "       comp set 0 rigid_body shape sphere\n";
+  oss << "   Each mutation command auto-saves when running standalone.\n";
+  oss << "   When attached to a live editor, saving is done in the editor.\n\n";
   oss << "5. Start the interactive REPL (manual save):\n";
+  oss << "   weasel-cli -i -a        # attached to the running editor\n";
   oss << "   weasel-cli --project ./mygame/wslpro.json --interactive\n\n";
   oss << "   Inside the REPL you can manage entities, components, scenes, and "
          "more:\n";
@@ -127,8 +132,10 @@ handle_get_quick_start (const mcp::json &params)
   oss << "     ent inspect 0                 # Inspect entity\n";
   oss << "     scene save                    # Save scene (manual in REPL)\n";
   oss << "     help                          # Show full command reference\n\n";
-  oss << "6. Attach to a running editor:\n";
-  oss << "   weasel-cli --project ./mygame/wslpro.json --attach\n\n";
+  oss << "6. Attach behavior:\n";
+  oss << "   weasel-cli -a <command>   # first editor instance, its project\n";
+  oss << "   weasel-cli -a --project P # only an editor with project P\n";
+  oss << "   No editor found: warns and runs standalone instead.\n\n";
   oss << "For full command reference, use the list_commands and "
          "describe_command tools.\n";
   oss << "For component property details, use describe_component (e.g. Rigid "
@@ -147,10 +154,13 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "======================================\n\n";
 
   oss << "== Save Policy ==\n";
-  oss << "  One-shot mode (no --interactive/--attach): mutation commands\n";
-  oss << "  auto-save the active scene and project after each change.\n";
-  oss << "  Interactive/attach mode: save manually via scene save / proj "
-         "save.\n\n";
+  oss << "  Prefer attach mode: weasel-cli -a <command> drives the running\n";
+  oss << "  editor instance (its open project) — changes appear live and are\n";
+  oss << "  saved manually in the editor via scene save / proj save.\n";
+  oss << "  Standalone one-shot runs (including -a when no editor was "
+         "found):\n";
+  oss << "  mutation commands auto-save the active scene and project after\n";
+  oss << "  each change.\n\n";
 
   oss << "== Fully Implemented ==\n";
   oss << "  proj new        - Create and load a new project\n";
@@ -246,6 +256,11 @@ mcp_server_app::mcp_server_app ([[maybe_unused]] const std::string &host,
   m_server.set_capabilities (capabilities);
   m_server.set_instructions (
       "This MCP server provides reference documentation for the Weasel Engine. "
+      "When suggesting weasel-cli commands, ALWAYS prefer attach mode: "
+      "'weasel-cli -a <command>' attaches to the first running editor instance "
+      "and uses its open project; if no editor is running it warns and falls "
+      "back to standalone execution. Only add --project when a specific "
+      "project is required.\n"
       "Available tool categories:\n"
       "  CLI/REPL: list_commands, describe_command, get_quick_start, "
       "cli_capabilities\n"
@@ -257,6 +272,11 @@ mcp_server_app::mcp_server_app ([[maybe_unused]] const std::string &host,
   m_stdio_server.set_capabilities (capabilities);
   m_stdio_server.set_instructions (
       "This MCP server provides reference documentation for the Weasel Engine. "
+      "When suggesting weasel-cli commands, ALWAYS prefer attach mode: "
+      "'weasel-cli -a <command>' attaches to the first running editor instance "
+      "and uses its open project; if no editor is running it warns and falls "
+      "back to standalone execution. Only add --project when a specific "
+      "project is required.\n"
       "Available tool categories:\n"
       "  CLI/REPL: list_commands, describe_command, get_quick_start, "
       "cli_capabilities\n"

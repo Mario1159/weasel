@@ -159,9 +159,11 @@ cli_handler::parse (int argc, char **argv)
   app.add_flag ("-i,--interactive", interactive, "Start the interactive REPL");
 
   bool attach = false;
-  auto *attach_flag = app.add_flag (
-      "-a,--attach", attach, "Attach to running editor server for the project");
-  attach_flag->needs (project_opt);
+  app.add_flag (
+      "-a,--attach", attach,
+      "Attach to the first running editor instance and use its open project "
+      "(pass --project to pick a specific one; falls back to standalone with "
+      "a warning when no editor is running)");
 
   auto *create_project
       = app.add_subcommand ("create-project", "Create a new project");
