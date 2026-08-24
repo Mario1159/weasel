@@ -10,9 +10,162 @@
 #include <simdjson.h>
 
 #include <filesystem>
+#include <algorithm>
 
 namespace editor
 {
+
+namespace
+{
+
+using wsl::ai::acp::tool_call_content_item;
+
+/**
+ * Parse the ``content`` array of a tool call update into typed items.
+ *
+ * :param update: The ``update`` object of a session/update notification.
+ * :return: The parsed items, or nullopt when the update carries none.
+ */
+std::optional<std::vector<tool_call_content_item>>
+parse_tool_call_content (const simdjson::dom::element &update)
+{
+  auto content_el = update["content"];
+  if (content_el.error () || !content_el.value ().is_array ()) {
+    return std::nullopt;
+  }
+
+  std::vector<tool_call_content_item> items;
+
+  for (auto item_el : content_el.value ().get_array ()) {
+    std::string_view type;
+    auto type_el = item_el["type"];
+    if (type_el.error () || type_el.get_string ().get (type) != 0) {
+      continue;
+    }
+
+    tool_call_content_item item;
+
+    if (type == "text") {
+      auto text_el = item_el["text"];
+      if (text_el.error ()) {
+        continue;
+      }
+      std::string_view text;
+      if (text_el.get_string ().get (text) != 0) {
+        continue;
+      }
+
+      tool_call_content_item::content_wrapper wrapper;
+      wrapper.content = wsl::ai::acp::text_content{ std::string (text) };
+      item.item = std::move (wrapper);
+    } else if (type == "diff") {
+      tool_call_content_item::diff_content diff;
+
+      auto path_el = item_el["path"];
+      if (!path_el.error ()) {
+        std::string_view path;
+        if (path_el.get_string ().get (path) == 0) {
+          diff.path = std::string (path);
+        }
+      }
+
+      auto old_el = item_el["oldText"];
+      if (!old_el.error ()) {
+        std::string_view old_text;
+        if (old_el.get_string ().get (old_text) == 0) {
+          diff.old_text = std::string (old_text);
+        }
+      }
+
+      auto new_el = item_el["newText"];
+      if (!new_el.error ()) {
+        std::string_view new_text;
+        if (new_el.get_string ().get (new_text) == 0) {
+          diff.new_text = std::string (new_text);
+        }
+      }
+
+      item.item = std::move (diff);
+    } else if (type == "resource_link") {
+      tool_call_content_item::content_wrapper wrapper;
+      wsl::ai::acp::resource_link_content link;
+
+      auto name_el = item_el["name"];
+      if (!name_el.error ()) {
+        std::string_view name;
+        if (name_el.get_string ().get (name) == 0) {
+          link.name = std::string (name);
+        }
+      }
+      auto uri_el = item_el["uri"];
+      if (!uri_el.error ()) {
+        std::string_view uri;
+        if (uri_el.get_string ().get (uri) == 0) {
+          link.uri = std::string (uri);
+        }
+      }
+
+      wrapper.content = std::move (link);
+      item.item = std::move (wrapper);
+    } else {
+      continue;
+    }
+
+    items.push_back (std::move (item));
+  }
+
+  if (items.empty ()) {
+    return std::nullopt;
+  }
+  return items;
+}
+
+/**
+ * Render a block of monospaced-style output in a bordered child region.
+ *
+ * Long output is capped at ``max_lines`` and becomes scrollable, with
+ * horizontal scrolling for wide lines.
+ */
+void
+render_output_block (const char *child_id, const std::string &text,
+                     size_t max_lines)
+{
+  const float line_height = ImGui::GetTextLineHeightWithSpacing ();
+  const size_t line_count
+      = static_cast<size_t> (std::count (text.begin (), text.end (), '\n')) + 1;
+  float height = static_cast<float> (line_count) * line_height + 8.0F;
+  height = std::min (height, static_cast<float> (max_lines) * line_height);
+
+  ImGui::BeginChild (child_id, ImVec2 (0, height),
+                     ImGuiChildFlags_Borders | ImGuiChildFlags_FrameStyle,
+                     ImGuiWindowFlags_HorizontalScrollbar);
+  ImGui::TextUnformatted (text.c_str ());
+  ImGui::EndChild ();
+}
+
+/**
+ * Render diff content as colored +/- lines.
+ */
+void
+render_diff_lines (const std::string &text, char prefix, ImVec4 color)
+{
+  size_t begin = 0;
+  while (begin <= text.size ()) {
+    const size_t end = text.find ('\n', begin);
+    const size_t length
+        = end == std::string::npos ? text.size () - begin : end - begin;
+    if (length > 0) {
+      ImGui::TextColored (color, "%c %.*s", prefix, static_cast<int> (length),
+                          text.c_str () + begin);
+    }
+    if (end == std::string::npos) {
+      break;
+    }
+    begin = end + 1;
+  }
+}
+
+} // namespace
 
 chat_panel::chat_panel (wsl::comp::singl::runtime_context * /*runtime_ctx*/,
                         wsl::comp::singl::editor_context * /*editor_ctx*/)
@@ -30,22 +183,25 @@ chat_panel::chat_panel (wsl::comp::singl::runtime_context * /*runtime_ctx*/,
 
   m_session.set_agent_request_handler (
       [this] (const std::string &method,
-              const std::string &params) -> std::string {
+              const std::string &params) -> wsl::ai::acp::agent_response {
         return on_agent_request (method, params);
       });
 }
 
 chat_panel::~chat_panel ()
 {
+  // Unblock any in-flight RPC waits before joining their threads.
+  m_client.terminate ();
+
   if (m_connect_thread.joinable ()) {
     m_connect_thread.join ();
   }
   if (m_prompt_thread.joinable ()) {
     m_prompt_thread.join ();
   }
+
   if (m_connected) {
     m_session.close_session ();
-    m_client.terminate ();
   }
 }
 
@@ -76,6 +232,7 @@ chat_panel::draw (const char *title, bool *open)
       info_msg.m_role = display_message::role::system;
       info_msg.m_text = "Connected to " + m_selected_agent
                         + " (session: " + m_connect_session_id + ")";
+      std::lock_guard<std::mutex> lock (m_msg_mutex);
       m_messages.push_back (info_msg);
       m_scroll_to_bottom = true;
     } else {
@@ -83,6 +240,7 @@ chat_panel::draw (const char *title, bool *open)
       display_message err_msg;
       err_msg.m_role = display_message::role::system;
       err_msg.m_text = m_connect_error;
+      std::lock_guard<std::mutex> lock (m_msg_mutex);
       m_messages.push_back (err_msg);
       m_scroll_to_bottom = true;
     }
@@ -95,10 +253,13 @@ chat_panel::draw (const char *title, bool *open)
       m_prompt_thread.join ();
     }
     // Mark streaming as done on the last assistant message
-    if (!m_messages.empty ()
-        && m_messages.back ().m_role == display_message::role::assistant
-        && m_messages.back ().m_streaming) {
-      m_messages.back ().m_streaming = false;
+    {
+      std::lock_guard<std::mutex> lock (m_msg_mutex);
+      if (!m_messages.empty ()
+          && m_messages.back ().m_role == display_message::role::assistant
+          && m_messages.back ().m_streaming) {
+        m_messages.back ().m_streaming = false;
+      }
     }
     m_prompt_done.store (false);
   }
@@ -255,6 +416,7 @@ chat_panel::draw_plan ()
   ImGui::TextDisabled ("Plan");
   ImGui::Indent ();
 
+  std::lock_guard<std::mutex> lock (m_msg_mutex);
   for (const auto &entry : m_plan) {
     bool checked = entry.status == "completed";
     ImGui::PushID (entry.content.c_str ());
@@ -287,6 +449,10 @@ chat_panel::draw_messages ()
 
   ImGui::BeginChild ("scrolling_region", ImVec2 (0, -footer_height_to_reserve),
                      false, ImGuiWindowFlags_HorizontalScrollbar);
+
+  // m_messages is mutated by the ACP reader thread (session updates);
+  // hold the lock for the whole traversal.
+  std::lock_guard<std::mutex> lock (m_msg_mutex);
 
   for (const auto &msg : m_messages) {
     ImGui::PushID (&msg);
@@ -397,22 +563,26 @@ chat_panel::handle_send ()
   std::string text (m_input_buffer);
 
   // Add user message to display
-  display_message user_msg;
-  user_msg.m_role = display_message::role::user;
-  user_msg.m_text = text;
-  m_messages.push_back (user_msg);
+  {
+    std::lock_guard<std::mutex> lock (m_msg_mutex);
+
+    display_message user_msg;
+    user_msg.m_role = display_message::role::user;
+    user_msg.m_text = text;
+    m_messages.push_back (user_msg);
+    m_scroll_to_bottom = true;
+
+    // Prepare assistant message placeholder BEFORE sending prompt
+    // so on_session_update can append chunks immediately
+    display_message assistant_msg;
+    assistant_msg.m_role = display_message::role::assistant;
+    assistant_msg.m_streaming = true;
+    m_messages.push_back (assistant_msg);
+  }
   m_scroll_to_bottom = true;
 
   // Clear input
   m_input_buffer[0] = '\0';
-
-  // Prepare assistant message placeholder BEFORE sending prompt
-  // so on_session_update can append chunks immediately
-  display_message assistant_msg;
-  assistant_msg.m_role = display_message::role::assistant;
-  assistant_msg.m_streaming = true;
-  m_messages.push_back (assistant_msg);
-  m_scroll_to_bottom = true;
 
   // Send to agent (non-blocking)
   prompt_async (text);
@@ -466,7 +636,10 @@ chat_panel::handle_connect ()
   display_message info_msg;
   info_msg.m_role = display_message::role::system;
   info_msg.m_text = "Connecting to " + agent->display_name + "...";
-  m_messages.push_back (info_msg);
+  {
+    std::lock_guard<std::mutex> lock (m_msg_mutex);
+    m_messages.push_back (info_msg);
+  }
   m_scroll_to_bottom = true;
 
   // Launch agent subprocess (fast, non-blocking)
@@ -478,7 +651,10 @@ chat_panel::handle_connect ()
     err_msg.m_role = display_message::role::system;
     err_msg.m_text
         = "Error: Failed to launch agent '" + agent->display_name + "'";
-    m_messages.push_back (err_msg);
+    {
+      std::lock_guard<std::mutex> lock (m_msg_mutex);
+      m_messages.push_back (err_msg);
+    }
     m_scroll_to_bottom = true;
     return;
   }
@@ -529,13 +705,14 @@ chat_panel::handle_disconnect ()
     return;
   }
 
-  // Wait for any in-flight prompt to finish
+  // Unblock any in-flight prompt wait before joining its thread.
+  m_client.terminate ();
+
   if (m_prompt_thread.joinable ()) {
     m_prompt_thread.join ();
   }
 
   m_session.close_session ();
-  m_client.terminate ();
   m_connected = false;
   m_plan.clear ();
   m_pending_permission.reset ();
@@ -543,7 +720,10 @@ chat_panel::handle_disconnect ()
   display_message info_msg;
   info_msg.m_role = display_message::role::system;
   info_msg.m_text = "Disconnected";
-  m_messages.push_back (info_msg);
+  {
+    std::lock_guard<std::mutex> lock (m_msg_mutex);
+    m_messages.push_back (info_msg);
+  }
   m_scroll_to_bottom = true;
 }
 
@@ -556,7 +736,10 @@ chat_panel::handle_cancel ()
     display_message info_msg;
     info_msg.m_role = display_message::role::system;
     info_msg.m_text = "Cancelled";
-    m_messages.push_back (info_msg);
+    {
+      std::lock_guard<std::mutex> lock (m_msg_mutex);
+      m_messages.push_back (info_msg);
+    }
     m_scroll_to_bottom = true;
   }
 }
@@ -577,51 +760,104 @@ chat_panel::render_content_block (const wsl::ai::acp::content_block &block)
 void
 chat_panel::render_tool_call (const wsl::ai::acp::tool_call_update &tc)
 {
-  ImGui::PushStyleColor (ImGuiCol_ChildBg, ImVec4 (0.15F, 0.15F, 0.2F, 0.5F));
-  ImGui::Indent ();
-
-  float const avail = ImGui::GetContentRegionAvail ().x;
-  ImGui::BeginChild ("tool_call", ImVec2 (avail, 0), ImGuiChildFlags_Borders);
-
-  // Status icon
-  const char *status_icon = "○";
+  // Status color for the header title. Plain "●" is the only glyph
+  // used so it renders even with minimal font ranges.
+  ImVec4 status_color (0.55F, 0.55F, 0.55F, 1.0F);
+  const char *status_label = "pending";
   if (tc.status) {
     switch (*tc.status) {
     case wsl::ai::acp::tool_call_status::pending:
-      status_icon = "○";
+      status_color = ImVec4 (0.55F, 0.55F, 0.55F, 1.0F);
+      status_label = "pending";
       break;
     case wsl::ai::acp::tool_call_status::in_progress:
-      status_icon = "◐";
+      status_color = ImVec4 (0.9F, 0.75F, 0.25F, 1.0F);
+      status_label = "running";
       break;
     case wsl::ai::acp::tool_call_status::completed:
-      status_icon = "●";
+      status_color = ImVec4 (0.45F, 0.8F, 0.45F, 1.0F);
+      status_label = "completed";
       break;
     case wsl::ai::acp::tool_call_status::failed:
-      status_icon = "✗";
+      status_color = ImVec4 (0.85F, 0.35F, 0.35F, 1.0F);
+      status_label = "failed";
       break;
     }
   }
 
-  // Title
   std::string title = "Tool Call";
-  if (tc.title) {
+  if (tc.title && !tc.title->empty ()) {
     title = *tc.title;
   } else if (tc.kind) {
     title = wsl::ai::acp::tool_kind_name (*tc.kind);
   }
 
-  ImGui::Text ("%s %s", status_icon, title.c_str ());
+  // One collapsible block per tool call, keyed by its id.
+  std::string label
+      = title + "###tool_call_" + tc.tool_call_id + "_" + status_label;
 
-  // Locations
-  if (tc.locations) {
-    for (const auto &loc : *tc.locations) {
-      ImGui::TextDisabled ("  %s", loc.path.c_str ());
+  ImGui::SetNextItemOpen (true, ImGuiCond_Appearing);
+  ImGui::PushStyleColor (ImGuiCol_Text, status_color);
+  const bool open = ImGui::CollapsingHeader (label.c_str ());
+  ImGui::PopStyleColor ();
+
+  if (!open) {
+    return;
+  }
+
+  ImGui::Indent ();
+
+  if (tc.content) {
+    int output_index = 0;
+    for (const auto &item : *tc.content) {
+      if (auto *wrapper
+          = std::get_if<tool_call_content_item::content_wrapper> (&item.item)) {
+        if (auto *text
+            = std::get_if<wsl::ai::acp::text_content> (&wrapper->content)) {
+          const std::string child_id
+              = "##tc_output_" + std::to_string (output_index++);
+          render_output_block (child_id.c_str (), text->text, 12);
+        } else if (auto *img = std::get_if<wsl::ai::acp::image_content> (
+                       &wrapper->content)) {
+          ImGui::TextDisabled ("[Image: %s]", img->mime_type.c_str ());
+        } else if (auto *link
+                   = std::get_if<wsl::ai::acp::resource_link_content> (
+                       &wrapper->content)) {
+          ImGui::TextDisabled ("[Resource] %s", link->uri.c_str ());
+        }
+      } else if (auto *diff
+                 = std::get_if<tool_call_content_item::diff_content> (
+                     &item.item)) {
+        ImGui::TextDisabled ("%s", diff->path.c_str ());
+        if (diff->old_text) {
+          render_diff_lines (*diff->old_text, '-',
+                             ImVec4 (0.85F, 0.4F, 0.4F, 1.0F));
+        }
+        if (!diff->new_text.empty ()) {
+          render_diff_lines (diff->new_text, '+',
+                             ImVec4 (0.4F, 0.8F, 0.45F, 1.0F));
+        }
+        ImGui::Spacing ();
+      } else if (auto *terminal
+                 = std::get_if<tool_call_content_item::terminal_content> (
+                     &item.item)) {
+        ImGui::TextDisabled ("[Terminal %s]", terminal->terminal_id.c_str ());
+      }
     }
   }
 
-  ImGui::EndChild ();
+  if (tc.locations) {
+    for (const auto &loc : *tc.locations) {
+      if (loc.line) {
+        ImGui::TextDisabled ("  %s:%u", loc.path.c_str (),
+                             static_cast<unsigned> (*loc.line));
+      } else {
+        ImGui::TextDisabled ("  %s", loc.path.c_str ());
+      }
+    }
+  }
+
   ImGui::Unindent ();
-  ImGui::PopStyleColor ();
 }
 
 void
@@ -680,6 +916,9 @@ void
 chat_panel::on_session_update (const std::string & /*method*/,
                                const std::string &params)
 {
+  // Runs on the ACP reader thread; serialize access against draw().
+  std::lock_guard<std::mutex> lock (m_msg_mutex);
+
   simdjson::dom::parser parser;
   auto doc = parser.parse (params);
 
@@ -723,8 +962,8 @@ chat_panel::on_session_update (const std::string & /*method*/,
         }
       }
     }
-  } else if (update_type == "tool_call") {
-    // Tool call update
+  } else if (update_type == "tool_call" || update_type == "tool_call_update") {
+    // Tool call creation or progress update
     wsl::ai::acp::tool_call_update tc;
 
     auto id_el = update["toolCallId"];
@@ -766,12 +1005,40 @@ chat_panel::on_session_update (const std::string & /*method*/,
       }
     }
 
-    // Add to last assistant message
-    if (!m_messages.empty ()
-        && m_messages.back ().m_role == display_message::role::assistant) {
-      m_messages.back ().m_tool_calls.push_back (tc);
-      m_scroll_to_bottom = true;
+    // Command output / diffs produced by the tool call
+    tc.content = parse_tool_call_content (update);
+
+    // Files touched by the tool call
+    auto locations_el = update["locations"];
+    if (!locations_el.error () && locations_el.value ().is_array ()) {
+      std::vector<wsl::ai::acp::tool_call_location> locations;
+      for (auto loc_el : locations_el.value ().get_array ()) {
+        wsl::ai::acp::tool_call_location loc;
+
+        auto path_el = loc_el["path"];
+        if (!path_el.error ()) {
+          std::string_view path;
+          if (path_el.get_string ().get (path) == 0) {
+            loc.path = std::string (path);
+          }
+        }
+
+        auto line_el = loc_el["line"];
+        if (!line_el.error () && line_el.value ().is_uint64 ()) {
+          loc.line = static_cast<uint32_t> (
+              line_el.value ().get_uint64 ().value_unsafe ());
+        }
+
+        if (!loc.path.empty ()) {
+          locations.push_back (std::move (loc));
+        }
+      }
+      if (!locations.empty ()) {
+        tc.locations = std::move (locations);
+      }
     }
+
+    apply_tool_call_update (std::move (tc));
   } else if (update_type == "plan") {
     // Plan update
     auto entries_el = update["entries"];
@@ -858,13 +1125,53 @@ chat_panel::on_session_update (const std::string & /*method*/,
   }
 }
 
-std::string
-chat_panel::on_agent_request (const std::string &method,
+void
+chat_panel::apply_tool_call_update (wsl::ai::acp::tool_call_update &&update)
+{
+  if (m_messages.empty ()
+      || m_messages.back ().m_role != display_message::role::assistant) {
+    return;
+  }
+
+  auto &tool_calls = m_messages.back ().m_tool_calls;
+  auto it = std::find_if (tool_calls.begin (), tool_calls.end (),
+                          [&] (const wsl::ai::acp::tool_call_update &tc) {
+                            return tc.tool_call_id == update.tool_call_id;
+                          });
+
+  if (it == tool_calls.end ()) {
+    tool_calls.push_back (std::move (update));
+    m_scroll_to_bottom = true;
+    return;
+  }
+
+  // Progress update for an existing tool call: only overwrite the
+  // fields the agent actually sent.
+  if (update.title) {
+    it->title = std::move (*update.title);
+  }
+  if (update.kind) {
+    it->kind = *update.kind;
+  }
+  if (update.status) {
+    it->status = *update.status;
+  }
+  if (update.content) {
+    it->content = std::move (*update.content);
+  }
+  if (update.locations) {
+    it->locations = std::move (*update.locations);
+  }
+}
+
+wsl::ai::acp::agent_response
+chat_panel::on_agent_request (const std::string & /*method*/,
                               const std::string & /*params*/)
 {
-  // Handle fs, terminal, and other agent requests
-  // For now, return an error for unhandled requests
-  return R"({"error":{"code":-32601,"message":"Method not implemented"}})";
+  // No editor-specific handling yet: return unhandled so the built-in
+  // protocol handlers in wsl::ai::acp::acp_session answer fs and
+  // permission requests.
+  return {};
 }
 
 } // namespace editor

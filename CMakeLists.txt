@@ -713,9 +713,21 @@ doctest_discover_tests(weasel_mcp_server_tests)
   # they only depend on the `wsl` core library.
   add_executable(weasel_core_tests
       "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_event_bus.cpp"
+      "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_acp_client.cpp"
   )
   target_link_libraries(weasel_core_tests PRIVATE wsl doctest)
   doctest_discover_tests(weasel_core_tests)
+
+  # Fake ACP agent subprocess exercised by test_acp_client.cpp. It is
+  # launched by the tests over pipes and speaks JSON-RPC on stdio.
+  add_executable(fake_acp_agent
+      "${CMAKE_SOURCE_DIR}/tests/weasel-core/fake_acp_agent.cpp"
+  )
+  target_link_libraries(fake_acp_agent PRIVATE simdjson::simdjson)
+  add_dependencies(weasel_core_tests fake_acp_agent)
+  target_compile_definitions(weasel_core_tests PRIVATE
+      FAKE_AGENT_PATH="$<TARGET_FILE:fake_acp_agent>"
+  )
 
 # --- Installation ---
 # Only install our own targets/resources.  CPM dependencies (slang,

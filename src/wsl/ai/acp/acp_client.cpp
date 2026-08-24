@@ -87,6 +87,7 @@ acp_client::launch_agent (const std::string &command,
   m_running.store (true);
 
   m_read_thread = std::thread ([this] { read_loop (); });
+  start_dispatch_thread ();
 
   spdlog::info ("[acp] Agent launched: {} (pid {})", command, pid);
   return true;
@@ -94,7 +95,8 @@ acp_client::launch_agent (const std::string &command,
 
 std::string
 acp_client::send_request (const std::string &method,
-                          const std::string &params_json)
+                          const std::string &params_json,
+                          std::chrono::milliseconds timeout)
 {
   int64_t id = m_next_id.fetch_add (1);
 
@@ -116,14 +118,22 @@ acp_client::send_request (const std::string &method,
 
   // Wait for response
   std::unique_lock<std::mutex> lock (m_pending_mutex);
-  m_pending_cv.wait_for (lock, std::chrono::seconds{ 30 },
-                         [&] { return pending->completed; });
+  if (timeout > std::chrono::milliseconds::zero ()) {
+    m_pending_cv.wait_for (lock, timeout, [&] { return pending->completed; });
+  } else {
+    m_pending_cv.wait (lock, [&] { return pending->completed; });
+  }
 
   std::string result;
   if (pending->completed) {
     result = pending->result;
+    if (!pending->error.empty ()) {
+      spdlog::warn ("[acp] Request {} ({}) failed: {}", id, method,
+                    pending->error);
+      result.clear ();
+    }
   } else {
-    spdlog::warn ("[acp] Request {} timed out", id);
+    spdlog::warn ("[acp] Request {} ({}) timed out", id, method);
   }
 
   m_pending.erase (id);
@@ -151,6 +161,15 @@ acp_client::set_notification_handler (notification_handler handler)
   m_on_notification = std::move (handler);
 }
 
+void
+acp_client::set_agent_request_handler (
+    std::function<agent_response (const std::string &method,
+                                  const std::string &params)>
+        handler)
+{
+  m_on_agent_request = std::move (handler);
+}
+
 bool
 acp_client::is_running () const
 {
@@ -168,6 +187,8 @@ acp_client::terminate ()
     m_agent_pid = -1;
   }
 
+  stop_dispatch_thread ();
+
   if (m_stdin_fd >= 0) {
     close (m_stdin_fd);
     m_stdin_fd = -1;
@@ -183,13 +204,7 @@ acp_client::terminate ()
   }
 
   // Wake up any pending requests
-  {
-    std::lock_guard<std::mutex> lock (m_pending_mutex);
-    for (auto &[id, req] : m_pending) {
-      req->completed = true;
-    }
-  }
-  m_pending_cv.notify_all ();
+  complete_all_pending ();
 }
 
 void
@@ -226,6 +241,9 @@ acp_client::read_loop ()
 
   spdlog::info ("[acp] Agent stdout closed");
   m_running.store (false);
+
+  // Unblock callers waiting for responses that will never arrive
+  complete_all_pending ();
 }
 
 void
@@ -248,9 +266,25 @@ acp_client::dispatch_message (const std::string &line)
   auto method_el = doc["method"];
 
   if (!id_el.error () && !method_el.error ()) {
-    // Request from agent (shouldn't happen in normal ACP flow)
-    spdlog::warn ("[acp] Unexpected request from agent: {}",
-                  std::string (method_el.get_string ().value ()));
+    // Request from the agent (permission prompts, fs access, ...).
+    // Queue it for the dispatch thread so the read loop keeps
+    // processing messages while the handler runs.
+    incoming_request request;
+    request.id_json = simdjson::to_string (id_el.value ());
+    request.method = std::string (method_el.get_string ().value ());
+
+    auto params_el = doc["params"];
+    if (!params_el.error ()) {
+      request.params = simdjson::to_string (params_el.value ());
+    }
+
+    spdlog::info ("[acp] Agent request: {}", request.method);
+
+    {
+      std::lock_guard<std::mutex> lock (m_dispatch_mutex);
+      m_dispatch_queue.push_back (std::move (request));
+    }
+    m_dispatch_cv.notify_one ();
     return;
   }
 
@@ -312,6 +346,94 @@ acp_client::dispatch_message (const std::string &line)
   }
 
   spdlog::warn ("[acp] Malformed JSON-RPC message");
+}
+
+void
+acp_client::start_dispatch_thread ()
+{
+  if (!m_dispatch_thread.joinable ()) {
+    m_dispatch_thread = std::thread ([this] { process_dispatch_queue (); });
+  }
+}
+
+void
+acp_client::stop_dispatch_thread ()
+{
+  // m_running is false by now; wake the loop so it can exit.
+  m_dispatch_cv.notify_all ();
+
+  if (m_dispatch_thread.joinable ()) {
+    m_dispatch_thread.join ();
+  }
+}
+
+void
+acp_client::process_dispatch_queue ()
+{
+  while (true) {
+    incoming_request request;
+
+    {
+      std::unique_lock<std::mutex> lock (m_dispatch_mutex);
+      m_dispatch_cv.wait (lock, [this] {
+        return !m_running.load () || !m_dispatch_queue.empty ();
+      });
+
+      if (!m_running.load () && m_dispatch_queue.empty ()) {
+        break;
+      }
+
+      request = std::move (m_dispatch_queue.front ());
+      m_dispatch_queue.pop_front ();
+    }
+
+    handle_incoming_request (request);
+  }
+}
+
+void
+acp_client::handle_incoming_request (const incoming_request &request)
+{
+  agent_response response;
+  if (m_on_agent_request) {
+    response = m_on_agent_request (request.method, request.params);
+  }
+
+  if (!response.handled) {
+    spdlog::warn ("[acp] Unhandled agent request: {}", request.method);
+  }
+
+  a2a::json_builder jb;
+  jb.begin_object ();
+  jb.add_string ("jsonrpc", "2.0");
+  jb.add_raw_json ("id", request.id_json);
+
+  if (response.handled && response.ok) {
+    jb.add_raw_json ("result", response.result_json);
+  } else {
+    jb.begin_object ("error");
+    jb.add_int ("code", response.handled ? response.error_code : -32601);
+    jb.add_string ("message",
+                   response.handled
+                       ? response.error_message
+                       : "Method not handled by client: " + request.method);
+    jb.end_object ();
+  }
+
+  jb.end_object ();
+  write_line (jb.str ());
+}
+
+void
+acp_client::complete_all_pending ()
+{
+  {
+    std::lock_guard<std::mutex> lock (m_pending_mutex);
+    for (auto &[id, req] : m_pending) {
+      req->completed = true;
+    }
+  }
+  m_pending_cv.notify_all ();
 }
 
 void

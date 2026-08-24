@@ -53,8 +53,9 @@ private:
   void render_permission_dialog ();
 
   void on_session_update (const std::string &method, const std::string &params);
-  std::string on_agent_request (const std::string &method,
-                                const std::string &params);
+  void apply_tool_call_update (wsl::ai::acp::tool_call_update &&update);
+  wsl::ai::acp::agent_response on_agent_request (const std::string &method,
+                                                 const std::string &params);
 
   wsl::ai::acp::acp_client m_client;
   wsl::ai::acp::acp_session m_session;

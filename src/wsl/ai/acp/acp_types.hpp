@@ -317,6 +317,28 @@ struct implementation_info
 using request_id = std::variant<std::nullptr_t, int64_t, std::string>;
 
 /**
+ * The reply a client produces for an agent-to-client request
+ * (permission prompts, filesystem access, terminal, ...).
+ */
+struct agent_response
+{
+  /** Whether the request was recognized; ``false`` replies with -32601. */
+  bool handled = false;
+
+  /** Whether the request succeeded; ``false`` replies with an error. */
+  bool ok = true;
+
+  /** Result JSON payload (used when handled && ok). */
+  std::string result_json = "{}";
+
+  /** JSON-RPC error code (used when handled && !ok). */
+  int64_t error_code = -32000;
+
+  /** Human-readable error message (used when handled && !ok). */
+  std::string error_message;
+};
+
+/**
  * A JSON-RPC 2.0 error object.
  */
 struct jsonrpc_error

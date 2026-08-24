@@ -213,6 +213,51 @@ rsc::project_loader::create (const project &proj) const
         << "include(CPack)\n";
   }
 
+  // Generate AGENTS.md so AI agents working in the project get engine
+  // context by default.
+  const fs::path agents_file = fs::path (proj.root_path) / "AGENTS.md";
+  std::ofstream agents_out (agents_file);
+  if (agents_out) {
+    agents_out
+        << "# AGENTS.md\n\n"
+        << "Guidance for AI agents working in this repository.\n\n"
+        << "## What this is\n\n"
+        << "This is a game project for the Weasel Engine, an ECS 2D & 3D "
+           "game engine\n"
+        << "for C++ and Daslang. Scenes follow the Entity Component System "
+           "model:\n"
+        << "entities hold components (Transform, RigidBody, Camera,\n"
+        << "ModelInstance3D, ...), and behavior lives in systems.\n\n"
+        << "## Project layout\n\n"
+        << "- `wslpro.json` - project manifest (paths, default scene)\n"
+        << "- `" << proj.scenes_path
+        << "/` - scenes stored as `.wscn.json` files\n"
+        << "- `" << proj.components_path << "/`, `" << proj.systems_path
+        << "/`, `" << proj.singletons_path << "/` - runtime code\n"
+        << "- `src/main.cpp` - standalone game entry point\n"
+        << "- Asset folders: models, images, audio, fonts, shaders, "
+           "materials\n\n"
+        << "## Making engine calls\n\n"
+        << "Prefer attaching to a running Weasel editor instance:\n\n"
+        << "    weasel-cli -a ent new Player\n"
+        << "    weasel-cli -a comp set 0 transform position '[0, 2, 0]'\n\n"
+        << "`-a` attaches to the first running editor and uses its open\n"
+        << "project. Without an editor it warns and falls back to standalone\n"
+        << "execution (add `--project <path>` to select one). Mutations\n"
+        << "auto-save when running standalone; when attached, saving is done\n"
+        << "in the editor.\n\n"
+        << "For interactive exploration use the REPL: `weasel-cli -i -a`\n\n"
+        << "The same functionality is also exposed as MCP tools through\n"
+        << "`weasel-mcp-server`. When connected to it, prefer those tools\n"
+        << "(list_commands, describe_command, list_components,\n"
+        << "describe_component, describe_namespace) over shelling out.\n\n"
+        << "## Notes\n\n"
+        << "- Core systems (Transform, Physics, 3D Render, ...) exist in\n"
+        << "  every scene automatically; do not create them manually.\n"
+        << "- Validate structural changes with:\n"
+        << "  `weasel-cli validate-project wslpro.json`\n";
+  }
+
   wsl::log::rsc ()->debug ("Created project manifest at {}",
                            project_file.string ());
   return true;

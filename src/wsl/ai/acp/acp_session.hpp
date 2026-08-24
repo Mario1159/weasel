@@ -29,8 +29,12 @@ public:
 
   /**
    * Callback for agent-to-client requests (fs, terminal, permission).
+   *
+   * Return a handled :cpp:struct:`agent_response` to answer the
+   * request from the application layer; returning an unhandled
+   * response falls back to the session's built-in protocol handlers.
    */
-  using agent_request_handler = std::function<std::string (
+  using agent_request_handler = std::function<agent_response (
       const std::string &method, const std::string &params)>;
 
   explicit acp_session (acp_client &client);
@@ -121,8 +125,14 @@ private:
   void handle_notification (const std::string &method,
                             const std::string &params);
 
-  std::string handle_agent_request (const std::string &method,
-                                    const std::string &params);
+  agent_response handle_agent_request (const std::string &method,
+                                       const std::string &params);
+
+  agent_response handle_permission_request (const std::string &params);
+
+  agent_response handle_fs_read_text_file (const std::string &params);
+
+  agent_response handle_fs_write_text_file (const std::string &params);
 
   acp_client &m_client;
   bool m_initialized = false;

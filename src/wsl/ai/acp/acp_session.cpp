@@ -4,8 +4,66 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cstdio>
+#include <fstream>
+
 namespace wsl::ai::acp
 {
+
+namespace
+{
+
+/**
+ * Escape a string as the body of a JSON string literal.
+ *
+ * json_builder does not perform escaping, so file contents must be
+ * sanitized before being embedded in a response.
+ */
+std::string
+escape_json_string (const std::string &value)
+{
+  std::string escaped;
+  escaped.reserve (value.size () + 8);
+
+  for (char c : value) {
+    switch (c) {
+    case '"':
+      escaped += "\\\"";
+      break;
+    case '\\':
+      escaped += "\\\\";
+      break;
+    case '\b':
+      escaped += "\\b";
+      break;
+    case '\f':
+      escaped += "\\f";
+      break;
+    case '\n':
+      escaped += "\\n";
+      break;
+    case '\r':
+      escaped += "\\r";
+      break;
+    case '\t':
+      escaped += "\\t";
+      break;
+    default:
+      if (static_cast<unsigned char> (c) < 0x20) {
+        char buffer[7];
+        std::snprintf (buffer, sizeof (buffer), "\\u%04x", c);
+        escaped += buffer;
+      } else {
+        escaped += c;
+      }
+      break;
+    }
+  }
+
+  return escaped;
+}
+
+} // namespace
 
 acp_session::acp_session (acp_client &client) : m_client (client) {}
 
@@ -41,6 +99,11 @@ acp_session::initialize (const client_capabilities &client_caps,
   m_client.set_notification_handler (
       [this] (const std::string &method, const std::string &params) {
         handle_notification (method, params);
+      });
+
+  m_client.set_agent_request_handler (
+      [this] (const std::string &method, const std::string &params) {
+        return handle_agent_request (method, params);
       });
 
   std::string result = m_client.send_request ("initialize", jb.str ());
@@ -289,7 +352,10 @@ acp_session::prompt_with_content (const std::vector<content_block> &content)
   jb.end_object ();
 
   m_processing = true;
-  std::string result = m_client.send_request ("session/prompt", jb.str ());
+  // Agentic turns routinely run for minutes; wait indefinitely.  The
+  // wait is still woken by the agent's response or by terminate().
+  std::string result = m_client.send_request ("session/prompt", jb.str (),
+                                              std::chrono::milliseconds{ 0 });
   m_processing = false;
 
   if (result.empty ()) {
@@ -505,17 +571,253 @@ acp_session::handle_notification (const std::string &method,
   }
 }
 
-std::string
+agent_response
 acp_session::handle_agent_request (const std::string &method,
                                    const std::string &params)
 {
+  // Give the application layer first crack at custom UX (interactive
+  // permission dialogs etc.); fall back to protocol defaults.
   if (m_on_agent_request) {
-    return m_on_agent_request (method, params);
+    agent_response response = m_on_agent_request (method, params);
+    if (response.handled) {
+      return response;
+    }
   }
 
-  // Default: reject all agent requests
-  spdlog::warn ("[acp] Unhandled agent request: {}", method);
-  return "{}";
+  if (method == "session/request_permission") {
+    return handle_permission_request (params);
+  }
+
+  if (method == "fs/read_text_file") {
+    return handle_fs_read_text_file (params);
+  }
+
+  if (method == "fs/write_text_file") {
+    return handle_fs_write_text_file (params);
+  }
+
+  spdlog::warn ("[acp] Agent requested unsupported method: {}", method);
+  return {};
+}
+
+agent_response
+acp_session::handle_permission_request (const std::string &params)
+{
+  agent_response response;
+  response.handled = true;
+
+  simdjson::dom::parser parser;
+  auto doc = parser.parse (params);
+
+  std::vector<permission_option> options;
+  auto options_el = doc["options"];
+  if (!options_el.error () && options_el.value ().is_array ()) {
+    for (auto opt_el : options_el.value ().get_array ()) {
+      permission_option opt;
+
+      auto id_el = opt_el["optionId"];
+      if (!id_el.error ()) {
+        std::string_view id;
+        if (id_el.get_string ().get (id) == 0)
+          opt.option_id = std::string (id);
+      }
+
+      auto name_el = opt_el["name"];
+      if (!name_el.error ()) {
+        std::string_view name;
+        if (name_el.get_string ().get (name) == 0)
+          opt.name = std::string (name);
+      }
+
+      auto kind_el = opt_el["kind"];
+      if (!kind_el.error ()) {
+        std::string_view kind;
+        if (kind_el.get_string ().get (kind) == 0) {
+          if (kind == "allow_once")
+            opt.kind = permission_option_kind::allow_once;
+          else if (kind == "allow_always")
+            opt.kind = permission_option_kind::allow_always;
+          else if (kind == "reject_once")
+            opt.kind = permission_option_kind::reject_once;
+          else if (kind == "reject_always")
+            opt.kind = permission_option_kind::reject_always;
+        }
+      }
+
+      options.push_back (std::move (opt));
+    }
+  }
+
+  // No UI for interactive permission decisions yet, so pick the least
+  // restrictive option: prefer allow_once, then allow_always, then
+  // whatever the agent listed first.
+  const permission_option *selected = nullptr;
+  for (const auto &opt : options) {
+    if (opt.kind == permission_option_kind::allow_once) {
+      selected = &opt;
+      break;
+    }
+  }
+  if (!selected) {
+    for (const auto &opt : options) {
+      if (opt.kind == permission_option_kind::allow_always) {
+        selected = &opt;
+        break;
+      }
+    }
+  }
+  if (!selected && !options.empty ()) {
+    selected = &options.front ();
+  }
+
+  if (!selected) {
+    spdlog::warn ("[acp] Permission request has no options; cancelling turn");
+    response.result_json = R"({"outcome":{"outcome":"cancelled"}})";
+    return response;
+  }
+
+  spdlog::info ("[acp] Auto-approving tool call ({})", selected->name);
+
+  a2a::json_builder jb;
+  jb.begin_object ();
+  jb.begin_object ("outcome");
+  jb.add_string ("outcome", "selected");
+  jb.add_string ("optionId", selected->option_id);
+  jb.end_object ();
+  jb.end_object ();
+
+  response.result_json = jb.str ();
+  return response;
+}
+
+agent_response
+acp_session::handle_fs_read_text_file (const std::string &params)
+{
+  agent_response response;
+  response.handled = true;
+
+  simdjson::dom::parser parser;
+  auto doc = parser.parse (params);
+
+  std::string path;
+  auto path_el = doc["path"];
+  if (!path_el.error ()) {
+    std::string_view p;
+    if (path_el.get_string ().get (p) == 0)
+      path = std::string (p);
+  }
+
+  uint64_t line = 0;
+  bool has_line = false;
+  auto line_el = doc["line"];
+  if (!line_el.error () && line_el.value ().is_uint64 ()) {
+    line = line_el.value ().get_uint64 ().value_unsafe ();
+    has_line = true;
+  }
+
+  uint64_t limit = 0;
+  bool has_limit = false;
+  auto limit_el = doc["limit"];
+  if (!limit_el.error () && limit_el.value ().is_uint64 ()) {
+    limit = limit_el.value ().get_uint64 ().value_unsafe ();
+    has_limit = true;
+  }
+
+  if (path.empty ()) {
+    response.ok = false;
+    response.error_message = "fs/read_text_file: missing path";
+    return response;
+  }
+
+  std::ifstream file (path);
+  if (!file) {
+    response.ok = false;
+    response.error_code = -32000;
+    response.error_message = "fs/read_text_file: cannot open '" + path + "'";
+    return response;
+  }
+
+  std::string content;
+  std::string file_line;
+  uint64_t current_line = 0;
+  uint64_t emitted = 0;
+
+  while (std::getline (file, file_line)) {
+    if (has_line && current_line < line) {
+      ++current_line;
+      continue;
+    }
+
+    content += file_line;
+    content += '\n';
+    ++current_line;
+    ++emitted;
+
+    if (has_limit && emitted >= limit) {
+      break;
+    }
+  }
+
+  a2a::json_builder jb;
+  jb.begin_object ();
+  jb.add_raw_json ("content", "\"" + escape_json_string (content) + "\"");
+  jb.end_object ();
+
+  response.result_json = jb.str ();
+  return response;
+}
+
+agent_response
+acp_session::handle_fs_write_text_file (const std::string &params)
+{
+  agent_response response;
+  response.handled = true;
+
+  simdjson::dom::parser parser;
+  auto doc = parser.parse (params);
+
+  std::string path;
+  auto path_el = doc["path"];
+  if (!path_el.error ()) {
+    std::string_view p;
+    if (path_el.get_string ().get (p) == 0)
+      path = std::string (p);
+  }
+
+  std::string content;
+  auto content_el = doc["content"];
+  if (!content_el.error ()) {
+    std::string_view c;
+    if (content_el.get_string ().get (c) == 0)
+      content = std::string (c);
+  }
+
+  if (path.empty ()) {
+    response.ok = false;
+    response.error_code = -32000;
+    response.error_message = "fs/write_text_file: missing path";
+    return response;
+  }
+
+  std::ofstream file (path, std::ios::binary | std::ios::trunc);
+  if (!file) {
+    response.ok = false;
+    response.error_code = -32000;
+    response.error_message = "fs/write_text_file: cannot open '" + path + "'";
+    return response;
+  }
+
+  file << content;
+  if (!file.good ()) {
+    response.ok = false;
+    response.error_code = -32000;
+    response.error_message
+        = "fs/write_text_file: write failed for '" + path + "'";
+    return response;
+  }
+
+  response.result_json = "{}";
+  return response;
 }
 
 } // namespace wsl::ai::acp
