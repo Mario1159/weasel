@@ -167,9 +167,9 @@ render_diff_lines (const std::string &text, char prefix, ImVec4 color)
 
 } // namespace
 
-chat_panel::chat_panel (wsl::comp::singl::runtime_context * /*runtime_ctx*/,
+chat_panel::chat_panel (wsl::comp::singl::runtime_context *runtime_ctx,
                         wsl::comp::singl::editor_context * /*editor_ctx*/)
-    : m_session (m_client)
+    : m_session (m_client), m_runtime_ctx (runtime_ctx)
 {
   m_available_agents = m_agent_manager.discover_agents ();
   if (!m_available_agents.empty ()) {
@@ -683,7 +683,19 @@ chat_panel::connect_async ()
     return;
   }
 
+  // Run the agent inside the active project so it sees the project's
+  // files (AGENTS.md, scenes, runtime code) as its workspace. Fall
+  // back to the process working directory when no project is open.
   std::string cwd = std::filesystem::current_path ().string ();
+  if (m_runtime_ctx != nullptr) {
+    auto const project = m_runtime_ctx->resource_manager ().current_project ();
+    if (project && !project->root_path.empty ()) {
+      cwd = std::filesystem::absolute (project->root_path)
+                .lexically_normal ()
+                .string ();
+    }
+  }
+
   std::string session_id = m_session.new_session (cwd);
 
   if (session_id.empty ()) {

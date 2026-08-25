@@ -61,6 +61,9 @@ private:
   wsl::ai::acp::acp_session m_session;
   wsl::ai::acp::acp_agent_manager m_agent_manager;
 
+  // Not owned.
+  wsl::comp::singl::runtime_context *m_runtime_ctx = nullptr;
+
   // Agent state
   bool m_connected = false;
   bool m_initializing = false;
