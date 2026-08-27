@@ -101,12 +101,15 @@ TEST_CASE ("--scene without --project is rejected")
   CHECK (res.exit_code != 0);
 }
 
-TEST_CASE ("--attach without --project is rejected")
+TEST_CASE ("--attach without --project is accepted (attach mode)")
 {
   const char *argv[] = { "weasel-cli", "--attach" };
   auto res = cli_handler ().parse (2, const_cast<char **> (argv));
-  CHECK (res.should_exit == true);
-  CHECK (res.exit_code != 0);
+  // Attach mode is preferred and does not require --project (it falls back to a
+  // running editor or standalone execution). Parsing alone must succeed.
+  CHECK (res.should_exit == false);
+  CHECK (res.exit_code == 0);
+  CHECK (res.attach == true);
 }
 
 // ===== Headless Subcommands (error cases - no engine needed) =====

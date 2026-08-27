@@ -119,6 +119,16 @@ scene_snapshot_serializer::save_scene (Archive &archive) const
     header.systems.push_back (sys->get_name ());
   }
 
+  // Defensive purge: destroyed entities must not leave stale names behind
+  // in the saved header, even if a destroy path missed remove_entity_name.
+  for (auto it = scene_ref.get_entity_names ().begin ();
+       it != scene_ref.get_entity_names ().end ();) {
+    if (!scene_ref.get_registry ().valid (it->first))
+      it = scene_ref.get_entity_names ().erase (it);
+    else
+      ++it;
+  }
+
   for (const std::pair<const entt::entity, std::string> &entry :
        scene_ref.get_entity_names ()) {
     header.entity_names.emplace_back (

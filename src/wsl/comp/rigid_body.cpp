@@ -281,6 +281,7 @@ rigid_body::sync_applied_cache ()
   applied_collision_mask = collision_mask.value;
   applied_friction = friction;
   applied_restitution = restitution;
+  applied_density = density;
   applied_position = position;
   applied_rotation = rotation;
 }
@@ -306,7 +307,7 @@ rigid_body::has_structural_change () const
          || half_extents.z () != applied_half_extents.z ()
          || radius != applied_radius || dynamic != applied_dynamic
          || motion_type.value != applied_motion
-         || allowed_dofs.value != applied_dofs;
+         || allowed_dofs.value != applied_dofs || density != applied_density;
 }
 
 bool
@@ -431,8 +432,21 @@ rigid_body::create_body (phys::engine &engine, const glm::vec3 &world_pos,
   settings.mAllowedDOFs = allowed_dofs.value;
   settings.mFriction = friction;
   settings.mRestitution = restitution;
-  settings.mOverrideMassProperties
-      = JPH::EOverrideMassProperties::CalculateMassAndInertia;
+
+  // Derive mass from the configured density and the shape's volume. Jolt's
+  // default density is 1000, so scaling the shape's computed mass properties by
+  // (density / 1000) yields density * volume.
+  if (shape_ref) {
+    JPH::MassProperties mp = shape_ref->GetMassProperties ();
+    const float scaled_mass = mp.mMass * (density / default_density);
+    mp.ScaleToMass (scaled_mass);
+    settings.mOverrideMassProperties
+        = JPH::EOverrideMassProperties::MassAndInertiaProvided;
+    settings.mMassPropertiesOverride = mp;
+  } else {
+    settings.mOverrideMassProperties
+        = JPH::EOverrideMassProperties::CalculateMassAndInertia;
+  }
 
   body_id = engine.get_body_interface ().CreateAndAddBody (
       settings, JPH::EActivation::Activate);
@@ -584,6 +598,17 @@ rigid_body::register_meta ()
       .custom<comp::meta_info> (meta_info{
           "Radius", "Sphere radius (scaled by the entity's Transform scale)",
           "" })
+
+      .data<&comp::rigid_body::density> ("density"_hs)
+      .custom<comp::meta_info> (
+          meta_info{ "Density",
+                     "Material density in kg/m^3; derives the body mass from "
+                     "its shape volume",
+                     "" })
+
+      .func<&comp::rigid_body::mass> ("mass"_hs)
+      .custom<comp::meta_info> (meta_info{
+          "Mass", "Derived body mass (kg) = density * shape volume", "" })
 
       .data<&comp::rigid_body::motion_type> ("motion_type"_hs)
       .custom<comp::meta_info> (

@@ -37,6 +37,26 @@ namespace runtime
 {
 
 /**
+ * High-level state of the runtime-module loading pipeline.
+ *
+ * A single authoritative state replaces the former pair of independent
+ * booleans ("module loaded", "cached metadata loaded") whose interactions
+ * were hard to reason about.
+ */
+enum class load_state_t
+{
+  /** Nothing is loaded for this session. */
+  unloaded,
+
+  /** Registration names restored from the on-disk metadata cache only
+   * (placeholders; no live Daslang context). */
+  metadata_cache,
+
+  /** Runtime sources compiled and registrations applied. */
+  loaded
+};
+
+/**
  * Loads user-authored Daslang runtime code for a project.
  *
  * User C++ runtime sources are rejected. Engine C++ components remain
@@ -88,8 +108,24 @@ public:
    *
    * This is a fast path for commands that only need runtime names and system
    * placeholders. It does not load user C++ types.
+   *
+   * The cache is only trusted when it is non-empty while Daslang sources
+   * exist; an empty-but-valid-hash cache is treated as corrupt, deleted, and
+   * ``false`` is returned so callers can escalate to a full compile.
+   *
+   * :param project: Project description that provides source directories.
+   * :return: ``true`` if metadata was applied, otherwise ``false``.
    */
   bool load_cached_metadata (const rsc::project &project);
+
+  /**
+   * Resets the in-memory load state and deletes the on-disk registration
+   * cache file.
+   *
+   * :param project: Project whose cache file should be removed. May be
+   *   ``nullptr`` to use the currently loaded project root (if any).
+   */
+  void invalidate (const rsc::project *project);
 
   /**
    * Finalizes the loading process on the main thread.
@@ -112,21 +148,71 @@ public:
   }
 
   /**
+   * Returns the detailed error from the most recent failed operation.
+   *
+   * Empty when nothing has failed yet. Unlike \c last_status, this is not
+   * overwritten by successful transitions, so a compile failure remains
+   * visible until the next success.
+   *
+   * :return: The most recent error string, or an empty string.
+   */
+  const std::string &
+  last_error () const
+  {
+    return m_last_error;
+  }
+
+  /**
    * Reports whether a runtime module has already been loaded.
    * :return: \c true if runtime code is active for this session.
    */
   bool
   has_loaded_module () const
   {
-    return m_module_loaded;
+    return m_load_state == load_state_t::loaded;
   }
 
   /** Reports whether cached runtime metadata is active. */
   bool
   has_loaded_cached_metadata () const
   {
-    return m_metadata_cache_loaded;
+    return m_load_state == load_state_t::metadata_cache;
   }
+
+  /** Returns the current position in the loading pipeline. */
+  load_state_t
+  get_load_state () const
+  {
+    return m_load_state;
+  }
+
+  /** Returns the project root of the currently loaded module (if any). */
+  const std::filesystem::path &
+  loaded_project_root () const
+  {
+    return m_loaded_project_root;
+  }
+
+  /** Returns the source hash of the currently loaded module. */
+  std::size_t
+  source_hash () const
+  {
+    return m_source_hash;
+  }
+
+  /// Counts of live Daslang registrations held by this module.
+  std::size_t das_component_count () const;
+  std::size_t das_singleton_count () const;
+  std::size_t das_system_count () const;
+
+  /**
+   * Returns the path of the on-disk registration cache for a project root.
+   *
+   * Exposed publicly so tooling can inspect or delete the cache file
+   * directly.
+   */
+  static std::filesystem::path
+  registration_cache_path (const std::filesystem::path &project_root);
 
   /**
    * Returns the daslang engine instance.
@@ -195,9 +281,6 @@ private:
 
   static std::size_t compute_source_hash (const source_set &sources);
 
-  static std::filesystem::path
-  registration_cache_path (const std::filesystem::path &project_root);
-
   static bool read_registration_cache (const std::filesystem::path &path,
                                        std::size_t source_hash,
                                        registration_cache &out);
@@ -215,8 +298,9 @@ private:
   comp::singl::runtime_context *m_runtime_ctx = nullptr;
   std::filesystem::path m_loaded_project_root;
   std::string m_last_status;
-  bool m_module_loaded = false;
-  bool m_metadata_cache_loaded = false;
+  /** Detailed error of the most recent failed operation (empty if none). */
+  std::string m_last_error;
+  load_state_t m_load_state = load_state_t::unloaded;
   std::size_t m_source_hash = 0;
 
   std::unique_ptr<wsl::das::das_engine> m_das_engine;

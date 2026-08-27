@@ -136,44 +136,77 @@ skybox_instance_3d
     // ===================================================================
     { "sys",
       { "sys – ECS Systems (game logic)",
-        "Systems contain the behavior that operates on entities. Each system "
-        "derives from ecs_system and overrides lifecycle hooks like on_update.",
+        "Systems contain the behavior that operates on entities. User "
+        "systems are authored in Daslang only (C++ user systems are not "
+        "supported): create with 'sys create', load with 'script reload', "
+        "attach with 'sys add'.",
 
         R"doc(== wsl::sys — ECS Systems ==
 
 The logic layer. Systems iterate over entity components and implement
-behavior. Each system is a class inheriting from ecs_system (or the CRTP
-helper ecs_system_t<Derived>).
+behavior.
 
-── Base class: ecs_system (system.hpp) ──
+IMPORTANT — authoring rules:
+  • User systems are written in DASLANG ONLY. Files live under the
+    project's src/systems directory (one system per .das file).
+  • User C++ runtime components/systems are NOT supported; the runtime
+    module loader rejects C++ sources.
 
-Lifecycle hooks (override as needed):
-  on_init(registry)         — called once on first activation
-  on_inactive(registry)     — called on deactivation
-  on_update(registry, dt)   — called every frame while runtime-active
-  on_editor_update(registry, dt) — called every frame while editor-active
-  on_event(registry, event) — SDL event handler
-  on_render_build_draw_data(registry)
-  on_render_prepare_gpu_rsc(registry)
-  on_render_record_draw_cmd(registry)
+── Lifecycle of a user system (all via weasel-cli) ──
 
-Activation control:
-  set_active(bool, registry)
-  set_init_on_startup(bool, registry, is_playing)
-  set_editor_active(bool) — independent; no runtime side-effects
+  1. sys create ball_controller_system
+       → generates src/systems/ball_controller_system.das containing
+         'class System : EcsSystem' with an empty on_update override.
+  2. Edit the .das file and implement on_update.
+  3. script reload
+       → compiles all project .das sources and registers them.
+       ('script status' shows the current load state, registry counts,
+        cache path, and last error if a compile failed.)
+  4. sys avail
+       → lists registered user systems by display name.
+  5. sys add "Ball Controller System"
+       → attaches an instance to the active scene (quote names that
+         contain spaces).
 
-System dependencies and conflicts (prevent incompatible systems):
-  set_dependencies({"SystemA", "SystemB"})
-  set_conflicts({"SystemC"})
+── Display-name derivation ──
 
-── CRTP helper: ecs_system_t<Derived> ──
+The file stem defines the registered display name:
+  foo_bar_system.das → type 'foo_bar_system' → display 'Foo Bar System'
+(underscores become spaces, first letter capitalized).
 
-  Provides automatic type ID and typed iteration registration:
+── Daslang system interface (weasel_ecs module) ──
 
-  template <typename... Components, typename Fn>
-  void register_iteration(event_hub&, const char* name, Fn&& fn);
+class EcsSystem {
+    def on_init() : void { }          // once after load
+    def on_update(dt : float) : void { }   // every frame while playing
+    def on_inactive() : void { }      // cleanup
+}
 
-  This declares a typed system iteration visible to the event hub.
+Input is pull-based: read keyboard/mouse each frame with helpers from
+the weasel_api module (e.g. is_key_pressed(scancode)).
+
+── Minimal movement/physics example ──
+
+  options gen2
+  require weasel_ecs
+  require weasel_helpers
+
+  class System : EcsSystem {
+      def override on_update(dt : float) : void {
+          each_entity_id_with([ TYPE_RIGID_BODY() ]) <| $(e : uint) {
+              apply_force(e, 0.0, 6500.0, 0.0) // ~g lift for a 524 kg ball
+          }
+      }
+  }
+
+Notes:
+  • each_entity_id_with([TYPE_X(), ...]) visits entities that own ALL
+    listed components and passes the entity id to the block — use it
+    when you need the id (apply_force, apply_impulse, ...).
+  • query() $(t : Transform&) { t.position.y += dt } binds LIVE
+    component references for in-place writes when no id is needed.
+  • Physics bodies use Jolt density 1000 kg/m^3: a builtin://sphere
+    (radius 0.5) masses ~524 kg, so forces must be in the thousands.
 
 ── Built-in Systems ──
 
@@ -185,7 +218,9 @@ physics_system
   Steps the physics engine. Syncs rigid_body ↔ transform:
     • Before step: copies transform → Jolt body position/rotation
     • After step:  copies Jolt body → world_transform
-  Also drains sensor overlap events.
+  Dynamic bodies own their transform during simulation; writing
+  transform.position directly on them mid-play is ignored (use forces/
+  impulses, or remove + re-add the rigid_body component to teleport).
 
 lighting_system
   Scans point_light, spot_light, directional_light components and
@@ -226,9 +261,8 @@ Every scene created via scene_manager::create_scene() starts with:
     - Rendering Manager    (renderer config, shadow settings)
     - Physics Manager      (Jolt engine pointer)
 
-No per-scene systems (Transform, Physics, etc.) are pre-attached
-to a newly created scene. Use sys add <name> in the REPL or call
-scene.add_system<T>() in C++ to attach them.
+No per-scene systems are pre-attached to a newly created scene.
+Use sys add <name> to attach user systems.
 
 ── Global Core Systems ──
 
@@ -246,53 +280,15 @@ are attached:
   7. 3D Render — collects models and issues draw calls
   8. UI        — renders ImGui overlay
 
-These global systems are initialized in core_systems::init() and
-updated/rendered via core_systems::update(dt) and
-core_systems::render(window, callbacks).
+Core systems are always present; sys add is only needed for custom
+systems created via sys create.
 
 ── Per-Scene Systems ──
 
-Per-scene systems are optional user- or tool-added systems stored
-in the scene's systems vector. They run in addition to (and at a
-different point in the frame from) the global core systems. Use
-the factory registry to register and create them:
-
-  system_factory_registry factory;
-  factory.register_system_type<my_system>({"My System"});
-  scene.add_system(factory.create("My System", scene));
-
-── Orchestrator: core_systems ──
-
-  core_systems owns all built-in systems and provides a unified API:
-
-    core_systems systems;
-    systems.init(runtime_ctx, editor_ctx);
-
-    while (running) {
-        systems.update(dt);
-        systems.render(window, callbacks);
-    }
-
-  Callbacks allow injecting custom render stages:
-    render_callbacks { build_draw_data, prepare_gpu_rsc, record_ui_draw_cmd }
-
-── Writing a Custom System ──
-
-  class my_system : public wsl::sys::ecs_system_t<my_system> {
-  public:
-      using ecs_system_t::ecs_system_t;
-
-      void on_update(entt::registry& reg, double dt) override {
-          auto view = reg.view<comp::transform>();
-          for (auto e : view) {
-              auto& t = view.get<comp::transform>(e);
-              t.position.y += static_cast<float>(dt);
-          }
-      }
-  };
-
-  Register with system_factory_registry to make it available:
-    sys_reg.register_system<my_system>("My System");
+Per-scene systems are optional user systems stored in the scene's
+systems vector. They run in addition to (and at a different point in
+the frame from) the global core systems. Attach them with
+'sys add "<display name>"' after loading them with 'script reload'.
 )doc" } },
 
     // ===================================================================

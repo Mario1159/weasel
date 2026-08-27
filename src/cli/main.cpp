@@ -32,8 +32,7 @@ main (int argc, char **argv)
     if (!repl.editor_connected ()) {
       repl.set_auto_save (true);
     }
-    repl.execute_command (*result.command);
-    return 0;
+    return repl.execute_command (*result.command);
   }
 
   return result.exit_code;

@@ -214,10 +214,14 @@ cli_handler::parse (int argc, char **argv)
   auto *proj_load = proj_cmd->add_subcommand (
       "load", "Load a project into a non-interactive runtime");
   std::string proj_load_path;
+  bool proj_load_strict = false;
   proj_load
       ->add_option ("path", proj_load_path,
                     "Path to wslpro.json or project root")
       ->required ();
+  proj_load->add_flag (
+      "--strict-runtime", proj_load_strict,
+      "Exit non-zero if the runtime script compile fails after load");
 
   auto *proj_info = proj_cmd->add_subcommand (
       "info", "Show information about the loaded project");
@@ -382,8 +386,13 @@ cli_handler::parse (int argc, char **argv)
 
       = sys_cmd->add_subcommand (
           "add", "Add a user-defined system to the active scene");
-  std::string sys_add_name;
-  sys_add->add_option ("name", sys_add_name, "System name")->required ();
+  std::vector<std::string> sys_add_name;
+  sys_add
+      ->add_option ("name", sys_add_name,
+                    "System name (quotes optional; "
+                    "multiple words are joined)")
+      ->required ()
+      ->expected (-1);
 
   auto *sys_create
       = sys_cmd->add_subcommand ("create", "Generate a system template");
@@ -479,6 +488,23 @@ cli_handler::parse (int argc, char **argv)
       ->add_option ("--include,-I", aot_include_dirs,
                     "Additional directory to search for `require`d modules")
       ->allow_extra_args (false);
+
+  int play_frames = 60;
+  double play_dt = 1.0 / 60.0;
+  std::string play_inspect;
+  bool play_json = false;
+  auto *play_cmd
+      = app.add_subcommand ("play", "Run the active scene headlessly");
+  play_cmd
+      ->add_option ("--frames,-f", play_frames,
+                    "Number of simulation frames to step")
+      ->capture_default_str ();
+  play_cmd->add_option ("--dt", play_dt, "Fixed timestep in seconds")
+      ->capture_default_str ();
+  play_cmd->add_option ("--inspect,-i", play_inspect,
+                        "Entity id (number) or name to snapshot after the run");
+  play_cmd->add_flag ("--json,-j", play_json,
+                      "Emit the inspect snapshot as JSON");
 
   try {
     app.parse (argc, argv);
@@ -714,7 +740,12 @@ cli_handler::parse (int argc, char **argv)
         = build_repl_command ({ "proj", "new", proj_new_path, proj_new_name });
   }
   if (!repl_command && *proj_load) {
-    repl_command = build_repl_command ({ "proj", "load", proj_load_path });
+    if (proj_load_strict) {
+      repl_command = build_repl_command (
+          { "proj", "load", proj_load_path, "--strict-runtime" });
+    } else {
+      repl_command = build_repl_command ({ "proj", "load", proj_load_path });
+    }
   }
   if (!repl_command && *proj_info) {
     repl_command = build_repl_command ({ "proj", "info" });
@@ -822,7 +853,13 @@ cli_handler::parse (int argc, char **argv)
     repl_command = build_repl_command ({ "sys", "avail" });
   }
   if (!repl_command && *sys_add) {
-    repl_command = build_repl_command ({ "sys", "add", sys_add_name });
+    std::string joined;
+    for (std::size_t i = 0; i < sys_add_name.size (); ++i) {
+      if (i > 0)
+        joined += ' ';
+      joined += sys_add_name[i];
+    }
+    repl_command = build_repl_command ({ "sys", "add", joined });
   }
   if (!repl_command && *sys_create) {
     std::vector<std::string> args{ "sys", "create", sys_create_name };
@@ -889,6 +926,19 @@ cli_handler::parse (int argc, char **argv)
                                    prefab_instantiate_name };
     if (!prefab_instantiate_parent.empty ()) {
       args.push_back (prefab_instantiate_parent);
+    }
+    repl_command = build_repl_command (args);
+  }
+  if (!repl_command && *play_cmd) {
+    std::vector<std::string> args{ "play", "--frames",
+                                   std::to_string (play_frames), "--dt",
+                                   std::to_string (play_dt) };
+    if (!play_inspect.empty ()) {
+      args.push_back ("--inspect");
+      args.push_back (play_inspect);
+    }
+    if (play_json) {
+      args.push_back ("--json");
     }
     repl_command = build_repl_command (args);
   }

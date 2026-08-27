@@ -9,6 +9,11 @@
 
 #include <string>
 
+#include <fstream>
+#include <filesystem>
+#include <regex>
+#include <set>
+
 using namespace wsl::mcp_server;
 
 // Helper: extract text from the MCP content array
@@ -137,7 +142,7 @@ TEST_CASE ("handle_describe_namespace for sys")
 {
   mcp::json params = { { "name", "sys" } };
   mcp::json result = handle_describe_namespace (params);
-  CHECK (get_text (result).find ("ecs_system") != std::string::npos);
+  CHECK (get_text (result).find ("EcsSystem") != std::string::npos);
 }
 
 // ============================================================================
@@ -211,4 +216,60 @@ TEST_CASE ("handle_cli_capabilities returns manifest")
   CHECK (text.find ("NOT Implemented") != std::string::npos);
   CHECK (text.find ("proj new") != std::string::npos);
   CHECK (text.find ("sig") != std::string::npos);
+}
+
+// ============================================================================
+// doc-drift guard: the generated Daslang API ledger
+// (src/wsl/das/das_api_catalog.gen.hpp) must stay in sync with the real
+// registration site (addExtern calls in src/wsl/das/wsl_api_module.cpp).
+// ============================================================================
+
+#ifndef WSL_SOURCE_DIR
+#define WSL_SOURCE_DIR "."
+#endif
+
+TEST_CASE ("das_api_catalog stays in sync with wsl_api_module registrations")
+{
+  const std::filesystem::path source = std::filesystem::path (WSL_SOURCE_DIR)
+                                       / "src/wsl/das/wsl_api_module.cpp";
+  const std::filesystem::path catalog = std::filesystem::path (WSL_SOURCE_DIR)
+                                        / "src/wsl/das/das_api_catalog.gen.hpp";
+
+  std::ifstream src (source);
+  REQUIRE_MESSAGE (src.good (), "could not open wsl_api_module.cpp");
+  std::ifstream cat (catalog);
+  REQUIRE_MESSAGE (cat.good (), "could not open das_api_catalog.gen.hpp");
+
+  std::string src_text ((std::istreambuf_iterator<char> (src)),
+                        std::istreambuf_iterator<char> ());
+  std::string cat_text ((std::istreambuf_iterator<char> (cat)),
+                        std::istreambuf_iterator<char> ());
+
+  // Mirror the generator's regex for the C++ registration name.
+  const std::regex extern_re (
+      R"PAT(addExtern\s*<\s*DAS_BIND_FUN\s*\(\s*([A-Za-z_][\w]*)\s*\)\s*>\s*\()PAT");
+  std::set<std::string> registered;
+  for (auto it
+       = std::sregex_iterator (src_text.begin (), src_text.end (), extern_re);
+       it != std::sregex_iterator (); ++it) {
+    registered.insert ((*it)[1].str ());
+  }
+  REQUIRE_MESSAGE (!registered.empty (),
+                   "no addExtern registrations found in source");
+
+  // Catalog entries store the C++ name as the second array element.
+  const std::regex cat_re (R"PAT(\{\s*"([^"]+)",\s*"([^"]+)",)PAT");
+  std::set<std::string> cataloged;
+  for (auto it
+       = std::sregex_iterator (cat_text.begin (), cat_text.end (), cat_re);
+       it != std::sregex_iterator (); ++it) {
+    cataloged.insert ((*it)[2].str ());
+  }
+  REQUIRE_MESSAGE (!cataloged.empty (), "no entries found in catalog");
+
+  for (const auto &name : registered) {
+    INFO ("registered function '" << name
+                                  << "' missing from generated catalog");
+    CHECK (cataloged.count (name) == 1);
+  }
 }

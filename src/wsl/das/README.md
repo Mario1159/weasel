@@ -73,6 +73,15 @@ require weasel_api      → C++ Module_WeaselApi (interpreted and AOT)
 require weasel_helpers  → weasel_helpers.das (always from .das file)
 ```
 
+> ⚠️ **Ignore any `weasel_api.das` you find on disk.** `weasel_api` is a C++
+> module (`Module_WeaselApi`); there is no `.das` declaration for it. Old
+> installs shipped a hand-written `weasel_api.das` stub that declared
+> functions which do not exist (`set_position`, `get_position_x`, camera
+> helpers, …) and would shadow the real bindings. Current builds remove that
+> stub at install time. For the authoritative, complete list of available
+> functions, use the MCP tool `describe_das_api` or the CLI command
+> `das api` (see Workstream B).
+
 ### ProjectFsFileAccess
 
 The `ProjectFsFileAccess` class (defined in `das_engine.cpp`) extends `FsFileAccess` to search project source directories when resolving bare `require` names. Without this, daScript's built-in resolution only checks the same directory as the requiring file.

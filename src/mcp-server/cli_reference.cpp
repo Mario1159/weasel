@@ -270,12 +270,13 @@ const std::vector<cli_command_info> g_cli_reference = {
       "comp set 42 rigid_body motion_type.value 2" } },
   { "comp create",
     "cli",
-    "Generate a C++ world component template file (header and optionally "
-    "source) in the project's components directory.",
-    "comp create <name> [--source]",
-    { "<name> – Component name (e.g. health, movement).",
-      "--source – Also generate a .cpp source file." },
-    { "comp create health", "comp create movement --source" } },
+    "Generate a Daslang component template (.das struct) in the project's "
+    "components directory. Edit the generated file to define fields, then run "
+    "'script reload' to register it.",
+    "comp create <name>",
+    { "<name> – Component name (e.g. health, movement). The file stem is "
+      "snake_case; the struct name is PascalCase." },
+    { "comp create health", "comp create movement" } },
   { "singl ls",
     "repl",
     "List singleton components registered in the active scene, showing their "
@@ -292,12 +293,12 @@ const std::vector<cli_command_info> g_cli_reference = {
     { "singl add \"Physics Manager\"", "singl add \"Rendering Manager\"" } },
   { "singl create",
     "cli",
-    "Generate a C++ singleton component template file (header and optionally "
-    "source) in the project's singletons directory.",
-    "singl create <name> [--source]",
-    { "<name> – Singleton name (e.g. game_state, global_settings).",
-      "--source – Also generate a .cpp source file." },
-    { "singl create game_state", "singl create global_settings --source" } },
+    "Generate a Daslang singleton template (.das struct) in the project's "
+    "singletons directory. Run 'script reload' after editing to register it.",
+    "singl create <name>",
+    { "<name> – Singleton name (e.g. game_state, global_settings). The file "
+      "stem is snake_case; the struct name is PascalCase." },
+    { "singl create game_state", "singl create global_settings" } },
   { "singl set",
     "repl",
     "Set a property on a singleton component. Uses EnTT meta property names "
@@ -355,26 +356,28 @@ const std::vector<cli_command_info> g_cli_reference = {
     { "sig disconnect comp::audio::play \"Audio System\" on_play 42 43" } },
   { "sys add",
     "repl",
-    "Add a user-defined system to the active scene. The 8 core engine systems "
-    "(Transform, Physics, 3D Render, Audio, Lighting, Skybox, Shadow, UI) are "
-    "always present in every scene and cannot be added via this command. Use "
-    "'sys create' to generate a new custom system, then 'sys add' to attach "
-    "it. "
-    "System names are case-sensitive.",
-    "sys add <name>",
-    { "<name> – User-defined system name (created with 'sys create'). "
-      "Core systems (Transform, Physics, etc.) are built-in and always "
-      "active." },
-    { "sys add gravity", "sys add custom_render" } },
+    "Add a user-defined system to the active scene. Requires the project's "
+    "runtime scripts to be loaded ('script reload'). The 8 core engine "
+    "systems (Transform, Physics, 3D Render, Audio, Lighting, Skybox, Shadow, "
+    "UI) are always present in every scene and cannot be added via this "
+    "command. Use 'sys create' to generate a new custom system, then 'sys "
+    "add' to attach it. Display names are derived from the file name: "
+    "foo_bar_system.das registers as 'Foo Bar System'.",
+    "sys add \"<display name>\"",
+    { "<display name> – User-defined system display name as shown by "
+      "'sys avail'. Quote names containing spaces. Core systems (Transform, "
+      "Physics, etc.) are built-in and always active." },
+    { "sys avail", "sys add \"Gravity\"", "sys add \"Custom Render\"" } },
   { "sys create",
     "cli",
-    "Generate a C++ system template file (header and optionally source) in the "
-    "project's systems directory. Appends 'system' to the name automatically "
-    "if missing.",
-    "sys create <name> [--source]",
-    { "<name> – System name (e.g. gravity, custom_render).",
-      "--source – Also generate a .cpp source file." },
-    { "sys create gravity", "sys create custom_render --source" } },
+    "Generate a Daslang system template (.das) in the project's systems "
+    "directory. The file defines 'class System : EcsSystem' with an empty "
+    "on_update override. After editing, run 'script reload' so 'sys add' can "
+    "find it. Appends 'system' to the name automatically if missing.",
+    "sys create <name>",
+    { "<name> – System name (e.g. gravity, custom_render). The display name "
+      "is title-cased from the file stem." },
+    { "sys create gravity", "script reload", "sys add \"Gravity\"" } },
   { "sys ls",
     "repl",
     "List all systems in the active scene: core engine systems (always "
@@ -391,6 +394,33 @@ const std::vector<cli_command_info> g_cli_reference = {
     "sys avail",
     {},
     { "sys avail" } },
+  { "script status",
+    "repl",
+    "Show the runtime script loading state: load state (unloaded, "
+    "metadata-cache, loaded), project and loaded root paths, source hash, "
+    "registered component/singleton/system counts, on-disk cache file path, "
+    "and the last status/error messages.",
+    "script status",
+    {},
+    { "script status" } },
+  { "script reload",
+    "repl",
+    "Recompile and reload all user Daslang runtime scripts for the current "
+    "project. Equivalent to the editor's 'Reload Scripts' button. Blocks "
+    "until compilation finishes; reports component/singleton/system counts on "
+    "success or the compiler error on failure. Run this after editing any "
+    "file under src/systems, src/components, or src/singletons.",
+    "script reload",
+    {},
+    { "script reload" } },
+  { "script invalidate",
+    "repl",
+    "Clear in-memory runtime registrations AND delete the on-disk registration "
+    "cache file (build/weasel_runtime/runtime_registration_cache.json). Use "
+    "when cached metadata seems stale or wrong; follow with 'script reload'.",
+    "script invalidate",
+    {},
+    { "script invalidate", "script invalidate\nscript reload" } },
   { "rsc ls",
     "cli",
     "List registered resources. Optionally filter by type (models, images, "

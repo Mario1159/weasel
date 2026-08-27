@@ -1,3 +1,4 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include "repl_handler.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/das/das_engine.hpp"
@@ -12,8 +13,8 @@
 #include "comp/model_instance_3d.hpp"
 #include "comp/point_light.hpp"
 #include "comp/rigid_body.hpp"
+#include "comp/world_transform.hpp"
 #include "comp/singl/physics_manager.hpp"
-#include "comp/singl/rendering_manager.hpp"
 #include "comp/spot_light.hpp"
 #include "comp/transform.hpp"
 #include "comp/world_transform.hpp"
@@ -29,12 +30,16 @@
 #include "wsl/comp/singl/ui_manager.hpp"
 #include "wsl/sys/system.hpp"
 #include "wsl/comp/components.hpp"
+#include "wsl/das/das_api_catalog.gen.hpp"
 
 #include <cereal/archives/json.hpp>
 #include <entt/entt.hpp>
 #include <nlohmann/json.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <chrono>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <algorithm>
 #include <cctype>
 #include <iterator>
@@ -108,6 +113,53 @@ write_registered_entry (std::ostringstream &output,
     output << " [runtime]";
   }
   output << "\n";
+}
+
+// Find the closest registered system name to a (possibly mis-typed) query,
+// using Levenshtein distance, for self-diagnosing `sys add` errors.
+static std::string
+suggest_system_name (const std::string &query,
+                     const wsl::reg::system_factory_registry &registry)
+{
+  auto levenshtein = [] (const std::string &a, const std::string &b) -> int {
+    const std::size_t n = a.size (), m = b.size ();
+    std::vector<std::vector<int>> d (n + 1, std::vector<int> (m + 1, 0));
+    for (std::size_t i = 0; i <= n; ++i)
+      d[i][0] = static_cast<int> (i);
+    for (std::size_t j = 0; j <= m; ++j)
+      d[0][j] = static_cast<int> (j);
+    for (std::size_t i = 1; i <= n; ++i) {
+      for (std::size_t j = 1; j <= m; ++j) {
+        const int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+        d[i][j] = std::min (
+            { d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost });
+      }
+    }
+    return d[n][m];
+  };
+
+  auto to_lower_str = [] (const std::string &s) {
+    std::string out = s;
+    for (auto &c : out)
+      c = static_cast<char> (std::tolower (static_cast<unsigned char> (c)));
+    return out;
+  };
+
+  const std::string qlow = to_lower_str (query);
+  std::string best;
+  int best_dist = std::numeric_limits<int>::max ();
+  for (const auto *system : registry.get_systems ()) {
+    if (!system)
+      continue;
+    const int dist = levenshtein (qlow, to_lower_str (system->display_name));
+    // Only suggest reasonably close names.
+    if (dist <= static_cast<int> (system->display_name.size () / 2) + 2
+        && dist < best_dist) {
+      best_dist = dist;
+      best = system->display_name;
+    }
+  }
+  return best;
 }
 
 std::string
@@ -746,17 +798,19 @@ command_executor::set_current_project (std::shared_ptr<wsl::rsc::project> proj)
   m_current_project = std::move (proj);
 }
 
-void
-command_executor::ensure_runtime_module_loaded (bool allow_cached_metadata)
+bool
+command_executor::ensure_runtime (runtime_load_mode mode)
 {
-  if (!m_current_project
-      || m_rtc.runtime_project_module ().has_loaded_module ())
-    return;
-  if (allow_cached_metadata
-      && m_rtc.runtime_project_module ().has_loaded_cached_metadata ()) {
-    return;
-  }
+  auto &module = m_rtc.runtime_project_module ();
+  using wsl::reg::runtime::load_state_t;
 
+  if (!m_current_project)
+    return true;
+
+  if (module.get_load_state () != load_state_t::unloaded)
+    return module.get_load_state () == load_state_t::loaded;
+
+  // Only projects with runtime source directories can have a module.
   std::filesystem::path const root (m_current_project->root_path);
   bool has_runtime = false;
   for (auto const &sub :
@@ -768,24 +822,33 @@ command_executor::ensure_runtime_module_loaded (bool allow_cached_metadata)
     }
   }
   if (!has_runtime)
-    return;
+    return true;
 
-  if (allow_cached_metadata
-      && m_rtc.runtime_project_module ().load_cached_metadata (
-          *m_current_project)) {
-    wsl::log::cli ()->info ("Runtime metadata loaded from cache.");
-    return;
-  }
-
-  wsl::log::cli ()->info ("Compiling and loading runtime module...");
   wsl::das::das_engine::initialize_global ();
-  if (!m_rtc.runtime_project_module ().compile_and_load (*m_current_project)) {
-    m_output << "Warning: runtime module compilation failed.\n"
-             << "  Some user-defined types may not be available.\n";
-    return;
+
+  // Fast path: restore registration names from the metadata cache.
+  // load_cached_metadata refuses empty/stale caches, so this escalates to a
+  // full compile automatically whenever the cache cannot be trusted.
+  if (mode == runtime_load_mode::auto_mode
+      && module.load_cached_metadata (*m_current_project)) {
+    wsl::log::cli ()->info ("Runtime registry source: metadata cache.");
+    m_output << "Registry source: metadata cache.\n";
+    return true;
   }
-  m_rtc.runtime_project_module ().finalize_load ();
+
+  // Slow path: compile the runtime sources.
+  m_output << "Compiling and loading runtime module...\n";
+  if (!module.compile_and_load (*m_current_project)) {
+    m_output << "Warning: runtime module compilation failed:\n"
+             << "  " << module.last_error () << "\n"
+             << "  Run 'script status' for details. Continuing without "
+                "user-defined types.\n";
+    return false;
+  }
+  module.finalize_load ();
+  m_output << "Registry source: full compile.\n";
   wsl::log::cli ()->info ("Runtime module loaded successfully.");
+  return true;
 }
 
 void
@@ -930,6 +993,18 @@ command_executor::execute (const std::string &line)
   }
   if (!handled && family == "prefab") {
     cmd_prefab (tokens);
+    handled = true;
+  }
+  if (!handled && family == "script") {
+    cmd_script (tokens);
+    handled = true;
+  }
+  if (!handled && family == "das") {
+    cmd_das (tokens);
+    handled = true;
+  }
+  if (!handled && family == "play") {
+    cmd_play (tokens);
     handled = true;
   }
   if (!handled && family == "help") {
@@ -1083,6 +1158,26 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     m_current_project = wsl::rsc::project_loader::load (load_path.string ());
     if (m_current_project) {
       m_output << "Project '" << m_current_project->name << "' loaded.\n";
+
+      // A5: make `proj load` honest — also load the runtime scripts and
+      // report the outcome instead of leaving an empty registry silently.
+      const bool strict
+          = std::find (tokens.begin (), tokens.end (), "--strict-runtime")
+            != tokens.end ();
+      auto &module = m_rtc.runtime_project_module ();
+      ensure_runtime (runtime_load_mode::auto_mode);
+      if (module.has_loaded_module ()) {
+        m_output << "Runtime: compiled " << module.das_component_count ()
+                 << " components / " << module.das_system_count ()
+                 << " systems.\n";
+      } else {
+        m_output << "Runtime: FAILED — see 'script status'; continuing without "
+                    "user scripts.\n"
+                 << "  Last error: " << module.last_error () << "\n";
+        if (strict) {
+          m_exit_code = 1;
+        }
+      }
     } else
       m_output << "Failed to load project.\n";
   } else if (action == "info") {
@@ -1259,7 +1354,7 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     }
 
     // Ensure runtime component types are registered before loading
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
 
     // Derive scene name from the path basename (strip .wscn.json / .json)
     std::string scene_name
@@ -1288,17 +1383,34 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
+    bool as_default = false;
+    std::string explicit_path;
+    for (std::size_t i = 2; i < tokens.size (); ++i) {
+      if (tokens[i] == "--as-default") {
+        as_default = true;
+      } else if (explicit_path.empty ()) {
+        explicit_path = tokens[i];
+      } else {
+        explicit_path += ' ' + tokens[i];
+      }
+    }
     std::string path;
-    if (tokens.size () > 2) {
-      path = tokens[2];
+    if (!explicit_path.empty ()) {
+      path = explicit_path;
       // Resolve relative paths against the project root
       if (m_current_project && !std::filesystem::path (path).is_absolute ()) {
         path = (std::filesystem::path (m_current_project->root_path) / path)
                    .string ();
       }
     } else {
-      // Default to project's scenes_path + scene_name.wscn.json
-      if (m_current_project) {
+      // Default save target resolution (E1):
+      //   1. The path the scene was loaded from (keeps edits in place).
+      //   2. <root>/<scenes_path>/<default_scene_path> when the active scene
+      //      name matches the default scene's stem.
+      //   3. <root>/<scenes_path>/<scene_name>.wscn.json as a last resort.
+      if (m_current_project && !m_active_scene_source_path.empty ()) {
+        path = m_active_scene_source_path;
+      } else if (m_current_project) {
         std::filesystem::path scenes_dir (m_current_project->root_path);
         scenes_dir /= m_current_project->scenes_path;
         std::string sname
@@ -1307,7 +1419,28 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
           sname.resize (sname.size () - 10);
         else if (sname.ends_with (".json"))
           sname.resize (sname.size () - 5);
-        path = (scenes_dir / (sname + ".wscn.json")).string ();
+        bool matches_default = false;
+        if (!m_current_project->default_scene_path.empty ()) {
+          std::string def_stem
+              = std::filesystem::path (m_current_project->default_scene_path)
+                    .filename ()
+                    .string ();
+          if (def_stem.ends_with (".wscn.json"))
+            def_stem.resize (def_stem.size () - 10);
+          else if (def_stem.ends_with (".json"))
+            def_stem.resize (def_stem.size () - 5);
+          matches_default = (def_stem == sname);
+        }
+        if (matches_default
+            && !m_current_project->default_scene_path.empty ()) {
+          path
+              = (scenes_dir
+                 / std::filesystem::path (m_current_project->default_scene_path)
+                       .filename ())
+                    .string ();
+        } else {
+          path = (scenes_dir / (sname + ".wscn.json")).string ();
+        }
       } else {
         std::string sname
             = std::filesystem::path (scene->get_name ()).filename ().string ();
@@ -1324,6 +1457,32 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     std::filesystem::create_directories (save_path.parent_path (), ec);
     if (serializer.save_json (save_path.string ())) {
       m_output << "Scene saved to " << path << "\n";
+      if (m_current_project
+          && !m_current_project->default_scene_path.empty ()) {
+        const std::string saved_name
+            = std::filesystem::path (path).filename ().string ();
+        const std::string default_name
+            = std::filesystem::path (m_current_project->default_scene_path)
+                  .filename ()
+                  .string ();
+        if (saved_name != default_name) {
+          m_output << "Warning: saved to '" << saved_name
+                   << "' but project default_scene_path points at '"
+                   << default_name << "'.\n"
+                   << "  The project will open the stale scene on load. Run "
+                      "'proj set default_scene_path "
+                   << saved_name
+                   << "' (then 'proj save'), or use "
+                      "'scene save --as-default'.\n";
+        }
+      }
+      if (as_default && m_current_project) {
+        m_current_project->default_scene_path
+            = std::filesystem::path (path).filename ().string ();
+        auto_save_project ();
+        m_output << "Project default_scene_path set to '"
+                 << m_current_project->default_scene_path << "'.\n";
+      }
     } else
       m_output << "Failed to save scene.\n";
   } else if (action == "ls") {
@@ -1451,6 +1610,7 @@ command_executor::cmd_ent (const std::vector<std::string> &tokens)
       m_output << "Unknown entity: " << tokens[2] << "\n";
       return;
     }
+    scene->remove_entity_name (e);
     scene->get_registry ().destroy (e);
     m_output << "Entity " << tokens[2] << " destroyed.\n";
     auto_save_scene ();
@@ -1491,7 +1651,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   const std::string &action = tokens[1];
 
   if ((action == "ls" || action == "avail") && tokens.size () == 2) {
-    ensure_runtime_module_loaded (true);
+    ensure_runtime (runtime_load_mode::auto_mode);
     auto components = m_rtc.component_registry ().get_world_components ();
     m_output << "Registered Components (" << components.size () << "):\n";
     for (const auto *component : components) {
@@ -1571,7 +1731,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
       m_output << "Usage: comp info <name>\n";
       return;
     }
-    ensure_runtime_module_loaded (true);
+    ensure_runtime (runtime_load_mode::auto_mode);
     const auto *descriptor
         = m_rtc.component_registry ().find_world_component (tokens[2]);
     if (!descriptor) {
@@ -1606,7 +1766,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   }
 
   if (action == "ls") {
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
     for (auto [id, storage] : scene->get_registry ().storage ()) {
       if (storage.contains (e)) {
         if (const auto *descriptor
@@ -1626,7 +1786,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   } else if (action == "add") {
     if (tokens.size () < 4)
       return;
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
     const auto *descriptor
         = m_rtc.component_registry ().find_world_component (tokens[3]);
     if (descriptor && descriptor->emplace_default) {
@@ -1643,7 +1803,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
   } else if (action == "rm") {
     if (tokens.size () < 4)
       return;
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
     const auto *descriptor
         = m_rtc.component_registry ().find_world_component (tokens[3]);
     if (descriptor && descriptor->remove) {
@@ -1663,7 +1823,7 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
       return;
     }
 
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
     const auto *descriptor
         = m_rtc.component_registry ().find_world_component (tokens[3]);
     if (!descriptor) {
@@ -1834,7 +1994,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
 
   // ── singl ls ──
   if (action == "ls") {
-    ensure_runtime_module_loaded (true);
+    ensure_runtime (runtime_load_mode::auto_mode);
     auto singletons = m_rtc.singleton_registry ().get_singleton_components ();
     auto *scene = get_active_scene ();
     m_output << "Singleton Components (" << singletons.size () << "):\n";
@@ -1872,7 +2032,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "Usage: singl info <name>\n";
       return;
     }
-    ensure_runtime_module_loaded (true);
+    ensure_runtime (runtime_load_mode::auto_mode);
     const auto *descriptor
         = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
     if (!descriptor) {
@@ -1900,7 +2060,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
     const auto *desc
         = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
     if (!desc) {
@@ -1996,7 +2156,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       m_output << "No active scene.\n";
       return;
     }
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
     const auto *desc
         = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
     if (!desc) {
@@ -2298,7 +2458,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "  (none)\n";
     }
   } else if (tokens[1] == "avail") {
-    ensure_runtime_module_loaded (true);
+    ensure_runtime (runtime_load_mode::auto_mode);
     auto systems = m_rtc.system_factory_registry ().get_systems ();
 
     std::vector<const reg::system_factory_registry::system_descriptor *>
@@ -2322,6 +2482,13 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
         continue;
       }
       write_registered_entry (m_output, *system);
+    }
+    if (!user_systems.empty ()) {
+      m_output << "\nEach system lives at src/systems/<file_stem>.das where "
+                  "<file_stem> is the display name lower-cased, spaces turned "
+                  "into underscores, and suffixed with '_system'\n"
+                  "(e.g. 'Ball Controller System' → "
+                  "src/systems/ball_controller_system.das).\n";
     }
   } else if (tokens[1] == "create") {
     if (tokens.size () < 3) {
@@ -2391,7 +2558,7 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
       m_output << "Usage: sys add <name>\n";
       return;
     }
-    ensure_runtime_module_loaded (true);
+    ensure_runtime (runtime_load_mode::auto_mode);
     std::string sys_name = tokens[2];
     for (size_t i = 3; i < tokens.size (); ++i) {
       sys_name += ' ' + tokens[i];
@@ -2403,7 +2570,15 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
     }
     auto *desc = m_rtc.system_factory_registry ().find_system (sys_name);
     if (desc == nullptr) {
-      m_output << "Unknown system: " << sys_name << "\n";
+      m_output << "Unknown system: '" << sys_name << "'\n";
+      const std::string suggestion
+          = suggest_system_name (sys_name, m_rtc.system_factory_registry ());
+      if (!suggestion.empty ()) {
+        m_output << "  Did you mean: '" << suggestion << "'?\n";
+      }
+      m_output << "  Use quotes for multi-word names: sys add \"" << sys_name
+               << "\"\n"
+               << "  List available systems with: sys avail\n";
     } else if (!desc->runtime_registered) {
       m_output << "'" << sys_name
                << "' is a core engine system and is always present.\n"
@@ -3047,7 +3222,11 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
                    .string ();
       }
     } else {
-      if (m_current_project) {
+      if (m_current_project && !m_active_scene_source_path.empty ()
+          && m_active_scene_source_path.ends_with (".prefab")) {
+        // Prefer the path the prefab was loaded from.
+        path = m_active_scene_source_path;
+      } else if (m_current_project) {
         std::filesystem::path scenes_dir (m_current_project->root_path);
         scenes_dir /= m_current_project->scenes_path;
         std::string sname
@@ -3118,7 +3297,7 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
                << "'.\n";
       return;
     }
-    ensure_runtime_module_loaded ();
+    ensure_runtime (runtime_load_mode::force_full);
     std::string scene_name
         = std::filesystem::path (load_path).stem ().stem ().string ();
     try {
@@ -3214,6 +3393,318 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
 }
 
 void
+command_executor::cmd_script (const std::vector<std::string> &tokens)
+{
+  auto &module = m_rtc.runtime_project_module ();
+  using wsl::reg::runtime::load_state_t;
+
+  const std::string action = tokens.size () > 1 ? tokens[1] : std::string ();
+
+  if (action == "status") {
+    m_output << "Runtime module status:\n";
+    switch (module.get_load_state ()) {
+    case load_state_t::unloaded:
+      m_output << "  State: unloaded\n";
+      break;
+    case load_state_t::metadata_cache:
+      m_output << "  State: metadata-cache (placeholders only)\n";
+      break;
+    case load_state_t::loaded:
+      m_output << "  State: loaded (full compile)\n";
+      break;
+    }
+    if (!m_current_project) {
+      m_output << "  Project: (none)\n";
+    } else {
+      m_output << "  Project: " << m_current_project->name << " ("
+               << m_current_project->root_path << ")\n";
+    }
+    if (!module.loaded_project_root ().empty ()) {
+      m_output << "  Loaded root: " << module.loaded_project_root ().string ()
+               << "\n"
+               << "  Source hash: " << module.source_hash () << "\n";
+    }
+    m_output << "  Registrations: " << module.das_component_count ()
+             << " components, " << module.das_singleton_count ()
+             << " singletons, " << module.das_system_count () << " systems\n";
+    if (m_current_project) {
+      m_output << "  Cache file: "
+               << module
+                      .registration_cache_path (
+                          std::filesystem::path (m_current_project->root_path))
+                      .string ()
+               << "\n";
+    }
+    m_output << "  Last status: " << module.last_status () << "\n";
+    if (!module.last_error ().empty ())
+      m_output << "  Last error: " << module.last_error () << "\n";
+    return;
+  }
+
+  if (action == "reload") {
+    if (!m_current_project) {
+      m_output << "Error: Load a project first.\n";
+      return;
+    }
+    // Mirror the editor's "Reload Scripts" button: async compile + poll on
+    // this thread. One-shot callers block until the outcome is known.
+    wsl::log::cli ()->info ("Reloading runtime scripts...");
+    m_output << "Reloading runtime scripts...\n";
+    module.compile_and_load_async (*m_current_project);
+    while (module.is_reloading ())
+      std::this_thread::sleep_for (std::chrono::milliseconds (50));
+    module.poll_async_reload (); // harvest the finished future
+    if (!module.has_loaded_module ()) {
+      m_output << "Reload FAILED:\n  " << module.last_error () << "\n"
+               << "  Run 'script status' for details.\n";
+      return;
+    }
+    m_output << "Reload complete: " << module.das_component_count ()
+             << " components, " << module.das_singleton_count ()
+             << " singletons, " << module.das_system_count () << " systems.\n  "
+             << module.last_status () << "\n";
+    return;
+  }
+
+  if (action == "invalidate") {
+    module.invalidate (m_current_project.get ());
+    m_output << "Runtime state invalidated (in-memory registrations cleared,"
+                " cache file deleted).\n"
+                "Run 'script reload' to rebuild.\n";
+    return;
+  }
+
+  m_output << "Usage: script <status|reload|invalidate>\n";
+}
+
+void
+command_executor::cmd_das (const std::vector<std::string> &tokens)
+{
+  const auto &catalog = wsl::mcp_server::das_api_catalog ();
+  const std::string name = tokens.size () > 1 ? tokens[1] : std::string ();
+
+  if (name.empty ()) {
+    m_output << "Weasel Daslang API (" << catalog.size ()
+             << " functions)\n"
+                "Generated from the runtime registration site "
+                "(wsl_api_module.cpp).\n\n";
+    std::map<std::string, std::vector<const wsl::mcp_server::das_api_entry *>>
+        by_cat;
+    for (const auto &e : catalog)
+      by_cat[e.category].push_back (&e);
+    const char *order[] = { "query", "mutation", "action" };
+    for (const char *cat : order) {
+      auto it = by_cat.find (cat);
+      if (it == by_cat.end ())
+        continue;
+      m_output << cat << " (" << it->second.size () << "):\n";
+      for (const auto *e : it->second) {
+        m_output << "  - " << e->name;
+        if (!e->args.empty ()) {
+          m_output << "(";
+          for (std::size_t i = 0; i < e->args.size (); ++i) {
+            if (i > 0)
+              m_output << ", ";
+            m_output << e->args[i];
+          }
+          m_output << ")";
+        }
+        m_output << "\n";
+      }
+      m_output << "\n";
+    }
+    m_output
+        << "Use 'das <name>' for a full entry (signature, side effects).\n";
+    return;
+  }
+
+  const wsl::mcp_server::das_api_entry *found = nullptr;
+  for (const auto &e : catalog) {
+    if (e.name == name) {
+      found = &e;
+      break;
+    }
+  }
+  if (found == nullptr) {
+    m_output << "Unknown API function: " << name << "\n";
+    return;
+  }
+  m_output << "Function: " << found->name << "\n"
+           << "  C++ symbol: " << found->cpp << "\n"
+           << "  Side effects: " << found->side_effect << " (" << found->effect
+           << ")\n"
+           << "  Category: " << found->category << "\n"
+           << "  Signature: " << found->name << "(";
+  for (std::size_t i = 0; i < found->args.size (); ++i) {
+    if (i > 0)
+      m_output << ", ";
+    m_output << found->args[i];
+  }
+  m_output << ")\n";
+}
+
+void
+command_executor::cmd_play (const std::vector<std::string> &tokens)
+{
+  auto *scene = get_active_scene ();
+  if (!scene) {
+    m_output << "No active scene. Load a scene first (scene load <path>).\n";
+    return;
+  }
+  if (!scene->is_initialized ()) {
+    scene->init ();
+  }
+
+  int frames = 60;
+  double dt = 1.0 / 60.0;
+  bool json = false;
+  std::string inspect_token;
+  bool has_inspect = false;
+
+  for (std::size_t i = 1; i < tokens.size (); ++i) {
+    if (tokens[i] == "--frames" && i + 1 < tokens.size ()) {
+      try {
+        frames = std::stoi (tokens[++i]);
+      } catch (const std::exception &) {
+        m_output << "Invalid --frames value.\n";
+        return;
+      }
+    } else if (tokens[i] == "--dt" && i + 1 < tokens.size ()) {
+      try {
+        dt = std::stod (tokens[++i]);
+      } catch (const std::exception &) {
+        m_output << "Invalid --dt value.\n";
+        return;
+      }
+    } else if (tokens[i] == "--json") {
+      json = true;
+    } else if (tokens[i] == "--inspect" && i + 1 < tokens.size ()) {
+      inspect_token = tokens[++i];
+      has_inspect = true;
+    }
+  }
+  if (frames <= 0) {
+    m_output << "Nothing to do (frames <= 0).\n";
+    return;
+  }
+
+  // Headless tick: run the simulation without rendering. We tick the physics
+  // and transform core systems plus any user systems attached to the scene.
+  // Render/audio/UI/skybox/shadow/lighting systems are intentionally skipped
+  // because they require a GPU/render-window context.
+  entt::registry &registry = scene->get_registry ();
+  auto &core = m_rtc.core_systems ();
+  const auto step = [&] () {
+    if (core) {
+      for (sys::ecs_system *sys : core->to_vec ()) {
+        if (sys == nullptr)
+          continue;
+        const std::string name = sys->get_name ();
+        if (name == "Transform" || name == "Physics") {
+          sys->update (&registry, dt);
+          sys->editor_update (&registry, dt);
+        }
+      }
+    }
+    for (auto &sys : scene->systems) {
+      if (sys) {
+        sys->update (&registry, dt);
+        sys->editor_update (&registry, dt);
+      }
+    }
+  };
+
+  for (int f = 0; f < frames; ++f) {
+    step ();
+  }
+
+  const double simulated = frames * dt;
+  m_output << "Played " << frames << " frames (" << simulated
+           << "s simulated at dt=" << dt << ").\n";
+
+  if (has_inspect) {
+    entt::entity e = entt::null;
+    try {
+      e = static_cast<entt::entity> (std::stoul (inspect_token));
+    } catch (const std::exception &) {
+      // treat as a name
+      for (const auto &kv : scene->get_entity_names ()) {
+        if (kv.second == inspect_token) {
+          e = kv.first;
+          break;
+        }
+      }
+    }
+    if (e == entt::null || !registry.valid (e)) {
+      m_output << "Inspect target not found: " << inspect_token << "\n";
+      return;
+    }
+
+    std::string entity_name;
+    for (const auto &kv : scene->get_entity_names ()) {
+      if (kv.first == e) {
+        entity_name = kv.second;
+        break;
+      }
+    }
+
+    nlohmann::json snap;
+    snap["entity"] = static_cast<uint32_t> (e);
+    snap["name"] = entity_name;
+
+    if (auto *wt = registry.try_get<wsl::comp::world_transform> (e)) {
+      const glm::mat4 m = wt->value ();
+      glm::vec3 scale, translation;
+      glm::quat rotation;
+      glm::vec3 skew;
+      glm::vec4 perspective;
+      glm::decompose (m, scale, rotation, translation, skew, perspective);
+      nlohmann::json t;
+      t["x"] = translation.x;
+      t["y"] = translation.y;
+      t["z"] = translation.z;
+      snap["position"] = t;
+      nlohmann::json r;
+      r["x"] = rotation.x;
+      r["y"] = rotation.y;
+      r["z"] = rotation.z;
+      r["w"] = rotation.w;
+      snap["rotation"] = r;
+      nlohmann::json s;
+      s["x"] = scale.x;
+      s["y"] = scale.y;
+      s["z"] = scale.z;
+      snap["scale"] = s;
+    }
+    snap["has_rigid_body"] = registry.any_of<wsl::comp::rigid_body> (e);
+    snap["has_transform"] = registry.any_of<wsl::comp::transform> (e);
+
+    if (json) {
+      m_output << snap.dump (2) << "\n";
+    } else {
+      m_output << "Entity " << static_cast<uint32_t> (e)
+               << (entity_name.empty () ? "" : " (" + entity_name + ")")
+               << ":\n";
+      if (snap.contains ("position")) {
+        m_output << "  position: (" << snap["position"]["x"].get<double> ()
+                 << ", " << snap["position"]["y"].get<double> () << ", "
+                 << snap["position"]["z"].get<double> () << ")\n";
+        m_output << "  rotation: (" << snap["rotation"]["x"].get<double> ()
+                 << ", " << snap["rotation"]["y"].get<double> () << ", "
+                 << snap["rotation"]["z"].get<double> () << ", "
+                 << snap["rotation"]["w"].get<double> () << ")\n";
+        m_output << "  scale: (" << snap["scale"]["x"].get<double> () << ", "
+                 << snap["scale"]["y"].get<double> () << ", "
+                 << snap["scale"]["z"].get<double> () << ")\n";
+      }
+      m_output << "  has_rigid_body: "
+               << (snap["has_rigid_body"].get<bool> () ? "true" : "false")
+               << "\n";
+    }
+  }
+}
+
+void
 command_executor::cmd_help ()
 {
   m_output
@@ -3284,6 +3775,30 @@ command_executor::cmd_help ()
       << "                             (core engine systems are always "
          "present)\n"
       << "  sys create <name> [--source]  Generate a system template\n\n"
+      << "Scripts (user Daslang runtime code):\n"
+      << "  script status              Show runtime load state, registry "
+         "counts,\n"
+      << "                             cache path, and last error\n"
+      << "  script reload              Recompile and reload runtime scripts "
+         "(same as\n"
+      << "                             the editor's Reload Scripts button)\n"
+      << "  script invalidate          Clear in-memory state and delete the "
+         "registration\n"
+      << "                             cache file (use when caches confuse "
+         "you)\n\n"
+      << "Daslang API reference:\n"
+      << "  das                         List all functions exposed to .das "
+         "scripts (grouped)\n"
+      << "  das <name>                 Show a function's signature and side "
+         "effects\n"
+      << "                             (generated from the runtime "
+         "registration "
+         "site)\n\n"
+      << "Headless simulation:\n"
+      << "  play --frames N [--dt S] [--inspect <id|name>] [--json]\n"
+      << "                             Step the active scene N frames without "
+         "rendering\n"
+      << "                             and (optionally) snapshot an entity\n\n"
       << "Resources:\n"
       << "  rsc ls [type]              List registered resources\n"
       << "  rsc add <type> <path> [--load]  Register a resource (name = "
@@ -3484,13 +3999,13 @@ is_exit_command (const std::string &line)
   return first == "exit" || first == "quit";
 }
 
-void
+int
 repl_handler::execute_command (const std::string &line)
 {
   // Check for exit/quit before doing anything else
   if (is_exit_command (line)) {
     m_running = false;
-    return;
+    return 0;
   }
 
   // If attached to editor server, forward command remotely
@@ -3502,7 +4017,7 @@ repl_handler::execute_command (const std::string &line)
       wsl::log::cli ()->error ("Lost connection to editor server");
       m_running = false;
     }
-    return;
+    return 0;
   }
 
   // Otherwise, execute locally
@@ -3510,7 +4025,9 @@ repl_handler::execute_command (const std::string &line)
   if (m_local_executor) {
     std::string output = m_local_executor->execute (line);
     std::cout << output;
+    return m_local_executor->exit_code ();
   }
+  return 0;
 }
 
 } // namespace wsl::cli

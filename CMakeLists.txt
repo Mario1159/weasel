@@ -692,12 +692,14 @@ target_link_libraries(weasel_cli_tests PRIVATE cli doctest)
 include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
 doctest_discover_tests(weasel_cli_tests)
 
-# Add doctest-based tests for the MCP server
-add_executable(weasel_mcp_server_tests
-    "${CMAKE_SOURCE_DIR}/tests/mcp-server/test_mcp_server.cpp"
-)
-target_link_libraries(weasel_mcp_server_tests PRIVATE mcp_server_lib doctest)
-doctest_discover_tests(weasel_mcp_server_tests)
+ # Add doctest-based tests for the MCP server
+ add_executable(weasel_mcp_server_tests
+     "${CMAKE_SOURCE_DIR}/tests/mcp-server/test_mcp_server.cpp"
+ )
+ target_link_libraries(weasel_mcp_server_tests PRIVATE mcp_server_lib doctest)
+ target_compile_definitions(weasel_mcp_server_tests PRIVATE
+     WSL_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+ doctest_discover_tests(weasel_mcp_server_tests)
 
   # Engine daslang component-accessors smoke test. Runs only when daslang is
   # enabled in the build (the weasel_daslang target exists).
@@ -891,6 +893,11 @@ install(FILES src/wsl/das/modules/weasel_ecs.das
     DESTINATION share/weasel/daslib
     COMPONENT Engine
 )
+
+# Remove any stale weasel_api.das stub left by older installs. weasel_api is a
+# C++ module (Module_WeaselApi) loaded in-process; a hand-written .das stub
+# that declares non-existent functions would shadow the real bindings.
+install(CODE "file(REMOVE \${CMAKE_INSTALL_PREFIX}/share/weasel/daslib/weasel_api.das)")
 
 # Copy weasel_ecs.das to the build daslib directory for runtime module resolution.
 # The engine's setDasRoot points to ${CMAKE_BINARY_DIR}/_deps/daslang-src, so

@@ -21,7 +21,7 @@ public:
   void run (std::optional<std::string> initial_project = std::nullopt,
             std::optional<std::string> initial_scene = std::nullopt);
 
-  void execute_command (const std::string &line);
+  int execute_command (const std::string &line);
 
   void set_auto_save (bool enabled);
 

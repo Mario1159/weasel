@@ -79,6 +79,12 @@ struct rigid_body : world_component
   math::vec3f half_extents{ 0.5F, 0.5F, 0.5F };
   float radius = 0.5F;
 
+  // Material density (kg/m^3) used to derive the body mass from its shape
+  // volume. Defaults to water (1000), matching Jolt's default so existing
+  // scenes keep their current mass.
+  float density = 1000.0F;
+  static constexpr float default_density = 1000.0F;
+
   // kept for authored/debug state, but runtime layer is derived from
   // motion_type
   bool dynamic = true;
@@ -108,6 +114,7 @@ struct rigid_body : world_component
       = phys::layers::all_collision_layers;
   float applied_friction = 0.2F;
   float applied_restitution = 0.0F;
+  float applied_density = 1000.0F;
   math::vec3f applied_position{ 0, 0, 0 };
   math::quatf applied_rotation{ 0, 0, 0, 1 };
   math::vec3f applied_scale{ 1, 1, 1 };
@@ -144,6 +151,22 @@ struct rigid_body : world_component
   // sync current authored values into applied_* cache
   void sync_applied_cache ();
   JPH::ObjectLayer object_layer () const;
+
+  // Derive the body mass (kg) from density and shape volume. This mirrors the
+  // mass Jolt assigns at body creation given the configured density.
+  float
+  mass () const
+  {
+    if (shape == shape_type::sphere) {
+      const float volume
+          = (4.0F / 3.0F) * 3.14159265358979323846F * radius * radius * radius;
+      return density * volume;
+    }
+    const float volume
+        = half_extents.x () * half_extents.y () * half_extents.z () * 8.0F;
+    return density * volume;
+  }
+
   bool has_structural_change () const;
   bool has_surface_change () const;
   bool has_transform_change () const;
@@ -190,6 +213,7 @@ struct rigid_body : world_component
       serialize_field_if_diff (ar, "half_extents", half_extents,
                                def.half_extents);
       serialize_field_if_diff (ar, "radius", radius, def.radius);
+      serialize_field_if_diff (ar, "density", density, def.density);
       serialize_field_if_diff (ar, "dynamic", dynamic, def.dynamic);
       if (motion_i != (int)def.motion_type.value)
         ar (cereal::make_nvp ("motion_type", motion_i));
@@ -234,6 +258,10 @@ struct rigid_body : world_component
       }
       try {
         serialize_field_if_diff (ar, "radius", radius, def.radius);
+      } catch (...) {
+      }
+      try {
+        serialize_field_if_diff (ar, "density", density, def.density);
       } catch (...) {
       }
       try {
@@ -286,6 +314,7 @@ struct rigid_body : world_component
           cereal::make_nvp ("rotation", rotation),
           cereal::make_nvp ("half_extents", half_extents),
           cereal::make_nvp ("radius", radius),
+          cereal::make_nvp ("density", density),
           cereal::make_nvp ("dynamic", dynamic),
           cereal::make_nvp ("motion_type", motion_i),
           cereal::make_nvp ("allowed_dofs", dofs_i),

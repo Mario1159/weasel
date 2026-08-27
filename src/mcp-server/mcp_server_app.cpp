@@ -1,5 +1,7 @@
 #include "mcp_server_app.hpp"
+#include "cli_passthrough.hpp"
 #include "cli_reference.hpp"
+#include "das_api_info.hpp"
 #include "component_info.hpp"
 #include "mcp_server_handlers.hpp"
 #include "mcp_stdio_server.hpp"
@@ -192,7 +194,19 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "  sys avail       - List user-defined system types available via "
          "'sys add'\n";
   oss << "  sys add         - Add a user-defined system to the active scene\n";
-  oss << "  sys create      - Generate a system template\n";
+  oss << "  sys create      - Generate a Daslang system template\n";
+  oss << "  das             - List all functions exposed to .das scripts "
+         "(grouped)\n";
+  oss << "  das <name>      - Show a function's signature and side effects\n";
+  oss << "  script status   - Show runtime script load state, registry "
+         "counts,\n";
+  oss << "                    cache path, last error\n";
+  oss << "  script reload   - Recompile and reload runtime scripts (CLI "
+         "mirror of\n";
+  oss << "                    the editor's Reload Scripts button)\n";
+  oss << "  script invalidate - Clear runtime state and delete the "
+         "registration\n";
+  oss << "                    cache file\n";
   oss << "  check           - Run validation checks\n";
   oss << "  rsc ls          - List resources\n";
   oss << "  rsc add         - Register a resource (--load to load)\n";
@@ -252,37 +266,42 @@ mcp_server_app::mcp_server_app ([[maybe_unused]] const std::string &host,
 {
   mcp::json capabilities = { { "tools", mcp::json::object () } };
 
+  const char *instructions
+      = "This MCP server provides reference documentation for the Weasel "
+        "Engine and CLI passthrough tools for mutations. When suggesting "
+        "weasel-cli commands, ALWAYS prefer attach mode: 'weasel-cli -a "
+        "<command>' attaches to the first running editor instance and uses "
+        "its open project; if no editor is running it warns and falls back "
+        "to standalone execution. Only add --project when a specific "
+        "project is required.\n"
+        "Available tool categories:\n"
+        "  CLI/REPL: list_commands, describe_command, get_quick_start, "
+        "cli_capabilities\n"
+        "  Components: list_components, describe_component (incl. behavior "
+        "notes)\n"
+        "  Engine Namespaces: list_namespaces, describe_namespace — learn how "
+        "to write a game using comp/sys/rsc/phys/gfx/math/reg\n"
+        "  Daslang API: describe_das_api — authoritative list of every "
+        "function "
+        "exposed to .das scripts (generated from the runtime registration "
+        "site)\n"
+        "  Mutations (execute weasel-cli commands directly):\n"
+        "    script_reload — recompile/reload the project's runtime scripts\n"
+        "    run_cli_command — run any weasel-cli command (requires "
+        "confirm=true); prefer this over raw bash for engine mutations\n"
+        "    scene_save — save the active scene (structured, confirm=true)\n"
+        "    entity_add — create an entity (structured, confirm=true)\n"
+        "    entity_remove — destroy an entity by id/name (structured, "
+        "confirm=true)\n"
+        "    component_set — set a component property (structured, "
+        "confirm=true)";
   m_server.set_server_info ("Weasel MCP Server", "0.1.0");
   m_server.set_capabilities (capabilities);
-  m_server.set_instructions (
-      "This MCP server provides reference documentation for the Weasel Engine. "
-      "When suggesting weasel-cli commands, ALWAYS prefer attach mode: "
-      "'weasel-cli -a <command>' attaches to the first running editor instance "
-      "and uses its open project; if no editor is running it warns and falls "
-      "back to standalone execution. Only add --project when a specific "
-      "project is required.\n"
-      "Available tool categories:\n"
-      "  CLI/REPL: list_commands, describe_command, get_quick_start, "
-      "cli_capabilities\n"
-      "  Components: list_components, describe_component\n"
-      "  Engine Namespaces: list_namespaces, describe_namespace — learn how to "
-      "write a game using comp/sys/rsc/phys/gfx/math/reg");
+  m_server.set_instructions (instructions);
 
   m_stdio_server.set_server_info ("Weasel MCP Server", "0.1.0");
   m_stdio_server.set_capabilities (capabilities);
-  m_stdio_server.set_instructions (
-      "This MCP server provides reference documentation for the Weasel Engine. "
-      "When suggesting weasel-cli commands, ALWAYS prefer attach mode: "
-      "'weasel-cli -a <command>' attaches to the first running editor instance "
-      "and uses its open project; if no editor is running it warns and falls "
-      "back to standalone execution. Only add --project when a specific "
-      "project is required.\n"
-      "Available tool categories:\n"
-      "  CLI/REPL: list_commands, describe_command, get_quick_start, "
-      "cli_capabilities\n"
-      "  Components: list_components, describe_component\n"
-      "  Engine Namespaces: list_namespaces, describe_namespace — learn how to "
-      "write a game using comp/sys/rsc/phys/gfx/math/reg");
+  m_stdio_server.set_instructions (instructions);
 
   register_tools ();
 }
@@ -430,6 +449,33 @@ mcp_server_app::register_tools ()
         return handle_describe_namespace (params);
       });
 
+  // --- Daslang API reference tool ---
+
+  mcp::tool das_api_tool
+      = mcp::tool_builder ("describe_das_api")
+            .with_description (
+                "Describe the Daslang API exposed to .das scripts by the "
+                "engine "
+                "(Module_WeaselApi). With no 'name' returns a grouped function "
+                "listing; with 'name' returns the full entry (signature, side "
+                "effects, category). Generated from the runtime registration "
+                "site — always authoritative, never hand-written.")
+            .with_string_param (
+                "name",
+                "Optional function name (e.g. apply_force, is_key_pressed).",
+                false)
+            .build ();
+  m_server.register_tool (
+      das_api_tool,
+      [] (const mcp::json &params, const std::string & /*session_id*/) {
+        return handle_describe_das_api (params);
+      });
+  m_stdio_server.register_tool (
+      das_api_tool,
+      [] (const mcp::json &params, const std::string & /*session_id*/) {
+        return handle_describe_das_api (params);
+      });
+
   // --- CLI capabilities tool ---
 
   mcp::tool cli_cap_tool
@@ -447,6 +493,155 @@ mcp_server_app::register_tools ()
       [] (const mcp::json &params, const std::string & /*session_id*/) {
         return handle_cli_capabilities (params);
       });
+
+  // --- CLI passthrough / mutation tools ---
+
+  mcp::tool script_reload_tool
+      = mcp::tool_builder ("script_reload")
+            .with_description (
+                "Recompile and reload the user Daslang runtime scripts of the "
+                "project open in the attached editor (same as the editor's "
+                "'Reload Scripts' button or `weasel-cli -a script reload`). "
+                "Returns the CLI output including component/system counts, "
+                "or the compiler error on failure.")
+            .build ();
+  m_server.register_tool (
+      script_reload_tool,
+      [] (const mcp::json &params, const std::string & /*session_id*/) {
+        return handle_script_reload (params);
+      });
+  m_stdio_server.register_tool (
+      script_reload_tool,
+      [] (const mcp::json &params, const std::string & /*session_id*/) {
+        return handle_script_reload (params);
+      });
+
+  mcp::tool run_cli_tool
+      = mcp::tool_builder ("run_cli_command")
+            .with_description (
+                "Run any weasel-cli command and return its output. Prefers "
+                "attach mode (-a): if a Weasel editor instance is running, "
+                "the command executes against its open project; otherwise it "
+                "runs standalone. Mutates engine state — pass confirm=true. "
+                "Examples: 'scene ls', 'sys add \"Ball Controller System\"', "
+                "'ent new Ball'.")
+            .with_string_param ("command",
+                                "The weasel-cli command line, e.g. 'scene "
+                                "ls' or 'comp set 42 rigid_body radius 0.5'.")
+            .with_boolean_param (
+                "confirm", "Must be true to allow mutating commands.", true)
+            .with_string_param (
+                "project", "Optional project path for standalone runs.", false)
+            .with_boolean_param (
+                "attach", "Attach to a running editor (default true).", false)
+            .with_number_param ("timeout_seconds",
+                                "Kill the command after this many seconds "
+                                "(default 120, max 600).",
+                                false)
+            .build ();
+  m_server.register_tool (
+      run_cli_tool,
+      [] (const mcp::json &params, const std::string & /*session_id*/) {
+        return handle_run_cli_command (params);
+      });
+  m_stdio_server.register_tool (
+      run_cli_tool,
+      [] (const mcp::json &params, const std::string & /*session_id*/) {
+        return handle_run_cli_command (params);
+      });
+
+  // ── E3 tier 2: structured mutation tools ──
+  auto register_structured
+      = [&] (const mcp::tool &tool, mcp::json (*handler) (const mcp::json &)) {
+          m_server.register_tool (
+              tool, [handler] (const mcp::json &params,
+                               const std::string & /*session_id*/) {
+                return handler (params);
+              });
+          m_stdio_server.register_tool (
+              tool, [handler] (const mcp::json &params,
+                               const std::string & /*session_id*/) {
+                return handler (params);
+              });
+        };
+
+  mcp::tool scene_save_tool
+      = mcp::tool_builder ("scene_save")
+            .with_description (
+                "Save the active scene back to disk (default or explicit "
+                "path). Structured alternative to `run_cli_command 'scene "
+                "save'`. Requires confirm=true.")
+            .with_string_param ("path",
+                                "Optional explicit scene file path to write "
+                                "to (overrides the loaded path).",
+                                false)
+            .with_boolean_param (
+                "as_default",
+                "If true, also set this scene as the project's "
+                "default_scene_path.",
+                false)
+            .with_boolean_param ("confirm", "Must be true to mutate.", true)
+            .with_string_param ("project",
+                                "Optional project path (standalone).", false)
+            .with_boolean_param ("attach", "Attach to a running editor.", false)
+            .with_number_param ("timeout_seconds", "Command timeout.", false)
+            .build ();
+  register_structured (scene_save_tool, handle_scene_save);
+
+  mcp::tool entity_add_tool
+      = mcp::tool_builder ("entity_add")
+            .with_description (
+                "Create a new entity in the active scene. Structured "
+                "alternative to `run_cli_command 'ent new'`. Requires "
+                "confirm=true.")
+            .with_string_param ("name", "Name of the new entity.", true)
+            .with_boolean_param ("empty",
+                                 "If true, create an empty entity (no "
+                                 "Transform/WorldTransform/Hierarchy).",
+                                 false)
+            .with_boolean_param ("confirm", "Must be true to mutate.", true)
+            .with_string_param ("project",
+                                "Optional project path (standalone).", false)
+            .with_boolean_param ("attach", "Attach to a running editor.", false)
+            .with_number_param ("timeout_seconds", "Command timeout.", false)
+            .build ();
+  register_structured (entity_add_tool, handle_entity_add);
+
+  mcp::tool entity_remove_tool
+      = mcp::tool_builder ("entity_remove")
+            .with_description (
+                "Destroy an entity from the active scene by id or name. "
+                "Structured alternative to `run_cli_command 'ent rm'`. "
+                "Requires confirm=true.")
+            .with_string_param ("id", "Entity id (number) or name.", true)
+            .with_boolean_param ("confirm", "Must be true to mutate.", true)
+            .with_string_param ("project",
+                                "Optional project path (standalone).", false)
+            .with_boolean_param ("attach", "Attach to a running editor.", false)
+            .with_number_param ("timeout_seconds", "Command timeout.", false)
+            .build ();
+  register_structured (entity_remove_tool, handle_entity_remove);
+
+  mcp::tool component_set_tool
+      = mcp::tool_builder ("component_set")
+            .with_description (
+                "Set a property on a component instance of an entity. "
+                "Structured alternative to `run_cli_command 'comp set'`. "
+                "Requires confirm=true.")
+            .with_string_param ("entity", "Entity id (number) or name.", true)
+            .with_string_param ("component", "Component type name.", true)
+            .with_string_param ("property",
+                                "Property name (dot-path for "
+                                "nested fields).",
+                                true)
+            .with_string_param ("value", "New value as a string.", true)
+            .with_boolean_param ("confirm", "Must be true to mutate.", true)
+            .with_string_param ("project",
+                                "Optional project path (standalone).", false)
+            .with_boolean_param ("attach", "Attach to a running editor.", false)
+            .with_number_param ("timeout_seconds", "Command timeout.", false)
+            .build ();
+  register_structured (component_set_tool, handle_component_set);
 }
 
 } // namespace wsl::mcp_server

@@ -382,10 +382,22 @@ RigidBodyProxy::radius ()
   return comp ? comp->radius : fallback_value<float> ();
 }
 
+float &
+RigidBodyProxy::density ()
+{
+  return comp ? comp->density : fallback_value<float> ();
+}
+
 bool &
 RigidBodyProxy::dynamic ()
 {
   return comp ? comp->dynamic : fallback_value<bool> ();
+}
+
+float
+RigidBodyProxy::get_mass () const
+{
+  return comp ? comp->mass () : 0.0F;
 }
 
 float &
@@ -837,6 +849,7 @@ struct RigidBodyProxyAnnotation
     addProperty<DAS_BIND_MANAGED_PROP (half_extents)> ("half_extents",
                                                        "half_extents");
     addProperty<DAS_BIND_MANAGED_PROP (radius)> ("radius", "radius");
+    addProperty<DAS_BIND_MANAGED_PROP (density)> ("density", "density");
     addProperty<DAS_BIND_MANAGED_PROP (dynamic)> ("dynamic", "dynamic");
     addProperty<DAS_BIND_MANAGED_PROP (friction)> ("friction", "friction");
     addProperty<DAS_BIND_MANAGED_PROP (restitution)> ("restitution",
@@ -1043,6 +1056,11 @@ register_component_accessors (::das::Module &mod, ::das::ModuleLibrary &lib)
       "wsl::das::get_rigid_body_accessor")
       ->args ({ "entity", "at" });
 
+  addExtern<DAS_BIND_FUN (get_rigid_body_mass)> (
+      mod, lib, "get_rigid_body_mass", ::das::SideEffects::accessExternal,
+      "wsl::das::get_rigid_body_mass")
+      ->args ({ "proxy", "at" });
+
   addExtern<DAS_BIND_FUN (get_character_body_accessor),
             ::das::SimNode_ExtFuncCallAndCopyOrMove> (
       mod, lib, "get_character_body_accessor",
@@ -1193,6 +1211,13 @@ get_rigid_body_accessor (uint32_t entity, ::das::LineInfoArg *at)
   auto *reg = get_registry ();
   proxy.bind (reg ? reg->try_get<comp::rigid_body> (proxy.entity) : nullptr);
   return proxy;
+}
+
+float
+get_rigid_body_mass (RigidBodyProxy &proxy, ::das::LineInfoArg *at)
+{
+  (void)at;
+  return proxy.get_mass ();
 }
 
 CharacterBodyProxy

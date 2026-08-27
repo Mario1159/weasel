@@ -152,6 +152,13 @@ public:
   /** The systems associated with this scene. */
   std::vector<std::unique_ptr<sys::ecs_system>> systems;
 
+  /** Whether the scene has been initialized (systems refreshed and ready). */
+  bool
+  is_initialized () const
+  {
+    return m_initialized;
+  }
+
   /** The active camera entity in this scene. */
   entt::entity camera{ entt::null };
 

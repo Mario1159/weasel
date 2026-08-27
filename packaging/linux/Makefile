@@ -61,6 +61,7 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/weasel-mcp-server
 	rm -f $(DESTDIR)$(LIBDIR)/libwsl.so
 	rm -f $(DESTDIR)$(LIBDIR)/libTracyClient.so*
+	rm -f $(DESTDIR)$(SHAREDIR)/daslib/weasel_api.das
 	rm -rf $(DESTDIR)$(SHAREDIR)
 	rm -rf $(DESTDIR)$(CMAKE_DIR)
 	@echo "Uninstalled from $(PREFIX)"

@@ -209,9 +209,11 @@ struct RigidBodyProxy
   ::das::float4 &rotation ();
   ::das::float3 &half_extents ();
   float &radius ();
+  float &density ();
   bool &dynamic ();
   float &friction ();
   float &restitution ();
+  float get_mass () const;
 };
 
 struct CharacterBodyProxy
@@ -319,6 +321,8 @@ WorldTransformProxy get_world_transform_accessor (uint32_t entity,
                                                   = nullptr);
 RigidBodyProxy get_rigid_body_accessor (uint32_t entity,
                                         ::das::LineInfoArg *at = nullptr);
+float get_rigid_body_mass (RigidBodyProxy &proxy,
+                           ::das::LineInfoArg *at = nullptr);
 CharacterBodyProxy
 get_character_body_accessor (uint32_t entity, ::das::LineInfoArg *at = nullptr);
 ModelInstance3DProxy get_model_instance_3d_accessor (uint32_t entity,

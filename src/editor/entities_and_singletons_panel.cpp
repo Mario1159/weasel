@@ -143,6 +143,7 @@ entities_and_singletons_panel::draw ()
 
     if (ImGui::Button ("-##delete_entity", ImVec2 (ImGui::GetFrameHeight (),
                                                    ImGui::GetFrameHeight ()))) {
+      scene->remove_entity_name (m_selection.selected_entity);
       registry->destroy (m_selection.selected_entity);
       m_selection = {};
     }
@@ -630,6 +631,7 @@ entities_and_singletons_panel::delete_entity (entt::entity entity)
     }
   }
 
+  scene->remove_entity_name (entity);
   reg.destroy (entity);
 }
 
