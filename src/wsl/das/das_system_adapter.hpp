@@ -102,6 +102,33 @@ public:
   /** Returns the adapter currently executing a lifecycle call, or nullptr. */
   static das_system_adapter *current ();
 
+  /** Daslang helper: assign the stage of the currently-running system. */
+  static void
+  set_current_stage (std::string_view stage)
+  {
+    if (auto *c = current ()) {
+      c->set_stage (std::string (stage));
+    }
+  }
+
+  /** Daslang helper: declare a dependency for the running system. */
+  static void
+  add_current_dependency (std::string_view name)
+  {
+    if (auto *c = current ()) {
+      c->add_dependency (std::string (name));
+    }
+  }
+
+  /** Daslang helper: declare a conflict for the running system. */
+  static void
+  add_current_conflict (std::string_view name)
+  {
+    if (auto *c = current ()) {
+      c->add_conflict (std::string (name));
+    }
+  }
+
 private:
   struct event_declaration
   {

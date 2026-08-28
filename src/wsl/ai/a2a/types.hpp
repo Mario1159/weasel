@@ -107,7 +107,7 @@ struct task_status
   /** Current task state. */
   task_state state = task_state::unspecified;
   /** Optional status message from the agent. */
-  std::optional<message> message;
+  std::optional<message> status_message;
   /** ISO 8601 UTC timestamp of the last state change. */
   std::optional<std::string> timestamp;
 };
@@ -198,9 +198,9 @@ struct task_artifact_update_event
 struct stream_response
 {
   /** Current task state. */
-  std::optional<task> task;
+  std::optional<task> task_payload;
   /** Agent message. */
-  std::optional<message> message;
+  std::optional<message> message_payload;
   /** Status change event. */
   std::optional<task_status_update_event> status_update;
   /** Artifact update event. */

@@ -9,6 +9,8 @@
 #include "shadow_system.hpp"
 #include "skybox_system.hpp"
 #include "transform_system.hpp"
+#include "sys/stage_registry.hpp"
+#include "sys/system_scheduler.hpp"
 
 #include "wsl/event.hpp"
 #include "wsl/reg/registry_handle.hpp"
@@ -77,6 +79,7 @@ public:
 
 private:
   void register_debug_metadata ();
+  void ensure_scheduler ();
   void ensure_dummy_context_bindings ();
   void rebuild_system_cache ();
   void render_impl (wsl::gfx::render_window &window,
@@ -86,6 +89,12 @@ private:
   comp::singl::editor_context *m_editor_ctx = nullptr;
   entt::registry *m_bound_registry = nullptr;
   entt::registry m_dummy_registry;
+
+  /// Engine-wide ordered stage registry used to resolve WAW ordering.
+  stage_registry m_stages;
+  /// Parallel dispatcher driving system passes.
+  system_scheduler m_scheduler;
+  bool m_scheduler_ready = false;
 
   /**
    * Cached list of non-null core system pointers. Built once in

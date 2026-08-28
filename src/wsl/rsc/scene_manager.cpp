@@ -223,14 +223,6 @@ rsc::scene_manager::get_world () const
   return m_main_world;
 }
 
-void
-rsc::scene_manager::update (double dt)
-{
-  if (m_active_scene != nullptr) {
-    m_active_scene->update (dt);
-  }
-}
-
 bool
 rsc::scene_manager::custom_inspect (const char *label,
                                     comp::singl::runtime_context *runtime_ctx)

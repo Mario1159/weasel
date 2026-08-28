@@ -79,6 +79,7 @@ system_factory_registry::register_cached_runtime_system (
                           ? comp::humanize_identifier (type_name)
                           : std::string (display_name);
   desc.runtime_registered = true;
+  desc.stage = std::string (sys::stage_registry::default_stage);
   desc.factory = [display_name = desc.display_name,
                   script_path = std::string (script_path), type_id,
                   &engine] (rsc::scene &) -> std::unique_ptr<sys::ecs_system> {

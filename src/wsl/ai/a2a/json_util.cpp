@@ -405,7 +405,7 @@ task_status_from_json (simdjson::dom::element element)
   if (!msg_el.error ()) {
     auto parsed = message_from_json (msg_el.value ());
     if (parsed) {
-      ts.message = parsed.value ();
+      ts.status_message = parsed.value ();
     }
   }
 
@@ -592,7 +592,7 @@ stream_response_from_json (simdjson::dom::element element)
   if (!task_el.error ()) {
     auto t = task_from_json (task_el.value ());
     if (t) {
-      sr.task = t.value ();
+      sr.task_payload = t.value ();
     }
   }
 
@@ -600,7 +600,7 @@ stream_response_from_json (simdjson::dom::element element)
   if (!msg_el.error ()) {
     auto m = message_from_json (msg_el.value ());
     if (m) {
-      sr.message = m.value ();
+      sr.message_payload = m.value ();
     }
   }
 
@@ -1173,8 +1173,8 @@ to_json (const task_status &s)
   json_builder jb;
   jb.begin_object ();
   jb.add_raw_json ("state", to_json (s.state));
-  if (s.message) {
-    jb.add_raw_json ("message", to_json (*s.message));
+  if (s.status_message) {
+    jb.add_raw_json ("message", to_json (*s.status_message));
   }
   jb.add_optional_string ("timestamp", s.timestamp);
   jb.end_object ();
@@ -1274,11 +1274,11 @@ to_json (const stream_response &sr)
 {
   json_builder jb;
   jb.begin_object ();
-  if (sr.task) {
-    jb.add_raw_json ("task", to_json (*sr.task));
+  if (sr.task_payload) {
+    jb.add_raw_json ("task", to_json (*sr.task_payload));
   }
-  if (sr.message) {
-    jb.add_raw_json ("message", to_json (*sr.message));
+  if (sr.message_payload) {
+    jb.add_raw_json ("message", to_json (*sr.message_payload));
   }
   if (sr.status_update) {
     jb.add_raw_json ("statusUpdate", to_json (*sr.status_update));

@@ -2215,19 +2215,6 @@ wsl_get_hit_z ()
 
 // ── Runtime context / subsystem accessors ──
 
-comp::singl::runtime_context *
-try_get_runtime_context ()
-{
-  auto *reg = get_registry ();
-  if (!reg) {
-    return nullptr;
-  }
-  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
-    return nullptr;
-  }
-  return reg->ctx ().get<comp::singl::runtime_context *> ();
-}
-
 phys::engine *
 try_get_physics_engine ()
 {
@@ -2299,6 +2286,26 @@ wsl_apply_force (uint32_t entity, float x, float y, float z)
   }
   eng->get_body_interface ().AddForce (rb.body_id, JPH::Vec3 (x, y, z));
   eng->get_body_interface ().ActivateBody (rb.body_id);
+}
+
+// ── Systems: parallel execution hints ──
+
+void
+wsl_set_system_stage (const char *stage)
+{
+  wsl::das::das_system_adapter::set_current_stage (stage);
+}
+
+void
+wsl_set_system_dependency (const char *name)
+{
+  wsl::das::das_system_adapter::add_current_dependency (name);
+}
+
+void
+wsl_set_system_conflict (const char *name)
+{
+  wsl::das::das_system_adapter::add_current_conflict (name);
 }
 
 // ── Audio ──
@@ -3036,6 +3043,20 @@ public:
         "wsl::das::wsl_audio_set_volume")
         ->args ({ "entity", "volume" });
 
+    // ── Systems: parallel execution hints ──
+    addExtern<DAS_BIND_FUN (wsl_set_system_stage)> (
+        *this, lib, "set_system_stage", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_system_stage")
+        ->arg ("stage");
+    addExtern<DAS_BIND_FUN (wsl_set_system_dependency)> (
+        *this, lib, "set_system_dependency", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_system_dependency")
+        ->arg ("name");
+    addExtern<DAS_BIND_FUN (wsl_set_system_conflict)> (
+        *this, lib, "set_system_conflict", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_set_system_conflict")
+        ->arg ("name");
+
     // ── Event runtime wiring ──
     register_event_message_bindings (*this, lib);
 
@@ -3091,6 +3112,19 @@ public:
 };
 
 } // anonymous namespace
+
+comp::singl::runtime_context *
+try_get_runtime_context ()
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return nullptr;
+  }
+  if (!reg->ctx ().contains<comp::singl::runtime_context *> ()) {
+    return nullptr;
+  }
+  return reg->ctx ().get<comp::singl::runtime_context *> ();
+}
 
 static ::das::Module *g_weasel_api = nullptr;
 

@@ -49,12 +49,6 @@ public:
   world &get_world ();
   const world &get_world () const;
 
-  /**
-   * Updates the active scene.
-   * :param dt: Frame delta time in seconds.
-   */
-  void update (double dt);
-
   bool custom_inspect (const char *label,
                        comp::singl::runtime_context *runtime_ctx);
 

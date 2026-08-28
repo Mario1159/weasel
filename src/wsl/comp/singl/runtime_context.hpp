@@ -33,6 +33,18 @@ namespace wsl
 namespace comp::singl
 {
 
+/** Tunable parallel-systems execution policy. */
+struct system_parallelism_settings
+{
+  bool parallel_systems_enabled = true;
+  bool parallel_render_build_enabled = true;
+  std::size_t max_system_worker_threads = 0; // 0 = hardware concurrency
+  bool stage_fences_enabled = false;
+  bool strict_system_ordering = false;
+  bool warn_undeclared_cross_tier = true;
+  bool deterministic_system_order = false;
+};
+
 /**
  * Core shared state for a Weasel runtime instance.
  *
@@ -58,6 +70,19 @@ public:
 
   /** Register reflection metadata for this class. */
   static void register_meta ();
+
+  /** Mutable parallel-systems execution policy. */
+  system_parallelism_settings &
+  parallel_settings ()
+  {
+    return m_parallel_settings;
+  }
+
+  const system_parallelism_settings &
+  parallel_settings () const
+  {
+    return m_parallel_settings;
+  }
 
   /** Returns the active rendering manager from the current scene. */
   rendering_manager *get_active_rendering_manager () const;
@@ -362,6 +387,8 @@ private:
   rsc::scene_id m_play_session_origin_scene_id{ entt::null };
 
   bool m_needs_save_active_scene = false;
+
+  system_parallelism_settings m_parallel_settings;
 };
 
 } // namespace comp::singl

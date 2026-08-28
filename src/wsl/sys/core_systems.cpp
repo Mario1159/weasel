@@ -119,15 +119,25 @@ void
 core_systems::register_factory_types (comp::singl::runtime_context &rtc)
 {
   auto &factory = rtc.system_factory_registry ();
-  factory.register_system_type<transform_system> ({ "Transform" });
-  factory.register_system_type<physics_system> ({ "Physics" });
-  factory.register_system_type<render_3d_system> ({ "3D Render" });
-  factory.register_system_type<render_2d_system> ({ "2D Render" });
-  factory.register_system_type<audio_system> ({ "Audio" });
-  factory.register_system_type<lighting_system> ({ "Lighting" });
-  factory.register_system_type<skybox_system> ({ "Skybox" });
-  factory.register_system_type<shadow_system> ({ "Shadow" });
-  factory.register_system_type<render_ui_system> ({ "UI" });
+  using sys_opts = wsl::reg::system_registration_options;
+  factory.register_system_type<transform_system> (
+      sys_opts{ .display_name = "Transform", .stage = "transform" });
+  factory.register_system_type<physics_system> (
+      sys_opts{ .display_name = "Physics", .stage = "physics" });
+  factory.register_system_type<render_3d_system> (
+      sys_opts{ .display_name = "3D Render", .stage = "render_build" });
+  factory.register_system_type<render_2d_system> (
+      sys_opts{ .display_name = "2D Render", .stage = "render_build" });
+  factory.register_system_type<audio_system> (
+      sys_opts{ .display_name = "Audio", .stage = "logic" });
+  factory.register_system_type<lighting_system> (
+      sys_opts{ .display_name = "Lighting", .stage = "render_build" });
+  factory.register_system_type<skybox_system> (
+      sys_opts{ .display_name = "Skybox", .stage = "render_build" });
+  factory.register_system_type<shadow_system> (
+      sys_opts{ .display_name = "Shadow", .stage = "render_build" });
+  factory.register_system_type<render_ui_system> (
+      sys_opts{ .display_name = "UI", .stage = "render_build" });
 }
 
 void
@@ -143,31 +153,40 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
 
   if (!render_3d_sys) {
     render_3d_sys = std::make_unique<render_3d_system> ("3D Render System");
+    render_3d_sys->set_stage ("render_build");
   }
   if (!render_2d_sys) {
     render_2d_sys = std::make_unique<render_2d_system> ("2D Render System");
+    render_2d_sys->set_stage ("render_build");
   }
   if (!physics_sys) {
     physics_sys = std::make_unique<physics_system> ("Jolt Physics System");
+    physics_sys->set_stage ("physics");
   }
   if (!render_ui_sys) {
     render_ui_sys
         = std::make_unique<render_ui_system> ("Application UI System");
+    render_ui_sys->set_stage ("render_build");
   }
   if (!lighting_sys) {
     lighting_sys = std::make_unique<lighting_system> ("Lighting System");
+    lighting_sys->set_stage ("render_build");
   }
   if (!skybox_sys) {
     skybox_sys = std::make_unique<skybox_system> ("Skybox System");
+    skybox_sys->set_stage ("render_build");
   }
   if (!transform_sys) {
     transform_sys = std::make_unique<transform_system> ("Transform System");
+    transform_sys->set_stage ("transform");
   }
   if (!shadow_sys) {
     shadow_sys = std::make_unique<shadow_system> ("Shadow System");
+    shadow_sys->set_stage ("render_build");
   }
   if (!audio_sys) {
     audio_sys = std::make_unique<audio_system> ("Audio System");
+    audio_sys->set_stage ("logic");
   }
 
   if (m_runtime_ctx) {
@@ -246,6 +265,25 @@ core_systems::sync_activation ()
 }
 
 void
+core_systems::ensure_scheduler ()
+{
+  sys::graph_config cfg;
+  const auto &s = m_runtime_ctx->parallel_settings ();
+  cfg.parallel_systems_enabled = s.parallel_systems_enabled;
+  cfg.parallel_render_build_enabled = s.parallel_render_build_enabled;
+  cfg.stage_fences_enabled = s.stage_fences_enabled;
+  cfg.strict_system_ordering = s.strict_system_ordering;
+  cfg.warn_undeclared_cross_tier = s.warn_undeclared_cross_tier;
+  cfg.deterministic_system_order = s.deterministic_system_order;
+
+  std::size_t workers = s.max_system_worker_threads == 0
+                            ? std::thread::hardware_concurrency ()
+                            : s.max_system_worker_threads;
+  m_scheduler.configure (cfg, workers);
+  m_scheduler_ready = true;
+}
+
+void
 core_systems::update (double dt)
 {
   ZoneScopedN ("core_systems::update");
@@ -262,48 +300,40 @@ core_systems::update (double dt)
   entt::registry &registry
       = (scene != nullptr) ? scene->get_registry () : m_dummy_registry;
 
-  int active_count = 0;
-  for (sys::ecs_system *sys : to_vec ()) {
-    if (sys == nullptr) {
-      continue;
-    }
+  ensure_scheduler ();
 
-    if (sys->has_failed ()) {
-      continue;
-    }
-
-    sys->update (&registry, dt);
-    if (sys->is_active ()) {
-      ++active_count;
+  // Combined list of systems to drive this frame (core + scene). Each
+  // system self-gates on its own active/editor_active flags inside
+  // update()/editor_update(), so passing all of them is safe.
+  std::vector<sys::ecs_system *> all;
+  all.reserve (to_vec ().size ()
+               + (scene != nullptr ? scene->systems.size () : 0));
+  for (sys::ecs_system *s : to_vec ()) {
+    if (s != nullptr) {
+      all.push_back (s);
     }
   }
-
   if (scene != nullptr) {
-    for (auto &sys : scene->systems) {
-      if (sys->has_failed ()) {
-        continue;
-      }
-      sys->update (&registry, dt);
-      active_count++;
+    for (auto &sp : scene->systems) {
+      all.push_back (sp.get ());
     }
   }
 
-  for (sys::ecs_system *sys : to_vec ()) {
-    if (sys == nullptr) {
-      continue;
-    }
+  auto run_update
+      = [&] (sys::ecs_system *s, entt::registry &r) { s->update (&r, dt); };
+  m_scheduler.run_pass (sys::system_pass::update, all, registry,
+                        m_runtime_ctx->system_factory_registry (), m_stages,
+                        run_update);
 
-    sys->editor_update (&registry, dt);
-  }
+  auto run_editor = [&] (sys::ecs_system *s, entt::registry &r) {
+    s->editor_update (&r, dt);
+  };
+  m_scheduler.run_pass (sys::system_pass::editor_update, all, registry,
+                        m_runtime_ctx->system_factory_registry (), m_stages,
+                        run_editor);
 
-  if (scene != nullptr) {
-    for (auto &sys : scene->systems) {
-      sys->editor_update (&registry, dt);
-    }
-  }
-
-  wsl::log::sys ()->trace ("Update: {} active systems, dt={}s, scene='{}'",
-                           active_count, dt,
+  wsl::log::sys ()->trace ("Update: {} systems, dt={}s, scene='{}'",
+                           all.size (), dt,
                            scene ? scene->get_name ().c_str () : "(none)");
 }
 
@@ -415,22 +445,31 @@ core_systems::render_impl (wsl::gfx::render_window &window,
 
   {
     ZoneScopedN ("render_impl::build_draw_data");
-    for (sys::ecs_system *sys : to_vec ()) {
-      if (sys == nullptr) {
-        continue;
-      }
+    ensure_scheduler ();
 
-      sys->render_build_draw_data (&registry);
+    std::vector<sys::ecs_system *> all;
+    all.reserve (to_vec ().size ()
+                 + (scene != nullptr ? scene->systems.size () : 0));
+    for (sys::ecs_system *s : to_vec ()) {
+      if (s != nullptr) {
+        all.push_back (s);
+      }
     }
+    if (scene != nullptr) {
+      for (auto &sp : scene->systems) {
+        all.push_back (sp.get ());
+      }
+    }
+
+    auto run_build = [&] (sys::ecs_system *s, entt::registry &r) {
+      s->render_build_draw_data (&r);
+    };
+    m_scheduler.run_pass (sys::system_pass::render_build, all, registry,
+                          m_runtime_ctx->system_factory_registry (), m_stages,
+                          run_build);
 
     if (callbacks.build_draw_data) {
       callbacks.build_draw_data (registry);
-    }
-
-    if (scene != nullptr) {
-      for (auto &sys : scene->systems) {
-        sys->render_build_draw_data (&registry);
-      }
     }
   }
 

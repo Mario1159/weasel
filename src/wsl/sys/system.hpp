@@ -30,6 +30,8 @@ public:
   {
     std::string name;
     iteration_fn_t fn;
+    std::vector<entt::id_type> read_components;
+    std::vector<entt::id_type> write_components;
   };
 
   explicit ecs_system (const std::string &name) : m_name (name) {}
@@ -241,6 +243,51 @@ public:
     return m_name;
   }
 
+  const std::string &
+  get_stage () const
+  {
+    return m_stage;
+  }
+
+  /** Assign the execution stage (must match a name in `stage_registry`). */
+  void
+  set_stage (std::string name)
+  {
+    m_stage = std::move (name);
+  }
+
+  /** Append a declared dependency by system display name. */
+  void
+  add_dependency (std::string name)
+  {
+    m_dependencies.push_back (std::move (name));
+  }
+
+  /** Append a declared conflict by system display name. */
+  void
+  add_conflict (std::string name)
+  {
+    m_conflicts.push_back (std::move (name));
+  }
+
+  /**
+   * Union of component ids touched by this system's registered iterations.
+   * Used by the scheduler to derive component-access edges (CADS). Systems
+   * that touch components only via raw `registry.get/view` (not through
+   * `register_iteration`) yield empty sets and are treated conservatively.
+   */
+  void
+  collect_component_access (std::vector<entt::id_type> &out_reads,
+                            std::vector<entt::id_type> &out_writes) const
+  {
+    for (const auto &it : m_iterations) {
+      out_reads.insert (out_reads.end (), it.read_components.begin (),
+                        it.read_components.end ());
+      out_writes.insert (out_writes.end (), it.write_components.begin (),
+                         it.write_components.end ());
+    }
+  }
+
   const std::vector<std::string> &
   get_dependencies () const
   {
@@ -336,6 +383,7 @@ protected:
 
 private:
   std::string m_name;
+  std::string m_stage = "logic";
   std::vector<std::string> m_dependencies;
   std::vector<std::string> m_conflicts;
   bool m_active = false;
@@ -373,10 +421,35 @@ protected:
   {
     hub.template declare_iteration<Derived, Components...> (iteration_name);
 
-    this->m_iterations.push_back (ecs_system::registered_iteration{
-        iteration_name ? iteration_name : "",
-        ecs_system::iteration_fn_t (std::forward<Fn> (fn)),
-    });
+    registered_iteration it{ iteration_name ? iteration_name : "",
+                             ecs_system::iteration_fn_t (std::forward<Fn> (fn)),
+                             {},
+                             {} };
+    (it.write_components.push_back (wsl::comp::stable_type_id<Components> ()),
+     ...);
+    this->m_iterations.push_back (std::move (it));
+  }
+
+  /**
+   * Like `register_iteration` but splits component access into reads and
+   * writes so the scheduler can derive precise component-access (CADS) edges.
+   * Prefer this form so parallel systems are not over-serialized.
+   */
+  template <typename... Reads, typename... Writes, typename Fn>
+  void
+  register_iteration_rw (event::event_hub &hub, const char *iteration_name,
+                         Fn &&fn)
+  {
+    hub.template declare_iteration<Derived, Reads..., Writes...> (
+        iteration_name);
+
+    registered_iteration it{ iteration_name ? iteration_name : "",
+                             ecs_system::iteration_fn_t (std::forward<Fn> (fn)),
+                             {},
+                             {} };
+    (it.read_components.push_back (wsl::comp::stable_type_id<Reads> ()), ...);
+    (it.write_components.push_back (wsl::comp::stable_type_id<Writes> ()), ...);
+    this->m_iterations.push_back (std::move (it));
   }
 
   friend Derived;
