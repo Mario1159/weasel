@@ -2,7 +2,9 @@
 
 #include "../../rsc/resource_manager.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
 
 namespace wsl
 {

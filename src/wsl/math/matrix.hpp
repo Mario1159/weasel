@@ -1,14 +1,32 @@
 #pragma once
 
+#if defined(WSL_MODULE_BUILD)
+// See vector.hpp: component_meta.hpp is imported by the module unit at top
+// level as a header unit; not included/imported here (imports must be
+// contiguous at the TU top inside a module purview).
+#else
 #include "../comp/component_meta.hpp"
+#endif
 
+// Inside a C++20 module interface these 3rd-party headers are consumed as
+// header units (imported by the module), so they are skipped here. See
+// vector.hpp.
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
 
+// See wsl/math/vector.hpp for why EnTT is skipped inside a module build.
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <imgui.h>
+#endif
+#endif
 
 namespace wsl
 {
@@ -198,16 +216,17 @@ public:
   }
 
   /**
- * Column-major indexed access (read-only), compatible with
- * glm::mat4[col][row]
- */
+   * Column-major indexed access (read-only), compatible with
+   * glm::mat4[col][row]
+   */
   float const *
   operator[] (int col) const
   {
     return &m_data[static_cast<ptrdiff_t> (col) * 4];
   }
 
-  /** Column-major indexed access (mutable), compatible with glm::mat4[col][row] */
+  /** Column-major indexed access (mutable), compatible with glm::mat4[col][row]
+   */
   float *
   operator[] (int col)
   {

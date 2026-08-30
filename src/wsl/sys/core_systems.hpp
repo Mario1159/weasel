@@ -1,23 +1,53 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "lighting_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "audio_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "physics_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "render_2d_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "render_3d_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "render_ui_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "shadow_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "skybox_system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "transform_system.hpp"
+#endif
 #include "sys/stage_registry.hpp"
 #include "sys/system_scheduler.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/event.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/reg/registry_handle.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <functional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {

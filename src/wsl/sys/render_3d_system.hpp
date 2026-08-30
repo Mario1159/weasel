@@ -1,9 +1,15 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "entt/entity/fwd.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "system.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
 
 namespace wsl

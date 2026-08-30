@@ -1,4 +1,8 @@
 #include "app.hpp"
+#include "event/message_bus.hpp"
+#include "reg/component_registry.hpp"
+#include "reg/singleton_registry.hpp"
+#include "sys/core_systems.hpp"
 
 #include "comp/camera.hpp"
 #include "math/vector.hpp"

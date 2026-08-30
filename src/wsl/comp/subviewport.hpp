@@ -1,9 +1,13 @@
 #pragma once
 
 #include "../math/vector.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "component_meta.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl::comp
 {

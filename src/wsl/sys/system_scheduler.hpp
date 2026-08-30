@@ -1,10 +1,18 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <functional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
 #include "reg/system_factory_registry.hpp"
 #include "sys/stage_registry.hpp"

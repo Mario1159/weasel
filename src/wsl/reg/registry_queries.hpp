@@ -1,12 +1,22 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "component_registry.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "singleton_registry.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "system_factory_registry.hpp"
+#endif
 #include "event/event_hub.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl::reg
 {

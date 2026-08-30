@@ -1,14 +1,30 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <atomic>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <functional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <mutex>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <thread>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/transport.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/types.hpp>
+#endif
 
 namespace wsl::ai::a2a
 {

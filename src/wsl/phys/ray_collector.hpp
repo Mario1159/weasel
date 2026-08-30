@@ -1,14 +1,23 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "physics_engine.hpp"
+#endif
 
 // clang-format off
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/BodyID.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/CastResult.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/CollisionCollector.h>
+#endif
+#endif
 // clang-format on
-
 
 namespace wsl
 {

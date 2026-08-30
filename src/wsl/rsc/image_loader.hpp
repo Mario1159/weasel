@@ -1,13 +1,31 @@
 #pragma once
 
-#include "../gfx/image.hpp"
+namespace wsl
+{
+namespace gfx
+{
+class image;
+}
+} // namespace wsl
 
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_surface.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3_image/SDL_image.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/resource/loader.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
 
 namespace wsl
 {

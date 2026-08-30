@@ -1,12 +1,21 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
-#include "event_hub_fwd.hpp"
-
-#include <algorithm>
-#include <ranges>
-
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#endif
+#if !defined(WSL_MODULE_BUILD)
+#include "event_hub_fwd.hpp"
+#endif
+
+#if !defined(WSL_MODULE_BUILD)
+#include <algorithm>
+#endif
+#if !defined(WSL_MODULE_BUILD)
+#include <ranges>
+#endif
 
 namespace wsl::event
 {

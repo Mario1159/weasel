@@ -1,0 +1,32 @@
+#pragma once
+#define RMLUI_SDL_VERSION_MAJOR 3
+#include "stl_all.hpp"
+#include "sdl_all.hpp"
+#include "rmlui_all.hpp"
+#include "imgui_all.hpp"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <spdlog/spdlog.h>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+#include <tracy/Tracy.hpp>
+// Additional third-party libs used across the cluster
+#include <fastgltf/core.hpp>
+#include <fastgltf/types.hpp>
+#include <fastgltf/util.hpp>
+#include <fastgltf/math.hpp>
+#include <fastgltf/tools.hpp>
+#include <curl/curl.h>
+#include <archive.h>
+#include <archive_entry.h>
+#include <nlohmann/json.hpp>
+#include <meshoptimizer.h>
+#include <simdjson.h>

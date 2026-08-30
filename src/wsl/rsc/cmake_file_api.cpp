@@ -1,4 +1,5 @@
 #include "cmake_file_api.hpp"
+#include "../gfx/cubemap.hpp"
 #include "resource_manager.hpp"
 
 #include "wsl/log/log.hpp"

@@ -1,16 +1,30 @@
 #pragma once
 
 #include "../math/vector.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "component_meta.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/matrix_transform.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/mat4x4.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {

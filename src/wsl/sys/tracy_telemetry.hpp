@@ -1,6 +1,8 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
 
 namespace wsl::sys
 {

@@ -1,11 +1,19 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "scene.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl
 {

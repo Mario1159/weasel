@@ -1,10 +1,18 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "system.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/mat4x4.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
+#endif
 
 namespace wsl
 {

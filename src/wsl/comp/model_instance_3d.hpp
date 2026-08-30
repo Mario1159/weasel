@@ -1,11 +1,17 @@
 #pragma once
 
 #include "../rsc/resource_manager.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "component_meta.hpp"
+#endif
 #include "singl/runtime_context.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {

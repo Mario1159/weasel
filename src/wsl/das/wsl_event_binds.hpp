@@ -1,10 +1,18 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "daScript/ast/ast.h"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "daScript/ast/ast_handle.h"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/core/fwd.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstddef>
+#endif
 
 namespace das
 {

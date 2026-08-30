@@ -1,10 +1,18 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "renderdoc_app.h"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string_view>
+#endif
 
 /**
  * C++ wrapper around the RenderDoc in-application API 1.7.0.

@@ -1,21 +1,45 @@
 #pragma once
 
 #include "editor/ui_system_interface.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi/Core.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi/Core/Math.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi_Platform_SDL.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi_Renderer_SDL_GPU.h>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/component_meta.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_context.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_window.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_manager.hpp"
+#endif
 
 namespace wsl
 {

@@ -1,23 +1,49 @@
 // scene_snapshot_serializer.hpp
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/registry.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/snapshot.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/binary.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/json.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/utility.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/string.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/vector.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/core/hashed_string.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "scene.hpp"
+#endif
 
 namespace wsl
 {

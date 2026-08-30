@@ -1,6 +1,8 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/scene.hpp"
+#endif
 
 namespace wsl
 {

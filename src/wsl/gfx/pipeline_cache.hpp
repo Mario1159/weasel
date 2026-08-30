@@ -1,11 +1,23 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "shader_program.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <functional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {

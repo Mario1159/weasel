@@ -1,26 +1,62 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "area3d.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "audio.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "camera_2d.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "camera.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "character_body.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "directional_light.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "hierarchy.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "model_instance_3d.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "point_light.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "sprite_2d.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "prefab_instance.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "rigid_body.hpp"
+#endif
 #include "singl/ui_manager.hpp"
 #include "singl/physics_manager.hpp"
 #include "singl/rendering_manager.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "subviewport.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "transform_2d.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/singl/editor_context.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "spot_light.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "transform.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "world_transform.hpp"
+#endif
 #include "../rsc/resource_manager.hpp"
 #include "../rsc/scene_manager.hpp"
 

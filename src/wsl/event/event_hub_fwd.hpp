@@ -1,12 +1,25 @@
 #pragma once
 
+// See wsl/math/vector.hpp for why EnTT is skipped inside a module build.
+#if !defined(WSL_MODULE_BUILD)
 #include "entt/entt.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <functional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
 
 namespace wsl::sys
 {

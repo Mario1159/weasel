@@ -1,4 +1,6 @@
 #include "batch_renderer_2d.hpp"
+#include "gfx/cubemap.hpp"
+#include "gfx/image.hpp"
 #include "render_context.hpp"
 #include "render_window.hpp"
 #include "shader.hpp"
@@ -193,7 +195,7 @@ batch_renderer_2d::draw ()
 
   for (const auto &batch : m_batches) {
     SDL_GPUTexture *tex
-        = batch.texture ? batch.texture : m_window->hdr_scene().get ();
+        = batch.texture ? batch.texture : m_window->hdr_scene ().get ();
     if (tex) {
       SDL_GPUTextureSamplerBinding tex_binding{ tex, m_sampler.get () };
       SDL_BindGPUFragmentSamplers (pass, 0, &tex_binding, 1);

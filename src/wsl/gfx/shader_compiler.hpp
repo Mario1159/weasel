@@ -1,8 +1,14 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "shader_program.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {

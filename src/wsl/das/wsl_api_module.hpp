@@ -1,8 +1,14 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
 
 namespace das
 {

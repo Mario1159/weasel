@@ -2,13 +2,23 @@
 
 #include "../math/vector.hpp"         // math::vec3f, math::quatf
 #include "../phys/physics_engine.hpp" // phys::engine
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/BodyID.h>
+#endif
 
 namespace wsl
 {

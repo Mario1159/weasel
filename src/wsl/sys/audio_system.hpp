@@ -1,10 +1,17 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "system.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "../comp/audio.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3_mixer/SDL_mixer.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-
+#endif
 
 namespace wsl
 {
@@ -16,7 +23,7 @@ class audio_system : public sys::ecs_system_t<audio_system>
 {
 public:
   explicit audio_system (const std::string &name);
-  ~audio_system () override; 
+  ~audio_system () override;
 
   void on_update (entt::registry &registry, double dt) override;
   void on_init (entt::registry &registry) override;

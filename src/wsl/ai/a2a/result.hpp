@@ -1,8 +1,14 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <optional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <stdexcept>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <variant>
+#endif
 
 namespace wsl::ai::a2a
 {

@@ -1,13 +1,29 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/string.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/vector.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/unordered_map.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {

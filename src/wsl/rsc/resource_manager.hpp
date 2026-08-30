@@ -1,27 +1,69 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "cubemap_loader.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "image_loader.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "model_loader.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "project_loader.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "resource_ids.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "resource_ref.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "scene_loader.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "shader_loader.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/material_asset.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/shader_program.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3_mixer/SDL_mixer.h>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/resource/cache.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/resource/resource.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <future>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <optional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 namespace wsl
 {
 

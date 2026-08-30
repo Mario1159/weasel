@@ -1,12 +1,22 @@
 #pragma once
 
 #include "comp/singl/runtime_context.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/event.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
 
 /**
  * Game framework library for the Weasel engine.

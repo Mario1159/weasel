@@ -1,16 +1,36 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/camera.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/gpu_resources.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/mesh.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_context.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/subviewport_target.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/viewport.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {

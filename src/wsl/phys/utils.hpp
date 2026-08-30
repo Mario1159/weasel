@@ -1,9 +1,14 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
-
+#endif
+#endif
 
 namespace wsl
 {

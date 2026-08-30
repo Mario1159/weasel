@@ -1,7 +1,11 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/fwd.hpp>
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#endif
 
 namespace wsl
 {

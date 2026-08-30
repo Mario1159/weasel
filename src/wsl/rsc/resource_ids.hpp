@@ -1,6 +1,8 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl
 {
@@ -178,7 +180,9 @@ struct material_id
 // cereal serialization helpers for resource id types
 // ---------------------------------------------------------------------------
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {

@@ -1,7 +1,11 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <spdlog/spdlog.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
 
 namespace wsl::log
 {

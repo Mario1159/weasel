@@ -2,10 +2,18 @@
 
 #include "../sys/system.hpp"
 #include "../event/event_hub.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "modules/weasel_ecs_adapter_gen.inc"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace das
 {

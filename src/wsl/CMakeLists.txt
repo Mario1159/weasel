@@ -61,6 +61,7 @@ target_link_libraries(wsl PUBLIC
     EnTT::EnTT
     spdlog
     cereal
+    reflectcpp
     imguizmo
     imguitextselect
     imsearch
@@ -168,3 +169,33 @@ if(MSVC)
 else()
     target_compile_options(wsl PRIVATE -Wall -Wextra -Wpedantic -rdynamic)
 endif()
+
+# --- C++20 modules (opt-in, see WEASEL_ENABLE_MODULES in root CMakeLists) ---
+# Single `wsl` module: it textually includes every engine header (no header units,
+# no per-namespace modules). One translation unit means no cross-module duplication
+# and third-party macros work normally. See CXX_MODULES_PLAN_V2.md.
+if(WEASEL_ENABLE_MODULES)
+  # Include paths for the module TU (mirrors the wsl target's INCLUDE_DIRECTORIES).
+  set(_hu_rsp "${CMAKE_BINARY_DIR}/gcm.cache/hu_incs.rsp")
+  file(GENERATE OUTPUT "${_hu_rsp}"
+       CONTENT "$<JOIN:$<LIST:TRANSFORM,$<LIST:FILTER,$<TARGET_PROPERTY:wsl,INCLUDE_DIRECTORIES>,EXCLUDE,^$>,PREPEND,-I>,
+>")
+
+  add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/gcm.cache/wsl.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/gcm.cache"
+    COMMAND ${CMAKE_CXX_COMPILER} -std=c++20 -fmodules-ts
+            @${_hu_rsp}
+            -c "${CMAKE_CURRENT_SOURCE_DIR}/wsl.cppm"
+    COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/gcm.cache/wsl.stamp"
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    COMMENT "Phase4: build single wsl module (all engine headers, textual)"
+    VERBATIM
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/wsl.cppm"
+  )
+  # Opt-in only: never a dependency of `wsl`, so the legacy header build can
+  # never block on the module compile while the migration is in progress.
+  # Build it explicitly: `cmake --build build --target wsl_module`
+  add_custom_target(wsl_module DEPENDS "${CMAKE_BINARY_DIR}/gcm.cache/wsl.stamp")
+endif()
+

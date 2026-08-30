@@ -1,4 +1,5 @@
 #include "render_3d_system.hpp"
+#include "../rsc/scene_manager.hpp"
 
 #include "../comp/directional_light.hpp"
 #include "../comp/singl/editor_context.hpp"

@@ -1,22 +1,38 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../das/das_engine.hpp"
-#include <filesystem>
-#include <cstdint>
+#if !defined(WSL_MODULE_BUILD)
 #include <future>
+#endif
+#endif
+#if !defined(WSL_MODULE_BUILD)
+#include <filesystem>
+#endif
+#if !defined(WSL_MODULE_BUILD)
+#include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {
 
 class app;
 
+#if !defined(WSL_MODULE_BUILD)
 namespace comp::singl
 {
 class runtime_context;
 }
+#endif
 
 namespace rsc
 {

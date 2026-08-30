@@ -1,14 +1,30 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/lighting.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_context.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/ext/matrix_float4x4.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/type_ptr.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <span>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {

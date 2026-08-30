@@ -1,9 +1,15 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "component_meta.hpp"
+#endif
 #include "../math/vector.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_ids.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
 
 namespace wsl::comp
 {

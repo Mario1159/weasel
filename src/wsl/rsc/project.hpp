@@ -1,9 +1,17 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/string.hpp>
+#endif
 
 namespace wsl
 {

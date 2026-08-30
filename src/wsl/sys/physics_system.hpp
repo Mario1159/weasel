@@ -1,10 +1,18 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "system.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
+#endif
 
 namespace wsl
 {

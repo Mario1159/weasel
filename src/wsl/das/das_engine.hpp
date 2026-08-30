@@ -1,11 +1,23 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <csetjmp>
+#endif
 
 namespace das
 {

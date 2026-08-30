@@ -1,25 +1,55 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
 #include "../das/das_engine.hpp"
 
-#include "detail/registry_helpers.hpp"
-#include "wsl/log/log.hpp"
-
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/binary.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/json.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/types/vector.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/core/type_info.hpp>
+#endif
+#endif
 
+#include "detail/registry_helpers.hpp"
+#if !defined(WSL_MODULE_BUILD)
+#include "wsl/log/log.hpp"
+#endif
+
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <optional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstddef>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string_view>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl
 {

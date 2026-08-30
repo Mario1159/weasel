@@ -1,10 +1,16 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "component_meta.hpp"
+#endif
 #include "../rsc/resource_ids.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {

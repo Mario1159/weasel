@@ -3,19 +3,41 @@
 #include "../math/vector.hpp"         // math::vec3f, math::quatf
 #include "../phys/physics_engine.hpp" // phys::engine
 #include "singl/runtime_context.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <exception>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <algorithm>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/AllowedDOFs.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/BodyID.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/MotionType.h>
+#endif
 
 namespace wsl
 {

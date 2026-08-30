@@ -1,18 +1,45 @@
 #pragma once
 
+// Inside a C++20 module interface (WSL_MODULE_BUILD) these 3rd-party headers
+// are consumed as *header units* (imported by the module). They must NOT be
+// included textually here, or the same types would be declared both textually
+// (global fragment) and as a module, which is illegal. In the legacy header
+// build they are included normally.
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/binary.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/json.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cctype>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <concepts>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <optional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string_view>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <utility>
+#endif
 
 /**
  * Root namespace for the Weasel engine.

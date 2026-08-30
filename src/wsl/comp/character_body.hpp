@@ -3,18 +3,34 @@
 
 #include "../math/vector.hpp"
 #include "../phys/physics_engine.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "component_meta.hpp"
+#endif
 #include "singl/runtime_context.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
 // clang-format off
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/BodyID.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Character/CharacterVirtual.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#endif
 // clang-format on
 
 namespace wsl

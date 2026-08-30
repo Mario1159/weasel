@@ -1,12 +1,24 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include "material.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "material_asset.hpp"
+#endif
 
 namespace wsl
 {

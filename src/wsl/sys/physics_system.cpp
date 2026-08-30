@@ -1,4 +1,5 @@
 #include "physics_system.hpp"
+#include "../rsc/scene_manager.hpp"
 
 #include "../comp/area3d.hpp"
 #include "../comp/character_body.hpp"

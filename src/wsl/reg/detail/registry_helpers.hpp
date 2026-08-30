@@ -1,20 +1,44 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../../comp/component_meta.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/binary.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/archives/json.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/core/type_info.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/meta/factory.hpp>
+#endif
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <algorithm>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string_view>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl::reg::detail
 {

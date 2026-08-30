@@ -1,23 +1,39 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
 #include "../rsc/scene.hpp"
 #include "../sys/stage_registry.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/core/type_info.hpp>
+#endif
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <functional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string_view>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
 
 namespace wsl
 {
 
+#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 class das_engine;
 }
+#endif
 
 namespace reg
 {

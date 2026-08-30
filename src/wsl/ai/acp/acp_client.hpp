@@ -1,19 +1,45 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/acp/acp_types.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <atomic>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <chrono>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <condition_variable>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <deque>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <functional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <mutex>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <thread>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
 namespace wsl::ai::acp
 {

@@ -1,10 +1,20 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/app.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/singl/editor_context.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/debug/debug_renderer.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/editor/editor_ui_layer_interface.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/imgui_renderer_interface.hpp"
+#endif
 
 namespace wsl
 {

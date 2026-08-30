@@ -1,11 +1,17 @@
 #pragma once
 
 // clang-format off
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/ObjectLayer.h>
+#endif
+#endif
 // clang-format on
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
 
 namespace wsl
 {
@@ -22,28 +28,28 @@ namespace layers
 using layer_index_t = uint8_t;
 using layer_mask_t = uint16_t;
 
-static constexpr layer_index_t collision_layer_count = 8;
-static constexpr layer_mask_t all_collision_layers
+inline constexpr layer_index_t collision_layer_count = 8;
+inline constexpr layer_mask_t all_collision_layers
     = (layer_mask_t{ 1U } << collision_layer_count) - 1U;
 
 // Legacy object layers are kept for non-rigidbody physics objects like
 // character controllers and area sensors.
-static constexpr JPH::ObjectLayer
+inline constexpr JPH::ObjectLayer
     STATIC // NOLINT(readability-identifier-naming)
     = 0;
-static constexpr JPH::ObjectLayer dynamic = 1;
-static constexpr JPH::ObjectLayer character = 2;
+inline constexpr JPH::ObjectLayer dynamic = 1;
+inline constexpr JPH::ObjectLayer character = 2;
 
-static constexpr JPH::ObjectLayer encoded_rigidbody_flag = 1U << 15;
-static constexpr uint16_t encoded_layer_bits = 3;
-static constexpr uint16_t encoded_layer_mask = (1U << encoded_layer_bits) - 1U;
-static constexpr uint16_t encoded_mask_shift = encoded_layer_bits;
-static constexpr uint16_t encoded_mask_bits = collision_layer_count;
-static constexpr uint16_t encoded_collision_mask
+inline constexpr JPH::ObjectLayer encoded_rigidbody_flag = 1U << 15;
+inline constexpr uint16_t encoded_layer_bits = 3;
+inline constexpr uint16_t encoded_layer_mask = (1U << encoded_layer_bits) - 1U;
+inline constexpr uint16_t encoded_mask_shift = encoded_layer_bits;
+inline constexpr uint16_t encoded_mask_bits = collision_layer_count;
+inline constexpr uint16_t encoded_collision_mask
     = ((1U << encoded_mask_bits) - 1U) << encoded_mask_shift;
-static constexpr uint16_t encoded_motion_shift
+inline constexpr uint16_t encoded_motion_shift
     = encoded_mask_shift + encoded_mask_bits;
-static constexpr uint16_t encoded_motion_mask = 0x3U << encoded_motion_shift;
+inline constexpr uint16_t encoded_motion_mask = 0x3U << encoded_motion_shift;
 
 enum class motion_bucket : std::uint8_t
 {

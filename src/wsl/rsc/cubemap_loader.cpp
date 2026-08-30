@@ -14,6 +14,7 @@
 #include <archive_entry.h>
 
 #include "gfx/cubemap.hpp"
+#include "gfx/render_context.hpp"
 #include "stb_image.h"
 
 #include <array>
@@ -207,16 +208,14 @@ cubemap_loader::operator() (const std::string &path) const
       const uint32_t irr_size = 64;
       SDL_GPUTextureCreateInfo irr = ti;
       irr.width = irr.height = irr_size;
-      cube->ibl_irradiance
-          = SDL_CreateGPUTexture (m_ctx->gpu_device, &irr);
+      cube->ibl_irradiance = SDL_CreateGPUTexture (m_ctx->gpu_device, &irr);
 
       const uint32_t pre_size = 256;
       const uint32_t pre_mips = mip_count_2d (pre_size, pre_size);
       SDL_GPUTextureCreateInfo pre = ti;
       pre.width = pre.height = pre_size;
       pre.num_levels = pre_mips;
-      cube->ibl_prefilter
-          = SDL_CreateGPUTexture (m_ctx->gpu_device, &pre);
+      cube->ibl_prefilter = SDL_CreateGPUTexture (m_ctx->gpu_device, &pre);
       cube->prefilter_mip_count = pre_mips;
       cube->prefilter_max_mip = (float)(pre_mips - 1);
 
@@ -230,13 +229,11 @@ cubemap_loader::operator() (const std::string &path) const
       lut.num_levels = 1;
       lut.usage
           = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
-      cube->ibl_brdf_lut
-          = SDL_CreateGPUTexture (m_ctx->gpu_device, &lut);
+      cube->ibl_brdf_lut = SDL_CreateGPUTexture (m_ctx->gpu_device, &lut);
 
       SDL_GPUSamplerCreateInfo iblsi = si;
       iblsi.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
-      cube->ibl_sampler
-          = SDL_CreateGPUSampler (m_ctx->gpu_device, &iblsi);
+      cube->ibl_sampler = SDL_CreateGPUSampler (m_ctx->gpu_device, &iblsi);
     }
 
     return cube;
@@ -523,8 +520,7 @@ cubemap_loader::load_from_equirect (const std::string &path) const
   ti2d.num_levels = 1;
   ti2d.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
-  SDL_GPUTexture *equi_tex
-      = SDL_CreateGPUTexture (m_ctx->gpu_device, &ti2d);
+  SDL_GPUTexture *equi_tex = SDL_CreateGPUTexture (m_ctx->gpu_device, &ti2d);
 
   {
     SDL_GPUTransferBufferCreateInfo tbi{};
@@ -584,8 +580,7 @@ cubemap_loader::load_from_equirect (const std::string &path) const
     SDL_GPUTextureCreateInfo irr = ti;
     irr.format = ibl_cube_format;
     irr.width = irr.height = irr_size;
-    cube->ibl_irradiance
-        = SDL_CreateGPUTexture (m_ctx->gpu_device, &irr);
+    cube->ibl_irradiance = SDL_CreateGPUTexture (m_ctx->gpu_device, &irr);
 
     const uint32_t pre_size = 256;
     const uint32_t pre_mips = mip_count_2d (pre_size, pre_size);
@@ -593,8 +588,7 @@ cubemap_loader::load_from_equirect (const std::string &path) const
     pre.format = ibl_cube_format;
     pre.width = pre.height = pre_size;
     pre.num_levels = pre_mips;
-    cube->ibl_prefilter
-        = SDL_CreateGPUTexture (m_ctx->gpu_device, &pre);
+    cube->ibl_prefilter = SDL_CreateGPUTexture (m_ctx->gpu_device, &pre);
     cube->prefilter_mip_count = pre_mips;
     cube->prefilter_max_mip = (float)(pre_mips - 1);
 
@@ -621,6 +615,12 @@ cubemap_loader::load_from_equirect (const std::string &path) const
 }
 
 cubemap_loader::cubemap_loader (gfx::render_context *ctx) : m_ctx (ctx) {}
+
+std::shared_ptr<gfx::cubemap>
+cubemap_loader::operator() (gfx::cubemap &&ready_cubemap) const
+{
+  return std::make_shared<gfx::cubemap> (std::move (ready_cubemap));
+}
 
 } // namespace rsc
 

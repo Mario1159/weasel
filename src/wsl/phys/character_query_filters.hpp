@@ -1,14 +1,23 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "layers.hpp"
+#endif
 
 // clang-format off
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/BodyFilter.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/ShapeFilter.h>
+#endif
+#endif
 // clang-format on
-
 
 namespace wsl
 {
@@ -40,7 +49,8 @@ public:
   bool
   ShouldCollide (JPH::ObjectLayer layer) const override
   {
-    return layers::get_motion_bucket (layer) != layers::motion_bucket::character;
+    return layers::get_motion_bucket (layer)
+           != layers::motion_bucket::character;
   }
 };
 

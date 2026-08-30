@@ -1,9 +1,15 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.28)
 project(weasel LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Legacy header TUs must never be compiled in GCC/Clang module-scanning mode
+# (CMake >= 3.28 scans C++20 sources by default). The `wsl` module is built by
+# an explicit custom command (see src/wsl/CMakeLists.txt), which does not use
+# CMake's scanning machinery, so scanning is pure overhead/hazard here.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -36,6 +42,46 @@ option(WEASEL_ENABLE_MULTIPLAYER
 option(WEASEL_ENABLE_RENDERDOC
     "Enable RenderDoc in-application API (programmatic capture + annotation)"
     $<IF:$<CONFIG:Debug>,ON,OFF>)
+
+# --- C++20 modules (incremental opt-in) ---
+# When ON, the wsl core library and its consumers are built against C++20
+# named modules (one module per engine namespace, e.g. `wsl.math`,
+# `wsl.log`). The legacy header-based build remains the default and continues
+# to work unchanged until the migration is complete. See CXX_MODULES_PLAN.md.
+option(WEASEL_ENABLE_MODULES
+    "Adopt C++20 modules incrementally (opt-in; header build is still default)"
+    OFF)
+
+if(WEASEL_ENABLE_MODULES)
+  # Native C++20 module dependency scanning on Ninja is first-class with
+  # Clang (any recent version) and GCC >= 14. Other compilers (e.g. older
+  # AppleClang) may not support FILE_SET CXX_MODULES; warn rather than fail
+  # so CI can opt into the modules job deliberately.
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    message(WARNING
+      "WEASEL_ENABLE_MODULES=ON but the C++ compiler is "
+      "'${CMAKE_CXX_COMPILER_ID}'. C++20 modules are validated with "
+      "Clang/GCC>=14; the build may fail to configure or compile.")
+  endif()
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+     CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+    message(FATAL_ERROR
+      "WEASEL_ENABLE_MODULES=ON requires GCC >= 14 (found "
+      "${CMAKE_CXX_COMPILER_VERSION}). Use Clang or a newer GCC.")
+  endif()
+  message(STATUS "C++20 modules enabled (WEASEL_ENABLE_MODULES=ON)")
+
+  # C++20 modules require a generator with dependency scanning (Ninja, or
+  # Visual Studio 17.4+). The default Unix Makefiles generator cannot build
+  # them, so fail fast with an actionable message instead of a cryptic error.
+  if(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
+    message(FATAL_ERROR
+      "WEASEL_ENABLE_MODULES=ON requires the Ninja (or Visual Studio) CMake "
+      "generator, but the current generator is '${CMAKE_GENERATOR}'. "
+      "Configure with -G Ninja (e.g. `cmake -B build -G Ninja "
+      "-DWEASEL_ENABLE_MODULES=ON`).")
+  endif()
+endif()
 
 # Temporarily disable GameNetworkingSockets on Windows until abseil-cpp is fixed.
 # See: https://github.com/abseil/abseil-cpp/pull/2054
@@ -204,6 +250,15 @@ CPMAddPackage(
     GITHUB_REPOSITORY USCiLab/cereal
     GIT_TAG v1.3.2
     OPTIONS "BUILD_SANDBOX OFF" "BUILD_TESTS OFF"
+    SYSTEM ON
+)
+
+# C++20-native serialization (replaces cereal incrementally; see
+# CXX_MODULES_PLAN_V2.md Phase 1). cereal remains until the swap completes.
+CPMAddPackage(
+    NAME reflectcpp
+    GITHUB_REPOSITORY getml/reflect-cpp
+    GIT_TAG v0.25.0
     SYSTEM ON
 )
 

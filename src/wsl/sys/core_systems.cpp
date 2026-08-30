@@ -1,4 +1,6 @@
 #include "core_systems.hpp"
+#include "../rsc/scene_manager.hpp"
+#include "../reg/singleton_registry.hpp"
 #include "comp/singl/ui_manager.hpp"
 #include "rsc/resource_manager.hpp"
 #include "sys/audio_system.hpp"

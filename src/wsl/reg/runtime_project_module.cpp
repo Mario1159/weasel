@@ -1,4 +1,7 @@
 #include "runtime_project_module.hpp"
+#include "component_registry.hpp"
+#include "singleton_registry.hpp"
+#include "system_factory_registry.hpp"
 #include "../das/das_engine.hpp"
 
 #include "../rsc/project.hpp"

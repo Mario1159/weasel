@@ -1,9 +1,15 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <spdlog/sinks/base_sink.h>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <mutex>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
 
 namespace wsl::log
 {

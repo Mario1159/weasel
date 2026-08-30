@@ -1,23 +1,55 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <mutex>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "broad_phase_layer_interface.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "object_layer_pair_filter.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "object_vs_broad_phase_layer_filter.hpp"
+#endif
 
 // clang-format off
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/RegisterTypes.h>
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Core/JobSystemThreadPool.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Core/TempAllocator.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Body/BodyLockInterface.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/PhysicsSettings.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/PhysicsSystem.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
+#endif
+#endif
 // clang-format on
 
 namespace wsl

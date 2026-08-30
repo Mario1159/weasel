@@ -9,6 +9,7 @@
 // (SV_Target0 scene, SV_Target1 bloom).
 
 #include "render_window.hpp"
+#include "gfx/cubemap.hpp"
 #ifdef WEASEL_ENABLE_RENDERDOC
 #include "renderdoc.hpp"
 #endif
@@ -391,8 +392,8 @@ render_window::begin_3d_pass (bool clear_color, bool clear_depth,
                               const char *label) const
 {
   ZoneScoped;
-  if ((!m_msaa_hdr_scene) || (!m_msaa_hdr_bloom) || (!m_hdr_scene) || (!m_hdr_bloom_src)
-      || (!m_depth_texture)) {
+  if ((!m_msaa_hdr_scene) || (!m_msaa_hdr_bloom) || (!m_hdr_scene)
+      || (!m_hdr_bloom_src) || (!m_depth_texture)) {
     wsl::log::gfx ()->warn (
         "begin_3d_pass: null render target texture(s), skipping");
     return;
@@ -656,8 +657,8 @@ render_window::new_swapchain ()
     ZoneScopedN ("new_swapchain::non_blocking_spin");
     for (int attempt = 0; attempt < kSpinAttempts; ++attempt) {
       bool const ok = SDL_AcquireGPUSwapchainTexture (
-          m_ctx->main_cmd, m_handler, &m_swapchain.texture_data, &m_swapchain.width,
-          &m_swapchain.height);
+          m_ctx->main_cmd, m_handler, &m_swapchain.texture_data,
+          &m_swapchain.width, &m_swapchain.height);
       if (ok && m_swapchain.texture_data != nullptr) {
         return;
       }
@@ -699,8 +700,8 @@ render_window::new_swapchain ()
   {
     ZoneScopedN ("new_swapchain::blocking_acquire");
     bool const ok = SDL_WaitAndAcquireGPUSwapchainTexture (
-        m_ctx->main_cmd, m_handler, &m_swapchain.texture_data, &m_swapchain.width,
-        &m_swapchain.height);
+        m_ctx->main_cmd, m_handler, &m_swapchain.texture_data,
+        &m_swapchain.width, &m_swapchain.height);
     if (!ok) {
       wsl::log::gfx ()->error (
           "new_swapchain: blocking acquire also failed: {}", SDL_GetError ());
@@ -784,7 +785,8 @@ render_window::on_resize ()
   res.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
   m_hdr_scene = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (res));
-  m_hdr_bloom_src = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (res));
+  m_hdr_bloom_src
+      = gpu_texture::adopt (m_ctx->gpu_device, create_hdr_target (res));
   if (m_hdr_scene)
     SDL_SetGPUTextureName (m_ctx->gpu_device, m_hdr_scene.get (), "HDR Scene");
   if (m_hdr_bloom_src)
@@ -1008,8 +1010,8 @@ render_window::postprocess_hdr_bloom ()
   if (m_swapchain.texture_data != nullptr) {
     ZoneScopedN ("postprocess::composite_swapchain");
 #ifdef WEASEL_ENABLE_RENDERDOC
-    wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess.tonemap",
-                                      "m_swapchain");
+    wsl::gfx::rdoc::annotate_command (
+        m_ctx->main_cmd, "pass.postprocess.tonemap", "m_swapchain");
 #endif
     SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Tonemap Swapchain");
     SDL_GPUColorTargetInfo ct{};
@@ -1058,8 +1060,8 @@ render_window::postprocess_hdr_bloom ()
   if (m_present_tex.texture_data != nullptr) {
     ZoneScopedN ("postprocess::composite_present_tex");
 #ifdef WEASEL_ENABLE_RENDERDOC
-    wsl::gfx::rdoc::annotate_command (m_ctx->main_cmd, "pass.postprocess.tonemap",
-                                      "m_present_tex");
+    wsl::gfx::rdoc::annotate_command (
+        m_ctx->main_cmd, "pass.postprocess.tonemap", "m_present_tex");
 #endif
     SDL_PushGPUDebugGroup (m_ctx->main_cmd, "Tonemap Present Tex");
     SDL_GPUColorTargetInfo ct{};
@@ -1224,7 +1226,8 @@ render_window::frame_image_issue_copy ()
   // is unreachable in the normal flow because on_resize() calls
   // frame_image_resize() — it exists to prevent a buffer overflow
   // if that contract is ever broken.
-  if (m_fi_alloc_w != m_present_tex.width || m_fi_alloc_h != m_present_tex.height) {
+  if (m_fi_alloc_w != m_present_tex.width
+      || m_fi_alloc_h != m_present_tex.height) {
     SDL_WaitForGPUIdle (m_ctx->gpu_device);
     frame_image_resize (m_present_tex.width, m_present_tex.height);
     if (!m_fi_transfer) {
@@ -1319,8 +1322,8 @@ render_window::frame_image_submit (SDL_GPUFence *fence)
   }
 
   // Map the transfer buffer, downsample, hand to Tracy, unmap.
-  void *mapped
-      = SDL_MapGPUTransferBuffer (m_ctx->gpu_device, m_fi_transfer.get (), false);
+  void *mapped = SDL_MapGPUTransferBuffer (m_ctx->gpu_device,
+                                           m_fi_transfer.get (), false);
   if (mapped == nullptr) {
     wsl::log::gfx ()->warn (
         "render_window: SDL_MapGPUTransferBuffer failed for Tracy "

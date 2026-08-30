@@ -1,9 +1,15 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/ext/vector_float3.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cereal/cereal.hpp>
+#endif
 
 namespace glm
 {

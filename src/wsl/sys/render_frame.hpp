@@ -4,7 +4,9 @@
 #include "../gfx/scene_renderer.hpp"
 #include "../gfx/viewport.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl
 {

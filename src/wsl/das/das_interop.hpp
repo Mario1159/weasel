@@ -1,6 +1,8 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "das_engine.hpp"
+#endif
 
 namespace das
 {

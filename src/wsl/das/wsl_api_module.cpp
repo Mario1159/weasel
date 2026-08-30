@@ -1,4 +1,6 @@
 #include "wsl_api_module.hpp"
+#include "../rsc/scene_manager.hpp"
+#include "../reg/system_factory_registry.hpp"
 #include "wsl_api_component_accessors.hpp"
 #include "das_interop.hpp"
 

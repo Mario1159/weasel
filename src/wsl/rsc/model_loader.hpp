@@ -1,22 +1,55 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/resource/loader.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
+#endif
+#if !defined(WSL_MODULE_BUILD)
+#include <SDL3/SDL_gpu.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <memory>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <optional>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <span>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <string_view>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <vector>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <fastgltf/types.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <spdlog/spdlog.h>
+#endif
 
-#include "../gfx/model_3d.hpp"
-#include "../gfx/render_context.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "cpu_model.hpp"
+#endif
 
+namespace wsl
+{
+namespace gfx
+{
+class model_3d;
+class render_context;
+}
+} // namespace wsl
 
 namespace wsl
 {
@@ -28,8 +61,9 @@ namespace rsc
  * Resource loader for 3D models (glTF, etc.).
  *
  * This loader handles parsing glTF files into CPU-side data (raw::cpu_model)
- * and managing the asynchronous upload of that data to GPU memory (gfx::model_3d).
- * It also supports generating MikkTSpace tangents and parsing LOD naming conventions.
+ * and managing the asynchronous upload of that data to GPU memory
+ * (gfx::model_3d). It also supports generating MikkTSpace tangents and parsing
+ * LOD naming conventions.
  */
 struct model_loader final : entt::resource_loader<gfx::model_3d>
 {
@@ -51,7 +85,8 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
     std::string_view display_name;
   };
 
-  /** Represents a single unit of work in the asynchronous GPU upload process. */
+  /** Represents a single unit of work in the asynchronous GPU upload process.
+   */
   struct upload_task
   {
     enum class type
@@ -72,7 +107,8 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
   /** Configuration options for the GPU upload process. */
   struct upload_options
   {
-    /** If true, only the lowest detail mesh is uploaded (useful for previews). */
+    /** If true, only the lowest detail mesh is uploaded (useful for previews).
+     */
     bool lowest_lod_only;
     /** Number of vertices to upload in a single batch. */
     size_t vertex_chunk_size;
@@ -93,18 +129,18 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
   struct upload_session
   {
     upload_options options;
-    gfx::model_3d gpu_model;
+    gfx::model_3d *gpu_model = nullptr;
     std::vector<upload_task> tasks;
     size_t next_task = 0;
 
-    upload_session ()  {}
+    upload_session () {}
     explicit upload_session (upload_options options) : options (options) {}
   };
 
   /**
- * Constructs a model loader with a render context.
- * :param ctx: Pointer to the render context (must be valid for GPU uploads).
- */
+   * Constructs a model loader with a render context.
+   * :param ctx: Pointer to the render context (must be valid for GPU uploads).
+   */
   explicit model_loader (gfx::render_context *ctx) : m_ctx (ctx) {}
 
   /** Returns a list of all supported built-in primitives. */
@@ -121,64 +157,65 @@ struct model_loader final : entt::resource_loader<gfx::model_3d>
   std::shared_ptr<gfx::model_3d> operator() (gfx::model_3d &&ready_model) const;
 
   /**
- * Loads or retrieves a model from the specified path.
- *
- * If the path starts with "builtin://", it returns a built-in primitive.
- * Otherwise, it loads a glTF file and performs a synchronous upload.
- */
+   * Loads or retrieves a model from the specified path.
+   *
+   * If the path starts with "builtin://", it returns a built-in primitive.
+   * Otherwise, it loads a glTF file and performs a synchronous upload.
+   */
   std::shared_ptr<gfx::model_3d> operator() (const std::string &path) const;
 
   /** Directly creates a GPU model for a built-in primitive. */
   static std::shared_ptr<gfx::model_3d>
-  load_primitive (primitive_model primitive) ;
+  load_primitive (primitive_model primitive);
 
   /**
- * Uploads a CPU-side model to the GPU.
- * :param cpu: The source CPU model data.
- * :return: The resulting GPU-side model.
- */
+   * Uploads a CPU-side model to the GPU.
+   * :param cpu: The source CPU model data.
+   * :return: The resulting GPU-side model.
+   */
   gfx::model_3d upload_gpu (const raw::cpu_model &cpu) const;
 
   /**
- * Loads a model from disk into CPU memory.
- * :param path: Path to the model file.
- * :return: Shared pointer to the CPU model data, or nullptr on failure.
- */
+   * Loads a model from disk into CPU memory.
+   * :param path: Path to the model file.
+   * :return: Shared pointer to the CPU model data, or nullptr on failure.
+   */
   std::shared_ptr<raw::cpu_model> load_cpu (const std::string &path) const;
 
   /** Begins an asynchronous upload session for a CPU model. */
   upload_session begin_upload (const raw::cpu_model &cpu) const;
 
   /**
- * Begins an asynchronous upload session with custom options.
- * :param cpu: The source CPU model data.
- * :param options: Custom upload options.
- */
+   * Begins an asynchronous upload session with custom options.
+   * :param cpu: The source CPU model data.
+   * :param options: Custom upload options.
+   */
   upload_session begin_upload (const raw::cpu_model &cpu,
                                const upload_options &options) const;
 
   /**
- * Processes a batch of upload tasks for an active session.
- * :param session: Reference to the upload session.
- * :param cpu: The source CPU model data.
- * :param max_tasks: Maximum number of tasks to process in this batch.
- */
+   * Processes a batch of upload tasks for an active session.
+   * :param session: Reference to the upload session.
+   * :param cpu: The source CPU model data.
+   * :param max_tasks: Maximum number of tasks to process in this batch.
+   */
   void upload_next_batch (upload_session &session, const raw::cpu_model &cpu,
                           size_t max_tasks) const;
 
   /** Returns true if all tasks in the session are complete. */
-  static bool is_upload_complete (const upload_session &session) ;
+  static bool is_upload_complete (const upload_session &session);
 
   /**
- * Finalizes an upload session and returns the GPU model.
- * :param session: Reference to the completed upload session.
- * :param cpu: The source CPU model data.
- */
+   * Finalizes an upload session and returns the GPU model.
+   * :param session: Reference to the completed upload session.
+   * :param cpu: The source CPU model data.
+   */
   static gfx::model_3d finish_upload (upload_session &session,
-                               const raw::cpu_model &cpu) ;
+                                      const raw::cpu_model &cpu);
 
   /** Helper to create a GPU texture from CPU texture data. */
-  SDL_GPUTexture *create_gpu_texture (const raw::cpu_texture &tex, bool srgb) const;
+  SDL_GPUTexture *create_gpu_texture (const raw::cpu_texture &tex,
+                                      bool srgb) const;
 
 private:
   struct lod_info
@@ -192,25 +229,26 @@ private:
   template <typename Prim>
   void generate_tangents_mikktspace_any (Prim &prim) const;
   void generate_tangents_mikktspace (raw::cpu_primitive &prim) const;
-  static lod_info parse_lod_name (const std::string &name) ;
-  static glm::mat4 fastgltf_mat4_to_glm (const fastgltf::math::fmat4x4 &m) ;
+  static lod_info parse_lod_name (const std::string &name);
+  static glm::mat4 fastgltf_mat4_to_glm (const fastgltf::math::fmat4x4 &m);
 
   template <typename TexInfo>
   raw::uv_xform get_uv_xform (const TexInfo &info) const;
 
   void collect_low_lod_meshes_recursive (const raw::cpu_node &node,
                                          std::unordered_set<int> &out) const;
-  std::unordered_set<int> collect_low_lod_meshes (const raw::cpu_model &cpu) const;
+  std::unordered_set<int>
+  collect_low_lod_meshes (const raw::cpu_model &cpu) const;
 
   glm::mat4 compute_node_local_transform (const fastgltf::Node &node) const;
 
   static bool extract_image_data (const fastgltf::Asset &asset,
-                           const fastgltf::Image &img,
-                           std::vector<uint8_t> &out,
-                           const std::filesystem::path &base_path) ;
+                                  const fastgltf::Image &img,
+                                  std::vector<uint8_t> &out,
+                                  const std::filesystem::path &base_path);
 
-  static bool decode_rgba_image (const std::vector<uint8_t> &bytes, int &w, int &h,
-                          std::vector<uint8_t> &pixels) ;
+  static bool decode_rgba_image (const std::vector<uint8_t> &bytes, int &w,
+                                 int &h, std::vector<uint8_t> &pixels);
 };
 
 } // namespace rsc

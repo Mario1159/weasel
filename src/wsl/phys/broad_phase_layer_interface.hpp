@@ -1,11 +1,19 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "layers.hpp"
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#endif
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
+#endif
 
 namespace wsl
 {

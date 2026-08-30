@@ -1,4 +1,7 @@
 #include "resource_manager.hpp"
+#include "scene_manager.hpp"
+#include "../sys/core_systems.hpp"
+#include "../reg/runtime_project_module.hpp"
 
 #include "../comp/component_meta.hpp"
 #include "../comp/hierarchy.hpp"
