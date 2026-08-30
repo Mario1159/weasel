@@ -68,26 +68,64 @@ untangling proceeds outward.
   `-fmodules-ts` mode; the module TU is a custom command and needs no scanning.
 - ✅ Wrote this plan; demoted `CXX_MODULES_PLAN.md` to experimental record.
 
-### Phase 1 — Serialization swap: cereal → reflect-cpp ⬜ (1–2 weeks)
-- **Feasibility spike first (gate)**: compile a reflect-cpp-based
-  `component_meta.hpp` shim inside a module TU with GCC 16 *before* migrating
-  the 38 cereal-referencing files. 1-hour check.
-- New `wsl/serialize.hpp` — the single home of serialization:
-  - `rfl::json::write/read` for scenes/projects; `rfl::msgpack`/`cbor` for
-    binary payloads
-  - `save_field_if_diff(...)` replacing `serialize_field_if_diff`
-    (skip-if-equal-to-default on top of rfl)
-  - glm adapters: `vec2/3/4`, `quat`, `mat4`, `color` (replaces
-    `rsc/cereal_glm.hpp`)
-- Cleanup dividend: plain aggregate components need **zero** serialization
-  code (rfl reflects aggregates); only custom-logic components keep a method.
-- Migrate `comp/component_meta.hpp` (keep the entt-meta/`register_meta` part —
-  editor introspection is unrelated and untouched), then `rsc/*`
-  (scene_snapshot_serializer, project_loader, world,
-  data_types_serialization), then the remaining cereal files; audit `das/*`
-  for serialize usage.
-- Drop `CEREAL_CLASS_VERSION` versioning; bump scene/project format markers.
-- Remove cereal from CPM.
+### Phase 1 — Serialization swap: cereal → reflect-cpp 🔶 (in progress, 2026-08-30)
+- ✅ **Feasibility spike PASSED** (hard gate): rfl JSON round-trip of aggregate
+  components with glm members + erased-dispatch function pointers + entt
+  coexistence, all inside a GCC-16 module TU (`/tmp/opencode/spike`).
+  - Design lesson from the spike: instantiating rfl templates inside a module
+    *purview* triggers `-Wexpose-global-module-tu-local` (yyjson internal
+    linkage). **Resolution: rfl/yyjson live only in `.cpp` implementation
+    files; engine headers and module purviews never name them.**
+- ✅ **Serialization core implemented & validated** (commit `1f272d2`):
+  - `wsl/serialize/types.hpp` — `binary_writer/reader` (length-prefixed POD
+    stream) + `json_writer/reader` (yyjson composition, rfl subtree
+    grafting/extracting). Implementation-only: engine headers fwd-declare.
+  - `wsl/serialize/adapters.hpp` — `rfl::Reflector` for glm (vec2/3/4, quat,
+    mat4), engine math (vec2f–vec4f, quatf, mat33f/44f), `entt::entity`.
+  - `wsl/serialize/serialize.hpp` — `json_write/json_read` (JSON path) and
+    `msgpack_write/msgpack_read` (binary path); both share one reflection.
+  - Round-trip test green (binary + JSON) with engine types.
+  - CMake: `REFLECTCPP_MSGPACK ON` + link `msgpack-c`.
+- ✅ **Component inventory** (aggregate census + member audit, 2026-08-30):
+  13/17 world components are aggregates (auto-reflectable once their
+  `serialize()` methods are deleted). Non-aggregates needing
+  `rfl::Reflector` in `wsl/serialize/component_adapters.hpp` (to be written):
+  `transform`, `world_transform`, `camera`, `character_body`,
+  `prefab_instance`.
+  Special semantics to preserve via Reflectors:
+  - `audio` / `model_instance_3d`: resource ids serialize as **paths** via
+    `resource_manager::serialization_context` (save: `get_resource_path`,
+    load: `register_audio/register_model/register_material`; "None" when
+    unset). Runtime-only fields (`playing`, `was_playing`) drop out of the
+    ReflType.
+  - `character_body`: default ctor already yields null `m_body`; add a
+    public `post_load()` (reset applied-cache) honored by a registry
+    `has_post_load` concept.
+  - Singletons (non-aggregates, field lists): `rendering_manager` (~23
+    fields incl. `viewports`), `physics_manager` (5 fields +
+    `sanitize_settings()` pre-save), `ui_manager` (1 field),
+    `skybox_instance_3d` (cubemap id as raw value + `normalize_resource_id`
+    on load). `prefab_instance`/skybox/rendering keep raw id *values* (ids
+    are deterministic path hashes), unlike audio/model which use paths.
+- ⬜ **Registry rework** (`reg/component_registry.*`, `reg/singleton_registry.*`):
+  descriptor function-pointer signatures switch from cereal archives to
+  opaque `wsl::serialize::json_writer/reader/binary_writer/binary_reader`
+  (fwd-declared in headers). The `register_*_component<T>` template bodies
+  move from headers into the `.cpp`s with **explicit instantiation over the
+  closed component set** (`comp/components.hpp`) so rfl never instantiates in
+  a header. New scene JSON shape (free, no back-compat):
+  `{ "header": <rfl>, "entities": {alive_count, free_list_count, ids[]},
+  "components": { "<type>": {count, entries[{entity,tombstone,data}]} },
+  "singletons": { "<name>": <rfl> } }`; binary = POD envelope + msgpack
+  component/singletons blobs — **both paths share one entry/loop shape**
+  (no entt-snapshot-from-archive needed; `entt/entity/snapshot.hpp` include
+  can go away).
+- ⬜ Migrate `rsc/scene_snapshot_serializer.*` to concrete json/binary
+  functions on the new API; migrate `rsc/project_loader.cpp`,
+  `rsc/resource_manager.cpp`, `rsc/data_types_serialization.hpp`.
+- ⬜ Delete the 17 component `serialize()` methods + all cereal includes +
+  `serialize_field_if_diff` + `rsc/cereal_glm.hpp`; then remove cereal from
+  CPM/link.
 - **Gate**: round-trip test per component + scene save/load + project load.
 
 ### Phase 2 — Break the serialization edges ⬜ (3–5 days)
