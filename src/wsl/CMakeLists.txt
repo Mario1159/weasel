@@ -62,6 +62,7 @@ target_link_libraries(wsl PUBLIC
     spdlog
     cereal
     reflectcpp
+    msgpack-c
     imguizmo
     imguitextselect
     imsearch

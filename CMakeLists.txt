@@ -259,6 +259,7 @@ CPMAddPackage(
     NAME reflectcpp
     GITHUB_REPOSITORY getml/reflect-cpp
     GIT_TAG v0.25.0
+    OPTIONS "REFLECTCPP_MSGPACK ON"
     SYSTEM ON
 )
 
