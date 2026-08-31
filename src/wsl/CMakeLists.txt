@@ -172,36 +172,38 @@ endif()
 
 # --- C++20 modules (opt-in, see WEASEL_ENABLE_MODULES in root CMakeLists) ---
 # Real named modules, promoted per namespace as the include graph is
-# untangled (see CXX_MODULES_PLAN_V2.md). `wsl.math` is the first: it is
-# compiled by a custom command (no -fmodule-mapper, so GCC resolves the CMI
-# from gcm.cache) and the resulting object is linked into consumers that
-# `import wsl.math;`.
-if(WEASEL_ENABLE_MODULES)
-  # Response file carrying the wsl target's include directories. GCC splits
-  # the response file on whitespace; empty entries must be filtered (an empty
-  # -I adds CWD to the search path and breaks CMI key matching).
-  set(_math_rsp "${CMAKE_BINARY_DIR}/gcm.cache/math_incs.rsp")
-  file(GENERATE OUTPUT "${_math_rsp}"
-       CONTENT "$<JOIN:$<LIST:TRANSFORM,$<LIST:FILTER,$<TARGET_PROPERTY:wsl,INCLUDE_DIRECTORIES>,EXCLUDE,^$>,PREPEND,-I>,
+# untangled (see CXX_MODULES_PLAN_V2.md). Each module is compiled by a
+# custom command (no -fmodule-mapper, so GCC resolves the CMI from
+# gcm.cache) and the resulting object is linked into consumers that
+# `import` it (GCC emits the module initializer into the object).
+function (weasel_add_module qualified_name dir_name)
+  string (REPLACE "." "_" obj_tag "${qualified_name}")
+  set (_rsp "${CMAKE_BINARY_DIR}/gcm.cache/${obj_tag}_incs.rsp")
+  file (GENERATE OUTPUT "${_rsp}"
+        CONTENT "$<JOIN:$<LIST:TRANSFORM,$<LIST:FILTER,$<TARGET_PROPERTY:wsl,INCLUDE_DIRECTORIES>,EXCLUDE,^$>,PREPEND,-I>,
 >")
-
-  add_custom_command(
-    OUTPUT "${CMAKE_BINARY_DIR}/gcm.cache/wsl_math.stamp"
-           "${CMAKE_BINARY_DIR}/wsl_math.o"
+  add_custom_command (
+    OUTPUT "${CMAKE_BINARY_DIR}/gcm.cache/${obj_tag}.stamp"
+           "${CMAKE_BINARY_DIR}/${obj_tag}.o"
     COMMAND ${CMAKE_COMMAND} -E make_directory
             "${CMAKE_BINARY_DIR}/gcm.cache"
     COMMAND ${CMAKE_CXX_COMPILER} -std=c++20 -fmodules-ts
-            @${_math_rsp}
-            -c "${CMAKE_CURRENT_SOURCE_DIR}/math/math.cppm"
-            -o "${CMAKE_BINARY_DIR}/wsl_math.o"
+            @${_rsp}
+            -c "${CMAKE_CURRENT_SOURCE_DIR}/${dir_name}/${dir_name}.cppm"
+            -o "${CMAKE_BINARY_DIR}/${obj_tag}.o"
     COMMAND ${CMAKE_COMMAND} -E touch
-            "${CMAKE_BINARY_DIR}/gcm.cache/wsl_math.stamp"
+            "${CMAKE_BINARY_DIR}/gcm.cache/${obj_tag}.stamp"
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-    COMMENT "Building wsl.math module interface"
+    COMMENT "Building ${qualified_name} module interface"
     VERBATIM
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/math/math.cppm"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${dir_name}/${dir_name}.cppm"
   )
-  add_custom_target(wsl_math_module
-      DEPENDS "${CMAKE_BINARY_DIR}/gcm.cache/wsl_math.stamp")
+  add_custom_target (${obj_tag}_module
+      DEPENDS "${CMAKE_BINARY_DIR}/gcm.cache/${obj_tag}.stamp")
+endfunction ()
+
+if(WEASEL_ENABLE_MODULES)
+  weasel_add_module (wsl.math math)
+  weasel_add_module (wsl.event event)
 endif()
 

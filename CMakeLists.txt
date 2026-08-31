@@ -774,15 +774,17 @@ doctest_discover_tests(weasel_cli_tests)
   target_link_libraries(weasel_core_tests PRIVATE wsl doctest)
   doctest_discover_tests(weasel_core_tests)
 
-  # wsl.math module consumer (Phase 2 of CXX_MODULES_PLAN_V2.md). The TU
-  # `import wsl.math;` when modules are enabled (compiled without CMake's
-  # module scanning; the CMI resolves from gcm.cache) and falls back to the
-  # legacy header include otherwise. The module object must be linked because
-  # GCC emits the module initializer into it.
+  # wsl.math / wsl.event module consumers (Phases 2-3 of
+  # CXX_MODULES_PLAN_V2.md). The TU `import`s the promoted modules when
+  # modules are enabled (compiled without CMake's module scanning; the CMI
+  # resolves from gcm.cache) and falls back to the legacy header includes
+  # otherwise. The module objects must be linked because GCC emits the
+  # module initializers into them.
   if(WEASEL_ENABLE_MODULES)
     target_sources(weasel_core_tests PRIVATE
         "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_math_module.cpp"
         "${CMAKE_BINARY_DIR}/wsl_math.o"
+        "${CMAKE_BINARY_DIR}/wsl_event.o"
     )
     set_source_files_properties(
         "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_math_module.cpp"
@@ -791,7 +793,7 @@ doctest_discover_tests(weasel_cli_tests)
     target_compile_definitions(weasel_core_tests PRIVATE
         WEASEL_MATH_MODULE_CONSUMER
     )
-    add_dependencies(weasel_core_tests wsl_math_module)
+    add_dependencies(weasel_core_tests wsl_math_module wsl_event_module)
   else()
     target_sources(weasel_core_tests PRIVATE
         "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_math_module.cpp"

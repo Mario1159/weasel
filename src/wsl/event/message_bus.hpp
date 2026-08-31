@@ -3,7 +3,9 @@
 #if !defined(WSL_MODULE_BUILD)
 #include "message_event.hpp"
 #endif
+#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
+#endif
 
 #if !defined(WSL_MODULE_BUILD)
 #include <cstddef>

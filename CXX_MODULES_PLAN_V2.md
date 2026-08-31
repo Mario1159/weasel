@@ -155,7 +155,10 @@ untangling proceeds outward.
   types is actually promoted (the GMF then provides the definitions), and
   doing it per-promotion keeps the legacy build verifiable at each step.
 
-### Phase 3 — Untangle the hub ⬜ (1–2 weeks, incremental)
+### Phase 3 — Untangle the hub 🔶 (in progress, 2026-08-30)
+Progress: `math ✅` (Phase 2), **`event ✅`** (2026-08-30). Remaining:
+`phys → net → debug → log → rsc → gfx → sys → reg → das → comp`.
+
 Per namespace, repeating one pattern (order: `math → event → phys → net →
 debug → log → rsc → gfx → sys → reg → das → comp`):
 1. Move `runtime_context`'s transitive includes into `runtime_context.cpp`
@@ -164,6 +167,21 @@ debug → log → rsc → gfx → sys → reg → das → comp`):
    fwd-declare.
 3. Promote `export module wsl.<ns>;` when its cycles are gone.
 - After each promotion: full legacy build + module build green.
+
+**`wsl.event` — PROMOTED (2026-08-30):**
+- `event/event.cppm`: GMF = entt + `comp/component_meta.hpp` + STL
+  textually; purview = event_hub_fwd/event_hub/message_event/message_bus.
+  The comp include is a **GMF material** decision: `component_meta.hpp`
+  (post-cereal: entt + STL only) stays attached to the *global module* in
+  every module that needs it, avoiding the duplicate-entity problem for the
+  future `wsl.comp` promotion. `message_bus.hpp`'s comp include was the one
+  unguarded site — now guarded.
+- CMake: the module build is generalized into `weasel_add_module(<name>
+  <dir>)`; both module objects are linked into the consumer test.
+- Consumer test now imports **both** modules in one TU and instantiates the
+  hub's template API (`note_listener`/`note_emit` → `comp::stable_type_id`
+  from the global module) alongside wsl.math — validated in module AND
+  legacy modes. All 4 suites green in legacy mode.
 
 ### Phase 4 — Consumers switch to `import wsl.<ns>;` ⬜ (3–5 days)
 - `editor`, `cli`, `mcp-server`, tests switch per-target (a TU must not mix

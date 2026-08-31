@@ -1,7 +1,7 @@
-// Consumer validation for the wsl.math named module (Phase 2 of
-// CXX_MODULES_PLAN_V2.md). Compiled with module flags by CMake when
-// WEASEL_ENABLE_MODULES is ON; otherwise it falls back to the legacy
-// header include so the file stays in the suite either way.
+// Consumer validation for the promoted named modules — `wsl.math` and
+// `wsl.event` (Phases 2-3 of CXX_MODULES_PLAN_V2.md). Compiled with module
+// flags by CMake when WEASEL_ENABLE_MODULES is ON; otherwise it falls back
+// to the legacy header includes so the file stays in the suite either way.
 
 // GCC 16's std declarations conflict with doctest's forward-declaration
 // block when real std headers are included first (via wsl.math's deps).
@@ -14,11 +14,14 @@
 #if defined(WEASEL_MATH_MODULE_CONSUMER)
 
 import wsl.math;
+import wsl.event;
 
 #else
 
 #include "wsl/math/vector.hpp"
 #include "wsl/math/matrix.hpp"
+#include "wsl/event/event_hub.hpp"
+#include "wsl/event/message_event.hpp"
 
 #endif
 
@@ -39,4 +42,19 @@ TEST_CASE ("wsl.math module consumer round-trip")
   wsl::math::mat44f m;
   m.data ()[0] = 2.0F;
   CHECK (m.data ()[0] == 2.0F);
+}
+
+TEST_CASE ("wsl.event module consumer")
+{
+  // The message_event concept is std-only: usable without any third-party
+  // include on the consumer side.
+  static_assert (wsl::event::message_event<float>);
+
+  // The hub's template API instantiates comp::stable_type_id at the call
+  // site — this exercises the shared (global-module) component_meta
+  // declarations from inside a module consumer, alongside wsl.math.
+  wsl::event::event_hub hub;
+  hub.note_listener<struct p2_test_signal> ();
+  hub.note_emit<struct p2_test_signal> ();
+  CHECK (true);
 }
