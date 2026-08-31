@@ -60,7 +60,6 @@ target_link_libraries(wsl PUBLIC
     meshoptimizer
     EnTT::EnTT
     spdlog
-    cereal
     reflectcpp
     msgpack-c
     imguizmo

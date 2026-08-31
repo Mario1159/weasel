@@ -12,9 +12,6 @@
 #include <glm/ext/vector_float3.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 
 namespace wsl
 {
@@ -67,16 +64,6 @@ struct spot_light : world_component
             "" });
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    spot_light const def{};
-    serialize_field_if_diff (archive, "color", color, def.color);
-    serialize_field_if_diff (archive, "intensity", intensity, def.intensity);
-    serialize_field_if_diff (archive, "inner_cos", inner_cos, def.inner_cos);
-    serialize_field_if_diff (archive, "outer_cos", outer_cos, def.outer_cos);
-  }
 };
 
 } // namespace comp

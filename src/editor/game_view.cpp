@@ -4,6 +4,8 @@
 #include "gfx/mesh.hpp"
 #include "gfx/render_window.hpp"
 #include "rsc/resource_ids.hpp"
+#include "wsl/rsc/scene_manager.hpp"
+#include "wsl/reg/runtime_project_module.hpp"
 #include "wsl/comp/hierarchy.hpp"
 #include "wsl/comp/model_instance_3d.hpp"
 #include "wsl/comp/subviewport.hpp"

@@ -3,6 +3,9 @@
 #include "../sys/core_systems.hpp"
 #include "../reg/runtime_project_module.hpp"
 
+#include "../serialize/component_adapters.hpp"
+#include "../serialize/serialize.hpp"
+
 #include "../comp/component_meta.hpp"
 #include "../comp/hierarchy.hpp"
 #include "../comp/singl/editor_context.hpp"
@@ -2456,24 +2459,26 @@ rsc::resource_manager::load (material_id id)
     return nullptr;
   }
 
-  try {
-    cereal::JSONInputArchive archive (file);
-    auto asset = std::make_shared<gfx::material_asset> ();
-    archive (cereal::make_nvp ("material", *asset));
-    asset->id = id;
-    asset->path = rec->path;
-    if (asset->name.empty ()) {
-      asset->name = rec->name;
-    }
-    rec->shader_program_id = asset->shader_program.value;
-    m_materials[id.value] = asset;
-    rec->state = material_state::loaded;
-    return asset;
-  } catch (const std::exception &e) {
+  std::stringstream mss;
+  mss << file.rdbuf ();
+  auto parsed = rfl::json::read<gfx::material_asset> (mss.str ());
+  if (!parsed) {
     wsl::log::rsc ()->error ("Failed to parse material '{}': {}", resolved,
-                             e.what ());
+                             parsed.error ().what ());
     return nullptr;
   }
+
+  auto asset
+      = std::make_shared<gfx::material_asset> (std::move (parsed).value ());
+  asset->id = id;
+  asset->path = rec->path;
+  if (asset->name.empty ()) {
+    asset->name = rec->name;
+  }
+  rec->shader_program_id = asset->shader_program.value;
+  m_materials[id.value] = asset;
+  rec->state = material_state::loaded;
+  return asset;
 }
 
 void

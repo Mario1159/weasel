@@ -22,9 +22,6 @@
 #include <glm/mat4x4.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 
 namespace wsl
 {
@@ -109,15 +106,6 @@ struct transform : world_component
             "Scale", "Local non-uniform scale applied after rotation", "" });
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    transform def{};
-    serialize_field_if_diff (archive, "position", position, def.position);
-    serialize_field_if_diff (archive, "rotation", rotation, def.rotation);
-    serialize_field_if_diff (archive, "scale", scale, def.scale);
-  }
 };
 
 } // namespace comp

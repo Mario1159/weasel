@@ -12,7 +12,6 @@
 // header units (imported by the module), so they are skipped here. See
 // vector.hpp.
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
 
 // See wsl/math/vector.hpp for why EnTT is skipped inside a module build.
 #if !defined(WSL_MODULE_BUILD)
@@ -138,30 +137,6 @@ public:
     (factory.func<&mat33f::custom_inspect>)("custom_inspect"_hs);
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    mat33f def{};
-    wsl::comp::serialize_field_if_diff (archive, "m00", m_data[0],
-                                        def.m_data[0]);
-    wsl::comp::serialize_field_if_diff (archive, "m01", m_data[1],
-                                        def.m_data[1]);
-    wsl::comp::serialize_field_if_diff (archive, "m02", m_data[2],
-                                        def.m_data[2]);
-    wsl::comp::serialize_field_if_diff (archive, "m10", m_data[3],
-                                        def.m_data[3]);
-    wsl::comp::serialize_field_if_diff (archive, "m11", m_data[4],
-                                        def.m_data[4]);
-    wsl::comp::serialize_field_if_diff (archive, "m12", m_data[5],
-                                        def.m_data[5]);
-    wsl::comp::serialize_field_if_diff (archive, "m20", m_data[6],
-                                        def.m_data[6]);
-    wsl::comp::serialize_field_if_diff (archive, "m21", m_data[7],
-                                        def.m_data[7]);
-    wsl::comp::serialize_field_if_diff (archive, "m22", m_data[8],
-                                        def.m_data[8]);
-  }
 };
 
 struct mat44f
@@ -286,44 +261,6 @@ public:
     (factory.func<&mat44f::custom_inspect>)("custom_inspect"_hs);
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    mat44f def{};
-    wsl::comp::serialize_field_if_diff (archive, "m00", m_data[0],
-                                        def.m_data[0]);
-    wsl::comp::serialize_field_if_diff (archive, "m01", m_data[1],
-                                        def.m_data[1]);
-    wsl::comp::serialize_field_if_diff (archive, "m02", m_data[2],
-                                        def.m_data[2]);
-    wsl::comp::serialize_field_if_diff (archive, "m03", m_data[3],
-                                        def.m_data[3]);
-    wsl::comp::serialize_field_if_diff (archive, "m10", m_data[4],
-                                        def.m_data[4]);
-    wsl::comp::serialize_field_if_diff (archive, "m11", m_data[5],
-                                        def.m_data[5]);
-    wsl::comp::serialize_field_if_diff (archive, "m12", m_data[6],
-                                        def.m_data[6]);
-    wsl::comp::serialize_field_if_diff (archive, "m13", m_data[7],
-                                        def.m_data[7]);
-    wsl::comp::serialize_field_if_diff (archive, "m20", m_data[8],
-                                        def.m_data[8]);
-    wsl::comp::serialize_field_if_diff (archive, "m21", m_data[9],
-                                        def.m_data[9]);
-    wsl::comp::serialize_field_if_diff (archive, "m22", m_data[10],
-                                        def.m_data[10]);
-    wsl::comp::serialize_field_if_diff (archive, "m23", m_data[11],
-                                        def.m_data[11]);
-    wsl::comp::serialize_field_if_diff (archive, "m30", m_data[12],
-                                        def.m_data[12]);
-    wsl::comp::serialize_field_if_diff (archive, "m31", m_data[13],
-                                        def.m_data[13]);
-    wsl::comp::serialize_field_if_diff (archive, "m32", m_data[14],
-                                        def.m_data[14]);
-    wsl::comp::serialize_field_if_diff (archive, "m33", m_data[15],
-                                        def.m_data[15]);
-  }
 };
 
 } // namespace math

@@ -1,18 +1,6 @@
 #pragma once
 
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/string.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/vector.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/unordered_map.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
 #endif
 #if !defined(WSL_MODULE_BUILD)
@@ -54,14 +42,6 @@ struct graph_pin
   graph_pin_type type = graph_pin_type::none;
   bool is_input = true;
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("id", id), cereal::make_nvp ("name", name),
-        cereal::make_nvp ("type", type),
-        cereal::make_nvp ("is_input", is_input));
-  }
 };
 
 /** A connection between two pins. */
@@ -72,15 +52,6 @@ struct graph_link
   uint64_t to_node = 0;
   uint64_t to_pin = 0;
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("from_node", from_node),
-        cereal::make_nvp ("from_pin", from_pin),
-        cereal::make_nvp ("to_node", to_node),
-        cereal::make_nvp ("to_pin", to_pin));
-  }
 };
 
 /** Kinds of built-in shader graph nodes. */
@@ -145,16 +116,6 @@ struct graph_node
   /** Pins exposed by this node. */
   std::vector<graph_pin> pins;
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("id", id), cereal::make_nvp ("name", name),
-        cereal::make_nvp ("kind", kind), cereal::make_nvp ("pos_x", pos_x),
-        cereal::make_nvp ("pos_y", pos_y),
-        cereal::make_nvp ("properties", properties),
-        cereal::make_nvp ("pins", pins));
-  }
 };
 
 /**
@@ -166,14 +127,6 @@ struct shader_graph
   std::string name;
   std::vector<graph_node> nodes;
   std::vector<graph_link> links;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("nodes", nodes),
-        cereal::make_nvp ("links", links));
-  }
 
   /** Find a node by id, or nullptr. */
   const graph_node *find_node (uint64_t id) const;

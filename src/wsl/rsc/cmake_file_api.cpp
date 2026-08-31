@@ -3,7 +3,8 @@
 #include "resource_manager.hpp"
 
 #include "wsl/log/log.hpp"
-#include <cereal/external/rapidjson/document.h>
+#include <yyjson.h>
+#include <memory>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
@@ -100,6 +101,34 @@ cmake_file_api::write_query (const fs::path &build_dir)
   return true;
 }
 
+namespace
+{
+
+// Minimal yyjson navigation helpers (replacement for cereal's rapidjson).
+yyjson_val *
+jget (yyjson_val *obj, const char *key)
+{
+  if (obj == nullptr || !yyjson_is_obj (obj)) {
+    return nullptr;
+  }
+  return yyjson_obj_get (obj, key);
+}
+
+std::unique_ptr<yyjson_doc, void (*) (yyjson_doc *)>
+jparse (const std::string &content)
+{
+  yyjson_doc *doc = yyjson_read (content.data (), content.size (), 0);
+  return { doc, &yyjson_doc_free };
+}
+
+std::string
+jstr (yyjson_val *val)
+{
+  return (val != nullptr && yyjson_is_str (val)) ? yyjson_get_str (val) : "";
+}
+
+} // namespace
+
 std::optional<cmake_file_api::project_info>
 cmake_file_api::parse_replies (const fs::path &build_dir)
 {
@@ -120,27 +149,24 @@ cmake_file_api::parse_replies (const fs::path &build_dir)
       (std::istreambuf_iterator<char> (index_file)),
       std::istreambuf_iterator<char> ());
 
-  rapidjson::Document index_doc;
-  if (index_doc.Parse (index_content.c_str ()).HasParseError ()) {
+  auto index_doc = jparse (index_content);
+  if (index_doc == nullptr) {
     wsl::log::cmake ()->error ("cmake_file_api: failed to parse index file");
     return std::nullopt;
   }
+  yyjson_val *index_root = yyjson_doc_get_root (index_doc.get ());
 
   // Find the codemodel-v2 reply in the index.
-  if (!index_doc.HasMember ("reply") || !index_doc["reply"].IsObject ()) {
-    return std::nullopt;
-  }
-
-  const auto &reply = index_doc["reply"];
-  if (!reply.HasMember ("codemodel-v2") || !reply["codemodel-v2"].IsObject ()
-      || !reply["codemodel-v2"].HasMember ("jsonFile")) {
+  yyjson_val *reply = jget (index_root, "reply");
+  yyjson_val *codemodel = jget (reply, "codemodel-v2");
+  yyjson_val *codemodel_file_val = jget (codemodel, "jsonFile");
+  if (codemodel_file_val == nullptr) {
     wsl::log::cmake ()->error (
         "cmake_file_api: index does not contain codemodel-v2 reply");
     return std::nullopt;
   }
 
-  std::string const codemodel_file
-      = reply["codemodel-v2"]["jsonFile"].GetString ();
+  std::string const codemodel_file = yyjson_get_str (codemodel_file_val);
   fs::path const codemodel_path = reply_dir / codemodel_file;
 
   std::ifstream cm_file (codemodel_path);
@@ -153,37 +179,39 @@ cmake_file_api::parse_replies (const fs::path &build_dir)
   std::string const cm_content ((std::istreambuf_iterator<char> (cm_file)),
                                 std::istreambuf_iterator<char> ());
 
-  rapidjson::Document cm_doc;
-  if (cm_doc.Parse (cm_content.c_str ()).HasParseError ()) {
+  auto cm_doc = jparse (cm_content);
+  if (cm_doc == nullptr) {
     wsl::log::cmake ()->error (
         "cmake_file_api: failed to parse codemodel file");
     return std::nullopt;
   }
+  yyjson_val *cm_root = yyjson_doc_get_root (cm_doc.get ());
 
   project_info info;
-  if (cm_doc.HasMember ("project") && cm_doc["project"].IsObject ()) {
-    info.name = cm_doc["project"]["name"].GetString ();
-  }
+  info.name = jstr (jget (jget (cm_root, "project"), "name"));
 
-  if (!cm_doc.HasMember ("configurations")
-      || !cm_doc["configurations"].IsArray ()
-      || cm_doc["configurations"].Empty ()) {
+  yyjson_val *configurations = jget (cm_root, "configurations");
+  if (configurations == nullptr || !yyjson_is_arr (configurations)
+      || yyjson_arr_size (configurations) == 0) {
     return std::nullopt;
   }
 
   // We parse the first configuration (usually Debug or Release).
-  const auto &config = cm_doc["configurations"][0];
-  if (!config.HasMember ("targets") || !config["targets"].IsArray ()) {
+  yyjson_val *config = yyjson_arr_get (configurations, 0);
+  yyjson_val *targets = jget (config, "targets");
+  if (targets == nullptr || !yyjson_is_arr (targets)) {
     return std::nullopt;
   }
 
-  for (const auto &target_ref : config["targets"].GetArray ()) {
-    if (!target_ref.IsObject () || !target_ref.HasMember ("jsonFile")) {
+  yyjson_val *target_ref = nullptr;
+  yyjson_arr_iter target_iter = yyjson_arr_iter_with (targets);
+  while ((target_ref = yyjson_arr_iter_next (&target_iter)) != nullptr) {
+    yyjson_val *target_file_val = jget (target_ref, "jsonFile");
+    if (target_file_val == nullptr) {
       continue;
     }
 
-    fs::path const target_path
-        = reply_dir / target_ref["jsonFile"].GetString ();
+    fs::path const target_path = reply_dir / yyjson_get_str (target_file_val);
     auto target_info = parse_target_file (target_path);
     if (target_info) {
       info.targets.push_back (std::move (*target_info));
@@ -191,9 +219,10 @@ cmake_file_api::parse_replies (const fs::path &build_dir)
   }
 
   // Find the ctest-v1 reply in the index.
-  if (reply.HasMember ("ctest-v1") && reply["ctest-v1"].IsObject ()
-      && reply["ctest-v1"].HasMember ("jsonFile")) {
-    std::string const test_file = reply["ctest-v1"]["jsonFile"].GetString ();
+  yyjson_val *ctest = jget (reply, "ctest-v1");
+  yyjson_val *test_file_val = jget (ctest, "jsonFile");
+  if (test_file_val != nullptr) {
+    std::string const test_file = yyjson_get_str (test_file_val);
     fs::path const test_path = reply_dir / test_file;
 
     std::ifstream t_file (test_path);
@@ -201,18 +230,22 @@ cmake_file_api::parse_replies (const fs::path &build_dir)
       std::string const t_content ((std::istreambuf_iterator<char> (t_file)),
                                    std::istreambuf_iterator<char> ());
 
-      rapidjson::Document t_doc;
-      if (!t_doc.Parse (t_content.c_str ()).HasParseError ()) {
-        if (t_doc.HasMember ("tests") && t_doc["tests"].IsArray ()) {
-          for (const auto &test_node : t_doc["tests"].GetArray ()) {
+      auto t_doc = jparse (t_content);
+      if (t_doc != nullptr) {
+        yyjson_val *tests = jget (yyjson_doc_get_root (t_doc.get ()), "tests");
+        if (tests != nullptr && yyjson_is_arr (tests)) {
+          yyjson_val *test_node = nullptr;
+          yyjson_arr_iter test_iter = yyjson_arr_iter_with (tests);
+          while ((test_node = yyjson_arr_iter_next (&test_iter)) != nullptr) {
             cmake_test_info test;
-            test.name = test_node["name"].GetString ();
-            if (test_node.HasMember ("command")
-                && test_node["command"].IsArray ()
-                && !test_node["command"].Empty ()) {
-              test.command = test_node["command"][0].GetString ();
-              for (size_t i = 1; i < test_node["command"].Size (); ++i) {
-                test.arguments.push_back (test_node["command"][i].GetString ());
+            test.name = jstr (jget (test_node, "name"));
+            yyjson_val *command = jget (test_node, "command");
+            if (command != nullptr && yyjson_is_arr (command)
+                && yyjson_arr_size (command) > 0) {
+              test.command = jstr (yyjson_arr_get (command, 0));
+              for (size_t i = 1; i < yyjson_arr_size (command); ++i) {
+                test.arguments.push_back (
+                    jstr (yyjson_arr_get (command, i)));
               }
             }
             info.tests.push_back (std::move (test));
@@ -250,27 +283,36 @@ cmake_file_api::parse_target_file (const fs::path &target_json_path)
   std::string const content ((std::istreambuf_iterator<char> (file)),
                              std::istreambuf_iterator<char> ());
 
-  rapidjson::Document doc;
-  if (doc.Parse (content.c_str ()).HasParseError ()) {
+  auto doc = jparse (content);
+  if (doc == nullptr) {
     return std::nullopt;
   }
+  yyjson_val *root = yyjson_doc_get_root (doc.get ());
 
   cmake_target_info target;
-  target.name = doc["name"].GetString ();
-  target.type = doc["type"].GetString ();
+  target.name = jstr (jget (root, "name"));
+  target.type = jstr (jget (root, "type"));
 
   // Extract include directories and defines from compileGroups.
-  if (doc.HasMember ("compileGroups") && doc["compileGroups"].IsArray ()) {
-    for (const auto &group : doc["compileGroups"].GetArray ()) {
-      if (group.HasMember ("includes") && group["includes"].IsArray ()) {
-        for (const auto &inc : group["includes"].GetArray ()) {
-          target.include_directories.push_back (inc["path"].GetString ());
+  yyjson_val *compile_groups = jget (root, "compileGroups");
+  if (compile_groups != nullptr && yyjson_is_arr (compile_groups)) {
+    yyjson_val *group = nullptr;
+    yyjson_arr_iter group_iter = yyjson_arr_iter_with (compile_groups);
+    while ((group = yyjson_arr_iter_next (&group_iter)) != nullptr) {
+      yyjson_val *includes = jget (group, "includes");
+      if (includes != nullptr && yyjson_is_arr (includes)) {
+        yyjson_val *inc = nullptr;
+        yyjson_arr_iter inc_iter = yyjson_arr_iter_with (includes);
+        while ((inc = yyjson_arr_iter_next (&inc_iter)) != nullptr) {
+          target.include_directories.push_back (jstr (jget (inc, "path")));
         }
       }
-      if (group.HasMember ("compileCommandFragments")
-          && group["compileCommandFragments"].IsArray ()) {
-        for (const auto &frag : group["compileCommandFragments"].GetArray ()) {
-          std::string const fragment = frag["fragment"].GetString ();
+      yyjson_val *fragments = jget (group, "compileCommandFragments");
+      if (fragments != nullptr && yyjson_is_arr (fragments)) {
+        yyjson_val *frag = nullptr;
+        yyjson_arr_iter frag_iter = yyjson_arr_iter_with (fragments);
+        while ((frag = yyjson_arr_iter_next (&frag_iter)) != nullptr) {
+          std::string const fragment = jstr (jget (frag, "fragment"));
           // Simple extraction of -D flags.
           if (fragment.starts_with ("-D")) {
             target.compile_definitions.push_back (fragment.substr (2));
@@ -281,17 +323,17 @@ cmake_file_api::parse_target_file (const fs::path &target_json_path)
   }
 
   // Extract link libraries.
-  if (doc.HasMember ("link") && doc["link"].IsObject ()) {
-    const auto &link = doc["link"];
-    if (link.HasMember ("commandFragments")
-        && link["commandFragments"].IsArray ()) {
-      for (const auto &frag : link["commandFragments"].GetArray ()) {
-        std::string const fragment = frag["fragment"].GetString ();
-        // We only care about actual library paths/names, skipping flags for
-        // now.
-        if (!fragment.starts_with ("-")) {
-          target.link_libraries.push_back (fragment);
-        }
+  yyjson_val *link = jget (root, "link");
+  yyjson_val *link_fragments = jget (link, "commandFragments");
+  if (link_fragments != nullptr && yyjson_is_arr (link_fragments)) {
+    yyjson_val *frag = nullptr;
+    yyjson_arr_iter frag_iter = yyjson_arr_iter_with (link_fragments);
+    while ((frag = yyjson_arr_iter_next (&frag_iter)) != nullptr) {
+      std::string const fragment = jstr (jget (frag, "fragment"));
+      // We only care about actual library paths/names, skipping flags for
+      // now.
+      if (!fragment.starts_with ("-")) {
+        target.link_libraries.push_back (fragment);
       }
     }
   }

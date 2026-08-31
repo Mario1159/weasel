@@ -7,9 +7,6 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 
 namespace wsl
 {
@@ -62,15 +59,6 @@ struct hierarchy : world_component
         .custom<comp::meta_info> (meta_info{ "String", "A String", "" });
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    hierarchy def{};
-    serialize_field_if_diff (archive, "parent", parent, def.parent);
-    serialize_field_if_diff (archive, "first", first, def.first);
-    serialize_field_if_diff (archive, "next", next, def.next);
-  }
 };
 
 } // namespace comp

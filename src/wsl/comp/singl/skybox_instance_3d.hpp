@@ -7,9 +7,6 @@
 #include <entt/entt.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 
 namespace wsl
 {
@@ -45,18 +42,6 @@ public:
         entt::type_hash<rsc::cubemap_id>::value ());
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    skybox_instance_3d def{};
-    serialize_field_if_diff (archive, "cubemap_id", id.value, def.id.value);
-    if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
-                                    Archive>) {
-      // Older scenes stored ``0`` for "no cubemap".
-      rsc::normalize_resource_id (id.value);
-    }
-  }
 };
 
 } // namespace singl

@@ -4,6 +4,8 @@
 #include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/rsc/resource_manager.hpp"
+#include "wsl/gfx/image.hpp"
+#include "wsl/reg/runtime_project_module.hpp"
 
 #include <algorithm>
 #include <cctype>

@@ -8,9 +8,6 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 
 namespace wsl
 {
@@ -46,16 +43,6 @@ struct prefab_instance : world_component
     (factory.data<&comp::prefab_instance::prefab_entity>)("prefab_entity"_hs);
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    prefab_instance def{};
-    serialize_field_if_diff (archive, "prefab_id", prefab_id.value,
-                             def.prefab_id.value);
-    serialize_field_if_diff (archive, "prefab_entity", prefab_entity,
-                             def.prefab_entity);
-  }
 };
 
 } // namespace comp

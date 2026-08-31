@@ -4,16 +4,6 @@
 #include "../../comp/component_meta.hpp"
 
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/archives/binary.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/archives/json.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
 #if !defined(WSL_MODULE_BUILD)
@@ -148,56 +138,5 @@ struct is_in_place_storage<
 
 template <typename T>
 inline constexpr bool is_in_place_storage_v = is_in_place_storage<T>::value;
-
-/**
- * Single save entry: writes an entity id and its component data,
- *         or a tombstone marker for in-place deleted slots.
- */
-template <typename T> struct component_save_entry
-{
-  entt::entity entity_id{};
-  const T *data = nullptr;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar) const
-  {
-    if (data == nullptr) {
-      ar (cereal::make_nvp ("tombstone", true));
-    } else {
-      ar (cereal::make_nvp ("entity", entity_id),
-          cereal::make_nvp ("data", *data));
-    }
-  }
-};
-
-/**
- * Single load entry: reads an entity id and its component data,
- *         or detects a tombstone marker.
- */
-template <typename T> struct component_load_entry
-{
-  entt::entity entity_id{};
-  T data{};
-  bool is_tombstone = false;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    try {
-      bool tombstone = false;
-      ar (cereal::make_nvp ("tombstone", tombstone));
-      if (tombstone) {
-        is_tombstone = true;
-        return;
-      }
-    } catch (const cereal::Exception &) {
-      /* not a tombstone entry */
-    }
-    ar (cereal::make_nvp ("entity", entity_id),
-        cereal::make_nvp ("data", data));
-  }
-};
 
 } // namespace wsl::reg::detail

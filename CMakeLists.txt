@@ -245,16 +245,8 @@ if(NOT TARGET slang::slang)
     endif()
 endif()
 
-CPMAddPackage(
-    NAME cereal
-    GITHUB_REPOSITORY USCiLab/cereal
-    GIT_TAG v1.3.2
-    OPTIONS "BUILD_SANDBOX OFF" "BUILD_TESTS OFF"
-    SYSTEM ON
-)
-
-# C++20-native serialization (replaces cereal incrementally; see
-# CXX_MODULES_PLAN_V2.md Phase 1). cereal remains until the swap completes.
+# C++20-native serialization (reflect-cpp; replaced cereal in Phase 1 of
+# CXX_MODULES_PLAN_V2.md).
 CPMAddPackage(
     NAME reflectcpp
     GITHUB_REPOSITORY getml/reflect-cpp
@@ -262,6 +254,11 @@ CPMAddPackage(
     OPTIONS "REFLECTCPP_MSGPACK ON"
     SYSTEM ON
 )
+
+# Opt-in: rfl support for aggregates that inherit from a base (all engine
+# components derive from comp::world_component / singleton_component tags).
+# PUBLIC so the flag is consistent across the library and every consumer TU.
+target_compile_definitions (reflectcpp PUBLIC REFLECT_CPP_C_ARRAYS_OR_INHERITANCE)
 
 CPMAddPackage(
     NAME ImGuizmo
@@ -984,14 +981,6 @@ install(DIRECTORY src/
 # Install dependency headers needed by wsl public API
 if(DEFINED EnTT_SOURCE_DIR)
     install(DIRECTORY ${EnTT_SOURCE_DIR}/src/
-        DESTINATION include
-        COMPONENT Engine
-        FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}
-    )
-endif()
-
-if(DEFINED cereal_SOURCE_DIR)
-    install(DIRECTORY ${cereal_SOURCE_DIR}/include/
         DESTINATION include
         COMPONENT Engine
         FILES_MATCHING ${_WEASEL_HEADER_PATTERNS}

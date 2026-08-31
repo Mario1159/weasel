@@ -8,7 +8,9 @@
 #include "wsl/log/log.hpp"
 
 #include <ImNodeFlow.h>
-#include <cereal/archives/json.hpp>
+#include <rfl/json.hpp>
+#include "wsl/serialize/component_adapters.hpp"
+#include <sstream>
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
@@ -627,9 +629,15 @@ shader_graph_editor::load_graph (const std::string &path)
     return false;
   }
 
-  try {
-    cereal::JSONInputArchive ar (file);
-    ar (cereal::make_nvp ("graph", m_graph));
+  std::stringstream ss;
+  ss << file.rdbuf ();
+  auto parsed = rfl::json::read<wsl::gfx::shader_graph> (ss.str ());
+  if (!parsed) {
+    m_compile_log = std::string ("Load error: ") + parsed.error ().what ();
+    return false;
+  }
+  {
+    m_graph = std::move (parsed).value ();
     m_current_path = path;
     m_compile_log = "Loaded " + path;
     try {
@@ -642,9 +650,6 @@ shader_graph_editor::load_graph (const std::string &path)
         m_next_node_id = n.id + 1;
     sync_graph_to_nodeflow ();
     return true;
-  } catch (const std::exception &e) {
-    m_compile_log = std::string ("Load error: ") + e.what ();
-    return false;
   }
 }
 
@@ -661,9 +666,8 @@ shader_graph_editor::save_graph (const std::string &path)
   // serializing so the on-disk file round-trips correctly.
   sync_nodeflow_to_graph ();
 
-  try {
-    cereal::JSONOutputArchive ar (file);
-    ar (cereal::make_nvp ("graph", m_graph));
+  {
+    file << rfl::json::write (m_graph);
     m_current_path = path;
     m_compile_log = "Saved " + path;
     // Refresh the hot-reload timestamp so the next frame's check does not
@@ -673,9 +677,6 @@ shader_graph_editor::save_graph (const std::string &path)
     } catch (const std::exception &) {
     }
     return true;
-  } catch (const std::exception &e) {
-    m_compile_log = std::string ("Save error: ") + e.what ();
-    return false;
   }
 }
 
@@ -865,8 +866,7 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
     if (!ofs) {
       return;
     }
-    cereal::JSONOutputArchive ar (ofs);
-    ar (cereal::make_nvp ("material", *mat));
+    ofs << rfl::json::write (*mat);
     // `ofs` is flushed and closed when it goes out of scope, so the file is
     // fully written before we register/load it below.
   }
@@ -965,8 +965,7 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
   }
 
   try {
-    cereal::JSONOutputArchive ar (ofs);
-    ar (cereal::make_nvp ("material", *mat));
+    ofs << rfl::json::write (*mat);
     // Flush and close before registering/loading so the on-disk file is
     // complete when the resource manager reads it back.
   } catch (const std::exception &e) {

@@ -6,22 +6,7 @@
 #if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_ids.hpp"
 #endif
-#if !defined(WSL_MODULE_BUILD)
-#include "wsl/rsc/cereal_glm.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/string.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/unordered_map.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/variant.hpp>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
 #endif
@@ -66,12 +51,6 @@ struct material_parameter
   {
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("value", value));
-  }
 };
 
 /**
@@ -105,17 +84,6 @@ struct material_asset
   /** Metadata: does this material use alpha test / opacity mask? */
   bool alpha_test = false;
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("path", path),
-        cereal::make_nvp ("shader_program", shader_program.value),
-        cereal::make_nvp ("vertex_shader_path", vertex_shader_path),
-        cereal::make_nvp ("double_sided", double_sided),
-        cereal::make_nvp ("alpha_test", alpha_test),
-        cereal::make_nvp ("default_parameters", default_parameters));
-  }
 };
 
 /**

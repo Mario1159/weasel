@@ -3,6 +3,7 @@
 #include "comp/world_transform.hpp"
 #include "editor/ecs_inspector_utils.hpp"
 #include "wsl/rsc/project.hpp"
+#include "wsl/rsc/scene_manager.hpp"
 #include "wsl/rsc/resource_ids.hpp"
 #include "wsl/reg/singleton_registry.hpp"
 #include "wsl/comp/hierarchy.hpp"

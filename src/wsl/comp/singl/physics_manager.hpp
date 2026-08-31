@@ -7,9 +7,6 @@
 #include <algorithm>
 #endif
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
 #if !defined(WSL_MODULE_BUILD)
@@ -40,6 +37,13 @@ struct physics_manager : singleton_component
     fixed_timestep = std::max (fixed_timestep, 1.0e-4F);
     max_frame_time = std::max (max_frame_time, fixed_timestep);
     max_substeps = std::max (max_substeps, 1);
+  }
+
+  /** Re-clamps settings after deserialization (see registry load). */
+  void
+  post_load ()
+  {
+    sanitize_settings ();
   }
 
   void
@@ -130,22 +134,6 @@ struct physics_manager : singleton_component
         .data<&comp::singl::physics_manager::show_debug> ("show_debug"_hs)
         .custom<comp::meta_info> (comp::meta_info{
             "Show Debug", "Show physics debug renderer.", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    sanitize_settings ();
-    physics_manager def{};
-    serialize_field_if_diff (archive, "gravity", gravity, def.gravity);
-    serialize_field_if_diff (archive, "fixed_timestep", fixed_timestep,
-                             def.fixed_timestep);
-    serialize_field_if_diff (archive, "max_frame_time", max_frame_time,
-                             def.max_frame_time);
-    serialize_field_if_diff (archive, "max_substeps", max_substeps,
-                             def.max_substeps);
-    serialize_field_if_diff (archive, "show_debug", show_debug, def.show_debug);
   }
 };
 

@@ -100,7 +100,7 @@ target_link_libraries(weasel PRIVATE
     TracyClient
     imguizmo
     spdlog
-    cereal
+
     LibArchive::LibArchive
     imguitextselect
     imsearch

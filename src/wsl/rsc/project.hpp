@@ -6,12 +6,6 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
 #endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/string.hpp>
-#endif
 
 namespace wsl
 {
@@ -72,32 +66,6 @@ struct project
  * :param Archive: The archive type.
  * :param ar: The archive to use for serialization.
  */
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("author", author),
-        cereal::make_nvp ("root_path", root_path),
-        cereal::make_nvp ("systems_path", systems_path),
-        cereal::make_nvp ("components_path", components_path),
-        cereal::make_nvp ("singletons_path", singletons_path),
-        cereal::make_nvp ("scenes_path", scenes_path),
-        cereal::make_nvp ("models_path", models_path),
-        cereal::make_nvp ("images_path", images_path),
-        cereal::make_nvp ("cubemaps_path", cubemaps_path),
-        cereal::make_nvp ("audio_path", audio_path),
-        cereal::make_nvp ("ui_layouts_path", ui_layouts_path),
-        cereal::make_nvp ("fonts_path", fonts_path),
-        cereal::make_nvp ("shaders_path", shaders_path));
-
-    try {
-      ar (cereal::make_nvp ("materials_path", materials_path));
-    } catch (const cereal::Exception &) {
-      // If the field is missing (e.g. old project), keep the default.
-    }
-
-    ar (cereal::make_nvp ("default_scene_path", default_scene_path));
-  }
 };
 
 } // namespace rsc

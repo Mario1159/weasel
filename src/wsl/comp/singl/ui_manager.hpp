@@ -1,5 +1,11 @@
 #pragma once
 
+namespace wsl::serialize
+{
+class json_writer;
+class json_reader;
+}
+
 #include "editor/ui_system_interface.hpp"
 #if !defined(WSL_MODULE_BUILD)
 #include <RmlUi/Core.h>
@@ -14,9 +20,6 @@
 #include <RmlUi_Renderer_SDL_GPU.h>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
@@ -79,15 +82,6 @@ public:
     return m_prepared_registry;
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    rsc::ui_layout_id def_id{};
-    serialize_field_if_diff (archive, "active_document_id",
-                             m_active_document_id.value, def_id.value);
-  }
-
   // -- getters / setters
   // -------------------------------------------------------
 
@@ -145,6 +139,13 @@ public:
   {
     return m_active_document_id;
   }
+
+  /** Serializes editable state (out-of-line; implementation-only API). */
+  void write_state (wsl::serialize::json_writer &writer) const;
+
+  /** Restores editable state in place (out-of-line; implementation-only API).
+   */
+  void read_state (wsl::serialize::json_reader &reader);
 
   const rsc::ui_layout_id &
   loaded_document_id () const

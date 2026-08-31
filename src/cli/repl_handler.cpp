@@ -2,6 +2,11 @@
 #include "repl_handler.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/das/das_engine.hpp"
+#include "reg/component_registry.hpp"
+#include "reg/singleton_registry.hpp"
+#include "reg/system_factory_registry.hpp"
+#include "reg/runtime_project_module.hpp"
+#include "sys/core_systems.hpp"
 #include <cstdint>
 
 #include "comp/area3d.hpp"
@@ -32,7 +37,7 @@
 #include "wsl/comp/components.hpp"
 #include "wsl/das/das_api_catalog.gen.hpp"
 
-#include <cereal/archives/json.hpp>
+#include <rfl/json.hpp>
 #include <entt/entt.hpp>
 #include <nlohmann/json.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -918,8 +923,7 @@ command_executor::auto_save_project ()
     m_output << "Auto-save failed for project.\n";
     return;
   }
-  cereal::JSONOutputArchive archive (file);
-  archive (cereal::make_nvp ("project", *m_current_project));
+  file << rfl::json::write (*m_current_project);
 }
 
 std::string

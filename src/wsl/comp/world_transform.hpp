@@ -9,9 +9,6 @@
 #include "component_meta.hpp"
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 
 namespace wsl::comp::singl
 {
@@ -46,13 +43,6 @@ public:
 
   static void register_meta ();
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    world_transform def{};
-    serialize_field_if_diff (archive, "matrix", m_value, def.m_value);
-  }
 };
 
 } // namespace comp

@@ -3,6 +3,11 @@
 
 #include <SDL3/SDL_filesystem.h>
 
+#include "reg/component_registry.hpp"
+#include "reg/singleton_registry.hpp"
+#include "reg/system_factory_registry.hpp"
+#include "reg/runtime_project_module.hpp"
+#include "reg/singleton_registry.hpp"
 #include "comp/area3d.hpp"
 #include "comp/camera.hpp"
 #include "comp/character_body.hpp"

@@ -16,7 +16,6 @@
 // declared both textually (global fragment) and as a module, which is illegal.
 // In the legacy header build they are included normally.
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
 
 // entt/entt.hpp has no include guard, so it is guarded separately below for the
 // same reason it is skipped in the module build.
@@ -127,15 +126,6 @@ struct vec2f
 
     ImGui::PopID ();
     return changed;
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    vec2f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
   }
 
   static void
@@ -306,16 +296,6 @@ struct vec3f
         .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" });
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    vec3f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
-    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
-  }
-
 private:
   float m_x{ 0 }, m_y{ 0 }, m_z{ 0 };
 };
@@ -425,17 +405,6 @@ struct vec4f
 
     ImGui::PopID ();
     return changed;
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    vec4f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
-    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
-    wsl::comp::serialize_field_if_diff (archive, "w", m_w, def.m_w);
   }
 
   static void
@@ -591,17 +560,6 @@ struct quatf
         .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" })
         .data<&quatf::m_w> ("w"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "w", "W Coordinate", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    quatf def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
-    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
-    wsl::comp::serialize_field_if_diff (archive, "w", m_w, def.m_w);
   }
 
 private:

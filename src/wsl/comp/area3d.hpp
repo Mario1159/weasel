@@ -3,9 +3,6 @@
 #include "../math/vector.hpp"         // math::vec3f, math::quatf
 #include "../phys/physics_engine.hpp" // phys::engine
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
 #endif
 
@@ -150,69 +147,6 @@ struct area : world_component
             "" });
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    area const def{};
-    int shape_i = (int)shape;
-    int const def_shape_i = (int)def.shape;
-
-    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      if (shape_i != def_shape_i) {
-        ar (cereal::make_nvp ("shape", shape_i));
-      }
-      serialize_field_if_diff (ar, "position", position, def.position);
-      serialize_field_if_diff (ar, "rotation", rotation, def.rotation);
-      serialize_field_if_diff (ar, "half_extents", half_extents,
-                               def.half_extents);
-      serialize_field_if_diff (ar, "radius", radius, def.radius);
-    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-      shape_i = def_shape_i;
-      position = def.position;
-      rotation = def.rotation;
-      half_extents = def.half_extents;
-      radius = def.radius;
-      try {
-        ar (cereal::make_nvp ("shape", shape_i));
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "position", position, def.position);
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "rotation", rotation, def.rotation);
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "half_extents", half_extents,
-                                 def.half_extents);
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "radius", radius, def.radius);
-      } catch (...) {
-      }
-      shape = (shape_type)shape_i;
-      sanitize_dimensions ();
-      body_id = phys::body_id{};
-      sync_applied_cache ();
-    } else {
-      ar (cereal::make_nvp ("shape", shape_i),
-          cereal::make_nvp ("position", position),
-          cereal::make_nvp ("rotation", rotation),
-          cereal::make_nvp ("half_extents", half_extents),
-          cereal::make_nvp ("radius", radius));
-      if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
-                                      Archive>) {
-        shape = (shape_type)shape_i;
-        sanitize_dimensions ();
-        body_id = phys::body_id{};
-        sync_applied_cache ();
-      }
-    }
-  }
 };
 
 } // namespace comp

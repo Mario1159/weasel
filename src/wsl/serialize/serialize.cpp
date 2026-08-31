@@ -96,6 +96,12 @@ json_writer::write_string (std::string_view key, std::string_view value)
   yyjson_mut_obj_put (current (), make_key (key), str);
 }
 
+void
+json_writer::append_u64 (std::uint64_t value)
+{
+  yyjson_mut_arr_append (current (), yyjson_mut_uint (m_doc, value));
+}
+
 yyjson_mut_val *
 json_writer::graft_string (const std::string &json)
 {
@@ -220,6 +226,20 @@ json_reader::array_size (std::string_view key) const
     return 0;
   }
   return yyjson_arr_size (val);
+}
+
+bool
+json_reader::element_u64 (std::size_t index, std::uint64_t &out) const
+{
+  if (m_stack.empty () || !yyjson_is_arr (current ())) {
+    return false;
+  }
+  yyjson_val *val = yyjson_arr_get (current (), index);
+  if (val == nullptr || (!yyjson_is_uint (val) && !yyjson_is_int (val))) {
+    return false;
+  }
+  out = yyjson_get_uint (val);
+  return true;
 }
 
 void

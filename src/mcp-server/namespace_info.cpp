@@ -585,8 +585,8 @@ Designed for seamless interop between GLM, Jolt Physics, and ImGui.
     // Editor: ImGui drag-float with colored stripes (X=red, Y=green, Z=blue)
     v.custom_inspect("label");
 
-    // Serialization (Cereal)
-    ar(cereal::make_nvp("position", v));
+    // Serialization (reflect-cpp)
+    std::string json = rfl::json::write(v);
 
     // EnTT meta reflection
     v.register_meta();
@@ -601,8 +601,8 @@ Designed for seamless interop between GLM, Jolt Physics, and ImGui.
     glm::quat gq = q;            // implicit
     math::quatf q2 = glm::quat{};
 
-    // Serialization
-    ar(cereal::make_nvp("rotation", q));
+    // Serialization (reflect-cpp)
+    std::string json = rfl::json::write(q);
 
 ── MikkTSpace (mikktspace*.hpp) ──
 

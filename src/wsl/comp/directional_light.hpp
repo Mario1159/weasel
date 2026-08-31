@@ -12,9 +12,6 @@
 #include <glm/ext/vector_float3.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 
 namespace wsl
 {
@@ -49,14 +46,6 @@ struct directional_light : world_component
             "Intensity", "Brightness multiplier of the light.", "" });
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    directional_light const def{};
-    serialize_field_if_diff (archive, "color", color, def.color);
-    serialize_field_if_diff (archive, "intensity", intensity, def.intensity);
-  }
 };
 
 } // namespace comp

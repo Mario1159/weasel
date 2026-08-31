@@ -11,7 +11,6 @@ module;
 // entt/cereal are pulled by comp/component_meta.hpp, which now guards them
 // behind WSL_MODULE_BUILD, so provide them explicitly here.
 #include <entt/entt.hpp>
-#include <cereal/cereal.hpp>
 #include "thirdparty/thirdparty_all.hpp"
 #include "phys/jolt_all.hpp"
 #include "das/daScript_all.hpp"
@@ -58,7 +57,6 @@ export {
 #include "log/tracy_sink.hpp"
 #include "rsc/scene_loader.hpp"
 #include "rsc/resource_ids.hpp"
-#include "rsc/cereal_glm.hpp"
 #include "rsc/resource_manager.hpp"
 #include "rsc/cubemap_loader.hpp"
 #include "rsc/model_loader.hpp"
@@ -74,7 +72,6 @@ export {
 #include "rsc/project.hpp"
 #include "rsc/shader_loader.hpp"
 #include "rsc/cpu_model.hpp"
-#include "rsc/data_types_serialization.hpp"
 #include "comp/prefab_instance.hpp"
 #include "comp/singl/editor_context.hpp"
 #include "comp/singl/skybox_instance_3d.hpp"

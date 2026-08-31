@@ -1,4 +1,6 @@
 #include "root.hpp"
+#include "wsl/rsc/scene_manager.hpp"
+#include <rfl/json.hpp>
 #include "editor/ecs_inspector_utils.hpp"
 #include "rsc/project.hpp"
 #include "rsc/resource_manager.hpp"
@@ -931,8 +933,7 @@ editor::root::draw_project_settings_popup ()
             / wsl::rsc::project_loader::manifest_file;
       std::ofstream file (manifest);
       if (file) {
-        cereal::JSONOutputArchive archive (file);
-        archive (cereal::make_nvp ("project", *proj));
+        file << rfl::json::write (*proj);
         wsl::log::editor ()->info ("Saved project settings to {}",
                                    manifest.string ());
       } else {

@@ -2,6 +2,7 @@
 
 #include "wsl/log/log.hpp"
 #include "wsl/event/event_hub.hpp"
+#include "wsl/event.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "renderer_imgui.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"

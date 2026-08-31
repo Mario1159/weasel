@@ -195,9 +195,11 @@ public:
 
   /** Writes a boolean scalar into the current object. */
   void write_bool (std::string_view key, bool value);
-
   /** Writes a string scalar into the current object. */
   void write_string (std::string_view key, std::string_view value);
+
+  /** Appends a u64 element to the current array. */
+  void append_u64 (std::uint64_t value);
 
   /**
    * Parses a JSON string and grafts it into the current object under key.
@@ -251,9 +253,11 @@ public:
 
   /** Enters element index of the current array. */
   bool enter_element (std::size_t index);
-
   /** Returns the number of elements of the array under key (0 if absent). */
   std::size_t array_size (std::string_view key) const;
+
+  /** Reads the u64 element at index of the current array. */
+  bool element_u64 (std::size_t index, std::uint64_t &out) const;
 
   /** Leaves the current node. */
   void leave ();

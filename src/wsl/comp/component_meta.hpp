@@ -7,16 +7,6 @@
 // build they are included normally.
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/archives/binary.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/archives/json.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
 #endif
 
 #if !defined(WSL_MODULE_BUILD)
@@ -309,41 +299,6 @@ meta_icon_path (const entt::meta_type &meta)
   }
 
   return "";
-}
-
-/**
- * Serializes a field only if it differs from its default value.
- *
- * For JSON output archives, the field is skipped when it matches the default.
- * For JSON input archives, missing fields are ignored (the current value is
- * retained, which should be the default if the object was default-constructed).
- * Binary archives always serialize the field unconditionally.
- *
- * :param Archive: Cereal archive type.
- * :param T: Field type.
- * :param ar: The archive to serialize into/from.
- * :param name: The name of the field.
- * :param field: The field value to serialize.
- * :param default_value: The default value to compare against.
- */
-template <class Archive, typename T>
-inline void
-serialize_field_if_diff (Archive &archive, const char *name, T &field,
-                         const T &default_value)
-{
-  if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-    if (field != default_value) {
-      archive (cereal::make_nvp (name, field));
-    }
-  } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-    try {
-      archive (cereal::make_nvp (name, field));
-    } catch (const std::exception &) {
-      /* keep current value (default) */
-    }
-  } else {
-    archive (cereal::make_nvp (name, field));
-  }
 }
 
 } // namespace comp

@@ -12,9 +12,6 @@
 #endif
 
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
 
@@ -79,6 +76,18 @@ public:
   float radius = 0.4F;
   math::vec3f desired_velocity = math::vec3f{ 0.0F, 0.0F, 0.0F };
 
+  /** Restores runtime caches after deserialization (see registry load). */
+  void
+  post_load ()
+  {
+    // runtime-only
+    m_body = nullptr;
+
+    // reset cache so next inspector edit applies cleanly
+    m_applied_height = height;
+    m_applied_radius = radius;
+  }
+
   static void
   register_meta ()
   {
@@ -104,27 +113,6 @@ public:
         .data<&comp::character_body::desired_velocity> ("desired_velocity"_hs)
         .custom<comp::meta_info> (
             meta_info{ "Desired Velocity", "Target movement velocity", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    character_body def{};
-    serialize_field_if_diff (archive, "height", height, def.height);
-    serialize_field_if_diff (archive, "radius", radius, def.radius);
-    serialize_field_if_diff (archive, "desired_vel", desired_velocity,
-                             def.desired_velocity);
-
-    if constexpr (std::is_same_v<Archive, cereal::BinaryInputArchive>
-                  || std::is_same_v<Archive, cereal::JSONInputArchive>) {
-      // runtime-only
-      m_body = nullptr;
-
-      // reset cache so next inspector edit applies cleanly
-      m_applied_height = height;
-      m_applied_radius = radius;
-    }
   }
 
 private:

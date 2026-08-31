@@ -1,9 +1,9 @@
 #include "project_loader.hpp"
 
 #include <algorithm>
-#include <cereal/archives/binary.hpp>
-#include <cereal/archives/json.hpp>
-#include <cereal/cereal.hpp>
+#include <rfl.hpp>
+#include <rfl/json.hpp>
+#include <rfl/msgpack.hpp>
 #include <filesystem>
 #include <fstream>
 #include <ios>
@@ -124,8 +124,7 @@ rsc::project_loader::create (const project &proj) const
   }
   project project_copy = proj;
   project_copy.default_scene_path = default_scene_rel;
-  cereal::JSONOutputArchive archive (file);
-  archive (cereal::make_nvp ("project", project_copy));
+  file << rfl::json::write (project_copy);
 
   // Generate src/main.cpp
   const fs::path main_file = fs::path (proj.root_path) / "src/main.cpp";
@@ -275,24 +274,26 @@ rsc::project_loader::load (const std::string &path)
     return {};
   }
 
+  std::stringstream ss;
+  ss << file.rdbuf ();
+  const std::string contents = ss.str ();
+
   if (path.ends_with (".json")) {
-    try {
-      cereal::JSONInputArchive archive (file);
-      archive (cereal::make_nvp ("project", *proj));
-    } catch (const std::exception &e) {
+    auto parsed = rfl::json::read<project> (contents);
+    if (!parsed) {
       wsl::log::rsc ()->error ("Failed to parse project file '{}': {}", path,
-                               e.what ());
+                               parsed.error ().what ());
       return {};
     }
+    *proj = std::move (parsed).value ();
   } else {
-    try {
-      cereal::BinaryInputArchive archive (file);
-      archive (cereal::make_nvp ("project", *proj));
-    } catch (const std::exception &e) {
+    auto parsed = rfl::msgpack::read<project> (contents);
+    if (!parsed) {
       wsl::log::rsc ()->error ("Failed to parse project file '{}': {}", path,
-                               e.what ());
+                               parsed.error ().what ());
       return {};
     }
+    *proj = std::move (parsed).value ();
   }
 
   // Ensure root_path is absolute and points to the manifest's directory

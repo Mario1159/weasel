@@ -8,39 +8,20 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/registry.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
-#include <entt/entity/snapshot.hpp>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/archives/binary.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/archives/json.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/utility.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/string.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <cereal/types/vector.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <type_traits>
-#endif
+// Serialization backends are implementation details (see wsl/serialize).
+namespace wsl::serialize
+{
+class json_writer;
+class json_reader;
+class binary_writer;
+class binary_reader;
+}
 
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/core/hashed_string.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include "../comp/component_meta.hpp"
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include "scene.hpp"
 #endif
@@ -61,13 +42,6 @@ struct resource_ref_serialized
   resource_type type;
   /** The path to the resource, relative to the project or engine root. */
   std::string path;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("type", type), cereal::make_nvp ("path", path));
-  }
 };
 
 /** Contains metadata and structural information for a scene file. */
@@ -87,70 +61,14 @@ struct scene_header
   std::vector<resource_ref_serialized> autoload;
   /** The active camera entity in this scene. */
   uint32_t camera = entt::null;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("scene_name", scene_name),
-        cereal::make_nvp ("is_prefab", is_prefab),
-        cereal::make_nvp ("systems", systems),
-        cereal::make_nvp ("entity_names", entity_names),
-        cereal::make_nvp ("connections", connections),
-        cereal::make_nvp ("autoload", autoload));
-    uint32_t const camera_default = entt::null;
-    wsl::comp::serialize_field_if_diff (ar, "camera", camera, camera_default);
-  }
-};
-
-/**
- * Wrapper that adapts entt::snapshot for entt::entity into Cereal
- *        archives with human-readable field names.
- *
- * The default EnTT snapshot writes the entity storage as a flat sequence of
- * unnamed values, which Cereal's JSON output renders as auto-incremented
- * "value0", "value1", ... names. This wrapper re-implements the snapshot
- * protocol for JSON archives so the produced JSON is:
- *
- * .. code-block:: json
- *
- *    {
- *      "alive_count": "<number>",
- *      "free_list_count": "<number>",
- *      "entities": [ "<id>", "<id>", "..." ]
- *    }
- *
- * Binary archives continue to use EnTT's snapshot directly.
- */
-struct entity_snapshot_wrapper
-{
-  entt::registry &registry;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      save_json (ar);
-    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-      load_json (ar);
-    } else {
-      entt::snapshot const snapshot{ registry };
-      snapshot.get<entt::entity> (ar);
-    }
-  }
-
-private:
-  void save_json (cereal::JSONOutputArchive &ar) const;
-  void load_json (cereal::JSONInputArchive &ar);
 };
 
 /**
  * Handles serialization and deserialization of scene snapshots.
  *
- * This class uses EnTT snapshots and Cereal archives to save and load
- * the complete state of a scene, including entities, components, and
- * singletons.
+ * This class saves and loads the complete state of a scene, including
+ * entities, components, and singletons. The JSON format is human readable;
+ * the binary format mirrors the same structure with msgpack payloads.
  */
 class scene_snapshot_serializer
 {
@@ -185,11 +103,24 @@ public:
   /** Whether the scene is being serialized as a prefab. */
   bool is_prefab = false;
 
-  /** Internal implementation for saving the scene to an archive. */
-  template <typename Archive> void save_scene (Archive &archive) const;
+private:
+  /** Serializes the scene into a JSON document. */
+  void save_json_doc (serialize::json_writer &writer) const;
 
-  /** Internal implementation for loading the scene from an archive. */
-  template <typename Archive> void load_scene (Archive &archive);
+  /** Restores the scene from a JSON document. */
+  void load_json_doc (serialize::json_reader &reader);
+
+  /** Serializes the scene into a binary stream. */
+  void save_binary_stream (serialize::binary_writer &writer) const;
+
+  /** Restores the scene from a binary stream. */
+  void load_binary_stream (serialize::binary_reader &reader);
+
+  /** Builds the scene header from the current scene state. */
+  scene_header build_header () const;
+
+  /** Shared post-load finalization (names, connections, physics, ...). */
+  void post_load_finalize (const scene_header &header);
 };
 
 } // namespace io

@@ -27,16 +27,6 @@ struct transform_2d : world_component
 
   static void register_meta ();
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    transform_2d def{};
-    serialize_field_if_diff (archive, "position", position, def.position);
-    serialize_field_if_diff (archive, "rotation", rotation, def.rotation);
-    serialize_field_if_diff (archive, "scale", scale, def.scale);
-    serialize_field_if_diff (archive, "pivot", pivot, def.pivot);
-  }
 };
 
 } // namespace wsl::comp

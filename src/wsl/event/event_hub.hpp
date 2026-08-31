@@ -3,7 +3,6 @@
 #if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
 #if !defined(WSL_MODULE_BUILD)
-#include <cereal/cereal.hpp>
 #endif
 #endif
 #if !defined(WSL_MODULE_BUILD)
@@ -158,13 +157,6 @@ struct event_connection_data
   entt::id_type event_type_id{};
   entt::id_type system_type_id{};
   std::string handler_name;
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    archive (event_type_id, system_type_id, handler_name);
-  }
 };
 
 /** Editor/debug database that mirrors declared signals and connections. */

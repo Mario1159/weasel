@@ -68,7 +68,7 @@ untangling proceeds outward.
   `-fmodules-ts` mode; the module TU is a custom command and needs no scanning.
 - ✅ Wrote this plan; demoted `CXX_MODULES_PLAN.md` to experimental record.
 
-### Phase 1 — Serialization swap: cereal → reflect-cpp 🔶 (in progress, 2026-08-30)
+### Phase 1 — Serialization swap: cereal → reflect-cpp ✅ (2026-08-30)
 - ✅ **Feasibility spike PASSED** (hard gate): rfl JSON round-trip of aggregate
   components with glm members + erased-dispatch function pointers + entt
   coexistence, all inside a GCC-16 module TU (`/tmp/opencode/spike`).
@@ -107,7 +107,7 @@ untangling proceeds outward.
     `skybox_instance_3d` (cubemap id as raw value + `normalize_resource_id`
     on load). `prefab_instance`/skybox/rendering keep raw id *values* (ids
     are deterministic path hashes), unlike audio/model which use paths.
-- ⬜ **Registry rework** (`reg/component_registry.*`, `reg/singleton_registry.*`):
+- ✅ **Registry rework** (`reg/component_registry.*`, `reg/singleton_registry.*`):
   descriptor function-pointer signatures switch from cereal archives to
   opaque `wsl::serialize::json_writer/reader/binary_writer/binary_reader`
   (fwd-declared in headers). The `register_*_component<T>` template bodies
@@ -120,13 +120,16 @@ untangling proceeds outward.
   component/singletons blobs — **both paths share one entry/loop shape**
   (no entt-snapshot-from-archive needed; `entt/entity/snapshot.hpp` include
   can go away).
-- ⬜ Migrate `rsc/scene_snapshot_serializer.*` to concrete json/binary
+- ✅ Migrated `rsc/scene_snapshot_serializer.*` to concrete json/binary
   functions on the new API; migrate `rsc/project_loader.cpp`,
   `rsc/resource_manager.cpp`, `rsc/data_types_serialization.hpp`.
-- ⬜ Delete the 17 component `serialize()` methods + all cereal includes +
+- ✅ Deleted the 17 component `serialize()` methods + all cereal includes +
   `serialize_field_if_diff` + `rsc/cereal_glm.hpp`; then remove cereal from
   CPM/link.
-- **Gate**: round-trip test per component + scene save/load + project load.
+- **Gate PASSED**: all 4 test suites green (149 test cases, 0 failures),
+  including the das binary + JSON scene snapshot round-trips. cereal removed
+  from CPM and all targets; `weasel_core_tests`, `weasel_cli_tests`,
+  `weasel_das_tests`, `weasel_mcp_server_tests` all SUCCESS.
 
 ### Phase 2 — Break the serialization edges ⬜ (3–5 days)
 - Remove `#include "../comp/component_meta.hpp"` from `math/vector.hpp`,
@@ -166,6 +169,23 @@ debug → log → rsc → gfx → sys → reg → das → comp`):
 | Interim single-module = full module rebuild per header change | Passing through, not settling; Phases 2–3 shrink the rebuild surface steadily |
 | GCC module compiler bugs | Clang 22 fallback validated (cereal gone = the GCC-only wall is gone) |
 | Ninja 1.13.2 dyndep crash (upstream #2592, open) | Irrelevant while using the custom-command path (no dyndep); revisit only for FILE_SET module sources |
+
+### Phase 1 implementation notes (hard-won details)
+- `wsl/serialize/component_adapters.hpp` — `rfl::Reflector` for the 5
+  non-aggregate components + audio/model path mapping + singletons
+  (rendering_manager, physics_manager, skybox, ui_manager via out-of-line
+  `write_state`/`read_state` — the `has_state_io` registry concept) +
+  `JPH::BodyID` and `SDL_FColor`.
+- rfl needs `-D REFLECT_CPP_C_ARRAYS_OR_INHERITANCE` (PUBLIC compile
+  definition on the reflectcpp target) because every component derives from
+  the `world_component`/`singleton_component` tag bases.
+- Registry save/load: both formats share one entry shape — count + entries
+  (tombstone flag, entity u32, payload); JSON payloads are grafted rfl JSON
+  subtrees, binary payloads are msgpack blobs. `post_load()` concept restores
+  runtime caches (character_body, physics_manager sanitize).
+- gotcha fixed twice: `array_size(key)` must be read BEFORE
+  `enter_array(key)` (the key lookup only works on object nodes), and
+  yyjson tags small integers as UINT — accept both in element reads.
 
 ## Phase 0 state of the tree
 
