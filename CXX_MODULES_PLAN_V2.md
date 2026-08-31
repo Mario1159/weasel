@@ -131,13 +131,29 @@ untangling proceeds outward.
   from CPM and all targets; `weasel_core_tests`, `weasel_cli_tests`,
   `weasel_das_tests`, `weasel_mcp_server_tests` all SUCCESS.
 
-### Phase 2 — Break the serialization edges ⬜ (3–5 days)
-- Remove `#include "../comp/component_meta.hpp"` from `math/vector.hpp`,
-  `math/matrix.hpp`, and the `rsc`/`sys`/`reg`/`event` headers — serialization
-  lives in `wsl/serialize.hpp`, included only by TUs that serialize.
-- Result: `math` is a leaf; `comp→math` is one-directional and legal.
-- Promote `export module wsl.math;` as the first real named module.
-- Guard/remove the third-party fwd-decls (~18 sites).
+### Phase 2 — Break the serialization edges ✅ (2026-08-30)
+- ✅ `math` headers no longer include `comp/component_meta.hpp` (nor entt or
+  imgui): `register_meta()`/`custom_inspect()` bodies moved out-of-line into
+  `math/math_meta.cpp`; the headers depend only on glm, Jolt and the STL.
+  Result: **`math` is a leaf**; `comp→math` is one-directional and legal.
+- ✅ **`wsl.math` promoted — the first real named module**:
+  - `math/math.cppm`: GMF = glm + Jolt + STL textually;
+    `WSL_MODULE_BUILD` defined; purview exports `vector.hpp` + `matrix.hpp`.
+  - Built by the `wsl_math_module` custom target (no `-fmodule-mapper`; CMI
+    resolves from `gcm.cache`; object `wsl_math.o` carries the module
+    initializer and is linked into consumers).
+  - Consumer validation: `tests/weasel-core/test_math_module.cpp` does
+    `import wsl.math;` (module mode) or the legacy header include (fallback),
+    and passes in BOTH modes — 6 assertions incl. glm interop across the
+    module boundary. Note: in module mode every include must precede the
+    import, and doctest needs `DOCTEST_CONFIG_USE_STD_HEADERS` on GCC 16.
+  - Retired the single-module scaffolding: `wsl.cppm`, the 10 stale
+    namespace `.cppm` stubs and the `thirdparty/*_all.hpp` umbrellas
+    (`jolt_all.hpp`/`daScript_all.hpp` kept for the phys/das promotions).
+- 🔁 Resequenced: the third-party fwd-decl guarding (~18 sites) moves to
+  Phase 3 — it only matters when a namespace that fwd-declares daScript
+  types is actually promoted (the GMF then provides the definitions), and
+  doing it per-promotion keeps the legacy build verifiable at each step.
 
 ### Phase 3 — Untangle the hub ⬜ (1–2 weeks, incremental)
 Per namespace, repeating one pattern (order: `math → event → phys → net →

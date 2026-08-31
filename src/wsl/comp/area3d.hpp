@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../math/vector.hpp"         // math::vec3f, math::quatf
+#include "component_meta.hpp"
 #include "../phys/physics_engine.hpp" // phys::engine
 #if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>

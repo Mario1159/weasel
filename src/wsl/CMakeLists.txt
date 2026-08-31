@@ -171,31 +171,37 @@ else()
 endif()
 
 # --- C++20 modules (opt-in, see WEASEL_ENABLE_MODULES in root CMakeLists) ---
-# Single `wsl` module: it textually includes every engine header (no header units,
-# no per-namespace modules). One translation unit means no cross-module duplication
-# and third-party macros work normally. See CXX_MODULES_PLAN_V2.md.
+# Real named modules, promoted per namespace as the include graph is
+# untangled (see CXX_MODULES_PLAN_V2.md). `wsl.math` is the first: it is
+# compiled by a custom command (no -fmodule-mapper, so GCC resolves the CMI
+# from gcm.cache) and the resulting object is linked into consumers that
+# `import wsl.math;`.
 if(WEASEL_ENABLE_MODULES)
-  # Include paths for the module TU (mirrors the wsl target's INCLUDE_DIRECTORIES).
-  set(_hu_rsp "${CMAKE_BINARY_DIR}/gcm.cache/hu_incs.rsp")
-  file(GENERATE OUTPUT "${_hu_rsp}"
+  # Response file carrying the wsl target's include directories. GCC splits
+  # the response file on whitespace; empty entries must be filtered (an empty
+  # -I adds CWD to the search path and breaks CMI key matching).
+  set(_math_rsp "${CMAKE_BINARY_DIR}/gcm.cache/math_incs.rsp")
+  file(GENERATE OUTPUT "${_math_rsp}"
        CONTENT "$<JOIN:$<LIST:TRANSFORM,$<LIST:FILTER,$<TARGET_PROPERTY:wsl,INCLUDE_DIRECTORIES>,EXCLUDE,^$>,PREPEND,-I>,
 >")
 
   add_custom_command(
-    OUTPUT "${CMAKE_BINARY_DIR}/gcm.cache/wsl.stamp"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/gcm.cache"
+    OUTPUT "${CMAKE_BINARY_DIR}/gcm.cache/wsl_math.stamp"
+           "${CMAKE_BINARY_DIR}/wsl_math.o"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/gcm.cache"
     COMMAND ${CMAKE_CXX_COMPILER} -std=c++20 -fmodules-ts
-            @${_hu_rsp}
-            -c "${CMAKE_CURRENT_SOURCE_DIR}/wsl.cppm"
-    COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/gcm.cache/wsl.stamp"
+            @${_math_rsp}
+            -c "${CMAKE_CURRENT_SOURCE_DIR}/math/math.cppm"
+            -o "${CMAKE_BINARY_DIR}/wsl_math.o"
+    COMMAND ${CMAKE_COMMAND} -E touch
+            "${CMAKE_BINARY_DIR}/gcm.cache/wsl_math.stamp"
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-    COMMENT "Phase4: build single wsl module (all engine headers, textual)"
+    COMMENT "Building wsl.math module interface"
     VERBATIM
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/wsl.cppm"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/math/math.cppm"
   )
-  # Opt-in only: never a dependency of `wsl`, so the legacy header build can
-  # never block on the module compile while the migration is in progress.
-  # Build it explicitly: `cmake --build build --target wsl_module`
-  add_custom_target(wsl_module DEPENDS "${CMAKE_BINARY_DIR}/gcm.cache/wsl.stamp")
+  add_custom_target(wsl_math_module
+      DEPENDS "${CMAKE_BINARY_DIR}/gcm.cache/wsl_math.stamp")
 endif()
 
