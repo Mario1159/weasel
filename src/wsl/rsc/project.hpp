@@ -1,11 +1,7 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
-#endif
 
 namespace wsl
 {

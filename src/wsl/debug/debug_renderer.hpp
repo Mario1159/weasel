@@ -1,8 +1,6 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
-#endif
 
 namespace wsl {
 namespace debug {

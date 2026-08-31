@@ -1,22 +1,11 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi/Core/RenderInterface.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include "render_context.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_window.hpp"
-#endif
-
 
 namespace rsc { class resource_manager; }
 

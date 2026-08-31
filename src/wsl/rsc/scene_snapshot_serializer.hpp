@@ -1,13 +1,9 @@
 // scene_snapshot_serializer.hpp
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/registry.hpp>
-#endif
 
 // Serialization backends are implementation details (see wsl/serialize).
 namespace wsl::serialize
@@ -18,13 +14,9 @@ class binary_writer;
 class binary_reader;
 }
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/core/hashed_string.hpp>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include "scene.hpp"
-#endif
 
 namespace wsl
 {

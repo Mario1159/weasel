@@ -1,31 +1,25 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "event/event_hub.hpp"
+#endif
 
 #if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL.h>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_events.h>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_keyboard.h>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_keycode.h>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_scancode.h>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <string>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <vector>
 #endif

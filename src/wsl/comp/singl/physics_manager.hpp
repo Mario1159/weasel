@@ -1,14 +1,14 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../../phys/physics_engine.hpp"
+#endif
 #include "../component_meta.hpp"
 
 #if !defined(WSL_MODULE_BUILD)
 #include <algorithm>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <memory>
 #endif

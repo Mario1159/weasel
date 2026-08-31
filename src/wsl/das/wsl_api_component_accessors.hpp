@@ -1,53 +1,21 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/area3d.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/audio.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/camera_2d.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/character_body.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/directional_light.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/hierarchy.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/model_instance_3d.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/point_light.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/prefab_instance.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/rigid_body.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/spot_light.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/sprite_2d.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/subviewport.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/transform.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/transform_2d.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/world_transform.hpp"
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include "wsl/math/vector.hpp"
 #endif
@@ -55,9 +23,7 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <daScript/misc/vectypes.h>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <daScript/simulate/runtime_matrices.h>
-#endif
 
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
@@ -96,12 +62,14 @@ static_assert (sizeof (::wsl::math::quatf) == sizeof (::das::float4)
                    && std::is_trivially_copyable_v<::wsl::math::quatf>,
                "::wsl::math::quatf must be layout-identical to das::float4");
 
+#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 class Module;
 class ModuleLibrary;
 struct LineInfoArg;
 }
+#endif
 
 namespace wsl::das
 {

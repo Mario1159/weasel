@@ -1,18 +1,10 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <spdlog/spdlog.h>
-#endif
 
 #include "../rsc/scene.hpp"
 

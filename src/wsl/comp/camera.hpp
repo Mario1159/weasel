@@ -1,21 +1,11 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/matrix_transform.hpp>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include "component_meta.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "world_transform.hpp"
-#endif
 
 namespace wsl::comp::singl
 {

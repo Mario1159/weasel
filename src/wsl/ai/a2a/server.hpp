@@ -1,21 +1,11 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <atomic>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <thread>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/agent_card.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/transport.hpp>
-#endif
 
 namespace wsl::ai::a2a
 {

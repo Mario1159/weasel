@@ -1,14 +1,8 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <optional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
 namespace wsl::ai::a2a
 {

@@ -2,6 +2,8 @@
 
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/fwd.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif

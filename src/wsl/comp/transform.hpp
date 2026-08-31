@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../math/vector.hpp"
 #if !defined(WSL_MODULE_BUILD)
-#include "component_meta.hpp"
+#include "../math/vector.hpp"
 #endif
+#include "component_meta.hpp"
 
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
@@ -12,16 +12,11 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/matrix_transform.hpp>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/mat4x4.hpp>
-#endif
-
 
 namespace wsl
 {

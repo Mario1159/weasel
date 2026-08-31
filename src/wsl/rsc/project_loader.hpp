@@ -1,18 +1,10 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "project.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl
 {

@@ -1,20 +1,10 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <optional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "resource_manager.hpp"
-#endif
 
 namespace wsl
 {

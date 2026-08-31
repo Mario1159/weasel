@@ -1,30 +1,14 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "shader_program.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_ids.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <variant>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 
 namespace wsl
 {

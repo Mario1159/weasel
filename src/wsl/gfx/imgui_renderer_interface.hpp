@@ -1,20 +1,10 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <imgui.h>
-#endif
 
 namespace wsl::comp::singl { class runtime_context; }
 namespace wsl::rsc { class resource_manager; }

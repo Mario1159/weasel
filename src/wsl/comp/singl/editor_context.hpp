@@ -1,64 +1,26 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/component_meta.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/singl/engine_resources.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/singl/runtime_context.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/input.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/camera.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/camera_2d.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_ids.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/entity.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/fwd.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/vec2.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/vec3.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/mat4x4.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <optional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 
 #ifdef WEASEL_BUILD_EDITOR
-#if !defined(WSL_MODULE_BUILD)
 #include <imgui.h>
-#endif
 #endif
 
 namespace wsl::gfx

@@ -3,15 +3,25 @@
 // Implementation-only: reflect-cpp adapters for third-party and engine math
 // types. Never include from engine headers (module purview) — .cpp files only.
 
+#if !defined(WSL_MODULE_BUILD)
 #include <array>
+#endif
 #include <cstdint>
 
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/entity.hpp>
+#endif
 #include <glm/glm.hpp>
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include "math/matrix.hpp"
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "math/vector.hpp"
+#endif
 
 namespace rfl
 {

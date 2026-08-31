@@ -1,7 +1,11 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"         // math::vec3f, math::quatf
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include "../phys/physics_engine.hpp" // phys::engine
+#endif
 #include "singl/runtime_context.hpp"
 #if !defined(WSL_MODULE_BUILD)
 #include <exception>
@@ -13,15 +17,11 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <algorithm>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
-#endif
 
 #if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>

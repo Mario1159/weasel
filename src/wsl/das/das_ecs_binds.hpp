@@ -3,15 +3,15 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
+#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 class Module;
 class ModuleGroup;
 }
+#endif
 
 namespace wsl::das
 {

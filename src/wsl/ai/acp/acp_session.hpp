@@ -1,18 +1,10 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/acp/acp_client.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/acp/acp_types.hpp>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <functional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
 namespace wsl::ai::acp
 {

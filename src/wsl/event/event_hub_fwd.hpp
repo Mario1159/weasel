@@ -21,11 +21,6 @@
 #include <unordered_map>
 #endif
 
-namespace wsl::sys
-{
-class ecs_system;
-}
-
 namespace wsl::event
 {
 

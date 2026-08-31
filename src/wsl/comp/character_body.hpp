@@ -1,11 +1,13 @@
 // character_body.hpp
 #pragma once
 
-#include "../math/vector.hpp"
-#include "../phys/physics_engine.hpp"
 #if !defined(WSL_MODULE_BUILD)
-#include "component_meta.hpp"
+#include "../math/vector.hpp"
 #endif
+#if !defined(WSL_MODULE_BUILD)
+#include "../phys/physics_engine.hpp"
+#endif
+#include "component_meta.hpp"
 #include "singl/runtime_context.hpp"
 #if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>

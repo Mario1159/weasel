@@ -434,7 +434,7 @@ struct event_hub
   entt::dispatcher *dispatcher = nullptr;
   event_debug_db *db = nullptr;
   std::function<entt::registry *()> resolve_active_registry;
-  std::function<::wsl::sys::ecs_system *(entt::id_type)> resolve_system_by_type;
+  std::function<void *(entt::id_type)> resolve_system_by_type;
 
   event_hub () = default;
 
@@ -843,8 +843,7 @@ struct event_hub
           continue;
         }
 
-        ::wsl::sys::ecs_system *system
-            = resolve_system_by_type (connection.system_type_id);
+        void *system = resolve_system_by_type (connection.system_type_id);
         if (system == nullptr) {
           continue;
         }
@@ -892,8 +891,7 @@ struct event_hub
 
       void *owner = connection.owner_ptr;
       if (owner == nullptr) {
-        ::wsl::sys::ecs_system *system
-            = resolve_system_by_type (connection.system_type_id);
+        void *system = resolve_system_by_type (connection.system_type_id);
         if (system == nullptr) {
           continue;
         }

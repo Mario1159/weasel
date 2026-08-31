@@ -3,12 +3,11 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
-#include "../math/matrix.hpp"
-
 #if !defined(WSL_MODULE_BUILD)
-#include "component_meta.hpp"
+#include "../math/matrix.hpp"
 #endif
 
+#include "component_meta.hpp"
 
 namespace wsl::comp::singl
 {

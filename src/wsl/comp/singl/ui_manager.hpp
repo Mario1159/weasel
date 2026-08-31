@@ -7,42 +7,20 @@ class json_reader;
 }
 
 #include "editor/ui_system_interface.hpp"
-#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi/Core.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi/Core/Math.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi_Platform_SDL.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <RmlUi_Renderer_SDL_GPU.h>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/comp/component_meta.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_context.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_window.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_manager.hpp"
-#endif
 
 namespace wsl
 {
@@ -85,12 +63,12 @@ public:
   // -- getters / setters
   // -------------------------------------------------------
 
-  const editor::ui_system_interface &
+  const ::editor::ui_system_interface &
   system_interface () const
   {
     return m_system_interface;
   }
-  editor::ui_system_interface &
+  ::editor::ui_system_interface &
   system_interface ()
   {
     return m_system_interface;
@@ -170,7 +148,7 @@ public:
   }
 
 private:
-  editor::ui_system_interface m_system_interface;
+  ::editor::ui_system_interface m_system_interface;
   std::unique_ptr<RenderInterface_SDL_GPU> m_render_interface;
   Rml::Context *m_context = nullptr;
   Rml::ElementDocument *m_active_document_instance = nullptr;

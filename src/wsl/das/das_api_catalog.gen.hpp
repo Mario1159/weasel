@@ -2,12 +2,8 @@
 // Source of truth: src/wsl/das/wsl_api_module.cpp (addExtern calls).
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl::mcp_server {
 

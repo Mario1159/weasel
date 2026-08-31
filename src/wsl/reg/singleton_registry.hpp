@@ -2,9 +2,9 @@
 
 #include "detail/registry_helpers.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../rsc/world.hpp"
 
+#if !defined(WSL_MODULE_BUILD)
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
@@ -23,27 +23,19 @@ class binary_reader;
 #if !defined(WSL_MODULE_BUILD)
 #include <cassert>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <optional>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <string_view>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl
 {

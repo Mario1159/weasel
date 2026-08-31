@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../math/vector.hpp"
 #if !defined(WSL_MODULE_BUILD)
-#include "component_meta.hpp"
+#include "../math/vector.hpp"
 #endif
+#include "component_meta.hpp"
 
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>

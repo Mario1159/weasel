@@ -1,8 +1,12 @@
 #pragma once
 
+#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"         // math::vec3f, math::quatf
+#endif
 #include "component_meta.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #include "../phys/physics_engine.hpp" // phys::engine
+#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
 #endif

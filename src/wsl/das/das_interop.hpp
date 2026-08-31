@@ -1,14 +1,14 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "das_engine.hpp"
-#endif
 
+#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 class Module;
 class ModuleGroup;
 }
+#endif
 
 namespace wsl::das
 {

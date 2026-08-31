@@ -219,11 +219,50 @@ debug → log → rsc → gfx → sys → reg → das → comp`):
   `import` + `#include` of the same engine headers).
 - Measure compile-time win (BMI caching per namespace).
 
-### Phase 5 — Flip the default + install ⬜
-- `WEASEL_ENABLE_MODULES` default ON; keep headers installable for external
-  consumers (BMIs are compiler-version-locked — headers remain the
-  distribution format for a while).
-- Simplify/remove the `WSL_MODULE_BUILD` guard scaffolding where possible.
+### Phase 5 — Full cutover 🔶 (started 2026-08-30)
+**End-state architecture (all mechanics empirically validated):**
+- `wsl.math` ✅, `wsl.event` ✅ (inline, dual-mode), `wsl.phys` (interface
+  ready), and **`wsl.core`** — ONE module for the whole remaining cluster
+  (rsc/gfx/sys/reg/das/comp + top-level glue, 139 headers in a single
+  purview): its internal cycles are legal inside one module, and the
+  `rsc↔gfx↔sys↔reg↔comp` knot makes per-namespace modules impossible
+  (attachment rule, §Phase 3).
+- **`wsl_core.cppm` COMPILES GREEN** (GCC 16, attempt ~20): GMF = full
+  third-party + STL set + `comp/component_meta.hpp` (global-attached
+  utility); imports = Jolt header unit (`import "phys/jolt_all.hpp";`) +
+  wsl.math/event/phys; purview = topologically ordered headers
+  (`/tmp/opencode/order_purview.py` derives the order from the unguarded
+  internal include graph).
+- **Jolt is a header unit everywhere** (`phys/jolt_all.hpp`, built with
+  `-fmodule-header=user` + ABSOLUTE path): its TU-local vtables cannot
+  survive one module importing Jolt while another includes it textually.
+  Never mix HU + textual Jolt within one TU; across TUs both are
+  global-attached and merge.
+- **Implementation units**: `module;` + third-party/STL GMF ONLY (no engine
+  headers — the interface provides every engine decl; including your own
+  namespace's header creates a global-attached duplicate → ambiguity) +
+  `module wsl.core;` + code. Validated on `sys/task_pool.cpp`.
+- **simdjson is module-hostile on GCC 16** (TU-local exposure hard errors,
+  like cereal) → the `ai` namespace (whose a2a API names simdjson types)
+  stays a header-only island inside libwsl for now; rfl/simdjson are out of
+  the core interface GMF (the purview signatures are clean; impl units
+  include them in their own GMFs).
+- **Cross-module fwd-decls are poison**: a fwd-decl of `wsl::event::*` /
+  `wsl::phys::*` / `wsl::math::*` in a core header attaches it to the wrong
+  module → guarded behind `WSL_MODULE_BUILD` everywhere (imports provide the
+  types). `event_hub`'s typed `sys::ecs_system*` seam became `void*`
+  (callers cast).
+- **Remaining mechanical work (next session):**
+  1. Convert the other ~60 wsl `.cpp`s to `wsl.core` impl units (recipe
+     above; each: GMF = third-party/STL only, add `module wsl.core;`).
+  2. Wire libwsl: `.cpps` with `-fmodules-ts`, `wsl_core.o` +
+     `wsl_phys.o` into the target, build-order deps on the CMIs.
+  3. Consumer migration: editor/cli/mcp/tests TUs replace engine includes
+     with `import wsl.core;` etc. (+ `-fmodules-ts` on those targets).
+  4. Flip `WEASEL_ENABLE_MODULES` default ON; retire the legacy path and
+     the (now inert) guard scaffolding.
+  5. Re-enable `ai` once its simdjson surface is wrapped or simdjson gains
+     module support.
 
 ## Risks
 

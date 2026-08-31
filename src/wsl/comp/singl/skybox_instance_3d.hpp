@@ -3,10 +3,7 @@
 #include "../../rsc/resource_manager.hpp"
 #include "../component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
-
 
 namespace wsl
 {

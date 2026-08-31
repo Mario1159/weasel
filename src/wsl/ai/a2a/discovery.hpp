@@ -1,27 +1,13 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <chrono>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/result.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <mutex>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/agent_card.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/errors.hpp>
-#endif
 
 namespace wsl::ai::a2a
 {

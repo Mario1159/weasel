@@ -1,46 +1,20 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/resource/loader.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <optional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <span>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string_view>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <fastgltf/types.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <spdlog/spdlog.h>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include "cpu_model.hpp"
-#endif
 
 namespace wsl
 {

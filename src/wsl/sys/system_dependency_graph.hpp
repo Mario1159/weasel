@@ -1,27 +1,13 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <algorithm>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstddef>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
 
 #include "reg/system_factory_registry.hpp"
 #include "sys/stage_registry.hpp"

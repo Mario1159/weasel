@@ -1,11 +1,7 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 
 namespace wsl
 {

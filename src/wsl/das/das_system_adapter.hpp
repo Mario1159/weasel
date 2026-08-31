@@ -1,25 +1,25 @@
 #pragma once
 
 #include "../sys/system.hpp"
-#include "../event/event_hub.hpp"
 #if !defined(WSL_MODULE_BUILD)
-#include "modules/weasel_ecs_adapter_gen.inc"
+#include "../event/event_hub.hpp"
 #endif
+#include "modules/weasel_ecs_adapter_gen.inc"
 #if !defined(WSL_MODULE_BUILD)
 #include <memory>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <vector>
 #endif
 
+#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 struct StructInfo;
 class Context;
 }
+#endif
 
 namespace wsl::das
 {

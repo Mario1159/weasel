@@ -7,28 +7,14 @@
 // here; the real definitions are pulled in by runtime_context.cpp. The members
 // are owning `unique_ptr`s so an incomplete type is sufficient in this header.
 
-#if !defined(WSL_MODULE_BUILD)
 #include "rendering_manager.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "ui_manager.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "physics_manager.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
 
 namespace wsl
 {
@@ -57,13 +43,18 @@ class runtime_project_module;
 }
 } // namespace reg
 
+#if !defined(WSL_MODULE_BUILD)
 namespace event
 {
 class event_debug_db;
 class event_hub;
 class message_bus;
-struct scene_changed;
 } // namespace event
+#endif
+namespace event
+{
+struct scene_changed;
+} // namespace event (core-owned)
 
 namespace gfx
 {
@@ -72,10 +63,12 @@ class render_window;
 class scene_renderer;
 } // namespace gfx
 
+#if !defined(WSL_MODULE_BUILD)
 namespace phys
 {
 class engine;
 }
+#endif
 
 namespace sys
 {

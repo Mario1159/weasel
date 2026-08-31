@@ -1,15 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "world.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/entity.hpp>
-#endif
 
 namespace wsl
 {

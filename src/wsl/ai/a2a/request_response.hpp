@@ -1,24 +1,12 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <variant>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/agent_card.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/errors.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/types.hpp>
-#endif
 
 namespace wsl::ai::a2a
 {

@@ -1,7 +1,7 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../das/das_engine.hpp"
+#if !defined(WSL_MODULE_BUILD)
 #if !defined(WSL_MODULE_BUILD)
 #include <future>
 #endif
@@ -9,15 +9,11 @@
 #if !defined(WSL_MODULE_BUILD)
 #include <filesystem>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <memory>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <vector>
 #endif
@@ -27,12 +23,10 @@ namespace wsl
 
 class app;
 
-#if !defined(WSL_MODULE_BUILD)
 namespace comp::singl
 {
 class runtime_context;
 }
-#endif
 
 namespace rsc
 {

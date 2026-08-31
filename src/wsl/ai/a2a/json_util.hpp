@@ -1,28 +1,14 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/result.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <simdjson.h>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/agent_card.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/errors.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/request_response.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/types.hpp>
-#endif
 
 namespace wsl::ai::a2a
 {

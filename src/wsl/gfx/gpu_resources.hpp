@@ -1,12 +1,8 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <utility>
-#endif
 
 namespace wsl::gfx
 {

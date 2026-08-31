@@ -1,26 +1,12 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "gpu_resources.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "renderer.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_ids.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <optional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <map>
-#endif
 
 namespace wsl::gfx
 {

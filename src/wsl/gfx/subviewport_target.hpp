@@ -1,11 +1,7 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "gpu_resources.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 
 namespace wsl::gfx
 {

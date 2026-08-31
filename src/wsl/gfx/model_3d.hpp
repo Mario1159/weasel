@@ -1,36 +1,16 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "gpu_resources.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "mesh.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "render_context.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "tracy_gpu_mem.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <glm/ext/matrix_float4x4.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <limits>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl
 {

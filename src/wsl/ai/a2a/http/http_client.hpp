@@ -1,20 +1,12 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/agent_card.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <wsl/ai/a2a/transport.hpp>
-#endif
 
 extern "C" {
-#if !defined(WSL_MODULE_BUILD)
 #include <curl/curl.h>
-#endif
 }
 
 namespace wsl::ai::a2a

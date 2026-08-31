@@ -1,17 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <algorithm>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstddef>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl::sys
 {

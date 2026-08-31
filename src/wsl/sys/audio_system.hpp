@@ -1,17 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "system.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "../comp/audio.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3_mixer/SDL_mixer.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
 
 namespace wsl
 {

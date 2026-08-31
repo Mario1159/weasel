@@ -1,12 +1,14 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
 #include "../das/das_engine.hpp"
 
 #if !defined(WSL_MODULE_BUILD)
+#if !defined(WSL_MODULE_BUILD)
 #include <entt/entt.hpp>
 #endif
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #if !defined(WSL_MODULE_BUILD)
 #include <entt/core/type_info.hpp>
 #endif
@@ -23,34 +25,24 @@ class binary_reader;
 }
 
 #include "detail/registry_helpers.hpp"
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/log/log.hpp"
-#endif
 
 #if !defined(WSL_MODULE_BUILD)
 #include <memory>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <optional>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <cstddef>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <string_view>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <type_traits>
-#endif
 #if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl
 {

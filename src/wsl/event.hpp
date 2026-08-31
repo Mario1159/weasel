@@ -1,11 +1,7 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_events.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 
 namespace wsl
 {

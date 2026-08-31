@@ -1,62 +1,26 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/gfx/render_window.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "clustered_lighting.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "cubemap.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "lighting.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "mesh.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "model_3d.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "pipeline_cache.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "renderer.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "shader_program.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/rsc/resource_ids.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_gpu.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <SDL3/SDL_pixels.h>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/fwd.hpp>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
 #include <array>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstddef>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <deque>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <span>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl
 {

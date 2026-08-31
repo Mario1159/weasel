@@ -1,26 +1,12 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "shader_graph.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "shader_program.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <sstream>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_map>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <unordered_set>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl
 {

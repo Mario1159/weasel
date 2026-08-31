@@ -1,14 +1,8 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <entt/entity/fwd.hpp>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <functional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
 
 namespace wsl
 {

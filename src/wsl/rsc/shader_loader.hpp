@@ -1,17 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <string>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <memory>
-#endif
 
 namespace wsl::gfx {
     /** Represents a compiled shader module containing its bytecode. */

@@ -1,29 +1,13 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include <atomic>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <condition_variable>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <cstddef>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <functional>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <mutex>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <span>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <thread>
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include <vector>
-#endif
 
 namespace wsl::sys
 {
