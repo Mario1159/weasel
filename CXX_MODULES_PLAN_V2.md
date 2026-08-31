@@ -155,9 +155,40 @@ untangling proceeds outward.
   types is actually promoted (the GMF then provides the definitions), and
   doing it per-promotion keeps the legacy build verifiable at each step.
 
+**KEY FINDING (2026-08-30, from the phys attempt): the attachment rule
+governs everything.** A class DECLARED in a module purview is attached to
+that module; its out-of-line definitions and every TU naming the class must
+share that attachment. Consequences, all verified empirically
+(`/tmp/opencode/impltest`):
+1. Out-of-line definitions migrate to **implementation units**
+   (`module;` GMF + `module wsl.<ns>;` — GCC accepts a GMF in impl units and
+   the interface is visible without an import; self-import is rejected).
+   Definitions written there attach to the module and satisfy module
+   vtables.
+2. Consumers must link the interface object (vtable + initializer live
+   there) and must themselves be module TUs (import) — a *legacy* TU that
+   includes the header sees a *global-attached* class and its member calls
+   mangle differently → undefined symbols. **Dual-mode survives only for
+   all-inline namespaces** (math, event) whose out-of-line members were
+   re-inlined; math_meta.cpp was deleted accordingly.
+3. Therefore namespaces whose classes are named by other engine headers
+   (phys ← comp/singl/physics_manager; likewise rsc/gfx/sys/reg/das/comp)
+   cannot be promoted while any legacy TU names them. They move to the
+   **Phase-5 full cutover**: promote interface + impl units + migrate every
+   consumer TU in the same step, in reverse-dependency order (comp last).
+   `phys/phys.cppm` is kept as the worked template for that cutover (its
+   GMF/topological-order/impl-unit structure is validated up to the link
+   stage).
+- ✅ math dual-mode restored: register_meta/custom_inspect re-inlined
+  (entt/ImGui/component_meta in the wsl.math GMF — the event pattern);
+  the consumer test registers meta and takes custom_inspect's address
+  through the module — green in both modes.
+
 ### Phase 3 — Untangle the hub 🔶 (in progress, 2026-08-30)
-Progress: `math ✅` (Phase 2), **`event ✅`** (2026-08-30). Remaining:
-`phys → net → debug → log → rsc → gfx → sys → reg → das → comp`.
+Progress: `math ✅` (reworked all-inline, 2026-08-30), **`event ✅`**
+(2026-08-30). Remaining: `phys → net → debug → log → rsc → gfx → sys →
+reg → das → comp` — with the attachment-rule caveat below, most of these
+move to the Phase-5 full cutover.
 
 Per namespace, repeating one pattern (order: `math → event → phys → net →
 debug → log → rsc → gfx → sys → reg → das → comp`):

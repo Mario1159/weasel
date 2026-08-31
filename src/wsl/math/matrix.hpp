@@ -1,12 +1,30 @@
 #pragma once
 
-// Math types depend only on glm and (for conversions) Jolt. Editor/entt-facing
-// logic lives in math_meta.cpp. Inside a C++20 module interface
-// (WSL_MODULE_BUILD) the third-party includes below are skipped: the module's
-// global fragment provides them textually instead.
+#if defined(WSL_MODULE_BUILD)
+// See vector.hpp: component_meta.hpp is imported by the module unit at top
+// level as a header unit; not included/imported here (imports must be
+// contiguous at the TU top inside a module purview).
+#else
+#include "../comp/component_meta.hpp"
+#endif
+
+// Inside a C++20 module interface these 3rd-party headers are consumed as
+// header units (imported by the module), so they are skipped here. See
+// vector.hpp.
+#if !defined(WSL_MODULE_BUILD)
+
+// See wsl/math/vector.hpp for why EnTT is skipped inside a module build.
+#if !defined(WSL_MODULE_BUILD)
+#include <entt/entt.hpp>
+#endif
+
 #if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
+#endif
+
+#if !defined(WSL_MODULE_BUILD)
+#include <imgui.h>
+#endif
 #endif
 
 namespace wsl
@@ -83,10 +101,41 @@ public:
   }
 
   bool
-  custom_inspect (const char *label);
+  custom_inspect (const char *label)
+  {
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const width = (full - (spacing * 2.0F)) / 3.0F;
+
+    bool changed = false;
+
+    for (int row = 0; row < 3; ++row) {
+      ImGui::PushID (row);
+      for (int col = 0; col < 3; ++col) {
+        ImGui::SetNextItemWidth (width);
+        if (col > 0) {
+          ImGui::SameLine (0.0F, spacing);
+        }
+        changed |= ImGui::DragFloat (
+            "##v", &m_data[static_cast<ptrdiff_t> ((col * 3) + row)], 0.1F);
+      }
+      ImGui::PopID ();
+    }
+
+    ImGui::PopID ();
+    return changed;
+  }
 
   static void
-  register_meta ();
+  register_meta ()
+  {
+    using namespace entt::literals;
+    auto &&factory = entt::meta_factory<mat33f> ().type (
+        entt::type_hash<mat33f>::value ());
+    (factory.func<&mat33f::custom_inspect>)("custom_inspect"_hs);
+  }
 
 };
 
@@ -176,10 +225,41 @@ public:
   }
 
   bool
-  custom_inspect (const char *label);
+  custom_inspect (const char *label)
+  {
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const width = (full - (spacing * 3.0F)) / 4.0F;
+
+    bool changed = false;
+
+    for (int row = 0; row < 4; ++row) {
+      ImGui::PushID (row);
+      for (int col = 0; col < 4; ++col) {
+        ImGui::SetNextItemWidth (width);
+        if (col > 0) {
+          ImGui::SameLine (0.0F, spacing);
+        }
+        changed |= ImGui::DragFloat (
+            "##v", &m_data[static_cast<ptrdiff_t> ((col * 4) + row)], 0.1F);
+      }
+      ImGui::PopID ();
+    }
+
+    ImGui::PopID ();
+    return changed;
+  }
 
   static void
-  register_meta ();
+  register_meta ()
+  {
+    using namespace entt::literals;
+    auto &&factory = entt::meta_factory<mat44f> ().type (
+        entt::type_hash<mat44f>::value ());
+    (factory.func<&mat44f::custom_inspect>)("custom_inspect"_hs);
+  }
 
 };
 

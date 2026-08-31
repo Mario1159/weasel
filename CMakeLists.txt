@@ -785,7 +785,7 @@ doctest_discover_tests(weasel_cli_tests)
         "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_math_module.cpp"
         "${CMAKE_BINARY_DIR}/wsl_math.o"
         "${CMAKE_BINARY_DIR}/wsl_event.o"
-    )
+        )
     set_source_files_properties(
         "${CMAKE_SOURCE_DIR}/tests/weasel-core/test_math_module.cpp"
         PROPERTIES COMPILE_OPTIONS "-fmodules-ts"

@@ -1,15 +1,48 @@
 #pragma once
 
-// Math types depend only on glm (values) and Jolt (conversion operators).
-// Editor/entt-facing logic lives in math_meta.cpp. Inside a C++20 module
-// interface (WSL_MODULE_BUILD) the third-party includes below are skipped:
-// the module's global fragment provides them textually instead.
+#if defined(WSL_MODULE_BUILD)
+// Inside a C++20 module interface unit, component_meta.hpp is imported by the
+// module itself (e.g. wsl.math) at top level as a *header unit*; headers pulled
+// into a module purview must not contain `import` statements (they must be
+// contiguous at the TU top), so we intentionally do NOT include/import it here.
+// The module-level header-unit import makes wsl::comp reachable for this TU.
+#else
+#include "../comp/component_meta.hpp"
+#endif
+
+// When this header is compiled inside a C++20 module interface (wsl.math), the
+// 3rd-party dependencies below are consumed as *header units* (imported by the
+// module). They must NOT be included textually here, or the same types would be
+// declared both textually (global fragment) and as a module, which is illegal.
+// In the legacy header build they are included normally.
+#if !defined(WSL_MODULE_BUILD)
+
+// entt/entt.hpp has no include guard, so it is guarded separately below for the
+// same reason it is skipped in the module build.
+#if !defined(WSL_MODULE_BUILD)
+#include <entt/entt.hpp>
+#endif
+
 #if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Jolt.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <Jolt/Math/Vec3.h>
+#endif
 
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/glm.hpp>
+#endif
+#if !defined(WSL_MODULE_BUILD)
 #include <glm/gtc/quaternion.hpp>
+#endif
+
+#if !defined(WSL_MODULE_BUILD)
+#include <imgui.h>
+#endif
+#if !defined(WSL_MODULE_BUILD)
+#include <imgui_internal.h>
+#endif
 #endif
 
 namespace wsl
@@ -62,10 +95,51 @@ struct vec2f
   }
 
   bool
-  custom_inspect (const char *label);
+  custom_inspect (const char *label)
+  {
+    auto draw_drag_with_stripe
+        = [] (const char *id, float &v, ImU32 stripe_col) -> bool {
+      ImGui::SetNextItemWidth (ImMax (1.0F, ImGui::CalcItemWidth ()));
+      bool const changed = ImGui::DragFloat (id, &v, 0.1F);
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      ImVec2 const mn = ImGui::GetItemRectMin ();
+      ImVec2 const mx = ImGui::GetItemRectMax ();
+      const float stripe_w = 3.0F;
+      dl->AddRectFilled (mn, ImVec2 (mn.x + stripe_w, mx.y), stripe_col);
+      return changed;
+    };
+
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const w = (full - spacing) / 2.0F;
+
+    bool changed = false;
+
+    ImGui::SetNextItemWidth (w);
+    changed |= draw_drag_with_stripe ("##x", m_x, IM_COL32 (255, 0, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (w);
+    changed |= draw_drag_with_stripe ("##y", m_y, IM_COL32 (0, 200, 0, 255));
+
+    ImGui::PopID ();
+    return changed;
+  }
 
   static void
-  register_meta ();
+  register_meta ()
+  {
+    using namespace entt::literals;
+    entt::meta_factory<vec2f> ()
+        .type (entt::type_hash<vec2f>::value ())
+        .func<&vec2f::custom_inspect> ("custom_inspect"_hs)
+        .data<&vec2f::m_x> ("x"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
+        .data<&vec2f::m_y> ("y"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" });
+  }
 
 private:
   float m_x{ 0 }, m_y{ 0 };
@@ -149,10 +223,78 @@ struct vec3f
   // ---- NEW: custom inspector ----
   // Returns true if any value changed.
   bool
-  custom_inspect (const char *label);
+  custom_inspect (const char *label)
+  {
+    // Draw 3 floats on one line, each with a colored stripe on the left.
+    // Stripe colors: X=red, Y=blue, Z=green (as requested).
+
+    auto draw_drag_with_stripe
+        = [] (const char *id, float &v, ImU32 stripe_col) -> bool {
+      // Keep width reasonable even when the caller already placed us on
+      // SameLine.
+      ImGui::SetNextItemWidth (ImMax (1.0F, ImGui::CalcItemWidth ()));
+
+      bool const changed = ImGui::DragFloat (id, &v, 0.1F);
+
+      // Stripe overlay on the widget we just drew:
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      ImVec2 const mn = ImGui::GetItemRectMin ();
+      ImVec2 const mx = ImGui::GetItemRectMax ();
+
+      const float stripe_w = 3.0F;
+      dl->AddRectFilled (mn, ImVec2 (mn.x + stripe_w, mx.y), stripe_col);
+
+      return changed;
+    };
+
+    // Use label as an ID seed so multiple vec3f on the same window don't
+    // collide.
+    ImGui::PushID (label);
+
+    // Split available width into 3 items with spacing.
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const w = (full - (spacing * 2.0F)) / 3.0F;
+
+    bool changed = false;
+
+    // X
+    ImGui::SetNextItemWidth (w);
+    changed |= draw_drag_with_stripe ("##x", m_x, IM_COL32 (255, 0, 0, 255));
+
+    ImGui::SameLine (0.0F, spacing);
+
+    // Y
+    ImGui::SetNextItemWidth (w);
+    changed |= draw_drag_with_stripe ("##y", m_y, IM_COL32 (0, 200, 0, 255));
+
+    ImGui::SameLine (0.0F, spacing);
+
+    // Z
+    ImGui::SetNextItemWidth (w);
+    changed |= draw_drag_with_stripe ("##z", m_z, IM_COL32 (0, 128, 255, 255));
+
+    ImGui::PopID ();
+    return changed;
+  }
 
   static void
-  register_meta ();
+  register_meta ()
+  {
+    using namespace entt::literals;
+    entt::meta_factory<vec3f> ()
+        .type (entt::type_hash<vec3f>::value ())
+
+        // ---- NEW: register the custom inspector function in meta ----
+        .func<&vec3f::custom_inspect> ("custom_inspect"_hs)
+
+        .data<&vec3f::m_x> ("x"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
+        .data<&vec3f::m_y> ("y"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
+        .data<&vec3f::m_z> ("z"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" });
+  }
 
 private:
   float m_x{ 0 }, m_y{ 0 }, m_z{ 0 };
@@ -223,10 +365,64 @@ struct vec4f
   }
 
   bool
-  custom_inspect (const char *label);
+  custom_inspect (const char *label)
+  {
+    auto draw_drag_with_stripe
+        = [] (const char *id, float &v, ImU32 stripe_col) -> bool {
+      ImGui::SetNextItemWidth (ImMax (1.0F, ImGui::CalcItemWidth ()));
+      bool const changed = ImGui::DragFloat (id, &v, 0.1F);
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      ImVec2 const mn = ImGui::GetItemRectMin ();
+      ImVec2 const mx = ImGui::GetItemRectMax ();
+      const float stripe_w = 3.0F;
+      dl->AddRectFilled (mn, ImVec2 (mn.x + stripe_w, mx.y), stripe_col);
+      return changed;
+    };
+
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const item_w = (full - (spacing * 3.0F)) / 4.0F;
+
+    bool changed = false;
+
+    ImGui::SetNextItemWidth (item_w);
+    changed |= draw_drag_with_stripe ("##x", m_x, IM_COL32 (255, 0, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (item_w);
+    changed |= draw_drag_with_stripe ("##y", m_y, IM_COL32 (0, 200, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (item_w);
+    changed |= draw_drag_with_stripe ("##z", m_z, IM_COL32 (0, 128, 255, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (item_w);
+    changed
+        |= draw_drag_with_stripe ("##w", m_w, IM_COL32 (255, 255, 255, 255));
+
+    ImGui::PopID ();
+    return changed;
+  }
 
   static void
-  register_meta ();
+  register_meta ()
+  {
+    using namespace entt::literals;
+    entt::meta_factory<vec4f> ()
+        .type (entt::type_hash<vec4f>::value ())
+        .func<&vec4f::custom_inspect> ("custom_inspect"_hs)
+        .data<&vec4f::m_x> ("x"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
+        .data<&vec4f::m_y> ("y"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
+        .data<&vec4f::m_z> ("z"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" })
+        .data<&vec4f::m_w> ("w"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "w", "W Coordinate", "" });
+  }
 
 private:
   float m_x{ 0 }, m_y{ 0 }, m_z{ 0 }, m_w{ 0 };
@@ -297,10 +493,74 @@ struct quatf
   }
 
   bool
-  custom_inspect (const char *label);
+  custom_inspect (const char *label)
+  {
+    auto draw_drag_with_stripe
+        = [] (const char *id, float &v, ImU32 stripe_col) -> bool {
+      ImGui::SetNextItemWidth (ImMax (1.0F, ImGui::CalcItemWidth ()));
+      bool const changed = ImGui::DragFloat (id, &v, 0.1F);
+      ImDrawList *dl = ImGui::GetWindowDrawList ();
+      ImVec2 const mn = ImGui::GetItemRectMin ();
+      ImVec2 const mx = ImGui::GetItemRectMax ();
+      const float stripe_w = 3.0F;
+      dl->AddRectFilled (mn, ImVec2 (mn.x + stripe_w, mx.y), stripe_col);
+      return changed;
+    };
+
+    ImGui::PushID (label);
+
+    float const full = ImGui::CalcItemWidth ();
+    float const spacing = ImGui::GetStyle ().ItemInnerSpacing.x;
+    float const w = (full - (spacing * 2.0F)) / 3.0F;
+
+    glm::vec3 euler
+        = glm::degrees (glm::eulerAngles (static_cast<glm::quat> (*this)));
+
+    bool changed = false;
+
+    ImGui::SetNextItemWidth (w);
+    changed
+        |= draw_drag_with_stripe ("##x", euler.x, IM_COL32 (255, 0, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (w);
+    changed
+        |= draw_drag_with_stripe ("##y", euler.y, IM_COL32 (0, 200, 0, 255));
+    ImGui::SameLine (0.0F, spacing);
+
+    ImGui::SetNextItemWidth (w);
+    changed
+        |= draw_drag_with_stripe ("##z", euler.z, IM_COL32 (0, 128, 255, 255));
+
+    if (changed) {
+      glm::quat const q = glm::quat (glm::radians (euler));
+      quatf &self = const_cast<quatf &> (*this);
+      self.m_x = q.x;
+      self.m_y = q.y;
+      self.m_z = q.z;
+      self.m_w = q.w;
+    }
+
+    ImGui::PopID ();
+    return changed;
+  }
 
   static void
-  register_meta ();
+  register_meta ()
+  {
+    using namespace entt::literals;
+    entt::meta_factory<quatf> ()
+        .type (entt::type_hash<quatf>::value ())
+        .func<&quatf::custom_inspect> ("custom_inspect"_hs)
+        .data<&quatf::m_x> ("x"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "x", "X Coordinate", "" })
+        .data<&quatf::m_y> ("y"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
+        .data<&quatf::m_z> ("z"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" })
+        .data<&quatf::m_w> ("w"_hs)
+        .custom<comp::meta_info> (comp::meta_info{ "w", "W Coordinate", "" });
+  }
 
 private:
   float m_x{ 0 }, m_y{ 0 }, m_z{ 0 }, m_w{ 1 };
