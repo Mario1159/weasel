@@ -381,6 +381,97 @@ and impl units. Requires GCC 15+ or Clang 18+.
 | C: module conversion | 1 session | `import wsl.core;` works for consumers |
 | D: cleanup | ½ session | Guards removed, docs updated |
 
+## TODO
+
+### Phase A — Build System Migration (xmake replaces CMake)
+
+- [ ] Write initial `xmake.lua` with `set_project`, `set_languages`, `set_policy`
+- [ ] Add `add_requires` for all 25 third-party dependencies (see mapping table)
+- [ ] Port wsl target: `add_files("src/wsl/**.cpp")`, `add_includedirs`, `add_defines`, `add_packages`
+- [ ] Port daslang dependency (CPM git repo → xmake custom build or pre-built)
+- [ ] Port slang dependency (pre-built binary → `add_linkdirs`/`add_links`)
+- [ ] Port editor target (`src/editor/**.cpp`)
+- [ ] Port cli target (`src/cli/**.cpp`)
+- [ ] Port mcp-server target (`src/mcp-server/**.cpp`)
+- [ ] Port tests targets (core/cli/das/mcp-server)
+- [ ] Handle `editor_app.cpp` (compiled into wsl but lives in `src/editor/`)
+- [ ] Handle editor headers included by wsl (`ui_system_interface.hpp`, `editor_ui_layer_interface.hpp`)
+- [ ] Handle WEASEL_BUILD_EDITOR / WEASEL_ENABLE_MULTIPLAYER conditional sources
+- [ ] Handle Tracy compile definitions (`TRACY_ENABLE`, `TRACY_ON_DEMAND`, `TRACY_IMPORTS`)
+- [ ] Handle slangc deployment (`WEASEL_SLANGC_PATH`)
+- [ ] Handle protobuf/gameNetworkingSockets optional deps
+- [ ] `xmake build wsl` green
+- [ ] `xmake build weasel` green
+- [ ] `xmake build weasel-cli` green
+- [ ] `xmake build weasel-mcp-server` green
+- [ ] All 4 test suites green
+- [ ] Delete all `CMakeLists.txt` files
+- [ ] Delete `cmake/` directory (CPM, stb, etc.)
+
+### Phase B — Serialization Migration (cereal → reflect-cpp)
+
+- [ ] Add reflect-cpp to xmake.lua (`add_requires("reflectcpp v0.25.0")`)
+- [ ] Remove cereal from xmake.lua
+- [ ] Create `src/wsl/serialize/types.hpp` (binary_writer/reader, json_writer/reader)
+- [ ] Create `src/wsl/serialize/serialize.hpp` (rfl-backed json_write/read, msgpack_write/read)
+- [ ] Create `src/wsl/serialize/adapters.hpp` (glm + engine math + entt::entity Reflectors)
+- [ ] Create `src/wsl/serialize/serialize.cpp` (types.hpp implementations)
+- [ ] Create `src/wsl/serialize/component_adapters.hpp` (non-aggregate component Reflectors)
+- [ ] Feasibility spike: reflect-cpp + entt + glm in a Clang module TU
+- [ ] Replace `serialize_field_if_diff` in `comp/component_meta.hpp`
+- [ ] Delete 17 component `serialize()` methods + cereal includes
+- [ ] Migrate `reg/component_registry.*` (save/load world components via rfl)
+- [ ] Migrate `reg/singleton_registry.*` (save/load singletons via rfl)
+- [ ] Migrate `rsc/scene_snapshot_serializer.*` (JSON + binary scene format)
+- [ ] Migrate `rsc/project_loader.cpp` (project JSON via rfl)
+- [ ] Migrate `rsc/resource_manager.cpp` (material JSON via rfl)
+- [ ] Delete `rsc/cereal_glm.hpp`, `rsc/data_types_serialization.hpp`
+- [ ] Migrate editor/cli/mcp-server cereal call sites
+- [ ] Round-trip tests green (components + scene + project)
+- [ ] Delete all cereal includes and references
+
+### Phase C — Module Conversion (ABI-breaking style)
+
+- [ ] Add `#ifndef IN_MODULE_INTERFACE` guards to all 129 engine headers' third-party includes
+- [ ] Create `src/wsl/core/core.cppm` (GMF: third-party only; purview: all 148 engine headers)
+- [ ] Add `#define IN_MODULE_INTERFACE` before engine header includes in core.cppm
+- [ ] Add non-exported `using` declarations for third-party types in core.cppm purview
+- [ ] Update `xmake.lua`: `add_files("src/wsl/core/core.cppm", {public = true})`
+- [ ] Update `xmake.lua`: `set_policy("build.c++.modules", true)`
+- [ ] Convert 92 .cpp files to impl units (`module wsl.core;`, no includes)
+- [ ] Handle `ai` island (simdjson module-hostile — defer or wrap)
+- [ ] Handle `phys/jolt_all.hpp` (textual in GMF — no HU needed)
+- [ ] Handle `das/daScript_all.hpp` (textual in GMF)
+- [ ] Handle third-party using-decls for impl-unit types (RenderInterface_SDL_GPU, etc.)
+- [ ] `xmake build wsl` green with Clang
+- [ ] `xmake build wsl` green with GCC 16
+- [ ] Update consumer test to `import wsl.core;`
+- [ ] Verify `RenderInterface_SDL_GPU` reachable via using-decl
+- [ ] Verify `std::filesystem`, `std::mutex`, etc. reachable via CMI
+- [ ] Test incremental rebuild (change one header → verify recompile scope)
+- [ ] Test parallel build (no dyndep crashes)
+
+### Phase D — Cleanup
+
+- [ ] Remove all `WSL_MODULE_BUILD` guards from engine headers
+- [ ] Remove `IN_MODULE_INTERFACE` guards (headers are module-only now)
+- [ ] Remove legacy header installation rules
+- [ ] Remove `CXX_MODULES_PLAN_V2.md`
+- [ ] Remove this file (`XMAKE_MODULES_PLAN.md`) — replace with done docs
+- [ ] Update `doc/` with module usage examples
+- [ ] Verify `import std;` works (c++23 + GCC 15+ or Clang 18+)
+- [ ] Optionally replace textual STL includes with `import std;`
+
+### Known Risks to Track
+
+- [ ] daslang has complex CMake build — may need custom xmake rule
+- [ ] slang is a pre-built binary — needs custom xmake linking
+- [ ] Clang stricter IWYU than GCC — auto-fixer needed per impl unit
+- [ ] reflect-cpp v0.25.0 needs `-D REFLECT_CPP_C_ARRAYS_OR_INHERITANCE` (PUBLIC)
+- [ ] msgpack-c system library needed for reflect-cpp msgpack format
+- [ ] GCC 16 CMI "failed to load pendings" may recur — if so, use Clang only
+- [ ] Monolithic rebuild cost — measure and document before/after
+
 ## References
 
 - [xmake C++20 Modules](https://xmake.io/examples/cpp/cxx-modules)
