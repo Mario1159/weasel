@@ -2,9 +2,15 @@
 
 #include "project.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

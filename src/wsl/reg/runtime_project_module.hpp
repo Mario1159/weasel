@@ -1,12 +1,24 @@
 #pragma once
 
 #include "../das/das_engine.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <filesystem>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <future>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

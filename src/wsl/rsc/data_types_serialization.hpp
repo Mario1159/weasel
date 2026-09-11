@@ -1,9 +1,15 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/vector_float3.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <cereal/cereal.hpp>
+#endif
 
 namespace glm
 {

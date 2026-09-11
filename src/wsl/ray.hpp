@@ -1,7 +1,11 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
 
 namespace wsl
 {

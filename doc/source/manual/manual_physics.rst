@@ -1,7 +1,7 @@
 Physics
 =======
 
-Physics integration is provided through Jolt for 3D worlds.
+Physics integration is provided through Box3D for 3D worlds.
 
 .. toctree::
    :maxdepth: 1

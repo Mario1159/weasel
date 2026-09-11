@@ -1,13 +1,27 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <array>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/resource/loader.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <filesystem>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
 
 #include "../gfx/cubemap.hpp"
 #include "../gfx/render_context.hpp"

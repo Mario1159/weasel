@@ -2,11 +2,21 @@
 
 #include "entt/entt.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
 
 namespace wsl::sys
 {

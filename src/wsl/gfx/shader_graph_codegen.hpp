@@ -2,11 +2,21 @@
 
 #include "shader_graph.hpp"
 #include "shader_program.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <sstream>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

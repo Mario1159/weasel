@@ -32,7 +32,7 @@
 #include "wsl/comp/components.hpp"
 #include "wsl/das/das_api_catalog.gen.hpp"
 
-#include <cereal/archives/json.hpp>
+#include "wsl/serialize/serialize.hpp"
 #include <entt/entt.hpp>
 #include <nlohmann/json.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -918,8 +918,7 @@ command_executor::auto_save_project ()
     m_output << "Auto-save failed for project.\n";
     return;
   }
-  cereal::JSONOutputArchive archive (file);
-  archive (cereal::make_nvp ("project", *m_current_project));
+  file << serialize::json_write (*m_current_project);
 }
 
 std::string
@@ -1132,6 +1131,7 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     proj.cubemaps_path = "rsc/textures/cubemaps";
     proj.audio_path = "rsc/audio";
     proj.fonts_path = "rsc/fonts";
+    proj.materials_path = "rsc/materials";
     proj.ui_layouts_path = "src/ui";
     proj.shaders_path = "rsc/shaders";
 

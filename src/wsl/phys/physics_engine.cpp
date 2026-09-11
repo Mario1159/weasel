@@ -1,247 +1,232 @@
 #include "physics_engine.hpp"
-#include "jolt_runtime.hpp"
+
+#include "box3d_adapter.hpp"
 #include "wsl/log/log.hpp"
 
-#include "Jolt/Core/TempAllocator.h"
-#include "Jolt/Physics/Body/BodyID.h"
-#include "Jolt/Physics/Body/BodyInterface.h"
-#include "Jolt/Physics/Collision/NarrowPhaseQuery.h"
-#include "Jolt/Physics/PhysicsSystem.h"
-#include "comp/singl/physics_manager.hpp"
-#include "comp/components.hpp"
-#include <Jolt/Core/JobSystemThreadPool.h>
-#include <Jolt/Physics/Body/BodyLockInterface.h>
-#include <Jolt/Physics/Body/BodyManager.h>
-#include <Jolt/Physics/Collision/ObjectLayer.h>
-#include <Jolt/Physics/PhysicsSettings.h>
-
-#include <cstdint>
 #include <algorithm>
 #include <memory>
-#include <mutex>
-#include <sys/types.h>
-#include <thread>
-#include <vector>
 
-namespace wsl
+namespace wsl::phys
 {
 
-phys::engine::engine ()
+struct engine::impl
 {
-  phys::retain_jolt_runtime ();
+  box3d::world world;
+};
 
-  m_temp_alloc = std::make_unique<JPH::TempAllocatorImpl> (10 * 1024
-                                                           * 1024); // 10MB temp
-  m_job_sys = std::make_unique<JPH::JobSystemThreadPool> (
-      JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers,
-      std::max (1U, std::thread::hardware_concurrency () - 1));
+namespace
+{
 
-  m_bp_layer_if = std::make_unique<broad_phase_layer_interface> ();
-  m_obj_vs_bp_layer_filter
-      = std::make_unique<object_vs_broad_phase_layer_filter> ();
-  m_obj_layer_filter = std::make_unique<object_layer_pair_filter> ();
-
-  const uint32_t max_bodies = 1024;
-  const uint32_t num_body_mutexes = 0;
-  const uint32_t max_body_pairs = 1024;
-  const uint32_t max_contact_constraints = 1024;
-
-  m_phys_sys.Init (max_bodies, num_body_mutexes, max_body_pairs,
-                   max_contact_constraints, *m_bp_layer_if,
-                   *m_obj_vs_bp_layer_filter, *m_obj_layer_filter);
-
-  m_contact_listener = std::make_unique<contact_listener_impl> (*this);
-  m_phys_sys.SetContactListener (m_contact_listener.get ());
-  set_gravity (m_gravity_y);
-
-  wsl::log::phys ()->debug (
-      "Physics engine initialized (max_bodies={}, gravity={}, "
-      "fixed_step={}s, max_substeps={}, threads={})",
-      max_bodies, m_gravity_y, m_fixed_step, m_max_substeps,
-      std::max (1U, std::thread::hardware_concurrency () - 1));
+box3d::body_desc
+to_box3d_desc (const body_desc &desc)
+{
+  box3d::body_desc out;
+  out.type = static_cast<box3d::body_type> (desc.motion);
+  out.shape = static_cast<box3d::shape_type> (desc.shape);
+  out.position = { desc.position.x, desc.position.y, desc.position.z };
+  out.rotation = { desc.rotation.x, desc.rotation.y, desc.rotation.z,
+                   desc.rotation.w };
+  out.half_extents = { desc.half_extents.x, desc.half_extents.y,
+                       desc.half_extents.z };
+  out.radius = desc.radius;
+  out.density = desc.density;
+  out.sensor = desc.sensor;
+  return out;
 }
 
-phys::engine::~engine ()
+box3d::vector3
+to_box3d (vector3 value)
 {
-  m_phys_sys.SetContactListener (nullptr);
-  // unique_ptr fields will be destroyed automatically
-  phys::release_jolt_runtime ();
+  return { value.x, value.y, value.z };
 }
+
+vector3
+from_box3d (box3d::vector3 value)
+{
+  return { value.x, value.y, value.z };
+}
+
+box3d::quaternion
+to_box3d (quaternion value)
+{
+  return { value.x, value.y, value.z, value.w };
+}
+
+quaternion
+from_box3d (box3d::quaternion value)
+{
+  return { value.x, value.y, value.z, value.w };
+}
+
+} // namespace
+
+engine::engine () : m_impl (std::make_unique<impl> ())
+{
+  m_impl->world.set_gravity ({ 0.0F, static_cast<float> (m_gravity_y), 0.0F });
+  wsl::log::phys ()->debug ("Box3D physics backend initialized");
+}
+
+engine::~engine () = default;
 
 void
-phys::engine::step (double dt)
+engine::step (double dt)
 {
-  // Prevent spiral of death on huge frame drops
   dt = std::min (dt, m_max_frame_time);
-
   m_accumulator += dt;
-
   int steps = 0;
   while (m_accumulator >= m_fixed_step && steps < m_max_substeps) {
-    m_phys_sys.Update (static_cast<float> (m_fixed_step), 1,
-                       m_temp_alloc.get (), m_job_sys.get ());
+    m_impl->world.step (static_cast<float> (m_fixed_step), 1);
+    for (const auto &event : m_impl->world.drain_sensor_events ()) {
+      push_sensor_event (
+          { event.sensor, event.other, event.entered });
+    }
     m_accumulator -= m_fixed_step;
-    steps++;
-  }
-
-  if (steps > 0) {
-    wsl::log::phys ()->trace ("Physics step: {} sub-step(s), dt={}s", steps,
-                              dt);
+    ++steps;
   }
 }
 
 void
-phys::engine::clear ()
+engine::clear ()
 {
-  auto &bi = m_phys_sys.GetBodyInterface ();
-  JPH::BodyIDVector all_bodies;
-  m_phys_sys.GetBodies (all_bodies);
-
-  for (const JPH::BodyID &id : all_bodies) {
-    bi.RemoveBody (id);
-    bi.DestroyBody (id);
-  }
-
+  m_impl->world.clear ();
   m_sensors.clear ();
-  {
-    std::scoped_lock const lk (m_sensor_evt_mtx);
-    m_sensor_events.clear ();
-  }
-
+  std::scoped_lock const lock (m_sensor_evt_mtx);
+  m_sensor_events.clear ();
   m_accumulator = 0.0;
-
-  wsl::log::phys ()->debug ("Cleared physics world ({} bodies removed)",
-                            all_bodies.size ());
 }
 
-JPH::PhysicsSystem &
-phys::engine::get_system ()
+body_id
+engine::create_body (const body_desc &desc)
 {
-  return m_phys_sys;
-}
-
-JPH::BodyInterface &
-phys::engine::get_body_interface ()
-{
-  return m_phys_sys.GetBodyInterface ();
-}
-
-const JPH::BodyLockInterfaceLocking &
-phys::engine::get_body_lock_interface ()
-{
-  return m_phys_sys.GetBodyLockInterface ();
-}
-
-const JPH::NarrowPhaseQuery &
-phys::engine::get_narrow_phase_query ()
-{
-  return m_phys_sys.GetNarrowPhaseQuery ();
-}
-
-JPH::TempAllocatorImpl &
-phys::engine::get_temp_alloc ()
-{
-  return *m_temp_alloc;
-}
-
-double
-phys::engine::get_gravity () const
-{
-  return m_gravity_y;
+  const body_id id = m_impl->world.create_body (to_box3d_desc (desc));
+  if (id != null_body_id && desc.sensor) {
+    register_sensor (id);
+  }
+  return id;
 }
 
 void
-phys::engine::set_gravity (double gravity)
+engine::on_remove_body (body_id id)
+{
+  if (!is_body_valid (id)) {
+    return;
+  }
+  unregister_sensor (id);
+  m_impl->world.destroy_body (id);
+}
+
+bool
+engine::is_body_valid (body_id id) const
+{
+  return m_impl->world.is_body_valid (id);
+}
+
+vector3
+engine::get_body_position (body_id id) const
+{
+  if (!is_body_valid (id)) {
+    return {};
+  }
+  return from_box3d (m_impl->world.body_position (id));
+}
+
+quaternion
+engine::get_body_rotation (body_id id) const
+{
+  if (!is_body_valid (id)) {
+    return {};
+  }
+  return from_box3d (m_impl->world.body_rotation (id));
+}
+
+void
+engine::set_body_transform (body_id id, vector3 position, quaternion rotation)
+{
+  if (!is_body_valid (id)) {
+    return;
+  }
+  m_impl->world.set_body_transform (id, to_box3d (position),
+                                    to_box3d (rotation));
+}
+
+void
+engine::set_body_surface_properties (body_id id, float friction,
+                                     float restitution, object_layer layer)
+{
+  (void)id;
+  (void)friction;
+  (void)restitution;
+  (void)layer;
+}
+
+void
+engine::add_force (body_id id, vector3 force)
+{
+  if (!is_body_valid (id)) {
+    return;
+  }
+  m_impl->world.add_force (id, to_box3d (force));
+}
+
+void
+engine::add_impulse (body_id id, vector3 impulse)
+{
+  if (!is_body_valid (id)) {
+    return;
+  }
+  m_impl->world.add_impulse (id, to_box3d (impulse));
+}
+
+double engine::get_gravity () const { return m_gravity_y; }
+void engine::set_gravity (double gravity)
 {
   m_gravity_y = gravity;
-  m_phys_sys.SetGravity (
-      JPH::Vec3 (0.0F, static_cast<float> (m_gravity_y), 0.0F));
+  m_impl->world.set_gravity ({ 0.0F, static_cast<float> (gravity), 0.0F });
 }
-
-double
-phys::engine::get_fixed_step () const
-{
-  return m_fixed_step;
-}
-
-void
-phys::engine::set_fixed_step (double step)
+double engine::get_fixed_step () const { return m_fixed_step; }
+void engine::set_fixed_step (double step)
 {
   m_fixed_step = std::max (step, 1.0e-4);
 }
-
-double
-phys::engine::get_max_frame_time () const
-{
-  return m_max_frame_time;
-}
-
-void
-phys::engine::set_max_frame_time (double max_dt)
+double engine::get_max_frame_time () const { return m_max_frame_time; }
+void engine::set_max_frame_time (double max_dt)
 {
   m_max_frame_time = std::max (max_dt, m_fixed_step);
 }
-
-int
-phys::engine::get_max_substeps () const
-{
-  return m_max_substeps;
-}
-
-void
-phys::engine::set_max_substeps (int max_steps)
+int engine::get_max_substeps () const { return m_max_substeps; }
+void engine::set_max_substeps (int max_steps)
 {
   m_max_substeps = std::max (max_steps, 1);
 }
 
-void
-phys::engine::on_remove_body (const JPH::BodyID &id)
+void engine::register_sensor (body_id id)
 {
-  auto &body_interface = m_phys_sys.GetBodyInterface ();
-  if (!id.IsInvalid ()) {
-    body_interface.RemoveBody (id);
-    body_interface.DestroyBody (id);
-  }
-}
-
-// TODO: separate this into another class
-
-void
-phys::engine::register_sensor (const JPH::BodyID &id)
-{
-  if (!id.IsInvalid ()) {
+  if (is_body_valid (id)) {
     m_sensors.insert (id);
   }
 }
-
-void
-phys::engine::unregister_sensor (const JPH::BodyID &id)
+void engine::unregister_sensor (body_id id) { m_sensors.erase (id); }
+bool engine::is_sensor (body_id id) const
 {
-  if (!id.IsInvalid ()) {
-    m_sensors.erase (id);
-  }
+  return is_valid_body_id (id) && m_sensors.contains (id);
+}
+void engine::push_sensor_event (const sensor_overlap_event &event)
+{
+  std::scoped_lock const lock (m_sensor_evt_mtx);
+  m_sensor_events.push_back (event);
+}
+std::vector<sensor_overlap_event> engine::drain_sensor_events ()
+{
+  std::scoped_lock const lock (m_sensor_evt_mtx);
+  std::vector<sensor_overlap_event> result;
+  result.swap (m_sensor_events);
+  return result;
 }
 
-bool
-phys::engine::is_sensor (const JPH::BodyID &id) const
-{
-  return !id.IsInvalid () && m_sensors.contains (id);
-}
+void *engine::native_system () noexcept { return nullptr; }
+void *engine::native_body_interface () noexcept { return nullptr; }
+void *engine::native_body_lock_interface () noexcept { return nullptr; }
+void *engine::native_narrow_phase_query () noexcept { return nullptr; }
+void *engine::native_temp_allocator () noexcept { return nullptr; }
 
-void
-phys::engine::push_sensor_event (const phys::sensor_overlap_event &ev)
-{
-  std::scoped_lock const lk (m_sensor_evt_mtx);
-  m_sensor_events.push_back (ev);
-}
-
-std::vector<phys::sensor_overlap_event>
-phys::engine::drain_sensor_events ()
-{
-  std::scoped_lock const lk (m_sensor_evt_mtx);
-  std::vector<phys::sensor_overlap_event> out;
-  out.swap (m_sensor_events);
-  return out;
-}
-
-} // namespace wsl
+} // namespace wsl::phys

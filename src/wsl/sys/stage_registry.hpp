@@ -1,9 +1,17 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::sys
 {

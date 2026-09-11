@@ -1,6 +1,8 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
 
 namespace wsl {
 namespace debug {

@@ -1,6 +1,8 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
 #include "../rsc/resource_ids.hpp"
 
 namespace wsl

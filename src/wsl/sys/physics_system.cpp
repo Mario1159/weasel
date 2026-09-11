@@ -10,14 +10,8 @@
 
 #include "../comp/singl/physics_manager.hpp"
 #include "../comp/singl/runtime_context.hpp"
-#include "../phys/character_query_filters.hpp"
 #include "../phys/physics_engine.hpp"
-#include "../phys/utils.hpp"
 #include "sys/system.hpp"
-#include <Jolt/Math/Vec3.h>
-#include <Jolt/Physics/Body/BodyLock.h>
-#include <Jolt/Physics/Body/BodyLockInterface.h>
-#include <Jolt/Physics/EActivation.h>
 #include <cstddef>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
@@ -34,8 +28,7 @@
 #include "../comp/singl/editor_context.hpp"
 #include "../debug/debug_renderer.hpp"
 
-#include <Jolt/Physics/Body/BodyInterface.h>
-#include <Jolt/Physics/Character/CharacterVirtual.h>
+
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -364,30 +357,9 @@ physics_system::update_character_controllers (entt::registry &registry,
 
   const float step = static_cast<float> (dt);
 
-  auto view = registry.view<comp::character_body> ();
-
-  for (entt::entity const e : view) {
-    comp::character_body &char_body = view.get<comp::character_body> (e);
-    JPH::CharacterVirtual *character = char_body.get ();
-
-    if (character == nullptr) {
-      continue;
-    }
-
-    JPH::Vec3 vel = char_body.desired_velocity;
-    vel.SetY (vel.GetY () + engine.get_gravity ());
-
-    character->SetLinearVelocity (vel);
-
-    phys::character_broad_phase_filter const bp_filter;
-    phys::character_object_layer_filter const obj_filter;
-    phys::character_body_filter const body_filter (char_body.get_id ());
-    phys::character_shape_filter const shape_filter;
-
-    character->Update (step, JPH::Vec3 (0.0F, engine.get_gravity (), 0.0F),
-                       bp_filter, obj_filter, body_filter, shape_filter,
-                       engine.get_temp_alloc ());
-  }
+  // Character body update is deferred until Box3D provides a character controller.
+  (void)step;
+  (void)engine;
 }
 
 void
@@ -430,7 +402,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
     std::size_t
     operator() (const phys::body_id &id) const noexcept
     {
-      return static_cast<std::size_t> (id.GetIndexAndSequenceNumber ());
+      return static_cast<std::size_t> (id);
     }
   };
 
@@ -440,7 +412,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
     auto view = registry.view<comp::rigid_body> ();
     for (entt::entity const e : view) {
       comp::rigid_body const &rb = view.get<comp::rigid_body> (e);
-      if (!rb.body_id.IsInvalid ()) {
+      if (phys::is_valid_body_id (rb.body_id)) {
         body_to_entity[rb.body_id] = e;
       }
     }
@@ -450,7 +422,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
     auto view = registry.view<comp::area> ();
     for (entt::entity const e : view) {
       comp::area const &a = view.get<comp::area> (e);
-      if (!a.body_id.IsInvalid ()) {
+      if (phys::is_valid_body_id (a.body_id)) {
         body_to_entity[a.body_id] = e;
       }
     }
@@ -462,7 +434,7 @@ physics_system::dispatch_sensor_overlap_events (entt::registry &registry,
       comp::character_body const &character
           = view.get<comp::character_body> (e);
       const phys::body_id body_id = character.get_id ();
-      if (!body_id.IsInvalid ()) {
+      if (phys::is_valid_body_id (body_id)) {
         body_to_entity[body_id] = e;
       }
     }
@@ -504,13 +476,11 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
     return;
   }
   phys::engine &engine = physics->ensure_engine ();
-  auto &bi = engine.get_body_interface ();
-
   auto view = registry.view<comp::transform, comp::rigid_body> ();
 
   for (entt::entity const e : view) {
     comp::rigid_body &rb = view.get<comp::rigid_body> (e);
-    if (rb.body_id.IsInvalid ()) {
+    if (!phys::is_valid_body_id (rb.body_id)) {
       continue;
     }
 
@@ -529,7 +499,7 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
     glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
 
     // If it has a parent, we MUST use the WorldTransform because
-    // ECS transform is local but Jolt wants world.
+    // ECS transform is local but the physics engine wants world.
     auto *h = registry.try_get<comp::hierarchy> (e);
     bool const has_parent = (h != nullptr) && h->parent != entt::null;
     if (has_parent) {
@@ -561,8 +531,9 @@ physics_system::sync_transforms_to_rigid_bodies (entt::registry &registry,
     world_pos = world_pos + (world_rot * (glm::vec3)rb.position);
     world_rot = world_rot * (glm::quat)rb.rotation;
 
-    bi.SetPositionAndRotation (rb.body_id, to_jolt (world_pos),
-                               to_jolt (world_rot), JPH::EActivation::Activate);
+    engine.set_body_transform (
+        rb.body_id, { world_pos.x, world_pos.y, world_pos.z },
+        { world_rot.x, world_rot.y, world_rot.z, world_rot.w });
   }
 }
 
@@ -581,7 +552,7 @@ physics_system::recreate_all_bodies (entt::registry &registry)
     auto view = registry.view<comp::rigid_body> ();
     for (entt::entity const e : view) {
       comp::rigid_body &rb = view.get<comp::rigid_body> (e);
-      if (rb.body_id.IsInvalid ()) {
+      if (!phys::is_valid_body_id (rb.body_id)) {
         glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
         glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
         glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
@@ -612,7 +583,7 @@ physics_system::recreate_all_bodies (entt::registry &registry)
     auto view = registry.view<comp::area> ();
     for (entt::entity const e : view) {
       comp::area &a = view.get<comp::area> (e);
-      if (a.body_id.IsInvalid ()) {
+      if (!phys::is_valid_body_id (a.body_id)) {
         glm::vec3 world_pos{ 0.0F, 0.0F, 0.0F };
         glm::quat world_rot{ 1.0F, 0.0F, 0.0F, 0.0F };
         glm::vec3 scale{ 1.0F, 1.0F, 1.0F };
@@ -641,12 +612,12 @@ physics_system::recreate_all_bodies (entt::registry &registry)
     auto view = registry.view<comp::character_body> ();
     for (entt::entity const e : view) {
       comp::character_body &c = view.get<comp::character_body> (e);
-      if (c.get () == nullptr) {
+      if (!c.valid ()) {
         if (auto *wt = registry.try_get<comp::world_transform> (e); wt) {
-          c.recreate (engine, to_jolt (glm::vec3 (
-                                  static_cast<glm::mat4> (wt->value ())[3])));
+          c.recreate (engine, glm::vec3 (
+                                  static_cast<glm::mat4> (wt->value ())[3]));
         } else if (auto *t = registry.try_get<comp::transform> (e); t) {
-          c.recreate (engine, to_jolt ((glm::vec3)t->position));
+          c.recreate (engine, (glm::vec3)t->position);
         }
       }
     }
@@ -664,29 +635,23 @@ physics_system::sync_rigid_bodies_to_transforms (entt::registry &registry,
   }
   phys::engine &engine = physics->ensure_engine ();
 
-  const JPH::BodyLockInterfaceLocking &lock_interface
-      = engine.get_body_lock_interface ();
-
   auto view = registry.view<comp::transform, comp::rigid_body> ();
 
   for (entt::entity const e : view) {
     comp::rigid_body const &rb = view.get<comp::rigid_body> (e);
 
-    if (rb.body_id.IsInvalid ()) {
+    if (!phys::is_valid_body_id (rb.body_id)) {
       continue;
     }
 
-    JPH::BodyLockRead const lock (lock_interface, rb.body_id);
-    if (!lock.Succeeded ()) {
-      continue;
-    }
-
-    const JPH::Body &body = lock.GetBody ();
-
-    // The Jolt body sits at transform_world + offset.  Remove the offset
+    // The physics body sits at transform_world + offset.  Remove the offset
     // so that set_local_from_world sees the transform's own world position.
-    glm::vec3 const body_world = to_glm (body.GetCenterOfMassPosition ());
-    glm::quat const body_rot = to_glm (body.GetRotation ());
+    const phys::vector3 body_position = engine.get_body_position (rb.body_id);
+    const phys::quaternion body_rotation = engine.get_body_rotation (rb.body_id);
+    glm::vec3 const body_world (body_position.x, body_position.y,
+                                body_position.z);
+    glm::quat const body_rot (body_rotation.w, body_rotation.x,
+                              body_rotation.y, body_rotation.z);
     glm::quat const inv_offset = glm::inverse ((glm::quat)rb.rotation);
     glm::quat const xform_rot = body_rot * inv_offset;
     glm::vec3 const xform_pos = body_world - xform_rot * (glm::vec3)rb.position;
@@ -699,16 +664,26 @@ void
 physics_system::sync_characters_to_transforms (entt::registry &registry,
                                                double /*dt*/)
 {
+  comp::singl::physics_manager *physics
+      = get_registry_physics_manager (registry);
+  if (physics == nullptr) {
+    return;
+  }
+  phys::engine &engine = physics->ensure_engine ();
+
   auto view = registry.view<comp::transform, comp::character_body> ();
 
   for (entt::entity const e : view) {
     comp::character_body &c = view.get<comp::character_body> (e);
-    if (c.get () == nullptr) {
+    if (!c.valid ()) {
       continue;
     }
 
-    set_local_from_world (registry, e, to_glm (c.get ()->GetPosition ()),
-                          to_glm (c.get ()->GetRotation ()));
+    phys::vector3 const pos = engine.get_body_position (c.get_id ());
+    phys::quaternion const rot = engine.get_body_rotation (c.get_id ());
+    set_local_from_world (registry, e,
+                          glm::vec3 (pos.x, pos.y, pos.z),
+                          glm::quat (rot.w, rot.x, rot.y, rot.z));
   }
 }
 
@@ -724,7 +699,7 @@ physics_system::on_rigid_body_constructed (entt::registry &registry,
   phys::engine &engine = physics->ensure_engine ();
 
   auto &rb = registry.get<comp::rigid_body> (entity);
-  if (!rb.body_id.IsInvalid ()) {
+  if (phys::is_valid_body_id (rb.body_id)) {
     return; // already has a body
   }
 
@@ -793,13 +768,11 @@ physics_system::sync_transforms_to_areas (entt::registry &registry,
     return;
   }
   phys::engine &engine = physics->ensure_engine ();
-  auto &bi = engine.get_body_interface ();
-
   auto view = registry.view<comp::area> ();
 
   for (entt::entity const e : view) {
     comp::area const &a = view.get<comp::area> (e);
-    if (a.body_id.IsInvalid ()) {
+    if (!phys::is_valid_body_id (a.body_id)) {
       continue;
     }
 
@@ -834,8 +807,9 @@ physics_system::sync_transforms_to_areas (entt::registry &registry,
     world_pos = world_pos + (world_rot * (glm::vec3)a.position);
     world_rot = world_rot * (glm::quat)a.rotation;
 
-    bi.SetPositionAndRotation (a.body_id, to_jolt (world_pos),
-                               to_jolt (world_rot), JPH::EActivation::Activate);
+    engine.set_body_transform (
+        a.body_id, { world_pos.x, world_pos.y, world_pos.z },
+        { world_rot.x, world_rot.y, world_rot.z, world_rot.w });
   }
 }
 
@@ -851,7 +825,7 @@ physics_system::on_area_constructed (entt::registry &registry,
   phys::engine &engine = physics->ensure_engine ();
 
   auto &a = registry.get<comp::area> (entity);
-  if (!a.body_id.IsInvalid ()) {
+  if (phys::is_valid_body_id (a.body_id)) {
     return;
   }
 

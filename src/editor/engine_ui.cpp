@@ -45,7 +45,8 @@ engine_ui::set_console_command_handler (
 void
 engine_ui::handle_event (const wsl::engine_event &event)
 {
-  ImGui_ImplSDL3_ProcessEvent (&event.sdl ());
+  if (ImGui::GetCurrentContext () != nullptr)
+    ImGui_ImplSDL3_ProcessEvent (&event.sdl ());
 
   if ((m_runtime_ctx == nullptr)
       || (m_runtime_ctx->get_current_input_map () == nullptr)

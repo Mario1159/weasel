@@ -2,15 +2,33 @@
 
 #include "event/event_hub.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_events.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_keyboard.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_keycode.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_scancode.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

@@ -3,10 +3,12 @@
 #include "../comp/component_meta.hpp"
 #include "event_hub_fwd.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <ranges>
-
-#include <cereal/cereal.hpp>
+#endif
 
 namespace wsl::event
 {

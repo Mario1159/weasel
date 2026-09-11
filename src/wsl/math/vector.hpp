@@ -2,18 +2,24 @@
 
 #include "../comp/component_meta.hpp"
 
-#include <cereal/cereal.hpp>
-
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
-#include <Jolt/Jolt.h>
-#include <Jolt/Math/Vec3.h>
 
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <imgui.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <imgui_internal.h>
+#endif
 
 namespace wsl
 {
@@ -98,15 +104,6 @@ struct vec2f
     return changed;
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    vec2f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
-  }
-
   static void
   register_meta ()
   {
@@ -132,9 +129,6 @@ struct vec3f
   {
   }
   vec3f (const glm::vec3 &v) : m_x (v.x), m_y (v.y), m_z (v.z) {}
-  vec3f (const JPH::Vec3 &v) : m_x (v.GetX ()), m_y (v.GetY ()), m_z (v.GetZ ())
-  {
-  }
 
   float
   x () const
@@ -168,7 +162,6 @@ struct vec3f
   }
 
   operator glm::vec3 () const { return glm::vec3{ m_x, m_y, m_z }; }
-  operator JPH::Vec3 () const { return JPH::Vec3{ m_x, m_y, m_z }; }
 
   bool
   operator== (const vec3f &other) const
@@ -273,16 +266,6 @@ struct vec3f
         .custom<comp::meta_info> (comp::meta_info{ "y", "Y Coordinate", "" })
         .data<&vec3f::m_z> ("z"_hs)
         .custom<comp::meta_info> (comp::meta_info{ "z", "Z Coordinate", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    vec3f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
-    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
   }
 
 private:
@@ -394,17 +377,6 @@ struct vec4f
 
     ImGui::PopID ();
     return changed;
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    vec4f def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
-    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
-    wsl::comp::serialize_field_if_diff (archive, "w", m_w, def.m_w);
   }
 
   static void
@@ -562,21 +534,9 @@ struct quatf
         .custom<comp::meta_info> (comp::meta_info{ "w", "W Coordinate", "" });
   }
 
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    quatf def{};
-    wsl::comp::serialize_field_if_diff (archive, "x", m_x, def.m_x);
-    wsl::comp::serialize_field_if_diff (archive, "y", m_y, def.m_y);
-    wsl::comp::serialize_field_if_diff (archive, "z", m_z, def.m_z);
-    wsl::comp::serialize_field_if_diff (archive, "w", m_w, def.m_w);
-  }
-
 private:
   float m_x{ 0 }, m_y{ 0 }, m_z{ 0 }, m_w{ 1 };
 };
-
 } // namespace math
 
 } // namespace wsl

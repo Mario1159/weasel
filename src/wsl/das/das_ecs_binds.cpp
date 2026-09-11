@@ -1,5 +1,5 @@
+#if WEASEL_HAS_DASLANG
 #include "das_ecs_binds.hpp"
-
 #include "daScript/ast/ast.h"
 #include "daScript/daScriptModule.h"
 
@@ -45,3 +45,4 @@ create_worker_ecs_module ()
 }
 
 } // namespace wsl::das
+#endif

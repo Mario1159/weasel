@@ -7,20 +7,44 @@
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/camera_2d.hpp"
 #include "wsl/rsc/resource_ids.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entity/entity.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entity/fwd.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/vec2.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/vec3.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/mat4x4.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
 
 #ifdef WEASEL_BUILD_EDITOR
+#ifndef IN_MODULE_INTERFACE
 #include <imgui.h>
+#endif
 #endif
 
 namespace wsl::gfx

@@ -2,10 +2,18 @@
 
 #include "../sys/system.hpp"
 #include "../event/event_hub.hpp"
+#if WEASEL_HAS_DASLANG
 #include "modules/weasel_ecs_adapter_gen.inc"
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace das
 {
@@ -27,7 +35,11 @@ class das_engine;
  * through das_invoke_function. This is the class adapter pattern from
  * daScript tutorial 19.
  */
+#if WEASEL_HAS_DASLANG
 class das_system_adapter : public sys::ecs_system, public EcsSystemAdapter
+#else
+class das_system_adapter : public sys::ecs_system
+#endif
 {
 public:
   /**
@@ -42,8 +54,8 @@ public:
    */
   das_system_adapter (const std::string &name, const std::string &script_path,
                       das_engine &engine, entt::id_type type_id,
-                      void *class_ptr, const StructInfo *class_info,
-                      Context *ctx);
+                      void *class_ptr, const ::das::StructInfo *class_info,
+                      ::das::Context *ctx);
 
   ~das_system_adapter () override = default;
 
@@ -157,7 +169,7 @@ private:
   entt::id_type m_type_id;
   void *m_class_ptr;
   const ::das::StructInfo *m_class_info;
-  Context *m_ctx;
+  ::das::Context *m_ctx;
   bool m_has_failed = false;
 
   std::vector<event_declaration> m_event_sources;

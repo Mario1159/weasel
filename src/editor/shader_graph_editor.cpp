@@ -6,8 +6,10 @@
 #include "wsl/gfx/shader_program.hpp"
 #include "wsl/rsc/resource_manager.hpp"
 #include "wsl/log/log.hpp"
+#include "wsl/serialize/types.hpp"
 
 #include <ImNodeFlow.h>
+#include "wsl/serialize/serialize.hpp"
 #include <cereal/archives/json.hpp>
 #include <cstdlib>
 #include <fstream>
@@ -628,8 +630,16 @@ shader_graph_editor::load_graph (const std::string &path)
   }
 
   try {
-    cereal::JSONInputArchive ar (file);
-    ar (cereal::make_nvp ("graph", m_graph));
+    std::stringstream ss;
+    ss << file.rdbuf ();
+    // json_reader keeps a view into the buffer for the whole read, so the
+    // content must outlive it.
+    const std::string content = ss.str ();
+    wsl::serialize::json_reader reader (content);
+    if (!reader.read (m_graph)) {
+      m_compile_log = "Deserialization error";
+      return false;
+    }
     m_current_path = path;
     m_compile_log = "Loaded " + path;
     try {
@@ -662,8 +672,12 @@ shader_graph_editor::save_graph (const std::string &path)
   sync_nodeflow_to_graph ();
 
   try {
-    cereal::JSONOutputArchive ar (file);
-    ar (cereal::make_nvp ("graph", m_graph));
+    wsl::serialize::json_writer writer;
+    if (!writer.write (m_graph)) {
+      m_compile_log = "Serialization error";
+      return false;
+    }
+    file << writer.json;
     m_current_path = path;
     m_compile_log = "Saved " + path;
     // Refresh the hot-reload timestamp so the next frame's check does not
@@ -867,8 +881,6 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
     }
     cereal::JSONOutputArchive ar (ofs);
     ar (cereal::make_nvp ("material", *mat));
-    // `ofs` is flushed and closed when it goes out of scope, so the file is
-    // fully written before we register/load it below.
   }
   m_preview_material_id = res_mgr.register_material (tmp_path.string ());
   res_mgr.load (m_preview_material_id);
@@ -967,8 +979,6 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
   try {
     cereal::JSONOutputArchive ar (ofs);
     ar (cereal::make_nvp ("material", *mat));
-    // Flush and close before registering/loading so the on-disk file is
-    // complete when the resource manager reads it back.
   } catch (const std::exception &e) {
     wsl::log::editor ()->error ("Failed to serialize material: {}", e.what ());
     return wsl::rsc::material_id{};

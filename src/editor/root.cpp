@@ -15,6 +15,7 @@
 #include "system_inspector.hpp"
 #include "job_manager.hpp"
 #include "wsl/log/log.hpp"
+#include "wsl/serialize/types.hpp"
 
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_filesystem.h>
@@ -535,6 +536,7 @@ editor::root::draw_new_project_popup ()
       proj.cubemaps_path = "rsc/textures/cubemaps";
       proj.audio_path = "rsc/audio";
       proj.fonts_path = "rsc/fonts";
+      proj.materials_path = "rsc/materials";
       proj.default_scene_path = "";
 
       m_selection = {};
@@ -931,10 +933,14 @@ editor::root::draw_project_settings_popup ()
             / wsl::rsc::project_loader::manifest_file;
       std::ofstream file (manifest);
       if (file) {
-        cereal::JSONOutputArchive archive (file);
-        archive (cereal::make_nvp ("project", *proj));
-        wsl::log::editor ()->info ("Saved project settings to {}",
-                                   manifest.string ());
+        wsl::serialize::json_writer writer;
+        if (writer.write (*proj)) {
+          file << writer.json;
+          wsl::log::editor ()->info ("Saved project settings to {}",
+                                     manifest.string ());
+        } else {
+          wsl::log::editor ()->error ("Failed to serialize project settings");
+        }
       } else {
         wsl::log::editor ()->error ("Failed to save project settings to {}",
                                     manifest.string ());

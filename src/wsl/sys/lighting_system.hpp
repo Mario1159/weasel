@@ -1,6 +1,8 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 #include "system.hpp"
 
 

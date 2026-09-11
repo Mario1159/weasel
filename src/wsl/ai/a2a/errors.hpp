@@ -1,8 +1,14 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
 namespace wsl::ai::a2a
 {

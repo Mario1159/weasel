@@ -1,51 +1,95 @@
 #pragma once
 
-#include <Jolt/Jolt.h>
-#include <mutex>
+#ifndef IN_MODULE_INTERFACE
+#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <unordered_set>
 #include <vector>
-#include "broad_phase_layer_interface.hpp"
-#include "object_layer_pair_filter.hpp"
-#include "object_vs_broad_phase_layer_filter.hpp"
+#endif
 
-// clang-format off
-#include <Jolt/RegisterTypes.h>
-#include <Jolt/Core/JobSystemThreadPool.h>
-#include <Jolt/Core/TempAllocator.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Body/BodyLockInterface.h>
-#include <Jolt/Physics/PhysicsSettings.h>
-#include <Jolt/Physics/PhysicsSystem.h>
-#include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
-// clang-format on
-
-namespace wsl
+namespace wsl::phys
 {
 
-/**
- * Physics engine interfaces and Jolt Physics integration.
- */
-namespace phys
+using body_id = std::uint64_t;
+inline constexpr body_id null_body_id = 0;
+
+inline constexpr bool
+is_valid_body_id (body_id id) noexcept
 {
+  return id != null_body_id;
+}
 
-using body_id = JPH::BodyID;
+enum class motion_type : std::uint8_t
+{
+  Static,
+  Kinematic,
+  Dynamic
+};
 
-// Type aliases to decouple Jolt types from the wider engine API. Replace uses
-// of these aliases in core headers so the engine can swap/mock physics
-// backends.
-using motion_type = JPH::EMotionType;
-using allowed_do_fs = JPH::EAllowedDOFs;
-using object_layer = JPH::ObjectLayer;
+enum class allowed_do_fs : std::uint16_t
+{
+  All = 0,
+  TranslationX = 1U << 0U,
+  TranslationY = 1U << 1U,
+  TranslationZ = 1U << 2U,
+  RotationX = 1U << 3U,
+  RotationY = 1U << 4U,
+  RotationZ = 1U << 5U
+};
+
+constexpr allowed_do_fs
+operator| (allowed_do_fs lhs, allowed_do_fs rhs) noexcept
+{
+  return static_cast<allowed_do_fs> (
+      static_cast<std::uint16_t> (lhs) | static_cast<std::uint16_t> (rhs));
+}
+
+using object_layer = std::uint16_t;
+
+struct vector3
+{
+  float x = 0.0F;
+  float y = 0.0F;
+  float z = 0.0F;
+};
+
+struct quaternion
+{
+  float x = 0.0F;
+  float y = 0.0F;
+  float z = 0.0F;
+  float w = 1.0F;
+};
+
+enum class shape_type : std::uint8_t
+{
+  box,
+  sphere
+};
+
+struct body_desc
+{
+  motion_type motion = motion_type::Dynamic;
+  allowed_do_fs allowed_dofs = allowed_do_fs::All;
+  object_layer layer = 0;
+  shape_type shape = shape_type::box;
+  vector3 position{};
+  quaternion rotation{};
+  vector3 half_extents{ 0.5F, 0.5F, 0.5F };
+  float radius = 0.5F;
+  float density = 1000.0F;
+  float friction = 0.2F;
+  float restitution = 0.0F;
+  bool sensor = false;
+};
 
 struct sensor_overlap_event
 {
-  body_id sensor;
-  body_id other;
-  bool entered = false; // true=enter, false=exit
+  body_id sensor = null_body_id;
+  body_id other = null_body_id;
+  bool entered = false;
 };
-
-class contact_listener_impl;
 
 class engine
 {
@@ -56,17 +100,18 @@ public:
   void step (double dt);
   void clear ();
 
-  // void on_add_body(const JPH::BodyID &id);
-  void on_remove_body (const body_id &id);
+  body_id create_body (const body_desc &desc);
+  void on_remove_body (body_id id);
+  bool is_body_valid (body_id id) const;
+  vector3 get_body_position (body_id id) const;
+  quaternion get_body_rotation (body_id id) const;
+  void set_body_transform (body_id id, vector3 position,
+                           quaternion rotation);
+  void set_body_surface_properties (body_id id, float friction,
+                                    float restitution, object_layer layer);
+  void add_force (body_id id, vector3 force);
+  void add_impulse (body_id id, vector3 impulse);
 
-  // internal interfaces
-  JPH::PhysicsSystem &get_system ();
-  JPH::BodyInterface &get_body_interface ();
-  const JPH::BodyLockInterfaceLocking &get_body_lock_interface ();
-  const JPH::NarrowPhaseQuery &get_narrow_phase_query ();
-  JPH::TempAllocatorImpl &get_temp_alloc ();
-
-  // get/set
   double get_gravity () const;
   void set_gravity (double gravity);
   double get_fixed_step () const;
@@ -76,114 +121,33 @@ public:
   int get_max_substeps () const;
   void set_max_substeps (int max_steps);
 
-  void register_sensor (const body_id &id);
-  void unregister_sensor (const body_id &id);
-  bool is_sensor (const body_id &id) const;
+  void register_sensor (body_id id);
+  void unregister_sensor (body_id id);
+  bool is_sensor (body_id id) const;
   void push_sensor_event (const sensor_overlap_event &ev);
-
   std::vector<sensor_overlap_event> drain_sensor_events ();
 
-private:
-  // jolt objects
-  std::unique_ptr<JPH::TempAllocatorImpl> m_temp_alloc;
-  std::unique_ptr<JPH::JobSystemThreadPool> m_job_sys;
-  JPH::PhysicsSystem m_phys_sys;
+  // Legacy backend escape hatch. The returned pointers are consumed only by
+  // private backend adapters and are intentionally untyped here.
+  void *native_system () noexcept;
+  void *native_body_interface () noexcept;
+  void *native_body_lock_interface () noexcept;
+  void *native_narrow_phase_query () noexcept;
+  void *native_temp_allocator () noexcept;
 
-  // layer interfaces
-  std::unique_ptr<broad_phase_layer_interface> m_bp_layer_if;
-  std::unique_ptr<object_vs_broad_phase_layer_filter> m_obj_vs_bp_layer_filter;
-  std::unique_ptr<object_layer_pair_filter> m_obj_layer_filter;
+private:
+  struct impl;
+  std::unique_ptr<impl> m_impl;
 
   double m_accumulator = 0.0;
-
-  struct bodyid_hash
-  {
-    size_t
-    operator() (const body_id &id) const noexcept
-    {
-      return (size_t)id.GetIndexAndSequenceNumber ();
-    }
-  };
-
-  std::unordered_set<body_id, bodyid_hash> m_sensors;
-
-  std::mutex m_sensor_evt_mtx;
-  std::vector<sensor_overlap_event> m_sensor_events;
-
-  std::unique_ptr<contact_listener_impl> m_contact_listener;
-
   double m_gravity_y = -9.8;
   double m_fixed_step = 1.0 / 60.0;
   double m_max_frame_time = 0.25;
   int m_max_substeps = 5;
+
+  std::unordered_set<body_id> m_sensors;
+  std::mutex m_sensor_evt_mtx;
+  std::vector<sensor_overlap_event> m_sensor_events;
 };
 
-class contact_listener_impl final : public JPH::ContactListener
-{
-public:
-  explicit contact_listener_impl (phys::engine &e) : m_eng (e) {}
-
-  JPH::ValidateResult
-  OnContactValidate (
-      const JPH::Body & /*inBody1*/, const JPH::Body & /*inBody2*/,
-      JPH::RVec3 /*inBaseOffset*/,
-      const JPH::CollideShapeResult & /*inCollisionResult*/) override
-  {
-    return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
-  }
-
-  void
-  OnContactAdded (
-      const JPH::Body &body1, const JPH::Body &body2,
-      const JPH::ContactManifold & /*inManifold*/ /*inManifold*/ /*inManifold*/
-      /*inManifold*/ /*inManifold*/ /*inManifold*/ /*inManifold*/,
-      JPH::ContactSettings & /*ioSettings*/ /*ioSettings*/ /*ioSettings*/
-      /*ioSettings*/ /*ioSettings*/ /*ioSettings*/ /*ioSettings*/) override
-  {
-    const JPH::BodyID a = body1.GetID ();
-    const JPH::BodyID b = body2.GetID ();
-
-    // Determine if one is a registered sensor
-    const bool a_sensor = m_eng.is_sensor (a);
-    const bool b_sensor = m_eng.is_sensor (b);
-    if ((a_sensor ^ b_sensor) == 0) {
-      return; // only care sensor vs non-sensor
-    }
-
-    phys::sensor_overlap_event ev;
-    ev.entered = true;
-    ev.sensor = a_sensor ? a : b;
-    ev.other = a_sensor ? b : a;
-
-    m_eng.push_sensor_event (ev);
-  }
-
-  void
-  OnContactRemoved (const JPH::SubShapeIDPair &pair) override
-  {
-    const JPH::BodyID a = pair.GetBody1ID ();
-    const JPH::BodyID b = pair.GetBody2ID ();
-
-    const bool a_sensor = m_eng.is_sensor (a);
-    const bool b_sensor = m_eng.is_sensor (b);
-    if ((a_sensor ^ b_sensor) == 0) {
-      {
-        return;
-      }
-    }
-
-    phys::sensor_overlap_event ev;
-    ev.entered = false;
-    ev.sensor = a_sensor ? a : b;
-    ev.other = a_sensor ? b : a;
-
-    m_eng.push_sensor_event (ev);
-  }
-
-private:
-  phys::engine &m_eng;
-};
-
-} // namespace phys
-
-} // namespace wsl
+} // namespace wsl::phys

@@ -17,6 +17,8 @@
 #include "rsc/shader_loader.hpp"
 #include "wsl/log/log.hpp"
 
+#include "../serialize/serialize.hpp"
+
 #include <SDL3/SDL_audio.h>
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
@@ -2454,9 +2456,12 @@ rsc::resource_manager::load (material_id id)
   }
 
   try {
-    cereal::JSONInputArchive archive (file);
+    std::string json_content ((std::istreambuf_iterator<char> (file)),
+                              std::istreambuf_iterator<char> ());
     auto asset = std::make_shared<gfx::material_asset> ();
-    archive (cereal::make_nvp ("material", *asset));
+    if (!serialize::json_read (json_content, *asset)) {
+      return nullptr;
+    }
     asset->id = id;
     asset->path = rec->path;
     if (asset->name.empty ()) {

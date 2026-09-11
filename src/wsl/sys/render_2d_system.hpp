@@ -1,7 +1,9 @@
 #pragma once
 
 #include "system.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl::sys
 {

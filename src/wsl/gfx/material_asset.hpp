@@ -2,18 +2,43 @@
 
 #include "shader_program.hpp"
 #include "wsl/rsc/resource_ids.hpp"
-#include "wsl/rsc/cereal_glm.hpp"
 
-#include <cereal/cereal.hpp>
-#include <cereal/types/string.hpp>
-#include <cereal/types/unordered_map.hpp>
-#include <cereal/types/variant.hpp>
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <variant>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/cereal.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/string.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/variant.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/unordered_map.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/variant.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include "../rsc/cereal_glm.hpp"
+#endif
 
 namespace wsl
 {
@@ -70,7 +95,8 @@ struct material_asset
   std::string vertex_shader_path
       = "engine://compiled_shaders/cube.vert.slang.spv";
 
-  /** Default parameters defined by the asset (populated from the shader graph). */
+  /** Default parameters defined by the asset (populated from the shader graph).
+   */
   std::unordered_map<std::string, material_parameter> default_parameters;
 
   /** Metadata: is this material double-sided? */
@@ -108,10 +134,10 @@ struct material_instance
   std::unordered_map<std::string, material_parameter> overrides;
 
   /**
- * Build a uniform buffer blob matching the shader reflection layout.
- *
- *  Looks up parameter values from instance overrides then asset defaults.
- */
+   * Build a uniform buffer blob matching the shader reflection layout.
+   *
+   *  Looks up parameter values from instance overrides then asset defaults.
+   */
   std::vector<uint8_t> build_uniform_blob (const shader_reflection &reflection,
                                            const material_asset &asset) const;
 

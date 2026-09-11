@@ -1,7 +1,9 @@
 #pragma once
 
 #include <wsl/ai/a2a/result.hpp>
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
 #include <simdjson.h>
 

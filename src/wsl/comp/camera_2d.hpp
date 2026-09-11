@@ -3,7 +3,9 @@
 #include "../math/vector.hpp"
 #include "component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl::comp
 {

@@ -22,10 +22,18 @@
 #include "ui_manager.hpp"
 #include "physics_manager.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
 
 namespace wsl
 {

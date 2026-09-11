@@ -1,5 +1,6 @@
 #include "singleton_registry.hpp"
 
+#include "../comp/singl/runtime_context.hpp"
 #include "../rsc/scene.hpp"
 #include "../rsc/world.hpp"
 
@@ -178,7 +179,7 @@ singleton_registry::clear_runtime_singleton_components (rsc::world &world)
 }
 
 bool
-singleton_registry::save_singleton_binary (cereal::BinaryOutputArchive &archive,
+singleton_registry::save_singleton_binary (serialize::binary_writer &writer,
                                            ::entt::registry &registry,
                                            ::entt::id_type type_id) const
 {
@@ -187,12 +188,12 @@ singleton_registry::save_singleton_binary (cereal::BinaryOutputArchive &archive,
     return false;
   }
 
-  desc->save_binary (archive, registry);
+  desc->save_binary (writer, registry);
   return true;
 }
 
 bool
-singleton_registry::load_singleton_binary (cereal::BinaryInputArchive &archive,
+singleton_registry::load_singleton_binary (serialize::binary_reader &reader,
                                            ::entt::registry &registry,
                                            ::entt::id_type type_id) const
 {
@@ -201,12 +202,12 @@ singleton_registry::load_singleton_binary (cereal::BinaryInputArchive &archive,
     return false;
   }
 
-  desc->load_binary (archive, registry);
+  desc->load_binary (reader, registry);
   return true;
 }
 
 bool
-singleton_registry::save_singleton_json (cereal::JSONOutputArchive &archive,
+singleton_registry::save_singleton_json (serialize::json_writer &writer,
                                          ::entt::registry &registry,
                                          ::entt::id_type type_id) const
 {
@@ -215,12 +216,12 @@ singleton_registry::save_singleton_json (cereal::JSONOutputArchive &archive,
     return false;
   }
 
-  desc->save_json (archive, registry);
+  desc->save_json (writer, registry);
   return true;
 }
 
 bool
-singleton_registry::load_singleton_json (cereal::JSONInputArchive &archive,
+singleton_registry::load_singleton_json (serialize::json_reader &reader,
                                          ::entt::registry &registry,
                                          ::entt::id_type type_id) const
 {
@@ -229,7 +230,7 @@ singleton_registry::load_singleton_json (cereal::JSONInputArchive &archive,
     return false;
   }
 
-  desc->load_json (archive, registry);
+  desc->load_json (reader, registry);
   return true;
 }
 

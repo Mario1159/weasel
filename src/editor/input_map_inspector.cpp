@@ -87,9 +87,8 @@ input_map_inspector::draw (entt::registry & /*unused*/,
     int sc_index = find_scancode_index (key.scancode);
     if (ImGui::Combo (
             "Key", &sc_index,
-            [] (void *, int i, const char **out) {
-              *out = scancode_list[i].name;
-              return true;
+            [] (void *, int i) -> const char * {
+              return scancode_list[i].name;
             },
             nullptr, (int)(sizeof (scancode_list) / sizeof (scancode_item)))) {
       key.scancode = scancode_list[sc_index].code;
@@ -150,10 +149,7 @@ input_map_inspector::draw (entt::registry & /*unused*/,
 
   ImGui::Combo (
       "New Key", &new_sc_index,
-      [] (void *, int i, const char **out) {
-        *out = scancode_list[i].name;
-        return true;
-      },
+      [] (void *, int i) -> const char * { return scancode_list[i].name; },
       nullptr, (int)(sizeof (scancode_list) / sizeof (scancode_item)));
 
   ImGui::Checkbox ("Ctrl##new", &new_ctrl);

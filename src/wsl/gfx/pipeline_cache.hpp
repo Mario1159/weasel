@@ -1,11 +1,21 @@
 #pragma once
 
 #include "shader_program.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

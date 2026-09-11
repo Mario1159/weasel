@@ -1,7 +1,11 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
 #include <wsl/ai/a2a/errors.hpp>
 #include <wsl/ai/a2a/request_response.hpp>

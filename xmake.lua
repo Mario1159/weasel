@@ -1,0 +1,953 @@
+-- Weasel Engine — xmake build (Phase A: legacy header build, no modules yet)
+-- Replaces CMakeLists.txt; keeps same sources & tests via xmake.
+-- Toolchain: xmake 3.1.1 + Clang 22 (GCC 16 also works)
+set_project("weasel")
+set_version("0.1.0")
+set_xmakever("3.0.0")
+set_languages("c++20")
+set_policy("build.warning", true)
+set_policy("build.optimization.lto", false)
+
+add_rules("mode.debug", "mode.release")
+
+-- ---------------------------------------------------------------------------
+-- Options (mirror CMake options)
+-- ---------------------------------------------------------------------------
+option("weasel_enable_multiplayer", function ()
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable multiplayer via GameNetworkingSockets")
+end)
+
+option("weasel_enable_renderdoc", function ()
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable RenderDoc in-application API")
+end)
+
+
+-- ---------------------------------------------------------------------------
+-- Custom packages for forks / packages not in xrepo
+-- These override or supplement xrepo packages.
+-- ---------------------------------------------------------------------------
+
+-- cpp-mcp (hkr04/cpp-mcp) — MCP SDK (static lib, not in xrepo)
+package("cpp-mcp")
+    set_kind("library")
+    set_homepage("https://github.com/hkr04/cpp-mcp")
+    set_description("cpp-mcp — C++ MCP SDK")
+    set_license("MIT")
+    add_urls("https://github.com/hkr04/cpp-mcp.git")
+    add_versions("main", "main")
+    on_install(function (package)
+        io.writefile("xmake.lua", [[
+            add_rules("mode.debug", "mode.release")
+            set_languages("c++17")
+            target("mcp")
+                set_kind("$(kind)")
+                add_files("src/*.cpp")
+                add_headerfiles("include/*.h", "include/*.hpp", "common/*.h", "common/*.hpp")
+                add_includedirs("include", "common")
+                add_defines("MCP_MAX_SESSIONS=10", "MCP_SESSION_TIMEOUT=30")
+                if is_plat("linux") then
+                    add_syslinks("pthread")
+                elseif is_plat("windows") then
+                    add_syslinks("ws2_32", "wsock32")
+                end
+        ]])
+        import("package.tools.xmake").install(package)
+    end)
+    on_load(function (package)
+        package:add("defines", "MCP_MAX_SESSIONS=10")
+        package:add("defines", "MCP_SESSION_TIMEOUT=30")
+        package:add("includedirs", "include")
+        package:add("includedirs", "common")
+    end)
+    on_test(function (package)
+        assert(package:check_cxxsnippets({test = [[void test(){ }]]}, {configs = {languages = "c++20"}}))
+    end)
+package_end()
+
+-- ImSearch (Mario1159/imsearch) — static lib (needs imgui)
+package("imsearch")
+    set_kind("library")
+    set_homepage("https://github.com/Mario1159/imsearch")
+    set_description("ImSearch — ImGui search widget")
+    add_urls("https://github.com/Mario1159/imsearch.git")
+    add_versions("main", "main")
+    on_install(function (package)
+        io.writefile("xmake.lua", [[
+            add_rules("mode.debug", "mode.release")
+            set_languages("c++20")
+            add_requires("imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+            target("imsearch")
+                set_kind("$(kind)")
+                add_files("imsearch.cpp")
+                add_headerfiles("imsearch.h", "imsearch_internal.h")
+                add_includedirs(".", {public = true})
+                add_packages("imgui")
+                if is_kind("shared") then
+                    add_rules("utils.symbols.export_all")
+                end
+        ]])
+        import("package.tools.xmake").install(package)
+    end)
+    on_load(function (package)
+        package:add("deps", "imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+    end)
+package_end()
+
+-- ImViewGuizmo (Mario1159/ImViewGuizmo) — header-only-ish
+package("imviewguizmo")
+    set_kind("library", {headeronly = true})
+    set_homepage("https://github.com/Mario1159/ImViewGuizmo")
+    set_description("ImViewGuizmo")
+    add_urls("https://github.com/Mario1159/ImViewGuizmo.git")
+    add_versions("main", "main")
+    on_install(function (package)
+        os.cp("*.h", package:installdir("include"))
+        os.cp("*.hpp", package:installdir("include"))
+        if os.isdir("include") then os.cp("include/**.h", package:installdir("include")) end
+    end)
+package_end()
+
+-- ImGizmo2D (Miisan-png/ImGizmo2D) — header-only
+package("imgizmo2d")
+    set_kind("library", {headeronly = true})
+    set_homepage("https://github.com/Miisan-png/ImGizmo2D")
+    add_urls("https://github.com/Miisan-png/ImGizmo2D.git")
+    add_versions("main", "main")
+    on_install(function (package)
+        os.cp("*.h", package:installdir("include"))
+        os.cp("*.hpp", package:installdir("include"))
+        -- Patch AddRect signature for imgui >= 1.92.8 (thickness and flags swapped)
+        io.replace(path.join(package:installdir("include"), "ImGizmo2D.h"),
+                   [[ctx.drawList->AddRect(tl, br, ctx.colLine, 0, 0, ctx.lineThickness);]],
+                   [[ctx.drawList->AddRect(tl, br, ctx.colLine, 0, ctx.lineThickness, 0);]],
+                   {plain = true})
+    end)
+package_end()
+
+-- ImNodeFlow (Fattorino/ImNodeFlow) — static lib
+package("imnodeflow")
+    set_kind("library")
+    set_homepage("https://github.com/Fattorino/ImNodeFlow")
+    add_urls("https://github.com/Fattorino/ImNodeFlow.git")
+    add_versions("master", "master")
+    on_install(function (package)
+        io.writefile("xmake.lua", [[
+            add_rules("mode.debug", "mode.release")
+            set_languages("c++20")
+            add_requires("imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+            target("imnodeflow")
+                set_kind("$(kind)")
+                add_files("src/ImNodeFlow.cpp")
+                add_headerfiles("include/ImNodeFlow.h")
+                add_headerfiles("src/imgui_bezier_math.h", "src/imgui_bezier_math.inl", "src/imgui_extra_math.h", "src/imgui_extra_math.inl")
+                add_includedirs("include", {public = true})
+                add_includedirs("src")
+                add_packages("imgui")
+                add_defines("IMGUI_DEFINE_MATH_OPERATORS")
+        ]])
+        import("package.tools.xmake").install(package)
+        -- Preserve relative include "../src/imgui_bezier_math.h" expected by ImNodeFlow.h
+        os.cp("src", package:installdir())
+    end)
+    on_load(function (package)
+        package:add("deps", "imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+        package:add("includedirs", "include")
+    end)
+package_end()
+
+-- ImGuiTextSelect (Mario1159/ImGuiTextSelect) — static lib
+package("imguitextselect")
+    set_kind("library")
+    set_homepage("https://github.com/Mario1159/ImGuiTextSelect")
+    add_urls("https://github.com/Mario1159/ImGuiTextSelect.git")
+    add_versions("main", "main")
+    on_install(function (package)
+        io.writefile("xmake.lua", [[
+            add_rules("mode.debug", "mode.release")
+            set_languages("c++20")
+            add_requires("imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+            target("imguitextselect")
+                set_kind("$(kind)")
+                add_files("textselect.cpp")
+                add_headerfiles("textselect.hpp")
+                add_includedirs(".", {public = true})
+                add_packages("imgui")
+        ]])
+        import("package.tools.xmake").install(package)
+    end)
+    on_load(function (package)
+        package:add("deps", "imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+    end)
+package_end()
+
+-- ImGuiColorTextEdit (goossens/ImGuiColorTextEdit) — static lib
+package("imguicolortextedit")
+    set_kind("library")
+    set_homepage("https://github.com/goossens/ImGuiColorTextEdit")
+    add_urls("https://github.com/goossens/ImGuiColorTextEdit.git")
+    add_versions("future", "future")
+    on_install(function (package)
+        io.writefile("xmake.lua", [[
+            add_rules("mode.debug", "mode.release")
+            set_languages("c++20")
+            add_requires("imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+            target("imguicolortextedit")
+                set_kind("$(kind)")
+                add_files("TextEditor.cpp", "TextDiff.cpp")
+                add_headerfiles("TextEditor.h", "TextDiff.h", "dtl.h")
+                add_includedirs(".", {public = true})
+                add_packages("imgui")
+        ]])
+        import("package.tools.xmake").install(package)
+    end)
+    on_load(function (package)
+        package:add("deps", "imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+    end)
+package_end()
+
+-- daslang — build from source like CMake does (Gaijin/daScript v0.6.3-RC3)
+-- xrepo's dascript is a binary bundle; we need libDaScript static lib
+package("daslang")
+    set_kind("library")
+    set_homepage("https://github.com/GaijinEntertainment/daScript")
+    set_description("daScript — daslang scripting language (source build)")
+    add_urls("https://github.com/GaijinEntertainment/daScript.git")
+    add_versions("v0.6.3-RC3", "v0.6.3-RC3")
+    add_deps("cmake")
+    add_includedirs("include", {public = true})
+    add_linkdirs("lib", {public = true})
+    -- daScript's CMake does not strip the auto "lib" prefix, so the
+    -- archive on disk is liblibDaScript.a -> link name "libDaScript".
+    -- libDaScript is a thin wrapper over libDaScript_runtime (Context,
+    -- simulator, annotations...) plus libUriParser; link them after.
+    add_links("libDaScript", "libDaScript_runtime", "libUriParser",
+              {public = true})
+    add_defines("WEASEL_HAS_DASLANG=1", {public = true})
+    on_install(function (package)
+        -- GCC 16 hard-errors on daslang's deprecated wstring_convert under
+        -- its own -Werror; the engine does not use the unit-test module.
+        -- Also re-enable RTTI: daslang builds -fno-rtti, which breaks the
+        -- link against the RTTI-enabled engine when using clang.
+        -- NB: io.replace gsubs by default; {plain = true} is required or
+        -- "-fno-rtti" (a malformed Lua pattern) silently matches nothing.
+        local common = "CMakeCommon.txt"  -- cwd is the package sourcedir
+        io.replace(common, "-fno-rtti", "-frtti", {plain = true})
+        assert(io.readfile(common):find("-frtti", 1, true),
+               "daslang: failed to patch CMakeCommon.txt for RTTI")
+        local configs = {}
+        table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
+        table.insert(configs, "-DCMAKE_CXX_FLAGS=-Wno-error=deprecated-declarations")
+        table.insert(configs, "-DBUILD_TESTING=OFF")
+        table.insert(configs, "-DDAS_UNIT_TEST_DISABLED=ON")
+        table.insert(configs, "-DDAS_GLFW_DISABLED=ON")
+        table.insert(configs, "-DDAS_CLANG_BIND_DISABLED=ON")
+        table.insert(configs, "-DDAS_LLVM_DISABLED=ON")
+        table.insert(configs, "-DDAS_SMT_DISABLED=ON")
+        table.insert(configs, "-DDAS_SQLITE_DISABLED=ON")
+        table.insert(configs, "-DDAS_HV_DISABLED=ON")
+        table.insert(configs, "-DDAS_AUDIO_DISABLED=ON")
+        table.insert(configs, "-DDAS_STDDLG_DISABLED=ON")
+        table.insert(configs, "-DDAS_STBIMAGE_DISABLED=ON")
+        table.insert(configs, "-DDAS_TOOLS_DISABLED=ON")
+        table.insert(configs, "-DDAS_AOT_EXAMPLES_DISABLED=ON")
+        table.insert(configs, "-DDAS_TUTORIAL_DISABLED=ON")
+        table.insert(configs, "-DDAS_TESTS_DISABLED=ON")
+        table.insert(configs, "-DDAS_BUILD_DOCUMENTATION=OFF")
+        import("package.tools.cmake").install(package, configs)
+        -- daslib scripts (incl. aot_cpp.das) for runtime `require` and AOT
+        os.cp("daslib", package:installdir())
+    end)
+package_end()
+
+-- imguizmo override to force docking imgui
+package("imguizmo")
+    set_homepage("https://github.com/CedricGuillemet/ImGuizmo")
+    set_description("Immediate mode 3D gizmo for scene editing and other controls based on Dear Imgui")
+    set_license("MIT")
+    add_urls("https://github.com/CedricGuillemet/ImGuizmo.git")
+    add_versions("1.91.3+wip", "bcdd86bb8a8019b373e46921c52ef7f2fdaa8b16")
+    on_load(function (package)
+        package:add("deps", "imgui v1.92.9-docking", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true, shared = false}})
+    end)
+    on_install("linux", "macosx", "windows", "mingw", function (package)
+        local imgui = package:dep("imgui")
+        local configs = imgui:requireinfo() and imgui:requireinfo().configs
+        if configs then
+            configs = string.serialize(configs, {strip = true, indent = false})
+        else
+            configs = "{}"
+        end
+        local xmake_lua = ([[
+            add_rules("mode.debug", "mode.release")
+            set_languages("c++14")
+            add_requires("imgui %s", {configs = %s})
+            target("imguizmo")
+                set_kind("$(kind)")
+                add_defines("IMGUI_DEFINE_MATH_OPERATORS")
+                add_files("*.cpp")
+                add_headerfiles("*.h")
+                add_packages("imgui")
+                if is_plat("windows") and is_kind("shared") then
+                    add_rules("utils.symbols.export_all", {export_classes = true})
+                end
+        ]]):format(imgui:version_str(), configs)
+        io.writefile("xmake.lua", xmake_lua)
+        -- ImGuizmo 1.91.3+wip predates imgui 1.92.8, which swapped the
+        -- 'thickness' and 'flags' parameters of AddPolyline(). The source
+        -- still passes `true`/`false` (old ImDrawFlags_Closed) in the
+        -- thickness slot; bool->float converts silently and the float
+        -- thickness gets truncated into the flags int, tripping imgui's
+        -- parameter validation on every gizmo draw. Rewrite to the new
+        -- argument order.
+        local imguizmo_cpp = "ImGuizmo.cpp"
+        io.gsub(imguizmo_cpp,
+                "colors%[3 %- axis%], false, gContext",
+                "colors[3 - axis], gContext")
+        io.gsub(imguizmo_cpp,
+                "GetColorU32%(ROTATION_USING_BORDER%), true, gContext%.mStyle%.RotationLineThickness",
+                "GetColorU32(ROTATION_USING_BORDER), gContext.mStyle.RotationLineThickness, ImDrawFlags_Closed")
+        io.gsub(imguizmo_cpp,
+                "GetColorU32%(DIRECTION_X %+ i%), true, 1%.0f",
+                "GetColorU32(DIRECTION_X + i), 1.0f, ImDrawFlags_Closed")
+        import("package.tools.xmake").install(package)
+    end)
+package_end()
+
+-- RmlUi (Mario1159/RmlUi) — custom fork with SDL3 GPU renderer backend
+package("rmlui")
+    set_kind("library")
+    set_homepage("https://github.com/Mario1159/RmlUi")
+    set_description("RmlUi with SDL_GPU renderer backend")
+    set_license("MIT")
+    add_urls("https://github.com/Mario1159/RmlUi.git")
+    add_versions("master", "master")
+    add_deps("cmake", "libsdl3", "freetype")
+    on_install(function (package)
+        local configs = {}
+        table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
+        table.insert(configs, "-DBUILD_SHARED_LIBS=" .. (package:config("shared") and "ON" or "OFF"))
+        table.insert(configs, "-DRMLUI_ENABLE_SVG=ON")
+        table.insert(configs, "-DRMLUI_FONT_ENGINE=freetype")
+        table.insert(configs, "-DRMLUI_SDL_VERSION_MAJOR=3")
+        table.insert(configs, "-DBUILD_SAMPLES=OFF")
+        table.insert(configs, "-DBUILD_TESTS=OFF")
+        import("package.tools.cmake").install(package, configs)
+        -- Install Backends headers and sources so wsl can compile them
+        if os.isdir("Backends") then
+            os.cp("Backends", package:installdir())
+            os.cp("Backends/*.h", package:installdir("include"))
+            os.cp("Backends/*.hpp", package:installdir("include"))
+        end
+    end)
+    on_load(function (package)
+        package:add("includedirs", "include")
+        local bdir = path.join(package:installdir(), "Backends")
+        if os.isdir(bdir) then
+            package:add("includedirs", "Backends")
+        end
+    end)
+package_end()
+
+-- ---------------------------------------------------------------------------
+-- Third-party packages (xrepo)
+-- ---------------------------------------------------------------------------
+-- Core engine deps — versions mirror CMakeLists.txt where possible
+add_requires("entt 3.15.0")
+add_requires("glm")
+add_requires("spdlog v1.17.0", {configs = {shared = true}})
+add_requires("fmt")
+add_requires("cereal v1.3.2")
+add_requires("reflect-cpp v0.25.0", {configs = {yyjson = true, msgpack = true}})
+add_requires("box3d v0.1.0", {configs = {simd = false, double_precision = false}})
+add_requires("rmlui", {configs = {shared = false}})
+add_requires("fastgltf", {configs = {}})
+add_requires("meshoptimizer v0.24")
+add_requires("simdjson v4.6.2")
+add_requires("libsdl3 3.4.12", {configs = {shared = false}})
+add_requires("libsdl3_image 3.4.0", {configs = {shared = false}})
+add_requires("libsdl3_mixer 3.2.4", {configs = {shared = false}})
+add_requires("tracy v0.13.1", {configs = {on_demand = true, tracy_enable = true, shared = false}})
+add_requires("imgui v1.92.9-docking", {configs = {shared = false, sdl3 = true, sdl3_renderer = true, sdl3_gpu = true}})
+add_requires("imguizmo", {configs = {shared = false}})
+add_requires("stb")
+add_requires("cli11 v2.6.2")
+add_requires("nlohmann_json v3.12.0")
+add_requires("libarchive")
+add_requires("libcurl")
+-- slang shader compiler (slangc) — enabled by default for shader compilation
+option("with_slang", {default = false, showmenu = true, description = "Enable slang shader compiler (slangc)"})
+if has_config("with_slang") then
+    add_requires("slang v2026.16", {configs = {shared = true, slangc = true, slang_glslang = true}})
+end
+
+-- Optional multiplayer — disabled by default in xmake until OpenSSL/Abseil fixed
+-- Enable with: xmake f --weasel_enable_multiplayer=y
+if is_config("weasel_enable_multiplayer", true) then
+    add_requires("gamenetworkingsockets v1.6.0", {optional = true})
+end
+
+-- Editor-only custom packages — mark optional so config can succeed even if they fail
+add_requires("imsearch", {optional = true})
+add_requires("imviewguizmo", {optional = true})
+add_requires("imgizmo2d", {optional = true})
+add_requires("imnodeflow", {optional = true})
+add_requires("imguitextselect", {optional = true})
+add_requires("imguicolortextedit", {optional = true})
+add_requires("cpp-mcp", {optional = true})
+
+-- daslang — optional for now (binary bundle vs source build mismatch)
+option("with_daslang", {default = true, showmenu = true, description = "Enable daslang scripting"})
+if has_config("with_daslang") then
+    add_requires("daslang")
+end
+
+-- C++20 modules — Phase C (ABI-breaking, single wsl.core)
+option("with_modules", {default = false, showmenu = true, description = "Enable C++20 modules (wsl.core)"})
+
+-- always need doctest for tests
+add_requires("doctest")
+
+-- ---------------------------------------------------------------------------
+-- Helpers
+-- ---------------------------------------------------------------------------
+-- shader sources (mirrors CMake)
+local vertex_shaders = {
+    "rsc/shaders/cube.vert.slang",
+    "rsc/shaders/flat.vert.slang",
+    "rsc/shaders/ui.vert.slang",
+    "rsc/shaders/fullscreen.vert.slang",
+    "rsc/shaders/skybox.vert.slang",
+    "rsc/shaders/shadow_depth.vert.slang",
+    "rsc/shaders/point_shadow.vert.slang",
+    "rsc/shaders/ssao_prepass.vert.slang",
+    "rsc/shaders/outline.vert.slang",
+    "rsc/shaders/grid.vert.slang",
+    "rsc/shaders/sprite_2d.vert.slang",
+}
+local fragment_shaders = {
+    "rsc/shaders/cube.frag.slang",
+    "rsc/shaders/unlit.frag.slang",
+    "rsc/shaders/preview_bg.frag.slang",
+    "rsc/shaders/flat.frag.slang",
+    "rsc/shaders/ui.frag.slang",
+    "rsc/shaders/ui_texture.frag.slang",
+    "rsc/shaders/sprite_2d.frag.slang",
+    "rsc/shaders/skybox.frag.slang",
+    "rsc/shaders/procedural_skybox.frag.slang",
+    "rsc/shaders/brdf_lut.frag.slang",
+    "rsc/shaders/ibl_prefilter.frag.slang",
+    "rsc/shaders/ibl_irradiance.frag.slang",
+    "rsc/shaders/bloom_blur.frag.slang",
+    "rsc/shaders/bloom_downsample.frag.slang",
+    "rsc/shaders/composite_tonemap.frag.slang",
+    "rsc/shaders/shadow_depth.frag.slang",
+    "rsc/shaders/point_shadow.frag.slang",
+    "rsc/shaders/ssao_prepass.frag.slang",
+    "rsc/shaders/ssao.frag.slang",
+    "rsc/shaders/ssao_blur.frag.slang",
+    "rsc/shaders/outline.frag.slang",
+    "rsc/shaders/equirect_to_cube.frag.slang",
+    "rsc/shaders/grid.frag.slang",
+}
+local compute_shaders = {
+    "rsc/shaders/cluster_build.slang",
+    "rsc/shaders/light_cull.slang",
+}
+
+-- ---------------------------------------------------------------------------
+-- wsl — core engine shared library
+-- ---------------------------------------------------------------------------
+target("wsl")
+    set_kind("static")
+    set_languages("c++20")
+    -- PIC required for shared libs that may link against this static lib
+    add_cxflags("-fPIC")
+
+    -- sources — mirror src/wsl/CMakeLists.txt GLOB_RECURSE
+    if has_config("with_modules") then
+        add_files("src/wsl/core/core.cppm", {public = true})
+        -- Phase C: all converted implementation units
+        for _, f in ipairs(os.files(path.join(os.projectdir(), "src/wsl/**_module.cpp"))) do
+            if not f:find("das/") and not f:find("ai/") and not f:find("runtime_project_module") then
+                add_files(f)
+            end
+        end
+    else
+        add_files("src/wsl/**.cpp")
+        -- Remove all *_module.cpp from legacy build (except runtime_project_module which is NOT a module unit)
+        -- and das/wsl_api_module.cpp — a regular TU that merely has "_module" in its name.
+        for _, f in ipairs(os.files(path.join(os.projectdir(), "src/wsl/**_module.cpp"))) do
+            if not f:find("runtime_project_module") and not f:find("das/wsl_api_module") then
+                remove_files(f)
+            end
+        end
+        -- RenderDoc opt-out
+        if not has_config("weasel_enable_renderdoc") then
+            remove_files("src/wsl/gfx/renderdoc.cpp")
+            remove_files("src/wsl/gfx/renderdoc_load_apple.cpp")
+            remove_files("src/wsl/gfx/renderdoc_load_linux.cpp")
+            remove_files("src/wsl/gfx/renderdoc_load_windows.cpp")
+        end
+        add_files("cmake/stb/stb_image_impl.c")
+        -- editor helpers compiled into wsl (guarded by WEASEL_BUILD_EDITOR)
+        -- renderer_imgui.cpp compiled in weasel binary (single imgui copy)
+        add_files("src/editor/physics_debug_drawer.cpp")
+    end
+
+    -- handle renderdoc opt-out and daslang opt-out (keep das_engine.cpp stub)
+    on_load(function (target)
+        if is_config("weasel_enable_renderdoc", false) then
+            target:remove("files", "src/wsl/gfx/renderdoc*.cpp")
+        end
+        if not has_config("with_daslang") then
+            target:remove("files", "src/wsl/das/das_ecs_binds.cpp", "src/wsl/das/das_interop.cpp", "src/wsl/das/das_system_adapter.cpp", "src/wsl/das/wsl_api_module.cpp", "src/wsl/das/wsl_event_binds.cpp")
+        end
+    end)
+
+    if has_config("with_modules") then
+        set_languages("c++20")
+        set_policy("build.c++.modules", true)
+        add_defines("WSL_MODULE_BUILD")
+        add_packages("meshoptimizer", {public = true})
+        add_packages("fastgltf", {public = true})
+        add_packages("simdjson", {public = true})
+        add_packages("libcurl", {public = true})
+        add_packages("libarchive", {public = true})
+        -- 32 impl units validated in module build; 48 remaining need manual GMF tuning
+    end
+
+    add_includedirs("src", {public = true})
+    add_includedirs("src/wsl", {public = true})
+    -- RmlUi backend headers (RmlUi/Backends is not in standard include path)
+    -- we handle via add_packages(rmlui) include + manual add_includedirs after package install is tricky
+    -- but we add backend sources directly:
+    -- they will be added via after_load hook that locates rmlui package installdir
+
+    add_defines("CPP_RTTI_ENABLED", "RMLUI_SDL_VERSION_MAJOR=3", "RMLUI_STATIC_LIB", "RMLUI_NUM_MSAA_SAMPLES=4", "SPDLOG_COMPILED_LIB", "TRACY_ENABLE", "TRACY_ON_DEMAND", "TRACY_HAS_CALLGRIND=0", "TRACY_IMPORTS", {public = true})
+    add_defines("WSL_HAS_BOX3D=1")
+    add_defines("WSL_PHYSICS_BACKEND_BOX3D=1", {public = true})
+    add_packages("box3d")
+    add_defines("WEASEL_BUILD_EDITOR")
+    if is_config("weasel_enable_multiplayer", true) then
+        add_defines("WEASEL_ENABLE_MULTIPLAYER", {public = true})
+    end
+    if has_config("weasel_enable_renderdoc") then
+        add_defines("WEASEL_ENABLE_RENDERDOC")
+        add_includedirs("cmake/renderdoc")
+    end
+    add_defines("WEASEL_SOURCE_DIR=\"$(projectdir)\"")
+    add_defines("WEASEL_BUILD_DIR=\"$(projectdir)/build\"")
+    -- compiler exe path for DAS AOT cache (like CMake's WEASEL_CXX_COMPILER)
+    add_defines("WEASEL_CXX_COMPILER=\"clang++\"")
+
+    add_cxxflags("-Wall", "-Wextra", "-Wpedantic", "-rdynamic", {force = true})
+
+    -- packages — core deps (slang/gns/daslang conditional)
+    add_packages("entt", "glm", "spdlog", "fmt", "cereal", "reflect-cpp", "box3d", "rmlui", "fastgltf", "meshoptimizer", "simdjson", "libsdl3", "libsdl3_image", "libsdl3_mixer", "tracy", "imgui", "imguizmo", "stb", "nlohmann_json", "libarchive", "libcurl", {public = false})
+    add_defines("REFLECT_CPP_C_ARRAYS_OR_INHERITANCE", {public = true})
+    if has_config("with_slang") then add_packages("slang") end
+    -- Public packages exported to downstream targets (editor, cli, mcp-server, tests)
+    add_packages("tracy", {public = true})
+    add_packages("imgui", {public = true})
+    add_packages("entt", {public = true})
+    add_packages("box3d", {public = true})
+    add_packages("glm", {public = true})
+    add_packages("spdlog", {public = true})
+    add_packages("fmt", {public = true})
+    add_packages("reflect-cpp", {public = true})
+    add_packages("cereal", {public = true})
+    add_packages("rmlui", {public = true})
+    add_packages("fastgltf", {public = true})
+    add_packages("meshoptimizer", {public = true})
+    add_packages("simdjson", {public = true})
+    add_packages("libcurl", {public = true})
+    add_packages("libarchive", {public = true})
+    add_packages("libsdl3", {public = true})
+    add_packages("libsdl3_image", {public = true})
+    add_packages("libsdl3_mixer", {public = true})
+    add_packages("stb", {public = true})
+    add_packages("nlohmann_json", {public = true})
+    add_packages("imguizmo", {public = true})
+    add_packages("libsdl3_image", {public = true})
+    add_packages("libsdl3_mixer", {public = true})
+    add_packages("simdjson", {public = true})
+    add_packages("libarchive", {public = true})
+    add_packages("libcurl", {public = true})
+
+    if is_config("weasel_enable_multiplayer", true) then
+        add_packages("gamenetworkingsockets", {optional = true})
+    end
+
+    -- daslang — if available
+    if is_config("with_daslang", true) then
+        add_packages("daslang", {public = true})
+    add_defines("WEASEL_HAS_DASLANG=1", {public = true})
+    else
+        add_defines("WEASEL_HAS_DASLANG=0", {public = true})
+    end
+
+    -- daslang daslib root: resolved at RUNTIME by das_engine.cpp
+    -- (WEASEL_DASLANG_ROOT env var, then the newest xmake package install).
+    -- Target hooks (on_load/after_load/on_config) proved unreliable across
+    -- xmake runs for injecting the package installdir as a define.
+
+    -- editor UI helpers that wsl links (mirrors CMake wsl target) — optional
+
+    -- editor UI helpers that wsl links (mirrors CMake wsl target) — optional
+    add_packages("imguitextselect", {optional = true})
+    add_packages("imsearch", {optional = true})
+    add_packages("imviewguizmo", {optional = true})
+    add_packages("imguicolortextedit", {optional = true})
+
+    -- link system libs
+    add_syslinks("dl", "pthread")
+
+    -- RmlUi backend sources — compile them as part of wsl
+    -- They live in the rmlui package's Backends dir (cached source, not installdir)
+    on_load(function (target)
+        local rmlui = target:pkg("rmlui")
+        if rmlui then
+            local backend_dir = path.join(rmlui:installdir(), "Backends")
+            if os.isdir(backend_dir) then
+                target:add("files", path.join(backend_dir, "RmlUi_Platform_SDL.cpp"))
+                target:add("files", path.join(backend_dir, "RmlUi_Renderer_SDL_GPU.cpp"))
+                target:add("includedirs", backend_dir)
+            end
+        end
+    end)
+
+    -- slangc path define — if slang package provides binary, set WEASEL_SLANGC_PATH
+    -- NB: inert in practice (this hook does not run on every xmake invocation);
+    -- shader_compiler.cpp falls back to WEASEL_SLANGC env or the slangc that
+    -- after_build deploys next to the executable.
+    on_config(function (target)
+        local box3d = target:pkg("box3d")
+        if box3d then
+            -- Module dependency scanning does not reliably consume package
+            -- -isystem paths for this C header, so provide a direct -I path.
+            target:add("includedirs", path.join(box3d:installdir(), "include"))
+        end
+        if is_config("with_slang", true) then
+            local slang = target:pkg("slang")
+            if slang then
+                local slangc = path.join(slang:installdir(), "bin", "slangc")
+                if os.isfile(slangc) then
+                    target:add("defines", "WEASEL_SLANGC_PATH=\"" .. slangc .. "\"")
+                else
+                    target:add("defines", "WEASEL_SLANGC_PATH=\"$(builddir)/slangc\"")
+                end
+            end
+        else
+            target:add("defines", "WEASEL_SLANGC_PATH=\"slangc\"")
+        end
+    end)
+
+    -- Deploy slang runtime plugins & slangc next to build dir (mirror CMake POST_BUILD)
+    after_build(function (target)
+        if is_config("with_slang", true) then
+            local slang = target:pkg("slang")
+            if slang then
+                local bindir = slang:installdir("bin")
+                if os.isdir(bindir) then
+                    for _, name in ipairs({"libslang-glslang.so", "libslang-glsl-module.so", "slangc"}) do
+                        local src = path.join(bindir, name)
+                        if os.isfile(src) then
+                            os.cp(src, target:targetdir())
+                        end
+                    end
+                end
+            end
+        end
+        -- copy otf, icons to both targetdir and builddir (engine looks in builddir)
+        local buildir = target:targetdir()
+        local project_buildir = path.join(os.projectdir(), "build")
+        for _, d in ipairs({buildir, project_buildir}) do
+            os.rm(path.join(d, "otf"))
+            os.rm(path.join(d, "icons"))
+            os.cp(path.join(os.projectdir(), "rsc/otf"), path.join(d, "otf"))
+            os.cp(path.join(os.projectdir(), "rsc/icons"), path.join(d, "icons"))
+        end
+        -- compile_shaders output will be in $(buildir)/compiled_shaders
+        -- daslib copy: engine modules (weasel_ecs, weasel_helpers) must be
+        -- visible under <das-root>/daslib so `require daslib/weasel_ecs` works
+        local daslib_src = path.join(os.projectdir(), "src/wsl/das/modules/weasel_ecs.das")
+        if os.isfile(daslib_src) then
+            -- try to locate daslang sourcedir
+            local das = target:pkg("daslang")
+            if das then
+                local daslib_dst = path.join(das:installdir(), "daslib")
+                os.cp(daslib_src, daslib_dst)
+                os.cp(path.join(os.projectdir(), "src/wsl/das/modules/weasel_helpers.das"), daslib_dst)
+                -- also copy to build daslib for dev
+                os.cp(daslib_src, path.join(os.projectdir(), "build/daslib"))
+                os.cp(path.join(os.projectdir(), "src/wsl/das/modules/weasel_helpers.das"), path.join(os.projectdir(), "build/daslib"))
+            end
+        end
+    end)
+
+-- ---------------------------------------------------------------------------
+-- compile_shaders — shader compilation via slangc
+-- ---------------------------------------------------------------------------
+target("compile_shaders")
+    set_kind("phony")
+    on_build(function (target)
+        -- locate slangc
+        local slangc = nil
+        local slang_libdir = nil
+        -- 1. xmake slang package
+        local slang = target:pkg("slang")
+        if slang then
+            local cand = path.join(slang:installdir(), "bin", "slangc")
+            if os.isfile(cand) then slangc = cand; slang_libdir = path.join(slang:installdir(), "lib") end
+        end
+        -- 2. ~/.local/bin (pre-built binary)
+        if not slangc then
+            local home = os.getenv("HOME") or "~"
+            local cand = path.join(home, ".local", "bin", "slangc")
+            if os.isfile(cand) then
+                slangc = cand
+                slang_libdir = path.join(home, ".local", "lib")
+            end
+        end
+        -- 3. xmake package cache (search all hash dirs)
+        if not slangc then
+            local home = os.getenv("HOME") or "~"
+            local dirs = os.dirs(path.join(home, ".xmake", "packages", "s", "slang", "*", "*"))
+            if dirs then
+                for _, d in ipairs(dirs) do
+                    local cand = path.join(d, "bin", "slangc")
+                    if os.isfile(cand) then slangc = cand; slang_libdir = path.join(d, "lib"); break end
+                end
+            end
+        end
+        -- 4. system paths
+        if not slangc then
+            for _, p in ipairs({"/usr/local/bin/slangc", "/usr/bin/slangc"}) do
+                if os.isfile(p) then slangc = p; break end
+            end
+        end
+        if not slangc then
+            print("compile_shaders: slangc not found, skipping shader compilation")
+            print("  Install slangc or run: xmake f --with_slang=y && xmake require slang")
+            return
+        end
+        -- Set LD_LIBRARY_PATH for slangc shared libs
+        if slang_libdir and os.isdir(slang_libdir) then
+            os.setenv("LD_LIBRARY_PATH", slang_libdir .. ":" .. (os.getenv("LD_LIBRARY_PATH") or ""))
+        end
+        local shader_dir = path.join(os.projectdir(), "rsc/shaders")
+        local outdir = path.join(os.projectdir(), "build", "compiled_shaders")
+        if not os.isdir(outdir) then os.mkdir(outdir) end
+        -- copy pbr_common (module/include, not compiled)
+        os.cp(path.join(shader_dir, "pbr_common.slang"), path.join(outdir, "pbr_common.slang"))
+        -- determine target
+        local slang_target = "spirv"
+        local ext = ".spv"
+        local dxc_flags = ""
+        local spirv_flags = "-emit-spirv-via-glsl -fvk-use-entrypoint-name"
+        if is_plat("windows") then
+            slang_target = "dxil"
+            ext = ".dxil"
+            dxc_flags = "-Xdxc -Vd"
+        elseif is_plat("macosx") then
+            slang_target = "metal"
+            ext = ".metal"
+            spirv_flags = ""
+        end
+        local shift = "-fvk-b-shift 0 3 -fvk-s-shift 0 2 -fvk-t-shift 0 2 -fvk-u-shift 0 2"
+        -- Vertex shaders: cbuffers live in set 1 (SDL vertex uniform set),
+        -- textures/samplers in set 0. The generic shifts above would
+        -- misplace the vertex uniform cbuffer and the GPU would sample
+        -- nothing (black game view).
+        local vert_shift = "-fvk-b-shift 0 1 -fvk-t-shift 0 0 -fvk-s-shift 0 0"
+        -- Compute shaders declare explicit [[vk::binding]] attributes;
+        -- passing any -fvk-*-shift flag makes slang ignore them.
+        local compute_shift = ""
+        local function compile_one(src, entry, profile, shifts)
+            local base = path.filename(src)
+            local out = path.join(outdir, base .. ext)
+            -- only compile if src newer than out
+            if os.isfile(out) and os.mtime(out) > os.mtime(src) then return end
+            local argv = {src, "-target", slang_target}
+            if profile ~= "" then table.insert(argv, "-profile"); table.insert(argv, profile) end
+            table.insert(argv, "-entry"); table.insert(argv, entry)
+            table.insert(argv, "-o"); table.insert(argv, out)
+            for _, s in ipairs(shifts:split("%s")) do if s ~= "" then table.insert(argv, s) end end
+            for _, f in ipairs(dxc_flags:split("%s")) do if f ~= "" then table.insert(argv, f) end end
+            for _, f in ipairs(spirv_flags:split("%s")) do if f ~= "" then table.insert(argv, f) end end
+            print("Compiling shader: " .. path.filename(src))
+            os.execv(slangc, argv)
+        end
+        -- Compile all shaders
+        local shaders = os.files(path.join(shader_dir, "*.slang"))
+        for _, src in ipairs(shaders) do
+            local name = path.basename(src)
+            -- pbr_common.slang is a module/include, not compiled standalone
+            if name == "pbr_common" then
+            elseif name:find("%.vert$") then
+                compile_one(src, "vsMain", "vs_6_0", vert_shift)
+            elseif name:find("%.frag$") then
+                compile_one(src, "fsMain", "ps_6_0", shift)
+            elseif name == "cluster_build" or name == "light_cull" then
+                compile_one(src, "csMain", "cs_6_0", compute_shift)
+            else
+                print("Skipping unknown shader: " .. path.filename(src))
+            end
+        end
+        print("compile_shaders: done (" .. #shaders .. " shaders processed)")
+    end)
+
+-- ---------------------------------------------------------------------------
+-- weasel — editor binary
+-- ---------------------------------------------------------------------------
+target("weasel")
+    set_kind("binary")
+    set_languages("c++20")
+    add_files("src/editor/**.cpp")
+    -- physics_debug_drawer stays in wsl; renderer_imgui.cpp is compiled here
+    remove_files("src/editor/physics_debug_drawer.cpp")
+    add_includedirs("src", {public = true})
+    add_deps("wsl", "cli")
+    -- Packages already exported public by wsl are resolved transitively.
+    -- Only list packages NOT on wsl here (cli11, editor UI helpers).
+    -- DO NOT re-list wsl's public packages here — xmake links them
+    -- BEFORE -lwsl, causing unresolved symbols from cross-archive deps.
+    add_packages("cli11")
+    add_packages("imguitextselect", {optional = true})
+    add_packages("imsearch", {optional = true})
+    add_packages("imviewguizmo", {optional = true})
+    add_packages("imguicolortextedit", {optional = true})
+    add_packages("imgizmo2d", {optional = true})
+    add_packages("imnodeflow", {optional = true})
+    if has_config("with_slang") then add_packages("slang") end
+    add_defines("CPP_RTTI_ENABLED", "WEASEL_BUILD_EDITOR", "IMGUI_DEFINE_MATH_OPERATORS")
+    if is_config("weasel_enable_multiplayer", true) then add_defines("WEASEL_ENABLE_MULTIPLAYER") end
+    add_defines("WEASEL_SOURCE_DIR=\"$(projectdir)\"", "WEASEL_BUILD_DIR=\"$(projectdir)/build\"", "TRACY_ENABLE")
+    if has_config("weasel_enable_renderdoc") then
+        add_defines("WEASEL_ENABLE_RENDERDOC")
+        add_includedirs("cmake/renderdoc")
+    end
+    add_cxxflags("-Wall", "-Wextra", "-Wpedantic", "-rdynamic")
+    add_syslinks("dl", "pthread")
+    add_deps("compile_shaders")
+    -- install rules
+    set_installdir("$(bindir)")
+    set_prefixdir("$(install_prefix)")
+    add_installfiles("$(builddir)/$(arch)/$(mode)/weasel", {prefixdir = "bin"})
+    add_installfiles(path.join(os.projectdir(), "build", "compiled_shaders", "*"), {prefixdir = "share/weasel/compiled_shaders"})
+    add_installfiles(path.join(os.projectdir(), "rsc/otf", "*"), {prefixdir = "share/weasel/otf"})
+    add_installfiles(path.join(os.projectdir(), "rsc/icons", "*"), {prefixdir = "share/weasel/icons"})
+    after_build(function (target)
+        -- bundle handling for macOS omitted for brevity — will add later
+        if is_config("with_slang", true) then
+            local slang = target:pkg("slang")
+            if slang then
+                local bindir = slang:installdir("bin")
+                if os.isdir(bindir) then
+                    for _, name in ipairs({"libslang-glslang.so", "libslang-glsl-module.so", "slangc"}) do
+                        local src = path.join(bindir, name)
+                        if os.isfile(src) then os.cp(src, target:targetdir()) end
+                    end
+                end
+            end
+        end
+    end)
+
+-- ---------------------------------------------------------------------------
+-- cli — static lib + weasel-cli binary
+-- ---------------------------------------------------------------------------
+target("cli")
+    set_kind("static")
+    set_languages("c++20")
+    add_files("src/cli/*.cpp")
+    remove_files("src/cli/main.cpp")
+    add_includedirs("src")
+    add_deps("wsl")
+    add_packages("cli11")
+
+target("weasel-cli")
+    set_kind("binary")
+    set_languages("c++20")
+    add_files("src/cli/main.cpp")
+    add_deps("cli", "wsl")
+    add_packages("cli11", "reflect-cpp")
+    add_includedirs("src")
+    add_cxxflags("-Wall", "-Wextra", "-Wpedantic")
+    add_installfiles("$(builddir)/$(arch)/$(mode)/weasel-cli", {prefixdir = "bin"})
+
+-- ---------------------------------------------------------------------------
+-- mcp-server — static lib + binary
+-- ---------------------------------------------------------------------------
+target("mcp_server_lib")
+    set_kind("static")
+    set_languages("c++20")
+    add_files("src/mcp-server/*.cpp")
+    remove_files("src/mcp-server/main.cpp")
+    add_includedirs("src")
+    add_deps("wsl")
+    add_packages("cli11")
+    add_packages("cpp-mcp", {public = true, optional = true})
+
+target("weasel-mcp-server")
+    set_kind("binary")
+    set_languages("c++20")
+    add_files("src/mcp-server/main.cpp")
+    add_deps("mcp_server_lib", "wsl")
+    add_packages("cli11")
+    add_packages("cpp-mcp", {optional = true})
+    add_includedirs("src")
+    add_cxxflags("-Wall", "-Wextra", "-Wpedantic")
+    add_installfiles("$(builddir)/$(arch)/$(mode)/weasel-mcp-server", {prefixdir = "bin"})
+
+-- ---------------------------------------------------------------------------
+-- Tests — mirrors CMake enable_testing()
+-- ---------------------------------------------------------------------------
+target("weasel_cli_tests")
+    set_kind("binary")
+    set_languages("c++20")
+    add_files("tests/weasel-cli/*.cpp")
+    add_deps("cli")
+    add_packages("doctest")
+    add_includedirs("src")
+    add_tests("weasel_cli_tests")
+
+target("weasel_mcp_server_tests")
+    set_kind("binary")
+    set_languages("c++20")
+    add_files("tests/mcp-server/*.cpp")
+    add_deps("mcp_server_lib")
+    add_packages("doctest", "cpp-mcp")
+    add_includedirs("src")
+    add_defines("WSL_SOURCE_DIR=\"$(projectdir)\"")
+    add_tests("weasel_mcp_server_tests")
+
+target("weasel_core_tests")
+    set_kind("binary")
+    set_languages("c++20")
+    add_files("tests/weasel-core/test_event_bus.cpp", "tests/weasel-core/test_acp_client.cpp", "tests/weasel-core/test_resource_ids.cpp")
+    add_deps("wsl", "fake_acp_agent")
+    add_packages("doctest", "simdjson")
+    add_includedirs("src")
+    add_defines("FAKE_AGENT_PATH=\"$(projectdir)/build/linux/x86_64/release/fake_acp_agent\"")
+    add_tests("weasel_core_tests")
+
+target("fake_acp_agent")
+    set_kind("binary")
+    set_languages("c++20")
+    add_files("tests/weasel-core/fake_acp_agent.cpp")
+    add_packages("simdjson")
+    add_includedirs("src")
+
+target("weasel_das_tests")
+    set_kind("binary")
+    set_languages("c++20")
+    set_enabled(has_config("with_daslang"))
+    add_files("tests/weasel-das/test_component_accessors.cpp")
+    add_deps("wsl")
+    add_packages("doctest")
+    add_includedirs("src")
+    add_tests("weasel_das_tests")

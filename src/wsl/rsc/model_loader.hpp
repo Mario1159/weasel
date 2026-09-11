@@ -1,17 +1,39 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/resource/loader.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <filesystem>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <span>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <fastgltf/types.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <spdlog/spdlog.h>
+#endif
 
 #include "../gfx/model_3d.hpp"
 #include "../gfx/render_context.hpp"

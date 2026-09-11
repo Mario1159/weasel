@@ -1,6 +1,8 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
+#endif
 
 namespace wsl::event
 {

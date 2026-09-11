@@ -3,10 +3,18 @@
 #include "comp/singl/runtime_context.hpp"
 #include "wsl/event.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
 
 /**
  * Game framework library for the Weasel engine.

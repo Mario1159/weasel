@@ -66,6 +66,7 @@ system_factory_registry::register_cached_runtime_system (
   m_factories[desc.display_name] = std::move (desc);
 }
 
+#if WEASEL_HAS_DASLANG
 void
 system_factory_registry::register_cached_runtime_system (
     entt::id_type type_id, std::string_view type_name,
@@ -91,7 +92,7 @@ system_factory_registry::register_cached_runtime_system (
           display_name, script_path, engine, type_id, instance.ptr,
           instance.info, instance.ctx);
     }
-    wsl::log::cmake ()->error (
+    wsl::log::xmake ()->error (
         "Daslang system '{}' must define class System : EcsSystem: {}",
         script_path, error);
     return nullptr;
@@ -101,6 +102,7 @@ system_factory_registry::register_cached_runtime_system (
   m_type_name_to_display_name[desc.type_name] = desc.display_name;
   m_factories[desc.display_name] = std::move (desc);
 }
+#endif
 
 const system_factory_registry::system_descriptor *
 system_factory_registry::find_system (std::string_view name) const

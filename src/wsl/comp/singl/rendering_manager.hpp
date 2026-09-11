@@ -9,11 +9,18 @@
 #include "../component_meta.hpp"
 #include "../transform.hpp"
 
-#include <cereal/cereal.hpp>
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {
@@ -281,65 +288,6 @@ struct rendering_manager : singleton_component
         .type (entt::type_hash<rsc::cubemap_id>::value ())
         .custom<comp::meta_info> (
             meta_info{ "Cubemap", "Cubemap resource identifier.", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    rendering_manager def{};
-    serialize_field_if_diff (archive, "skybox", skybox.value, def.skybox.value);
-    if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
-                                    Archive>) {
-      // Older scenes stored ``0`` for "no skybox".
-      rsc::normalize_resource_id (skybox.value);
-    }
-    serialize_field_if_diff (archive, "skybox_rotation", skybox_rotation,
-                             def.skybox_rotation);
-    serialize_field_if_diff (archive, "clear_color", clear_color,
-                             def.clear_color);
-    serialize_field_if_diff (archive, "clear_alpha", clear_alpha,
-                             def.clear_alpha);
-    serialize_field_if_diff (archive, "ambient_color", ambient_color,
-                             def.ambient_color);
-    serialize_field_if_diff (archive, "ambient_intensity", ambient_intensity,
-                             def.ambient_intensity);
-    serialize_field_if_diff (archive, "sun_altitude", sun_altitude,
-                             def.sun_altitude);
-    serialize_field_if_diff (archive, "sun_azimuth", sun_azimuth,
-                             def.sun_azimuth);
-    serialize_field_if_diff (archive, "exposure", exposure, def.exposure);
-    serialize_field_if_diff (archive, "bloom_threshold", bloom_threshold,
-                             def.bloom_threshold);
-    serialize_field_if_diff (archive, "bloom_knee", bloom_knee, def.bloom_knee);
-    serialize_field_if_diff (archive, "bloom_intensity", bloom_intensity,
-                             def.bloom_intensity);
-    serialize_field_if_diff (archive, "ibl_intensity", ibl_intensity,
-                             def.ibl_intensity);
-    serialize_field_if_diff (archive, "ssao_enabled", ssao_enabled,
-                             def.ssao_enabled);
-    serialize_field_if_diff (archive, "ssao_radius", ssao_radius,
-                             def.ssao_radius);
-    serialize_field_if_diff (archive, "ssao_bias", ssao_bias, def.ssao_bias);
-    serialize_field_if_diff (archive, "ssao_power", ssao_power, def.ssao_power);
-    serialize_field_if_diff (archive, "ssao_intensity", ssao_intensity,
-                             def.ssao_intensity);
-    serialize_field_if_diff (archive, "outline_color", outline_color,
-                             def.outline_color);
-    serialize_field_if_diff (archive, "outline_alpha", outline_alpha,
-                             def.outline_alpha);
-    serialize_field_if_diff (archive, "outline_width", outline_width,
-                             def.outline_width);
-    serialize_field_if_diff (archive, "shadow_bias", shadow_bias,
-                             def.shadow_bias);
-    serialize_field_if_diff (archive, "shadow_strength", shadow_strength,
-                             def.shadow_strength);
-    serialize_field_if_diff (archive, "viewports", viewports, def.viewports);
-    serialize_field_if_diff (archive, "render_viewport", render_viewport,
-                             def.render_viewport);
-    serialize_field_if_diff (archive, "root_viewport_virtual_size",
-                             root_viewport_virtual_size,
-                             def.root_viewport_virtual_size);
   }
 };
 

@@ -3,7 +3,9 @@
 #include "component_meta.hpp"
 #include "../math/vector.hpp"
 #include "wsl/rsc/resource_ids.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
 
 namespace wsl::comp
 {
@@ -33,21 +35,6 @@ struct sprite_2d : world_component
   int z_index = 0;
 
   static void register_meta ();
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    sprite_2d const def{};
-    serialize_field_if_diff (archive, "image", image.value, def.image.value);
-    serialize_field_if_diff (archive, "size", size, def.size);
-    serialize_field_if_diff (archive, "color", color, def.color);
-    serialize_field_if_diff (archive, "uv_offset", uv_offset, def.uv_offset);
-    serialize_field_if_diff (archive, "uv_scale", uv_scale, def.uv_scale);
-    serialize_field_if_diff (archive, "flip_v", flip_v, def.flip_v);
-    serialize_field_if_diff (archive, "flip_h", flip_h, def.flip_h);
-    serialize_field_if_diff (archive, "z_index", z_index, def.z_index);
-  }
 };
 
 } // namespace wsl::comp

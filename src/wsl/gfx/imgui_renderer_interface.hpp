@@ -1,10 +1,20 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <imgui.h>
+#endif
 
 namespace wsl::comp::singl { class runtime_context; }
 namespace wsl::rsc { class resource_manager; }

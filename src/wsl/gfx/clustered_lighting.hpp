@@ -3,12 +3,24 @@
 #include "wsl/gfx/lighting.hpp"
 #include "wsl/gfx/render_context.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/matrix_float4x4.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/type_ptr.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <span>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

@@ -1,16 +1,29 @@
 #pragma once
 
 #include "editor/ui_system_interface.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi/Core.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi/Core/Math.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi_Platform_SDL.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi_Renderer_SDL_GPU.h>
+#endif
 
-#include <cereal/cereal.hpp>
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
 
 #include "wsl/comp/component_meta.hpp"
 #include "wsl/gfx/render_context.hpp"
@@ -53,15 +66,6 @@ public:
   prepared_registry () const
   {
     return m_prepared_registry;
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    rsc::ui_layout_id def_id{};
-    serialize_field_if_diff (archive, "active_document_id",
-                             m_active_document_id.value, def_id.value);
   }
 
   // -- getters / setters

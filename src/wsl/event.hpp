@@ -1,7 +1,11 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_events.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
 
 namespace wsl
 {

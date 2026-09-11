@@ -1,8 +1,12 @@
 #pragma once
 
 #include "shader_program.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

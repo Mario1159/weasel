@@ -3,19 +3,37 @@
 #include "detail/registry_helpers.hpp"
 
 #include "../rsc/world.hpp"
+#include "../serialize/types.hpp"
+#include "../serialize/component_adapters.hpp"
 
-#include <cereal/archives/binary.hpp>
-#include <cereal/archives/json.hpp>
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <cassert>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {
@@ -49,10 +67,10 @@ struct singleton_component_registration_options
   bool serialize_with_scene = true;
 };
 
-/** Concept for types that have a serialize method compatible with Cereal. */
+/** Concept for types that have a serialize method compatible with rfl. */
 template <typename T>
 concept has_serialize
-    = requires (T &v, cereal::BinaryOutputArchive &ar) { v.serialize (ar); };
+    = requires (T &v) { { v.serialize () } -> std::same_as<void>; };
 
 /**
  * Central registry for singleton components (singletons) in the engine.
@@ -91,18 +109,16 @@ public:
     bool (*remove) (::entt::registry &) = nullptr;
     /** Function pointer to get a raw pointer to the singleton instance. */
     void *(*get_ptr) (::entt::registry &) = nullptr;
-    /** Function pointer to save the singleton to a binary archive. */
-    void (*save_binary) (cereal::BinaryOutputArchive &, ::entt::registry &)
+    /** Function pointer to save the singleton to a binary writer. */
+    void (*save_binary) (serialize::binary_writer &, ::entt::registry &)
         = nullptr;
-    /** Function pointer to load the singleton from a binary archive. */
-    void (*load_binary) (cereal::BinaryInputArchive &, ::entt::registry &)
+    /** Function pointer to load the singleton from a binary reader. */
+    void (*load_binary) (serialize::binary_reader &, ::entt::registry &)
         = nullptr;
-    /** Function pointer to save the singleton to a JSON archive. */
-    void (*save_json) (cereal::JSONOutputArchive &, ::entt::registry &)
-        = nullptr;
-    /** Function pointer to load the singleton from a JSON archive. */
-    void (*load_json) (cereal::JSONInputArchive &, ::entt::registry &)
-        = nullptr;
+    /** Function pointer to save the singleton to a JSON writer. */
+    void (*save_json) (serialize::json_writer &, ::entt::registry &) = nullptr;
+    /** Function pointer to load the singleton from a JSON reader. */
+    void (*load_json) (serialize::json_reader &, ::entt::registry &) = nullptr;
   };
 
   using singleton_component_descriptor = descriptor;
@@ -166,23 +182,23 @@ public:
   /** Clears runtime-registered singleton components from the world. */
   void clear_runtime_singleton_components (rsc::world &world);
 
-  /** Saves one registered singleton component to a binary archive. */
-  bool save_singleton_binary (cereal::BinaryOutputArchive &archive,
+  /** Saves one registered singleton component to a binary writer. */
+  bool save_singleton_binary (serialize::binary_writer &writer,
                               ::entt::registry &registry,
                               ::entt::id_type type_id) const;
 
-  /** Loads one registered singleton component from a binary archive. */
-  bool load_singleton_binary (cereal::BinaryInputArchive &archive,
+  /** Loads one registered singleton component from a binary reader. */
+  bool load_singleton_binary (serialize::binary_reader &reader,
                               ::entt::registry &registry,
                               ::entt::id_type type_id) const;
 
-  /** Saves one registered singleton component to a JSON archive. */
-  bool save_singleton_json (cereal::JSONOutputArchive &archive,
+  /** Saves one registered singleton component to a JSON writer. */
+  bool save_singleton_json (serialize::json_writer &writer,
                             ::entt::registry &registry,
                             ::entt::id_type type_id) const;
 
-  /** Loads one registered singleton component from a JSON archive. */
-  bool load_singleton_json (cereal::JSONInputArchive &archive,
+  /** Loads one registered singleton component from a JSON reader. */
+  bool load_singleton_json (serialize::json_reader &reader,
                             ::entt::registry &registry,
                             ::entt::id_type type_id) const;
 
@@ -286,47 +302,34 @@ singleton_registry::register_singleton_component (
   desc.can_add_default = true;
 
   if (options.serialize_with_scene) {
-    desc.save_binary = +[] (cereal::BinaryOutputArchive &archive,
-                            ::entt::registry &registry) {
-      archive (cereal::make_nvp (
-          detail::make_archive_name ("singleton_data_",
-                                     ::entt::type_name<T> ().value ()),
-          registry.ctx ().get<T> ()));
-    };
-    desc.load_binary = +[] (cereal::BinaryInputArchive &archive,
-                            ::entt::registry &registry) {
-      T value{};
-      archive (cereal::make_nvp (
-          detail::make_archive_name ("singleton_data_",
-                                     ::entt::type_name<T> ().value ()),
-          value));
-
-      auto &ctx = registry.ctx ();
-      if (ctx.contains<T> ()) {
-        ctx.get<T> () = std::move (value);
-      } else {
-        ctx.emplace<T> (std::move (value));
-      }
-    };
-    desc.save_json
-        = +[] (cereal::JSONOutputArchive &archive, ::entt::registry &registry) {
-            archive (cereal::make_nvp (
-                detail::make_archive_name ("singleton_data_",
-                                           ::entt::type_name<T> ().value ()),
-                registry.ctx ().get<T> ()));
+    desc.save_binary
+        = +[] (serialize::binary_writer &writer, ::entt::registry &registry) {
+            const auto &value = registry.ctx ().get<T> ();
+            writer.write (value);
           };
-    desc.load_json
-        = +[] (cereal::JSONInputArchive &archive, ::entt::registry &registry) {
+    desc.load_binary
+        = +[] (serialize::binary_reader &reader, ::entt::registry &registry) {
             T value{};
-            archive (cereal::make_nvp (
-                detail::make_archive_name ("singleton_data_",
-                                           ::entt::type_name<T> ().value ()),
-                value));
-
+            reader.read (value);
             auto &ctx = registry.ctx ();
             if (ctx.contains<T> ()) {
-              auto &existing = ctx.get<T> ();
-              existing = std::move (value);
+              ctx.get<T> () = std::move (value);
+            } else {
+              ctx.emplace<T> (std::move (value));
+            }
+          };
+    desc.save_json
+        = +[] (serialize::json_writer &writer, ::entt::registry &registry) {
+            const auto &value = registry.ctx ().get<T> ();
+            writer.write (value);
+          };
+    desc.load_json
+        = +[] (serialize::json_reader &reader, ::entt::registry &registry) {
+            T value{};
+            reader.read (value);
+            auto &ctx = registry.ctx ();
+            if (ctx.contains<T> ()) {
+              ctx.get<T> () = std::move (value);
             } else {
               ctx.emplace<T> (std::move (value));
             }
@@ -381,34 +384,24 @@ singleton_registry::register_bound_singleton_component (
 
   if (options.serialize_with_scene) {
     if constexpr (has_serialize<T>) {
-      desc.save_binary = +[] (cereal::BinaryOutputArchive &archive,
-                              ::entt::registry &registry) {
-        archive (cereal::make_nvp (
-            detail::make_archive_name ("singleton_data_",
-                                       ::entt::type_name<T> ().value ()),
-            *registry.ctx ().get<T *> ()));
-      };
-      desc.load_binary = +[] (cereal::BinaryInputArchive &archive,
-                              ::entt::registry &registry) {
-        archive (cereal::make_nvp (
-            detail::make_archive_name ("singleton_data_",
-                                       ::entt::type_name<T> ().value ()),
-            *registry.ctx ().get<T *> ()));
-      };
-      desc.save_json = +[] (cereal::JSONOutputArchive &archive,
-                            ::entt::registry &registry) {
-        archive (cereal::make_nvp (
-            detail::make_archive_name ("singleton_data_",
-                                       ::entt::type_name<T> ().value ()),
-            *registry.ctx ().get<T *> ()));
-      };
-      desc.load_json = +[] (cereal::JSONInputArchive &archive,
-                            ::entt::registry &registry) {
-        archive (cereal::make_nvp (
-            detail::make_archive_name ("singleton_data_",
-                                       ::entt::type_name<T> ().value ()),
-            *registry.ctx ().get<T *> ()));
-      };
+      desc.save_binary
+          = +[] (serialize::binary_writer &writer, ::entt::registry &registry) {
+              const auto &value = *registry.ctx ().get<T *> ();
+              writer.write (value);
+            };
+      desc.load_binary
+          = +[] (serialize::binary_reader &reader, ::entt::registry &registry) {
+              reader.read (*registry.ctx ().get<T *> ());
+            };
+      desc.save_json
+          = +[] (serialize::json_writer &writer, ::entt::registry &registry) {
+              const auto &value = *registry.ctx ().get<T *> ();
+              writer.write (value);
+            };
+      desc.load_json
+          = +[] (serialize::json_reader &reader, ::entt::registry &registry) {
+              reader.read (*registry.ctx ().get<T *> ());
+            };
     }
   }
 

@@ -5,12 +5,24 @@
 #include "wsl/log/log.hpp"
 
 #include "entt/entity/fwd.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <tracy/Tracy.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <utility>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

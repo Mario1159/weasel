@@ -565,6 +565,7 @@ cli_handler::parse (int argc, char **argv)
     proj.cubemaps_path = "rsc/textures/cubemaps";
     proj.audio_path = "rsc/audio";
     proj.fonts_path = "rsc/fonts";
+    proj.materials_path = "rsc/materials";
     proj.default_scene_path = "";
 
     wsl::comp::singl::runtime_context rtc{ "Project Generator", 0, 0,

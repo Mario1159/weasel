@@ -409,7 +409,7 @@ runtime_project_module::write_registration_cache () const
   std::error_code ec;
   fs::create_directories (path.parent_path (), ec);
   if (ec) {
-    wsl::log::cmake ()->warn ("Could not create runtime cache directory: {}",
+    wsl::log::xmake ()->warn ("Could not create runtime cache directory: {}",
                               ec.message ());
     return false;
   }
@@ -444,14 +444,14 @@ runtime_project_module::write_registration_cache () const
   {
     std::ofstream out (tmp_path, std::ios::binary | std::ios::trunc);
     if (!out) {
-      wsl::log::cmake ()->warn ("Could not write runtime cache temp file: {}",
+      wsl::log::xmake ()->warn ("Could not write runtime cache temp file: {}",
                                 tmp_path.string ());
       return false;
     }
     out << buffer.GetString ();
     out.flush ();
     if (!out.good ()) {
-      wsl::log::cmake ()->warn ("Failed writing to runtime cache temp file: {}",
+      wsl::log::xmake ()->warn ("Failed writing to runtime cache temp file: {}",
                                 tmp_path.string ());
       // attempt to remove temp file
       std::error_code rem_ec;
@@ -463,7 +463,7 @@ runtime_project_module::write_registration_cache () const
   std::error_code rename_ec;
   fs::rename (tmp_path, path, rename_ec);
   if (rename_ec) {
-    wsl::log::cmake ()->warn (
+    wsl::log::xmake ()->warn (
         "Could not move runtime cache into place: {} -> {} ({})",
         tmp_path.string (), path.string (), rename_ec.message ());
     // best-effort cleanup
@@ -583,7 +583,7 @@ runtime_project_module::load_das_registrations_from_cache (
     });
   }
 
-  wsl::log::cmake ()->debug (
+  wsl::log::xmake ()->debug (
       "load_das_registrations_from_cache: Restored {} das registrations",
       m_das_registrations.size ());
 }
@@ -628,7 +628,7 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
         = "Runtime metadata cache is empty although Daslang sources exist; "
           "ignoring it.";
     m_last_error = m_last_status;
-    wsl::log::cmake ()->warn ("{}", m_last_status);
+    wsl::log::xmake ()->warn ("{}", m_last_status);
     std::error_code ec;
     fs::remove (registration_cache_path (project_root), ec);
     return false;
@@ -641,7 +641,7 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
   m_load_state = load_state_t::metadata_cache;
   m_last_error.clear ();
   m_last_status = "Runtime metadata loaded from cache.";
-  wsl::log::cmake ()->debug ("{}", m_last_status);
+  wsl::log::xmake ()->debug ("{}", m_last_status);
   return true;
 }
 
@@ -674,7 +674,7 @@ runtime_project_module::invalidate (const rsc::project *project)
     std::error_code ec;
     fs::remove (registration_cache_path (root), ec);
     if (ec) {
-      wsl::log::cmake ()->debug ("Cache removal ignored: {}", ec.message ());
+      wsl::log::xmake ()->debug ("Cache removal ignored: {}", ec.message ());
     }
   }
 
@@ -742,9 +742,15 @@ runtime_project_module::finalize_load ()
               reg.display_name);
       break;
     case das_registration::system:
+#if WEASEL_HAS_DASLANG
       m_runtime_ctx->system_factory_registry ().register_cached_runtime_system (
           static_cast<entt::id_type> (reg.type_id), reg.type_name,
           reg.display_name, reg.script_path, *get_das_engine ());
+#else
+      m_runtime_ctx->system_factory_registry ().register_cached_runtime_system (
+          static_cast<entt::id_type> (reg.type_id), reg.type_name,
+          reg.display_name);
+#endif
       break;
     }
   }
@@ -761,7 +767,7 @@ runtime_project_module::unload ()
     return;
   }
 
-  wsl::log::cmake ()->trace ("Unloading module");
+  wsl::log::xmake ()->trace ("Unloading module");
 
   // Clear runtime registries before releasing Daslang programs and contexts.
   if (m_runtime_ctx != nullptr) {
@@ -827,24 +833,24 @@ runtime_project_module::compile_and_load (const rsc::project &project)
 {
   const fs::path project_root = fs::weakly_canonical (project.root_path);
 
-  wsl::log::cmake ()->trace ("Compile and load started for project root: {}",
+  wsl::log::xmake ()->trace ("Compile and load started for project root: {}",
                              project_root.string ());
 
   source_set sources;
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "Gathering Daslang files from components, systems, and singletons...");
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "  components_path: {}",
       (project_root / project.components_path).string ());
-  wsl::log::cmake ()->trace ("  systems_path: {}",
+  wsl::log::xmake ()->trace ("  systems_path: {}",
                              (project_root / project.systems_path).string ());
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "  singletons_path: {}",
       (project_root / project.singletons_path).string ());
   gather_files (project_root / project.components_path, sources);
   gather_files (project_root / project.systems_path, sources);
   gather_files (project_root / project.singletons_path, sources);
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "Gathered {} headers, {} cpp sources, and {} das sources",
       sources.headers.size (), sources.cpp_sources.size (),
       sources.das_sources.size ());
@@ -853,7 +859,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     m_last_status = "User C++ runtime components/systems are not supported; "
                     "use Daslang. ";
     m_last_error = m_last_status;
-    wsl::log::cmake ()->error ("{}", m_last_status);
+    wsl::log::xmake ()->error ("{}", m_last_status);
     return false;
   }
 
@@ -863,7 +869,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     m_loaded_project_root = project_root;
     m_last_status
         = "Runtime module is already up to date (no changes detected).";
-    wsl::log::cmake ()->trace ("{}", m_last_status);
+    wsl::log::xmake ()->trace ("{}", m_last_status);
     return true;
   }
 
@@ -877,7 +883,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   // User runtime code is Daslang source. There is no shared-library cache.
   if (sources.cpp_sources.empty () && sources.das_sources.empty ()) {
     m_last_status = "No source files found to compile.";
-    wsl::log::cmake ()->debug ("{}", m_last_status);
+    wsl::log::xmake ()->debug ("{}", m_last_status);
     m_load_state = load_state_t::loaded;
     m_source_hash = current_hash;
     return true;
@@ -887,18 +893,18 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   // successfully. A failed compile must leave the state at `unloaded` so the
   // next attempt is a real retry instead of being short-circuited.
   m_source_hash = current_hash;
-  wsl::log::cmake ()->debug ("Daslang runtime sources discovered.");
+  wsl::log::xmake ()->debug ("Daslang runtime sources discovered.");
 
   // Execute daslang files and store registrations for finalize_load
   m_das_registrations.clear ();
   if (!sources.das_sources.empty ()) {
-    wsl::log::cmake ()->debug ("Executing {} daslang files...",
+    wsl::log::xmake ()->debug ("Executing {} daslang files...",
                                sources.das_sources.size ());
     auto *das_engine = get_das_engine ();
     if (!das_engine->initialize ()) {
       m_last_status = "Failed to initialize daslang engine.";
       m_last_error = m_last_status + "\n" + das_engine->last_error ();
-      wsl::log::cmake ()->error ("{}", m_last_error);
+      wsl::log::xmake ()->error ("{}", m_last_error);
       return false;
     }
 
@@ -920,13 +926,13 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     das_engine->addFsRoot ("systems", sys_dir);
 
     for (const auto &das_file : sources.das_sources) {
-      wsl::log::cmake ()->debug ("Executing daslang file: {}",
+      wsl::log::xmake ()->debug ("Executing daslang file: {}",
                                  das_file.string ());
       if (!das_engine->execute_file (das_file)) {
         m_last_status
             = "Failed to execute daslang file: " + das_file.string () + ".";
         m_last_error = m_last_status + "\n" + das_engine->last_error ();
-        wsl::log::cmake ()->error ("{}", m_last_error);
+        wsl::log::xmake ()->error ("{}", m_last_error);
         return false;
       }
 
@@ -986,7 +992,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   m_load_state = load_state_t::loaded;
   m_last_error.clear ();
   m_last_status = "Runtime systems/components compiled and registered.";
-  wsl::log::cmake ()->trace ("{}", m_last_status);
+  wsl::log::xmake ()->trace ("{}", m_last_status);
   return true;
 }
 
@@ -1004,12 +1010,12 @@ runtime_project_module::compile_and_load_async (const rsc::project &project)
   }
 
   if (is_reloading ()) {
-    wsl::log::cmake ()->warn (
+    wsl::log::xmake ()->warn (
         "Async reload already in progress, ignoring duplicate request");
     return;
   }
 
-  wsl::log::cmake ()->debug ("Starting async runtime reload for project: {}",
+  wsl::log::xmake ()->debug ("Starting async runtime reload for project: {}",
                              project.name);
   m_async_reload_future = std::async (std::launch::async, [this, project] () {
     return this->compile_and_load (project);
@@ -1027,11 +1033,11 @@ runtime_project_module::poll_async_reload ()
       == std::future_status::ready) {
     const bool success = m_async_reload_future.get ();
     if (success) {
-      wsl::log::cmake ()->debug (
+      wsl::log::xmake ()->debug (
           "Async reload complete, calling finalize_load on main thread");
       finalize_load ();
     } else {
-      wsl::log::cmake ()->warn ("Async reload failed: {}", m_last_status);
+      wsl::log::xmake ()->warn ("Async reload failed: {}", m_last_status);
     }
     return true;
   }

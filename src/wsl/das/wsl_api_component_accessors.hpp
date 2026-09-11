@@ -18,12 +18,20 @@
 #include "wsl/comp/world_transform.hpp"
 #include "wsl/math/vector.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <daScript/misc/vectypes.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <daScript/simulate/runtime_matrices.h>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
+#endif
 
 // The vector properties are exposed to daslang as references to the dasLang
 // built-in float2/3/4 types, so the engine math types must be layout-identical

@@ -3,7 +3,9 @@
 #include "../math/vector.hpp"
 #include "component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl::comp
 {
@@ -84,49 +86,6 @@ struct subviewport : world_component
   bool render_2d_only = false;
 
   static void register_meta ();
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    subviewport def{};
-    serialize_field_if_diff (archive, "x", x, def.x);
-    serialize_field_if_diff (archive, "y", y, def.y);
-    serialize_field_if_diff (archive, "width", width, def.width);
-    serialize_field_if_diff (archive, "height", height, def.height);
-    serialize_field_if_diff (archive, "clear_color", clear_color,
-                             def.clear_color);
-    serialize_field_if_diff (archive, "clear_depth", clear_depth,
-                             def.clear_depth);
-    serialize_field_if_diff (archive, "clear_r", clear_r, def.clear_r);
-    serialize_field_if_diff (archive, "clear_g", clear_g, def.clear_g);
-    serialize_field_if_diff (archive, "clear_b", clear_b, def.clear_b);
-    serialize_field_if_diff (archive, "clear_a", clear_a, def.clear_a);
-    serialize_field_if_diff (archive, "camera_2d", camera_2d.value,
-                             def.camera_2d.value);
-    serialize_field_if_diff (archive, "camera_3d", camera_3d.value,
-                             def.camera_3d.value);
-    // Backward compatibility: old single "camera" field maps to camera_3d
-    if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-      if (camera_3d.value == entt::null) {
-        try {
-          archive (cereal::make_nvp ("camera", camera_3d.value));
-        } catch (const std::exception &) {
-          /* old field not present */
-        }
-      }
-    }
-    serialize_field_if_diff (archive, "world_quad_size", world_quad_size,
-                             def.world_quad_size);
-    serialize_field_if_diff (archive, "container_size", container_size,
-                             def.container_size);
-    serialize_field_if_diff (archive, "container_position", container_position,
-                             def.container_position);
-    serialize_field_if_diff (archive, "virtual_size", virtual_size,
-                             def.virtual_size);
-    serialize_field_if_diff (archive, "render_2d_only", render_2d_only,
-                             def.render_2d_only);
-  }
 };
 
 /**

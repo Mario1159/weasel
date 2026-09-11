@@ -4,12 +4,24 @@
 #include "../rsc/scene.hpp"
 #include "../sys/stage_registry.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/core/type_info.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
 
 namespace wsl
 {
@@ -162,11 +174,13 @@ public:
    * Creates a das_system that delegates lifecycle callbacks to the daslang
    * script via the engine.
    */
+#if WEASEL_HAS_DASLANG
   void register_cached_runtime_system (entt::id_type type_id,
                                        std::string_view type_name,
                                        std::string_view display_name,
                                        std::string_view script_path,
                                        das::das_engine &engine);
+#endif
 
   /**
    * Registers a system with a custom factory function.

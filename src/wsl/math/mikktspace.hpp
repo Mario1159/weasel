@@ -2,10 +2,18 @@
 
 #include "vector.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::math
 {

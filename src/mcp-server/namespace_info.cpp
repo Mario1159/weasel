@@ -205,7 +205,7 @@ Notes:
     when you need the id (apply_force, apply_impulse, ...).
   • query() $(t : Transform&) { t.position.y += dt } binds LIVE
     component references for in-place writes when no id is needed.
-  • Physics bodies use Jolt density 1000 kg/m^3: a builtin://sphere
+  • Physics bodies use density 1000 kg/m^3: a builtin://sphere
     (radius 0.5) masses ~524 kg, so forces must be in the thousands.
 
 ── Built-in Systems ──
@@ -216,8 +216,8 @@ transform_system
 
 physics_system
   Steps the physics engine. Syncs rigid_body ↔ transform:
-    • Before step: copies transform → Jolt body position/rotation
-    • After step:  copies Jolt body → world_transform
+    • Before step: copies transform → physics body position/rotation
+    • After step:  copies physics body → world_transform
   Dynamic bodies own their transform during simulation; writing
   transform.position directly on them mid-play is ignored (use forces/
   impulses, or remove + re-add the rigid_body component to teleport).
@@ -259,7 +259,7 @@ Every scene created via scene_manager::create_scene() starts with:
     - Resource Manager     (asset loading/caching)
     - UI Manager           (docking layout, themes)
     - Rendering Manager    (renderer config, shadow settings)
-    - Physics Manager      (Jolt engine pointer)
+    - Physics Manager      (physics engine pointer)
 
 No per-scene systems are pre-attached to a newly created scene.
 Use sys add <name> to attach user systems.
@@ -272,7 +272,7 @@ the active scene's registry, regardless of which per-scene systems
 are attached:
 
   1. Audio     — audio source playback and 3D positioning
-  2. Physics   — steps Jolt simulation, syncs rigid_body ↔ transform
+  2. Physics   — steps physics simulation, syncs rigid_body ↔ transform
   3. Transform — recomputes world_transform from hierarchy + transforms
   4. Shadow    — renders shadow-map depth passes
   5. Lighting  — uploads light data to GPU UBO
@@ -393,18 +393,18 @@ to decouple scenes from concrete asset paths.
     // phys
     // ===================================================================
     { "phys",
-      { "phys – Physics Engine (Jolt Physics wrapper)",
+      { "phys – Physics Engine (Box3D wrapper)",
         "Rigid body simulation, collision detection, sensors, and ray "
-        "casting backed by Jolt Physics.",
+        "casting backed by Box3D.",
 
-        R"doc(== wsl::phys — Physics (Jolt Integration) ==
+        R"doc(== wsl::phys — Physics (Box3D Integration) ==
 
-A C++ wrapper around Jolt Physics providing body creation, simulation
+A C++ wrapper around Box3D providing body creation, simulation
 stepping, collision queries, and sensor overlap events.
 
 ── phys::engine (physics_engine.hpp) ──
 
-  Owns the Jolt PhysicsSystem, thread pool, temp allocator, and filters.
+  Owns the Box3D world and simulation state.
 
   Configuration:
     set_gravity(double)     — default -9.8
@@ -417,18 +417,10 @@ stepping, collision queries, and sensor overlap events.
 
 ── Body Lifecycle ──
 
-  Bodies are created/removed via Jolt's BodyInterface:
+  Bodies are created/removed via the neutral engine API:
 
-    JPH::BodyInterface& bi = physics.get_body_interface();
-
-    JPH::BodyCreationSettings settings(
-        new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f)),
-        JPH::RVec3(0, 10, 0),
-        JPH::Quat::sIdentity(),
-        JPH::EMotionType::Dynamic,
-        Layers::MOVING);
-
-    JPH::BodyID id = bi.CreateAndAddBody(settings, JPH::EActivation::Activate);
+    auto id = engine.create_body(desc);
+    engine.destroy_body(id);
 
   Motion types:  Static (immovable), Kinematic (user-controlled), Dynamic (simulated)
   Allowed DOFs:  All, TranslationX/Y/Z, RotationX/Y/Z (bitfield)
@@ -442,17 +434,10 @@ stepping, collision queries, and sensor overlap events.
     auto events = physics.drain_sensor_events();
     // events: { sensor, other, entered (bool) }
 
-── Collision Filtering ──
-
-  Layers defined in layers.hpp. Customize:
-    broad_phase_layer_interface — maps object layers to broad-phase
-    object_vs_broad_phase_layer_filter — broad-phase vs object
-    object_layer_pair_filter — object vs object
-
 ── Querying ──
 
-    const JPH::NarrowPhaseQuery& query = physics.get_narrow_phase_query();
-    // ray casts, shape casts, collision queries via Jolt API
+    // Ray casts and shape queries via the physics engine API
+    auto result = engine.ray_cast(origin, direction, max_dist);
 
 ── Integration with ECS ──
 
@@ -560,12 +545,12 @@ shadow mapping, and immediate-mode UI overlay via ImGui.
     { "math",
       { "math – Math Types & Utilities",
         "Core math types (vec3f, quatf) with automatic conversion between "
-        "GLM, Jolt, and ImGui. Also includes MikkTSpace tangent computation.",
+        "GLM, and ImGui. Also includes MikkTSpace tangent computation.",
 
         R"doc(== wsl::math — Math Types ==
 
 Lightweight math types used as component fields across the engine.
-Designed for seamless interop between GLM, Jolt Physics, and ImGui.
+Designed for seamless interop between GLM and ImGui.
 
 ── vec3f (vector.hpp) ──
 
@@ -573,9 +558,8 @@ Designed for seamless interop between GLM, Jolt Physics, and ImGui.
 
     math::vec3f v{ 1, 2, 3 };
 
-    // Implicit conversions to/from GLM and Jolt
+    // Implicit conversions to/from GLM
     glm::vec3 gv = v;
-    JPH::Vec3 jv = v;
     math::vec3f v2 = glm::vec3{4,5,6};
 
     // Operators
@@ -614,7 +598,7 @@ Designed for seamless interop between GLM, Jolt Physics, and ImGui.
 
 ── Design Notes ──
 
-  These types exist to decouple component definitions from direct GLM/Jolt
+  These types exist to decouple component definitions from direct GLM
   dependencies. Each type provides:
     • Implicit conversion operators to/from the major math libraries
     • Cereal serialize() for scene snapshot serialization

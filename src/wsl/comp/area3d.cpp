@@ -1,18 +1,8 @@
 #include "area3d.hpp"
 
-#include "../phys/utils.hpp" // to_jolt(...)
 #include "phys/physics_engine.hpp"
 #include "singl/runtime_context.hpp"
 
-#include <Jolt/Core/Reference.h>
-#include <Jolt/Math/Quat.h>
-#include <Jolt/Math/Real.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Body/BodyInterface.h>
-#include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Collision/Shape/Shape.h>
-#include <Jolt/Physics/Collision/Shape/SphereShape.h>
-#include <Jolt/Physics/EActivation.h>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -57,13 +47,13 @@ area::has_transform_change () const
 void
 area::destroy_body (phys::engine &engine)
 {
-  if (body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (body_id)) {
     return;
   }
 
   engine.unregister_sensor (body_id);
   engine.on_remove_body (body_id);
-  body_id = JPH::BodyID{};
+  body_id = phys::null_body_id;
 }
 
 void
@@ -78,50 +68,37 @@ void
 area::create_body (phys::engine &engine, const glm::vec3 &world_pos,
                    const glm::quat &world_rot, const glm::vec3 &scale)
 {
-  if (!body_id.IsInvalid ()) {
+  if (phys::is_valid_body_id (body_id)) {
     destroy_body (engine);
   }
 
-  JPH::ShapeRefC shape_ref;
-
-  if (shape == shape_type::box) {
-    JPH::RefConst<JPH::ShapeSettings> const s = new JPH::BoxShapeSettings (
-        to_jolt (half_extents) * JPH::Vec3 (scale.x, scale.y, scale.z));
-    shape_ref = s->Create ().Get ();
-  } else {
-    float const avg_scale = (scale.x + scale.y + scale.z) / 3.0F;
-    JPH::RefConst<JPH::ShapeSettings> const s
-        = new JPH::SphereShapeSettings (radius * avg_scale);
-    shape_ref = s->Create ().Get ();
-  }
-
-  const JPH::RVec3 pos = to_jolt (world_pos);
-  const JPH::Quat rot = to_jolt (world_rot);
-
-  JPH::BodyCreationSettings settings (
-      shape_ref, pos, rot, phys::motion_type::Kinematic, (phys::object_layer)0);
-
-  settings.mIsSensor = true;
-  settings.mAllowDynamicOrKinematic = true;
-
-  body_id = engine.get_body_interface ().CreateAndAddBody (
-      settings, JPH::EActivation::Activate);
-
-  engine.register_sensor (body_id);
+  phys::body_desc desc;
+  desc.motion = phys::motion_type::Kinematic;
+  desc.shape = shape == shape_type::box ? phys::shape_type::box
+                                        : phys::shape_type::sphere;
+  desc.position = { world_pos.x, world_pos.y, world_pos.z };
+  desc.rotation = { world_rot.x, world_rot.y, world_rot.z, world_rot.w };
+  desc.half_extents = { half_extents.x () * scale.x,
+                        half_extents.y () * scale.y,
+                        half_extents.z () * scale.z };
+  desc.radius = radius * ((scale.x + scale.y + scale.z) / 3.0F);
+  desc.sensor = true;
+  body_id = engine.create_body (desc);
 }
 
 void
 area::apply_transform_to_body (phys::engine &engine) const
 {
-  if (body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (body_id)) {
     return;
   }
 
-  auto &bi = engine.get_body_interface ();
-
   // Read current body world position/rotation
-  glm::vec3 const body_pos = to_glm (bi.GetPosition (body_id));
-  glm::quat const body_rot = to_glm (bi.GetRotation (body_id));
+  const phys::vector3 body = engine.get_body_position (body_id);
+  const phys::quaternion rotation_value = engine.get_body_rotation (body_id);
+  glm::vec3 const body_pos (body.x, body.y, body.z);
+  glm::quat const body_rot (rotation_value.w, rotation_value.x,
+                            rotation_value.y, rotation_value.z);
 
   // Undo old offset to recover the transform's world rotation
   glm::quat const old_off_rot = (glm::quat)applied_rotation;
@@ -134,9 +111,9 @@ area::apply_transform_to_body (phys::engine &engine) const
   glm::vec3 const new_body_pos = body_pos + xform_rot * offset_delta;
   glm::quat const new_body_rot = xform_rot * new_off_rot;
 
-  bi.SetPositionAndRotation (body_id, to_jolt (new_body_pos),
-                             to_jolt (new_body_rot),
-                             JPH::EActivation::Activate);
+  engine.set_body_transform (
+      body_id, { new_body_pos.x, new_body_pos.y, new_body_pos.z },
+      { new_body_rot.x, new_body_rot.y, new_body_rot.z, new_body_rot.w });
 }
 
 void
@@ -156,16 +133,19 @@ area::on_inspector_changed (comp::singl::runtime_context *runtime,
   const bool structural_change = has_structural_change ();
   const bool xform_change = has_transform_change ();
 
-  if (body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (body_id)) {
     sync_applied_cache ();
     return;
   }
 
   if (structural_change) {
-    // Read current body position from Jolt to preserve world placement
-    auto const &bi = engine->get_body_interface ();
-    glm::vec3 const current_pos = to_glm (bi.GetPosition (body_id));
-    glm::quat const current_rot = to_glm (bi.GetRotation (body_id));
+    // Read current body position from physics engine to preserve world placement
+    const phys::vector3 current = engine->get_body_position (body_id);
+    const phys::quaternion current_rotation
+        = engine->get_body_rotation (body_id);
+    glm::vec3 const current_pos (current.x, current.y, current.z);
+    glm::quat const current_rot (current_rotation.w, current_rotation.x,
+                                 current_rotation.y, current_rotation.z);
     rebuild_body (*engine, current_pos, current_rot, scale);
   } else {
     if (xform_change) {
@@ -174,6 +154,53 @@ area::on_inspector_changed (comp::singl::runtime_context *runtime,
   }
 
   sync_applied_cache ();
+}
+
+void
+area::register_meta ()
+{
+  using namespace entt::literals;
+
+  entt::meta_factory<comp::area::shape_type> ()
+      .type (entt::type_hash<comp::area::shape_type>::value ())
+      .conv<int> ()
+      .data<comp::area::shape_type::box> ("box"_hs)
+      .custom<const char *> ("Box")
+      .data<comp::area::shape_type::sphere> ("sphere"_hs)
+      .custom<const char *> ("Sphere");
+
+  entt::meta_factory<comp::area> ()
+      .type (entt::type_hash<comp::area>::value ())
+      .custom<comp::meta_info> (meta_info{
+          "Area3D", "Sensor (trigger) to detect bodies entering/exiting",
+          "" })
+      .func<&comp::area::on_inspector_changed> ("on_inspector_changed"_hs)
+
+      .data<&comp::area::shape> ("shape"_hs)
+      .custom<comp::meta_info> (
+          meta_info{ "Shape", "Sensor collision shape", "" })
+
+      .data<&comp::area::position> ("position"_hs)
+      .custom<comp::meta_info> (meta_info{
+          "Position",
+          "Local position offset relative to the entity's Transform position",
+          "" })
+
+      .data<&comp::area::rotation> ("rotation"_hs)
+      .custom<comp::meta_info> (meta_info{
+          "Rotation",
+          "Local rotation offset relative to the entity's Transform rotation",
+          "" })
+
+      .data<&comp::area::half_extents> ("half_extents"_hs)
+      .custom<comp::meta_info> (meta_info{
+          "Half Extents",
+          "Box half size (scaled by the entity's Transform scale)", "" })
+
+      .data<&comp::area::radius> ("radius"_hs)
+      .custom<comp::meta_info> (meta_info{
+          "Radius", "Sphere radius (scaled by the entity's Transform scale)",
+          "" });
 }
 
 } // namespace comp

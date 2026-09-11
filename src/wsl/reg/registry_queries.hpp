@@ -5,8 +5,12 @@
 #include "system_factory_registry.hpp"
 #include "event/event_hub.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::reg
 {

@@ -1,9 +1,17 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 #include "material.hpp"
 #include "material_asset.hpp"

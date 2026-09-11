@@ -2,9 +2,15 @@
 
 #include "renderdoc_app.h"
 
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
+#endif
 
 /**
  * C++ wrapper around the RenderDoc in-application API 1.7.0.

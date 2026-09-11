@@ -3,10 +3,12 @@
 #include "../math/vector.hpp"
 #include "component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/vector_float3.hpp>
-
-#include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {
@@ -39,15 +41,6 @@ struct directional_light : world_component
         .data<&comp::directional_light::intensity> ("intensity"_hs)
         .custom<comp::meta_info> (meta_info{
             "Intensity", "Brightness multiplier of the light.", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    directional_light const def{};
-    serialize_field_if_diff (archive, "color", color, def.color);
-    serialize_field_if_diff (archive, "intensity", intensity, def.intensity);
   }
 };
 

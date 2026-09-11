@@ -1,5 +1,5 @@
+#if WEASEL_HAS_DASLANG
 #include "das_interop.hpp"
-
 #include "daScript/ast/ast.h"
 #include "daScript/ast/ast_interop.h"
 #include "daScript/daScript.h"
@@ -269,3 +269,4 @@ register_interop_functions (::das::Module &mod)
 }
 
 } // namespace wsl::das
+#endif

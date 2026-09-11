@@ -2,8 +2,9 @@
 
 #include "component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
-#include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {
@@ -54,16 +55,6 @@ struct hierarchy : world_component
     entt::meta_factory<std::string> ()
         .type (entt::type_hash<std::string>::value ())
         .custom<comp::meta_info> (meta_info{ "String", "A String", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    hierarchy def{};
-    serialize_field_if_diff (archive, "parent", parent, def.parent);
-    serialize_field_if_diff (archive, "first", first, def.first);
-    serialize_field_if_diff (archive, "next", next, def.next);
   }
 };
 

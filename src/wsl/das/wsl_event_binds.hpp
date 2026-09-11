@@ -1,19 +1,28 @@
 #pragma once
 
+#if WEASEL_HAS_DASLANG
 #include "daScript/ast/ast.h"
 #include "daScript/ast/ast_handle.h"
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/core/fwd.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
 
+#if WEASEL_HAS_DASLANG
 namespace das
 {
 class Module;
 class ModuleLibrary;
 }
+#endif
 
 namespace wsl::das
 {
+#if WEASEL_HAS_DASLANG
 
 /**
  * Registers Daslang bindings for the engine input message structs
@@ -44,5 +53,6 @@ void register_message_type (const char *name, entt::id_type id,
  * :param context: The context being destroyed.
  */
 void wsl_api_on_context_destroyed (::das::Context *context);
+#endif // WEASEL_HAS_DASLANG
 
 } // namespace wsl::das

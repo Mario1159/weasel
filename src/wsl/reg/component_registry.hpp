@@ -2,24 +2,43 @@
 
 #include "../comp/component_meta.hpp"
 #include "../das/das_engine.hpp"
+#include "../serialize/types.hpp"
+#include "../serialize/component_adapters.hpp"
 
 #include "detail/registry_helpers.hpp"
 #include "wsl/log/log.hpp"
 
-#include <cereal/archives/binary.hpp>
-#include <cereal/archives/json.hpp>
-#include <cereal/types/vector.hpp>
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/core/type_info.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {
@@ -166,16 +185,16 @@ public:
     /** Copies the component from a source entity to a destination entity. */
     void (*copy) (entt::registry &src_reg, entt::entity src_ent,
                   entt::registry &dst_reg, entt::entity dst_ent) = nullptr;
-    /** Saves component data to a binary archive. */
-    void (*save_binary) (cereal::BinaryOutputArchive &, entt::registry &)
+    /** Saves component data to a binary writer. */
+    void (*save_binary) (serialize::binary_writer &, entt::registry &)
         = nullptr;
-    /** Loads component data from a binary archive. */
-    void (*load_binary) (cereal::BinaryInputArchive &, entt::snapshot_loader &)
+    /** Loads component data from a binary reader. */
+    void (*load_binary) (serialize::binary_reader &, entt::registry &)
         = nullptr;
-    /** Saves component data to a JSON archive. */
-    void (*save_json) (cereal::JSONOutputArchive &, entt::registry &) = nullptr;
-    /** Loads component data from a JSON archive. */
-    void (*load_json) (cereal::JSONInputArchive &, entt::registry &) = nullptr;
+    /** Saves component data to a JSON writer. */
+    void (*save_json) (serialize::json_writer &, entt::registry &) = nullptr;
+    /** Loads component data from a JSON reader. */
+    void (*load_json) (serialize::json_reader &, entt::registry &) = nullptr;
   };
 
   using world_component_descriptor = descriptor;
@@ -259,53 +278,52 @@ public:
                              entt::entity dst_entity,
                              entt::id_type component_type_id) const;
 
-  /** Saves one registered world component storage to a binary archive. */
-  bool save_world_component_binary (cereal::BinaryOutputArchive &archive,
+  /** Saves one registered world component storage to a binary writer. */
+  bool save_world_component_binary (serialize::binary_writer &writer,
                                     entt::registry &registry,
                                     entt::id_type component_type_id) const;
 
-  /** Loads one registered world component storage from a binary archive. */
-  bool load_world_component_binary (cereal::BinaryInputArchive &archive,
-                                    entt::snapshot_loader &loader,
+  /** Loads one registered world component storage from a binary reader. */
+  bool load_world_component_binary (serialize::binary_reader &reader,
+                                    entt::registry &registry,
                                     entt::id_type component_type_id) const;
 
-  /** Saves one registered world component storage to a JSON archive. */
-  bool save_world_component_json (cereal::JSONOutputArchive &archive,
+  /** Saves one registered world component storage to a JSON writer. */
+  bool save_world_component_json (serialize::json_writer &writer,
                                   entt::registry &registry,
                                   entt::id_type component_type_id) const;
 
-  /** Loads one registered world component storage from a JSON archive. */
-  bool load_world_component_json (cereal::JSONInputArchive &archive,
+  /** Loads one registered world component storage from a JSON reader. */
+  bool load_world_component_json (serialize::json_reader &reader,
                                   entt::registry &registry,
                                   entt::id_type component_type_id) const;
 
   /**
-   * Saves all das component data to a JSON archive.
+   * Saves all das component data to a JSON writer.
    *
    * Each das component is serialized as a JSON array of objects with fields:
    * type_id (uint), entity (uint), data (hex string).
    */
-  void save_das_components_json (cereal::JSONOutputArchive &archive,
+  void save_das_components_json (serialize::json_writer &writer,
                                  entt::registry &registry) const;
 
   /**
-   * Loads das component data from a JSON archive.
+   * Loads das component data from a JSON reader.
    *
    * Expects the same format produced by save_das_components_json.
    */
-  void load_das_components_json (cereal::JSONInputArchive &archive,
+  void load_das_components_json (serialize::json_reader &reader,
                                  entt::registry &registry);
 
   /**
-   * Saves all das component data to a binary archive (for play/stop
-   * snapshots).
+   * Saves all das component data to a binary writer (for play/stop snapshots).
    */
-  void save_das_components_binary (cereal::BinaryOutputArchive &archive,
+  void save_das_components_binary (serialize::binary_writer &writer,
                                    entt::registry &registry) const;
 
-  /** Loads das component data from a binary archive (for play/stop snapshots).
+  /** Loads das component data from a binary reader (for play/stop snapshots).
    */
-  void load_das_components_binary (cereal::BinaryInputArchive &archive,
+  void load_das_components_binary (serialize::binary_reader &reader,
                                    entt::registry &registry);
 
   // ── Das component tracking ──
@@ -455,71 +473,124 @@ private:
   /** JSON save logic for one component type. */
   template <typename T>
   static void
-  save_component_json (cereal::JSONOutputArchive &ar, entt::registry &registry)
+  save_component_json (serialize::json_writer &writer, entt::registry &registry)
   {
     using storage_t = entt::registry::storage_for_type<T>;
     const auto &const_registry = registry;
     const storage_t *storage = const_registry.template storage<T> ();
 
-    if (storage == nullptr) {
-      entt::entity zero{};
-      ar (cereal::make_nvp ("count", zero));
-      return;
-    }
-
-    ar (cereal::make_nvp ("count", storage->size ()));
-
+    // Always emit a document, even when this component has no storage.
+    // The loader consumes one document per registered component in the
+    // same order, so a skipped document would desynchronize the stream.
     std::vector<detail::component_save_entry<T>> entries;
-    entries.reserve (storage->size ());
+    if (storage != nullptr) {
+      entries.reserve (storage->size ());
 
-    if constexpr (detail::is_in_place_storage_v<T>) {
-      for (auto it = storage->rbegin (), last = storage->rend (); it != last;
-           ++it) {
-        const auto ent = *it;
-        if (ent == entt::tombstone) {
-          detail::component_save_entry<T> tomb;
-          tomb.data = nullptr;
-          entries.push_back (tomb);
-        } else {
-          entries.push_back (
-              detail::component_save_entry<T>{ ent, &storage->get (ent) });
+      if constexpr (detail::is_in_place_storage_v<T>) {
+        for (auto it = storage->rbegin (), last = storage->rend (); it != last;
+             ++it) {
+          const auto ent = *it;
+          if (ent == entt::tombstone) {
+            detail::component_save_entry<T> tomb;
+            tomb.data = nullptr;
+            entries.push_back (tomb);
+          } else {
+            entries.push_back (
+                detail::component_save_entry<T>{ ent, &storage->get (ent) });
+          }
+        }
+      } else {
+        for (auto elem : storage->reach ()) {
+          entries.push_back (detail::component_save_entry<T>{
+              std::get<0> (elem), &std::get<1> (elem) });
         }
       }
-    } else {
-      for (auto elem : storage->reach ()) {
-        entries.push_back (detail::component_save_entry<T>{
-            std::get<0> (elem), &std::get<1> (elem) });
-      }
     }
 
-    ar (cereal::make_nvp ("entries", entries));
+    writer.write (entries);
   }
 
   /** JSON load logic for one component type. */
   template <typename T>
   static void
-  load_component_json (cereal::JSONInputArchive &ar, entt::registry &registry)
+  load_component_json (serialize::json_reader &reader, entt::registry &registry)
   {
     using storage_t = entt::registry::storage_for_type<T>;
     storage_t &storage = registry.template storage<T> ();
 
-    std::size_t count{};
-    ar (cereal::make_nvp ("count", count));
-
-    if (count == 0U) {
-      return;
-    }
-
     std::vector<detail::component_load_entry<T>> entries;
-    ar (cereal::make_nvp ("entries", entries));
+    reader.read (entries);
 
     for (auto &entry : entries) {
-      if (!entry.is_tombstone) {
-        if (storage.contains (entry.entity_id)) {
-          storage.get (entry.entity_id) = std::move (entry.data);
-        } else {
-          storage.emplace (entry.entity_id, std::move (entry.data));
+      if (!entry.data.has_value ()) {
+        continue;
+      }
+      if (storage.contains (entry.entity_id)) {
+        storage.get (entry.entity_id) = std::move (entry.data.value ());
+      } else {
+        storage.emplace (entry.entity_id, std::move (entry.data.value ()));
+      }
+    }
+  }
+
+  /** Binary save logic for one component type. */
+  template <typename T>
+  static void
+  save_binary_impl (serialize::binary_writer &writer, entt::registry &registry)
+  {
+    using storage_t = entt::registry::storage_for_type<T>;
+    const storage_t *storage = static_cast<const entt::registry *> (&registry)
+                                   ->template storage<T> ();
+
+    // Always emit a document, even when this component has no storage,
+    // to keep the save/load document streams positionally aligned.
+    std::vector<detail::component_save_entry<T>> entries;
+    if (storage != nullptr) {
+      entries.reserve (storage->size ());
+
+      if constexpr (detail::is_in_place_storage_v<T>) {
+        for (auto it = storage->rbegin (), last = storage->rend (); it != last;
+             ++it) {
+          const auto ent = *it;
+          if (ent == entt::tombstone) {
+            detail::component_save_entry<T> tomb;
+            tomb.data = nullptr;
+            entries.push_back (tomb);
+          } else {
+            entries.push_back (
+                detail::component_save_entry<T>{ ent, &storage->get (ent) });
+          }
         }
+      } else {
+        for (auto elem : storage->reach ()) {
+          entries.push_back (detail::component_save_entry<T>{
+              std::get<0> (elem), &std::get<1> (elem) });
+        }
+      }
+    }
+
+    writer.write (entries);
+  }
+
+  /** Binary load logic for one component type. */
+  template <typename T>
+  static void
+  load_binary_impl (serialize::binary_reader &reader, entt::registry &registry)
+  {
+    using storage_t = entt::registry::storage_for_type<T>;
+    storage_t &storage = registry.template storage<T> ();
+
+    std::vector<detail::component_load_entry<T>> entries;
+    reader.read (entries);
+
+    for (auto &entry : entries) {
+      if (!entry.data.has_value ()) {
+        continue;
+      }
+      if (storage.contains (entry.entity_id)) {
+        storage.get (entry.entity_id) = std::move (entry.data.value ());
+      } else {
+        storage.emplace (entry.entity_id, std::move (entry.data.value ()));
       }
     }
   }
@@ -527,45 +598,29 @@ private:
   // Internal wrappers previously in rsc::detail. Moved here to avoid an
   // additional namespace and keep implementation details private to this
   // class.
-  template <typename T> struct component_snapshot_wrapper
+  template <typename T> struct component_binary_wrapper
   {
     entt::registry &registry;
     template <class Archive>
     void
     serialize (Archive &ar)
     {
-      if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
+      (void)ar;
+      // rfl approach: iterate manually, handled by
+      // desc.save_binary/load_binary
+    }
+  };
+
+  template <typename T> struct component_json_wrapper
+  {
+    entt::registry &registry;
+    template <class Archive>
+    void
+    serialize (Archive &ar)
+    {
+      if constexpr (std::is_same_v<Archive, serialize::json_writer &>) {
         save_component_json<T> (ar, registry);
-      } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-        // Loading is performed by component_loader_wrapper. This branch
-        // exists so the wrapper is symmetric when reused.
-        (void)ar;
-      } else {
-        entt::snapshot const snapshot{ registry };
-        snapshot.get<T> (ar);
-      }
-    }
-  };
-
-  template <typename T> struct component_loader_wrapper
-  {
-    entt::snapshot_loader &loader;
-    template <class Archive>
-    void
-    serialize (Archive &ar)
-    {
-      loader.template get<T> (ar);
-    }
-  };
-
-  template <typename T> struct component_json_loader_wrapper
-  {
-    entt::registry &registry;
-    template <class Archive>
-    void
-    serialize (Archive &ar)
-    {
-      if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
+      } else if constexpr (std::is_same_v<Archive, serialize::json_reader &>) {
         load_component_json<T> (ar, registry);
       }
     }
@@ -655,33 +710,21 @@ component_registry::register_world_component (
   }
 
   desc.save_binary
-      = +[] (cereal::BinaryOutputArchive &archive, entt::registry &registry) {
-          archive (cereal::make_nvp (
-              detail::make_archive_name ("component_data_",
-                                         entt::type_name<T> ().value ()),
-              component_registry::component_snapshot_wrapper<T>{ registry }));
+      = +[] (serialize::binary_writer &writer, entt::registry &registry) {
+          component_registry::save_binary_impl<T> (writer, registry);
         };
-  desc.load_binary = +[] (cereal::BinaryInputArchive &archive,
-                          entt::snapshot_loader &loader) {
-    archive (cereal::make_nvp (
-        detail::make_archive_name ("component_data_",
-                                   entt::type_name<T> ().value ()),
-        component_registry::component_loader_wrapper<T>{ loader }));
-  };
+  desc.load_binary
+      = +[] (serialize::binary_reader &reader, entt::registry &registry) {
+          component_registry::load_binary_impl<T> (reader, registry);
+        };
   desc.save_json
-      = +[] (cereal::JSONOutputArchive &archive, entt::registry &registry) {
-          archive (cereal::make_nvp (
-              detail::make_archive_name ("component_data_",
-                                         entt::type_name<T> ().value ()),
-              component_registry::component_snapshot_wrapper<T>{ registry }));
+      = +[] (serialize::json_writer &writer, entt::registry &registry) {
+          component_registry::save_component_json<T> (writer, registry);
         };
-  desc.load_json = +[] (cereal::JSONInputArchive &archive,
-                        entt::registry &registry) {
-    archive (cereal::make_nvp (
-        detail::make_archive_name ("component_data_",
-                                   entt::type_name<T> ().value ()),
-        component_registry::component_json_loader_wrapper<T>{ registry }));
-  };
+  desc.load_json
+      = +[] (serialize::json_reader &reader, entt::registry &registry) {
+          component_registry::load_component_json<T> (reader, registry);
+        };
 
   m_descriptors[type_id] = std::move (desc);
 

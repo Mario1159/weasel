@@ -2,19 +2,35 @@
 
 #include "../../comp/component_meta.hpp"
 
-#include <cereal/archives/binary.hpp>
-#include <cereal/archives/json.hpp>
-#include <cereal/cereal.hpp>
-
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/core/type_info.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/meta/factory.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
+#include <optional>
+#endif
+
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::reg::detail
 {
@@ -134,16 +150,10 @@ template <typename T> struct component_save_entry
   entt::entity entity_id{};
   const T *data = nullptr;
 
-  template <class Archive>
-  void
-  serialize (Archive &ar) const
+  bool
+  is_tombstone () const
   {
-    if (data == nullptr) {
-      ar (cereal::make_nvp ("tombstone", true));
-    } else {
-      ar (cereal::make_nvp ("entity", entity_id),
-          cereal::make_nvp ("data", *data));
-    }
+    return data == nullptr;
   }
 };
 
@@ -154,25 +164,12 @@ template <typename T> struct component_save_entry
 template <typename T> struct component_load_entry
 {
   entt::entity entity_id{};
-  T data{};
-  bool is_tombstone = false;
+  std::optional<T> data;
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
+  bool
+  is_tombstone () const
   {
-    try {
-      bool tombstone = false;
-      ar (cereal::make_nvp ("tombstone", tombstone));
-      if (tombstone) {
-        is_tombstone = true;
-        return;
-      }
-    } catch (const cereal::Exception &) {
-      /* not a tombstone entry */
-    }
-    ar (cereal::make_nvp ("entity", entity_id),
-        cereal::make_nvp ("data", data));
+    return !data.has_value ();
   }
 };
 

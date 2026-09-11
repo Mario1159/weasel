@@ -7,10 +7,18 @@
 #include "wsl/gfx/subviewport_target.hpp"
 #include "wsl/gfx/viewport.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

@@ -3,14 +3,22 @@
 #include "../math/vector.hpp"
 #include "component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/matrix_transform.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/mat4x4.hpp>
-
-#include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {
@@ -93,16 +101,6 @@ struct transform : world_component
         .data<&comp::transform::scale> ("scale"_hs)
         .custom<comp::meta_info> (meta_info{
             "Scale", "Local non-uniform scale applied after rotation", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    transform def{};
-    serialize_field_if_diff (archive, "position", position, def.position);
-    serialize_field_if_diff (archive, "rotation", rotation, def.rotation);
-    serialize_field_if_diff (archive, "scale", scale, def.scale);
   }
 };
 

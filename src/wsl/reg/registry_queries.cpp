@@ -1,5 +1,7 @@
 #include "registry_queries.hpp"
 
+#include "../comp/singl/runtime_context.hpp"
+
 #include <algorithm>
 #include <set>
 

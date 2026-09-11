@@ -3,7 +3,9 @@
 #include "../comp/component_meta.hpp"
 #include "world.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entity/entity.hpp>
+#endif
 
 namespace wsl
 {

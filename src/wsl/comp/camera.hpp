@@ -1,8 +1,14 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/matrix_transform.hpp>
+#endif
 
 #include "component_meta.hpp"
 #include "world_transform.hpp"
@@ -113,20 +119,6 @@ public:
   }
 
   static void register_meta ();
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    camera def{};
-    serialize_field_if_diff (archive, "fov", m_fov, def.m_fov);
-    serialize_field_if_diff (archive, "near", m_near, def.m_near);
-    serialize_field_if_diff (archive, "far", m_far, def.m_far);
-    serialize_field_if_diff (archive, "aspect_ratio", m_aspect_ratio,
-                             def.m_aspect_ratio);
-    serialize_field_if_diff (archive, "only_for_editor", m_only_for_editor,
-                             def.m_only_for_editor);
-  }
 };
 
 } // namespace comp

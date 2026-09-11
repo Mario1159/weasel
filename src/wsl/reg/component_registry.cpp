@@ -1,5 +1,7 @@
 #include "component_registry.hpp"
 
+#include "../comp/singl/runtime_context.hpp"
+
 #include <algorithm>
 #include <cstring>
 #include <entt/core/fwd.hpp>
@@ -390,7 +392,7 @@ component_registry::copy_world_component (entt::registry &src_registry,
 
 bool
 component_registry::save_world_component_binary (
-    cereal::BinaryOutputArchive &archive, entt::registry &registry,
+    serialize::binary_writer &writer, entt::registry &registry,
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
@@ -399,13 +401,13 @@ component_registry::save_world_component_binary (
     return false;
   }
 
-  desc->save_binary (archive, registry);
+  desc->save_binary (writer, registry);
   return true;
 }
 
 bool
 component_registry::load_world_component_binary (
-    cereal::BinaryInputArchive &archive, entt::snapshot_loader &loader,
+    serialize::binary_reader &reader, entt::registry &registry,
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
@@ -414,13 +416,13 @@ component_registry::load_world_component_binary (
     return false;
   }
 
-  desc->load_binary (archive, loader);
+  desc->load_binary (reader, registry);
   return true;
 }
 
 bool
 component_registry::save_world_component_json (
-    cereal::JSONOutputArchive &archive, entt::registry &registry,
+    serialize::json_writer &writer, entt::registry &registry,
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
@@ -429,13 +431,13 @@ component_registry::save_world_component_json (
     return false;
   }
 
-  desc->save_json (archive, registry);
+  desc->save_json (writer, registry);
   return true;
 }
 
 bool
 component_registry::load_world_component_json (
-    cereal::JSONInputArchive &archive, entt::registry &registry,
+    serialize::json_reader &reader, entt::registry &registry,
     entt::id_type component_type_id) const
 {
   const descriptor *desc = find_world_component (component_type_id);
@@ -444,7 +446,7 @@ component_registry::load_world_component_json (
     return false;
   }
 
-  desc->load_json (archive, registry);
+  desc->load_json (reader, registry);
   return true;
 }
 
@@ -490,10 +492,9 @@ hex_to_bytes (const std::string &hex)
 } // namespace
 
 void
-component_registry::save_das_components_json (
-    cereal::JSONOutputArchive &archive, entt::registry &registry) const
+component_registry::save_das_components_json (serialize::json_writer &writer,
+                                              entt::registry &registry) const
 {
-  // Build a flat list of all das component entries.
   struct das_entry
   {
     uint32_t type_id;
@@ -521,36 +522,26 @@ component_registry::save_das_components_json (
     }
   }
 
-  std::size_t count = entries.size ();
-  archive (cereal::make_nvp ("das_component_count", count));
-
-  for (std::size_t i = 0; i < count; ++i) {
-    archive (cereal::make_nvp ("das_type_id", entries[i].type_id));
-    archive (cereal::make_nvp ("das_entity", entries[i].entity));
-    archive (cereal::make_nvp ("das_data", entries[i].data_hex));
-  }
+  writer.write (entries);
 }
 
 void
-component_registry::load_das_components_json (cereal::JSONInputArchive &archive,
+component_registry::load_das_components_json (serialize::json_reader &reader,
                                               entt::registry &registry)
 {
-  std::size_t count = 0;
-  archive (cereal::make_nvp ("das_component_count", count));
-
-  for (std::size_t i = 0; i < count; ++i) {
-    uint32_t type_id = 0;
-    uint32_t entity_raw = 0;
+  struct das_entry
+  {
+    uint32_t type_id;
+    uint32_t entity;
     std::string data_hex;
+  };
+  std::vector<das_entry> entries;
+  reader.read (entries);
 
-    archive (cereal::make_nvp ("das_type_id", type_id));
-    archive (cereal::make_nvp ("das_entity", entity_raw));
-    archive (cereal::make_nvp ("das_data", data_hex));
+  for (auto &e : entries) {
+    auto tid = static_cast<entt::id_type> (e.type_id);
+    auto entity = static_cast<entt::entity> (e.entity);
 
-    auto tid = static_cast<entt::id_type> (type_id);
-    auto entity = static_cast<entt::entity> (entity_raw);
-
-    // Ensure the component type and entity exist.
     if (!contains_world_component (tid)) {
       register_cached_runtime_world_component (tid, "unknown", "unknown");
     }
@@ -558,8 +549,7 @@ component_registry::load_das_components_json (cereal::JSONInputArchive &archive,
       das_component_add (registry, tid, entity);
     }
 
-    // Overwrite with saved data.
-    std::vector<uint8_t> data = hex_to_bytes (data_hex);
+    std::vector<uint8_t> data = hex_to_bytes (e.data_hex);
     uint8_t *dest = das_component_data (registry, tid, entity);
     if (dest) {
       const descriptor *desc = find_world_component (tid);
@@ -574,10 +564,17 @@ component_registry::load_das_components_json (cereal::JSONInputArchive &archive,
 
 void
 component_registry::save_das_components_binary (
-    cereal::BinaryOutputArchive &archive, entt::registry &registry) const
+    serialize::binary_writer &writer, entt::registry &registry) const
 {
-  // Count total entries.
-  std::size_t count = 0;
+  struct das_binary_entry
+  {
+    uint32_t type_id;
+    uint32_t entity;
+    uint32_t data_size;
+    std::vector<uint8_t> data;
+  };
+  std::vector<das_binary_entry> entries;
+
   const das_component_storage *storage = try_storage_for (registry);
   if (storage != nullptr) {
     for (const auto *desc :
@@ -586,50 +583,39 @@ component_registry::save_das_components_binary (
         continue;
       }
       if (const auto *component_pool = storage->find_pool (desc->type_id)) {
-        count += component_pool->entries.size ();
+        for (const auto &[entity, block] : component_pool->entries) {
+          entries.push_back (
+              { static_cast<uint32_t> (desc->type_id),
+                static_cast<uint32_t> (entt::to_integral (entity)),
+                static_cast<uint32_t> (block.size),
+                std::vector<uint8_t> (block.data (),
+                                      block.data () + block.size) });
+        }
       }
     }
   }
-  archive (count);
 
-  if (storage != nullptr) {
-    for (const auto *desc :
-         get_world_components (world_component_order::type_id)) {
-      if (desc == nullptr || !desc->is_das_component) {
-        continue;
-      }
-      const auto *component_pool = storage->find_pool (desc->type_id);
-      if (component_pool == nullptr) {
-        continue;
-      }
-      for (const auto &[entity, block] : component_pool->entries) {
-        auto tid = static_cast<uint32_t> (desc->type_id);
-        auto ent = static_cast<uint32_t> (entt::to_integral (entity));
-        auto data_size = static_cast<uint32_t> (block.size);
-        archive (tid, ent, data_size);
-        archive (cereal::binary_data (block.data (), block.size));
-      }
-    }
-  }
+  writer.write (entries);
 }
 
 void
 component_registry::load_das_components_binary (
-    cereal::BinaryInputArchive &archive, entt::registry &registry)
+    serialize::binary_reader &reader, entt::registry &registry)
 {
-  std::size_t count = 0;
-  archive (count);
+  struct das_binary_entry
+  {
+    uint32_t type_id;
+    uint32_t entity;
+    uint32_t data_size;
+    std::vector<uint8_t> data;
+  };
+  std::vector<das_binary_entry> entries;
+  reader.read (entries);
 
-  for (std::size_t i = 0; i < count; ++i) {
-    uint32_t tid_raw = 0;
-    uint32_t ent_raw = 0;
-    uint32_t data_size = 0;
-    archive (tid_raw, ent_raw, data_size);
+  for (auto &e : entries) {
+    auto tid = static_cast<entt::id_type> (e.type_id);
+    auto entity = static_cast<entt::entity> (e.entity);
 
-    auto tid = static_cast<entt::id_type> (tid_raw);
-    auto entity = static_cast<entt::entity> (ent_raw);
-
-    // Ensure the component type and entity exist.
     if (!contains_world_component (tid)) {
       register_cached_runtime_world_component (tid, "unknown", "unknown");
     }
@@ -637,17 +623,14 @@ component_registry::load_das_components_binary (
       das_component_add (registry, tid, entity);
     }
 
-    // Overwrite with saved data.
     uint8_t *dest = das_component_data (registry, tid, entity);
-    if (dest && data_size > 0) {
-      std::vector<uint8_t> data (data_size);
-      archive (cereal::binary_data (data.data (), data_size));
+    if (dest && e.data_size > 0) {
       const descriptor *desc = find_world_component (tid);
       std::size_t copy_size
           = desc ? static_cast<std::size_t> (desc->das_struct_size)
-                 : data.size ();
-      copy_size = std::min (copy_size, data.size ());
-      std::memcpy (dest, data.data (), copy_size);
+                 : e.data.size ();
+      copy_size = std::min (copy_size, e.data.size ());
+      std::memcpy (dest, e.data.data (), copy_size);
     }
   }
 }

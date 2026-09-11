@@ -3,7 +3,9 @@
 #include "system.hpp"
 #include "../comp/audio.hpp"
 #include <SDL3_mixer/SDL_mixer.h>
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
 
 
 namespace wsl

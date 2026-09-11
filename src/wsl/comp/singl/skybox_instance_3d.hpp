@@ -3,9 +3,9 @@
 #include "../../rsc/resource_manager.hpp"
 #include "../component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
-
-#include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {
@@ -39,19 +39,6 @@ public:
 
     entt::meta_factory<rsc::cubemap_id> ().type (
         entt::type_hash<rsc::cubemap_id>::value ());
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    skybox_instance_3d def{};
-    serialize_field_if_diff (archive, "cubemap_id", id.value, def.id.value);
-    if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
-                                    Archive>) {
-      // Older scenes stored ``0`` for "no cubemap".
-      rsc::normalize_resource_id (id.value);
-    }
   }
 };
 

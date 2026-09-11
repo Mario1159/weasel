@@ -13,15 +13,33 @@
 #include "wsl/gfx/shader_program.hpp"
 #include <SDL3_mixer/SDL_mixer.h>
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/resource/cache.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/resource/resource.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <future>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 namespace wsl
 {
 
@@ -60,10 +78,10 @@ namespace io
 }
 
 /**
- * Tools for interacting with the CMake File API and project
+ * Tools for interacting with the xmake build system and project
  * configuration.
  */
-namespace cmake
+namespace xmake
 {
 }
 

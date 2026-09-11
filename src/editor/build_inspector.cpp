@@ -4,6 +4,7 @@
 #include "job_manager.hpp"
 #include "wsl/log/log.hpp"
 #include <algorithm>
+#include <cctype>
 #include <future>
 #include <imgui.h>
 #include <cstdlib>
@@ -168,7 +169,7 @@ build_inspector::draw ()
 
   ImGui::SameLine ();
   if (ImGui::Button ("Refresh Info")) {
-    refresh_cmake_info ();
+    refresh_xmake_info ();
   }
 
   // Calculate remaining space for Tests list
@@ -200,14 +201,14 @@ build_inspector::draw ()
 }
 
 void
-build_inspector::refresh_cmake_info ()
+build_inspector::refresh_xmake_info ()
 {
   auto project = m_runtime_ctx->resource_manager ().current_project ();
   if (!project) {
     return;
   }
 
-  std::string const name = "Refreshing CMake Info";
+  std::string const name = "Refreshing XMake Info";
   auto future = std::async (std::launch::async, [this,
                                                  root_path
                                                  = project->root_path] () {
@@ -215,12 +216,12 @@ build_inspector::refresh_cmake_info ()
 
     std::string extra_args;
     if (!m_editor_ctx->wsl_library_path ().empty ()) {
-      extra_args = "-DWeasel_DIR=" + m_editor_ctx->wsl_library_path ();
+      extra_args = "--weasel_dir=" + m_editor_ctx->wsl_library_path ();
     }
 
-    if (m_cmake_api.query_and_configure (root_path, build_dir, extra_args,
+    if (m_xmake_api.query_and_configure (root_path, build_dir, extra_args,
                                          m_runtime_ctx->resource_manager ())) {
-      this->m_project_info = m_cmake_api.parse_replies (build_dir);
+      this->m_project_info = m_xmake_api.parse_replies (root_path, build_dir);
     }
   });
   job_manager::get ().add_job (name, std::move (future));
@@ -235,15 +236,13 @@ build_inspector::build_target (const std::string &target_name)
   }
 
   std::string const name = "Building Target " + target_name;
-  auto future = std::async (
-      std::launch::async, [root_path = project->root_path, target_name] () {
-        std::string const build_dir = root_path + "/build";
-        std::string command
-            = "cmake --build " + build_dir + " --target " + target_name;
+  auto future = std::async (std::launch::async, [root_path = project->root_path,
+                                                 target_name] () {
+    std::string command = "cd \"" + root_path + "\" && xmake -y " + target_name;
 
-        wsl::log::editor ()->debug ("Executing {}", command);
-        std::system (command.c_str ());
-      });
+    wsl::log::editor ()->debug ("Executing {}", command);
+    std::system (command.c_str ());
+  });
   job_manager::get ().add_job (name, std::move (future));
 }
 
@@ -261,23 +260,26 @@ build_inspector::configure_project (const std::string &kit_name)
                                                  kit_name] () {
     std::string const build_dir = root_path + "/build";
 
-    // Use the kit name to set build type for now.
+    // Use the kit name to set the build mode for now.
     std::string extra_args;
     if (!m_editor_ctx->wsl_library_path ().empty ()) {
-      extra_args = "-DWeasel_DIR=" + m_editor_ctx->wsl_library_path ();
+      extra_args = "--weasel_dir=" + m_editor_ctx->wsl_library_path ();
     }
 
     if (kit_name != "Default") {
       if (!extra_args.empty ()) {
         extra_args += " ";
       }
-      extra_args += "-DCMAKE_BUILD_TYPE=" + kit_name;
+      std::string mode = kit_name;
+      std::transform (mode.begin (), mode.end (), mode.begin (),
+                      [] (unsigned char c) { return (char)std::tolower (c); });
+      extra_args += "-m " + mode;
     }
 
     wsl::log::editor ()->debug ("Configuring with kit {}", kit_name);
-    if (m_cmake_api.query_and_configure (root_path, build_dir, extra_args,
+    if (m_xmake_api.query_and_configure (root_path, build_dir, extra_args,
                                          m_runtime_ctx->resource_manager ())) {
-      this->m_project_info = m_cmake_api.parse_replies (build_dir);
+      this->m_project_info = m_xmake_api.parse_replies (root_path, build_dir);
     }
   });
   job_manager::get ().add_job (name, std::move (future));
@@ -294,9 +296,8 @@ build_inspector::run_test (const std::string &test_name)
   std::string const name = "Running Test " + test_name;
   auto future = std::async (
       std::launch::async, [root_path = project->root_path, test_name] () {
-        std::string const build_dir = root_path + "/build";
         std::string command
-            = "ctest --test-dir " + build_dir + " -R ^" + test_name + "$";
+            = "cd \"" + root_path + "\" && xmake test -y \"" + test_name + "\"";
 
         wsl::log::editor ()->debug ("Executing {}", command);
         std::system (command.c_str ());

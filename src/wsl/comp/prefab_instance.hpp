@@ -3,8 +3,9 @@
 #include "component_meta.hpp"
 #include "../rsc/resource_ids.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
-#include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {
@@ -38,17 +39,6 @@ struct prefab_instance : world_component
                              "Tracks the source prefab for this entity", "" });
     (factory.data<&comp::prefab_instance::prefab_id>)("prefab_id"_hs);
     (factory.data<&comp::prefab_instance::prefab_entity>)("prefab_entity"_hs);
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    prefab_instance def{};
-    serialize_field_if_diff (archive, "prefab_id", prefab_id.value,
-                             def.prefab_id.value);
-    serialize_field_if_diff (archive, "prefab_entity", prefab_entity,
-                             def.prefab_entity);
   }
 };
 

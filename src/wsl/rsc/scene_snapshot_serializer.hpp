@@ -1,22 +1,24 @@
 // scene_snapshot_serializer.hpp
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entity/registry.hpp>
-#include <entt/entity/snapshot.hpp>
+#endif
 
-#include <cereal/archives/binary.hpp>
-#include <cereal/archives/json.hpp>
-#include <cereal/cereal.hpp>
-#include <cereal/types/utility.hpp>
-#include <cereal/types/string.hpp>
-#include <cereal/types/vector.hpp>
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/core/hashed_string.hpp>
+#endif
 
 #include "../comp/component_meta.hpp"
+#include "../serialize/types.hpp"
 #include "scene.hpp"
 
 namespace wsl
@@ -35,13 +37,6 @@ struct resource_ref_serialized
   resource_type type;
   /** The path to the resource, relative to the project or engine root. */
   std::string path;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("type", type), cereal::make_nvp ("path", path));
-  }
 };
 
 /** Contains metadata and structural information for a scene file. */
@@ -61,79 +56,17 @@ struct scene_header
   std::vector<resource_ref_serialized> autoload;
   /** The active camera entity in this scene. */
   uint32_t camera = entt::null;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("scene_name", scene_name),
-        cereal::make_nvp ("is_prefab", is_prefab),
-        cereal::make_nvp ("systems", systems),
-        cereal::make_nvp ("entity_names", entity_names),
-        cereal::make_nvp ("connections", connections),
-        cereal::make_nvp ("autoload", autoload));
-    uint32_t const camera_default = entt::null;
-    wsl::comp::serialize_field_if_diff (ar, "camera", camera, camera_default);
-  }
-};
-
-/**
- * Wrapper that adapts entt::snapshot for entt::entity into Cereal
- *        archives with human-readable field names.
- *
- * The default EnTT snapshot writes the entity storage as a flat sequence of
- * unnamed values, which Cereal's JSON output renders as auto-incremented
- * "value0", "value1", ... names. This wrapper re-implements the snapshot
- * protocol for JSON archives so the produced JSON is:
- *
- * .. code-block:: json
- *
- *    {
- *      "alive_count": "<number>",
- *      "free_list_count": "<number>",
- *      "entities": [ "<id>", "<id>", "..." ]
- *    }
- *
- * Binary archives continue to use EnTT's snapshot directly.
- */
-struct entity_snapshot_wrapper
-{
-  entt::registry &registry;
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      save_json (ar);
-    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-      load_json (ar);
-    } else {
-      entt::snapshot const snapshot{ registry };
-      snapshot.get<entt::entity> (ar);
-    }
-  }
-
-private:
-  void save_json (cereal::JSONOutputArchive &ar) const;
-  void load_json (cereal::JSONInputArchive &ar);
 };
 
 /**
  * Handles serialization and deserialization of scene snapshots.
  *
- * This class uses EnTT snapshots and Cereal archives to save and load
- * the complete state of a scene, including entities, components, and
- * singletons.
+ * This class uses rfl-based serialization to save and load the complete state
+ * of a scene, including entities, components, and singletons.
  */
 class scene_snapshot_serializer
 {
 public:
-  /**
-   * Constructs a serializer for a specific scene and runtime context.
-   * :param runtime_ctx: Pointer to the runtime context.
-   * :param scene: Reference to the scene to be serialized.
-   */
   /*explicit*/ scene_snapshot_serializer (
       comp::singl::runtime_context *runtime_ctx, scene &scene);
 
@@ -159,11 +92,11 @@ public:
   /** Whether the scene is being serialized as a prefab. */
   bool is_prefab = false;
 
-  /** Internal implementation for saving the scene to an archive. */
-  template <typename Archive> void save_scene (Archive &archive) const;
-
-  /** Internal implementation for loading the scene from an archive. */
-  template <typename Archive> void load_scene (Archive &archive);
+private:
+  void save (serialize::json_writer &writer) const;
+  void load (serialize::json_reader &reader);
+  void save_binary (serialize::binary_writer &writer) const;
+  void load_binary (serialize::binary_reader &reader);
 };
 
 } // namespace io

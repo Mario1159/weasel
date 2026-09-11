@@ -1,11 +1,11 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 #include "../math/matrix.hpp"
 
 #include "component_meta.hpp"
-
-#include <cereal/cereal.hpp>
 
 namespace wsl::comp::singl
 {
@@ -39,14 +39,6 @@ public:
                        comp::singl::runtime_context *runtime);
 
   static void register_meta ();
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    world_transform def{};
-    serialize_field_if_diff (archive, "matrix", m_value, def.m_value);
-  }
 };
 
 } // namespace comp

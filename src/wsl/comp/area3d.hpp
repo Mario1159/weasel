@@ -1,14 +1,19 @@
 #pragma once
 
-#include "../math/vector.hpp"         // math::vec3f, math::quatf
+#ifndef IN_MODULE_INTERFACE
+#include "../math/vector.hpp" // math::vec3f, math::quatf
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include "../phys/physics_engine.hpp" // phys::engine
-#include <cereal/cereal.hpp>
+#include "../phys/layers.hpp"
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
-
-#include <Jolt/Jolt.h>
-#include <Jolt/Physics/Body/BodyID.h>
+#endif
 
 namespace wsl
 {
@@ -27,14 +32,14 @@ struct area : world_component
   {
     entt::entity area_entity{ entt::null };
     entt::entity other_entity{ entt::null };
-    JPH::BodyID other_body;
+    phys::body_id other_body = phys::null_body_id;
   };
 
   struct exited
   {
     entt::entity area_entity{ entt::null };
     entt::entity other_entity{ entt::null };
-    JPH::BodyID other_body;
+    phys::body_id other_body = phys::null_body_id;
   };
 
   enum class shape_type
@@ -93,116 +98,7 @@ struct area : world_component
     radius = std::max (radius, 1e-3F);
   }
 
-  static void
-  register_meta ()
-  {
-    using namespace entt::literals;
-
-    entt::meta_factory<comp::area::shape_type> ()
-        .type (entt::type_hash<comp::area::shape_type>::value ())
-        .conv<int> ()
-        .data<comp::area::shape_type::box> ("box"_hs)
-        .custom<const char *> ("Box")
-        .data<comp::area::shape_type::sphere> ("sphere"_hs)
-        .custom<const char *> ("Sphere");
-
-    entt::meta_factory<comp::area> ()
-        .type (entt::type_hash<comp::area>::value ())
-        .custom<comp::meta_info> (meta_info{
-            "Area3D", "Jolt sensor (trigger) to detect bodies entering/exiting",
-            "" })
-        .func<&comp::area::on_inspector_changed> ("on_inspector_changed"_hs)
-
-        .data<&comp::area::shape> ("shape"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "Shape", "Sensor collision shape", "" })
-
-        .data<&comp::area::position> ("position"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Position",
-            "Local position offset relative to the entity's Transform position",
-            "" })
-
-        .data<&comp::area::rotation> ("rotation"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Rotation",
-            "Local rotation offset relative to the entity's Transform rotation",
-            "" })
-
-        .data<&comp::area::half_extents> ("half_extents"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Half Extents",
-            "Box half size (scaled by the entity's Transform scale)", "" })
-
-        .data<&comp::area::radius> ("radius"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Radius", "Sphere radius (scaled by the entity's Transform scale)",
-            "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    area const def{};
-    int shape_i = (int)shape;
-    int const def_shape_i = (int)def.shape;
-
-    if constexpr (std::is_same_v<Archive, cereal::JSONOutputArchive>) {
-      if (shape_i != def_shape_i) {
-        ar (cereal::make_nvp ("shape", shape_i));
-      }
-      serialize_field_if_diff (ar, "position", position, def.position);
-      serialize_field_if_diff (ar, "rotation", rotation, def.rotation);
-      serialize_field_if_diff (ar, "half_extents", half_extents,
-                               def.half_extents);
-      serialize_field_if_diff (ar, "radius", radius, def.radius);
-    } else if constexpr (std::is_same_v<Archive, cereal::JSONInputArchive>) {
-      shape_i = def_shape_i;
-      position = def.position;
-      rotation = def.rotation;
-      half_extents = def.half_extents;
-      radius = def.radius;
-      try {
-        ar (cereal::make_nvp ("shape", shape_i));
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "position", position, def.position);
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "rotation", rotation, def.rotation);
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "half_extents", half_extents,
-                                 def.half_extents);
-      } catch (...) {
-      }
-      try {
-        serialize_field_if_diff (ar, "radius", radius, def.radius);
-      } catch (...) {
-      }
-      shape = (shape_type)shape_i;
-      sanitize_dimensions ();
-      body_id = phys::body_id{};
-      sync_applied_cache ();
-    } else {
-      ar (cereal::make_nvp ("shape", shape_i),
-          cereal::make_nvp ("position", position),
-          cereal::make_nvp ("rotation", rotation),
-          cereal::make_nvp ("half_extents", half_extents),
-          cereal::make_nvp ("radius", radius));
-      if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase,
-                                      Archive>) {
-        shape = (shape_type)shape_i;
-        sanitize_dimensions ();
-        body_id = phys::body_id{};
-        sync_applied_cache ();
-      }
-    }
-  }
+  static void register_meta ();
 };
 
 } // namespace comp

@@ -3,8 +3,12 @@
 #include <wsl/ai/acp/acp_client.hpp>
 #include <wsl/ai/acp/acp_types.hpp>
 
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
 namespace wsl::ai::acp
 {

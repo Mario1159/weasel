@@ -2,9 +2,15 @@
 
 #include "system.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/mat4x4.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
 
 namespace wsl
 {

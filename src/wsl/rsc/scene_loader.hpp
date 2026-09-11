@@ -1,10 +1,18 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <spdlog/spdlog.h>
+#endif
 
 #include "../rsc/scene.hpp"
 

@@ -3,10 +3,15 @@
 #include "../../phys/physics_engine.hpp"
 #include "../component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
-#include <cereal/cereal.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
 
 namespace wsl
 {
@@ -122,22 +127,6 @@ struct physics_manager : singleton_component
         .data<&comp::singl::physics_manager::show_debug> ("show_debug"_hs)
         .custom<comp::meta_info> (comp::meta_info{
             "Show Debug", "Show physics debug renderer.", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    sanitize_settings ();
-    physics_manager def{};
-    serialize_field_if_diff (archive, "gravity", gravity, def.gravity);
-    serialize_field_if_diff (archive, "fixed_timestep", fixed_timestep,
-                             def.fixed_timestep);
-    serialize_field_if_diff (archive, "max_frame_time", max_frame_time,
-                             def.max_frame_time);
-    serialize_field_if_diff (archive, "max_substeps", max_substeps,
-                             def.max_substeps);
-    serialize_field_if_diff (archive, "show_debug", show_debug, def.show_debug);
   }
 };
 

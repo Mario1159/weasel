@@ -3,14 +3,30 @@
 #include "message_event.hpp"
 #include "../comp/component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstring>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <mutex>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::event
 {

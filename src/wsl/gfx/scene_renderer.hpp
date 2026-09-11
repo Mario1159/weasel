@@ -11,16 +11,32 @@
 #include "shader_program.hpp"
 #include "wsl/rsc/resource_ids.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_pixels.h>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entity/fwd.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <array>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <deque>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <span>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {
@@ -320,10 +336,10 @@ private:
   void render_custom_primitive (const primitive &prim,
                                 const gfx::material_instance &mat_inst,
                                 float mip_lod_bias);
-  inline void render_node (gfx::node &n, const glm::mat4 &view_proj,
-                           float mip_lod_bias = 0.0F,
-                           float geometry_lod_bias = 0.0F,
-                           float visibility_range = 0.0F);
+  void render_node (gfx::node &n, const glm::mat4 &view_proj,
+                    float mip_lod_bias = 0.0F,
+                    float geometry_lod_bias = 0.0F,
+                    float visibility_range = 0.0F);
   void render_scene (gfx::scene &scene, const glm::mat4 &view_proj,
                      float mip_lod_bias = 0.0F, float geometry_lod_bias = 0.0F,
                      float visibility_range = 0.0F);

@@ -2,10 +2,12 @@
 
 #include "../math/vector.hpp"
 #include "component_meta.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/vector_float3.hpp>
-
-#include <cereal/cereal.hpp>
+#endif
 
 namespace wsl
 {
@@ -64,21 +66,6 @@ struct point_light : world_component
         .custom<comp::meta_info> (
             meta_info{ "Shadow Bias",
                        "Bias used to reduce self-shadowing artifacts.", "" });
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &archive)
-  {
-    point_light const def{};
-    serialize_field_if_diff (archive, "color", color, def.color);
-    serialize_field_if_diff (archive, "intensity", intensity, def.intensity);
-    serialize_field_if_diff (archive, "radius", radius, def.radius);
-    serialize_field_if_diff (archive, "cast_shadows", cast_shadows,
-                             def.cast_shadows);
-    serialize_field_if_diff (archive, "shadow_far", shadow_far, def.shadow_far);
-    serialize_field_if_diff (archive, "shadow_bias", shadow_bias,
-                             def.shadow_bias);
   }
 };
 
