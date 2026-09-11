@@ -1,8 +1,6 @@
 #include "inspector.hpp"
-#include "wsl/rsc/scene_manager.hpp"
 
 #include "comp/component_meta.hpp"
-#include "wsl/reg/component_registry.hpp"
 #include "comp/singl/ui_manager.hpp"
 #include "wsl/das/das_engine.hpp"
 

@@ -1,36 +1,21 @@
 // character_body.hpp
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
+#include <memory>
+
 #include "../math/vector.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "../phys/physics_engine.hpp"
-#endif
 #include "component_meta.hpp"
-#include "singl/runtime_context.hpp"
-#if !defined(WSL_MODULE_BUILD)
+namespace wsl::comp::singl
+{
+class runtime_context;
+}
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
 #endif
-
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
-
-// clang-format off
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Jolt.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Body/BodyID.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Character/CharacterVirtual.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
-#endif
-// clang-format on
 
 namespace wsl
 {
@@ -41,94 +26,46 @@ namespace comp
 class character_body : public world_component
 {
 public:
-  character_body () = default;
+  character_body ();
+  ~character_body ();
+  character_body (character_body &&) noexcept;
+  character_body &operator= (character_body &&) noexcept;
 
-  character_body (phys::engine &physics, const JPH::Vec3 &position,
+  character_body (phys::engine &physics, const glm::vec3 &position,
                   float height = 1.8F, float radius = 0.4F);
 
   // runtime ops
-  void create_body (phys::engine &physics, const JPH::Vec3 &position);
+  void create_body (phys::engine &physics, const glm::vec3 &position);
   void destroy_body ();
 
   // must be called after load
-  void recreate (phys::engine &physics, const JPH::Vec3 &position);
+  void recreate (phys::engine &physics, const glm::vec3 &position);
 
   // called by inspector after any field edit
   void on_inspector_changed (comp::singl::runtime_context *runtime,
                              const glm::vec3 &scale = { 1, 1, 1 });
 
-  JPH::CharacterVirtual *
-  get ()
-  {
-    return m_body.GetPtr ();
-  }
-  const JPH::CharacterVirtual *
-  get () const
-  {
-    return m_body.GetPtr ();
-  }
-
-  JPH::BodyID
-  get_id () const
-  {
-    return ((m_body != nullptr) ? m_body->GetInnerBodyID () : JPH::BodyID ());
-  }
+  bool valid () const noexcept;
+  phys::body_id get_id () const noexcept;
+  void *native_handle () noexcept;
+  const void *native_handle () const noexcept;
 
   float height = 1.8F;
   float radius = 0.4F;
   math::vec3f desired_velocity = math::vec3f{ 0.0F, 0.0F, 0.0F };
 
-  /** Restores runtime caches after deserialization (see registry load). */
-  void
-  post_load ()
-  {
-    // runtime-only
-    m_body = nullptr;
-
-    // reset cache so next inspector edit applies cleanly
-    m_applied_height = height;
-    m_applied_radius = radius;
-  }
-
-  static void
-  register_meta ()
-  {
-    using namespace entt::literals;
-
-    entt::meta_factory<comp::character_body> ()
-        .type (entt::type_hash<comp::character_body>::value ())
-        .custom<comp::meta_info> (
-            meta_info{ "Character Body",
-                       "Capsule-based kinematic character controller (Jolt)",
-                       "engine://icons/comp_character_body.svg" })
-        .func<&comp::character_body::on_inspector_changed> (
-            "on_inspector_changed"_hs)
-
-        .data<&comp::character_body::height> ("height"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "Height", "Capsule height in meters", "" })
-
-        .data<&comp::character_body::radius> ("radius"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "Radius", "Capsule radius in meters", "" })
-
-        .data<&comp::character_body::desired_velocity> ("desired_velocity"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "Desired Velocity", "Target movement velocity", "" });
-  }
+  static void register_meta ();
 
 private:
-  static constexpr float min_half_height = 1e-3F; // must be > 0 for Jolt assert
+  static constexpr float min_half_height = 1e-3F;
   static constexpr float min_radius = 1e-3F;
 
   static void sanitize_dimensions (float &height, float &radius);
   static float capsule_half_height (float height, float radius);
 
-  void build_settings (JPH::CharacterVirtualSettings &settings) const;
+  struct impl;
+  std::unique_ptr<impl> m_impl;
 
-  JPH::Ref<JPH::CharacterVirtual> m_body;
-
-  // runtime cache to detect edits
   float m_applied_height = 1.8F;
   float m_applied_radius = 0.4F;
 };

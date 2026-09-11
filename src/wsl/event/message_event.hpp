@@ -1,6 +1,6 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
 #endif
 

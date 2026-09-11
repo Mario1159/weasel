@@ -3,7 +3,7 @@
 #include "editor_server.hpp"
 #include "cli/command_executor.hpp"
 #include "renderer_imgui.hpp"
-#include "physics_debug_renderer.hpp"
+#include "physics_debug_drawer.hpp"
 #include "engine_ui.hpp"
 #include "wsl/log/log.hpp"
 #include <filesystem>

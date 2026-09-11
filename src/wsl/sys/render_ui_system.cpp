@@ -219,8 +219,9 @@ render_ui_system::handle_sdl_event (entt::registry &registry,
                                  runtime_ctx.window ().handler (), adjusted_ev);
     }
   } else {
+    SDL_Event ev_copy = ev.sdl ();
     RmlSDL::InputEventHandler (ui.context (), runtime_ctx.window ().handler (),
-                               ev.sdl ());
+                               ev_copy);
   }
 }
 

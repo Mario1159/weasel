@@ -1,5 +1,4 @@
 #include "ui_render_interface.hpp"
-#include "gfx/cubemap.hpp"
 #include "gfx/render_context.hpp"
 #include "gfx/render_window.hpp"
 #include "shader.hpp"
@@ -18,6 +17,7 @@
 #include <cstdint>
 #include <cstring>
 
+
 namespace wsl
 {
 
@@ -34,44 +34,44 @@ ui_render_interface::~ui_render_interface ()
   for (auto &[_, g] : m_geometries) {
     if (g.vbo != nullptr) {
       SDL_ReleaseGPUBuffer (m_ctx->gpu_device, g.vbo);
-    }
+}
     if (g.ibo != nullptr) {
       SDL_ReleaseGPUBuffer (m_ctx->gpu_device, g.ibo);
-    }
+}
   }
 
   for (auto &[_, t] : m_textures) {
     if (t.texture != nullptr) {
       SDL_ReleaseGPUTexture (m_ctx->gpu_device, t.texture);
-    }
+}
   }
 
   if (m_pipeline != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline);
-  }
+}
 }
 
 void
 ui_render_interface::create_pipeline (wsl::rsc::resource_manager *res_mgr)
 {
-  auto vs_id = res_mgr->register_shader (
-      "engine://compiled_shaders/ui.vert.slang.spv");
-  auto fs_id = res_mgr->register_shader (
-      "engine://compiled_shaders/ui.frag.slang.spv");
+  auto vs_id = res_mgr->register_shader ("engine://compiled_shaders/ui.vert.slang.spv");
+  auto fs_id = res_mgr->register_shader ("engine://compiled_shaders/ui.frag.slang.spv");
 
   SDL_GPUShader *vs = gfx::shader::load_from_manager (
-      m_ctx->gpu_device, res_mgr, vs_id, SDL_GPU_SHADERSTAGE_VERTEX, 1, 0);
+      m_ctx->gpu_device, res_mgr, vs_id,
+      SDL_GPU_SHADERSTAGE_VERTEX, 1, 0);
 
   SDL_GPUShader *fs = gfx::shader::load_from_manager (
-      m_ctx->gpu_device, res_mgr, fs_id, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0);
+      m_ctx->gpu_device, res_mgr, fs_id,
+      SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0);
 
   if ((vs == nullptr) || (fs == nullptr)) {
     if (vs != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, vs);
-    }
+}
     if (fs != nullptr) {
       SDL_ReleaseGPUShader (m_ctx->gpu_device, fs);
-    }
+}
     return;
   }
 
@@ -118,8 +118,8 @@ ui_render_interface::create_pipeline (wsl::rsc::resource_manager *res_mgr)
   info.vertex_input_state.vertex_attributes = attrs;
 
   SDL_GPUColorTargetDescription ct{};
-  ct.format = SDL_GetGPUSwapchainTextureFormat (m_ctx->gpu_device,
-                                                m_window->handler ());
+  ct.format
+      = SDL_GetGPUSwapchainTextureFormat (m_ctx->gpu_device, m_window->handler());
 
   info.target_info.num_color_targets = 1;
   info.target_info.color_target_descriptions = &ct;
@@ -204,13 +204,13 @@ ui_render_interface::RenderGeometry (Rml::CompiledGeometryHandle geometry,
   auto it = m_geometries.find (geometry);
   if (it == m_geometries.end ()) {
     return;
-  }
+}
 
   auto &g = it->second;
 
   if ((m_ctx->main_pass == nullptr) || (m_pipeline == nullptr)) {
     return;
-  }
+}
 
   SDL_BindGPUGraphicsPipeline (m_ctx->main_pass, m_pipeline);
 
@@ -237,14 +237,14 @@ ui_render_interface::ReleaseGeometry (Rml::CompiledGeometryHandle geometry)
   auto it = m_geometries.find (geometry);
   if (it == m_geometries.end ()) {
     return;
-  }
+}
 
   if (it->second.vbo != nullptr) {
     SDL_ReleaseGPUBuffer (m_ctx->gpu_device, it->second.vbo);
-  }
+}
   if (it->second.ibo != nullptr) {
     SDL_ReleaseGPUBuffer (m_ctx->gpu_device, it->second.ibo);
-  }
+}
 
   m_geometries.erase (it);
 }
@@ -277,7 +277,7 @@ ui_render_interface::GenerateTexture (Rml::Span<const Rml::byte> source,
       m_ctx->gpu_device, &transfer_buffer_create_info);
 
   memcpy (SDL_MapGPUTransferBuffer (m_ctx->gpu_device, staging, false),
-          source.data (), static_cast<size_t> (size.x * size.y * 4));
+          source.data (), static_cast<size_t>(size.x * size.y * 4));
 
   SDL_UnmapGPUTransferBuffer (m_ctx->gpu_device, staging);
 
@@ -333,7 +333,7 @@ ui_render_interface::ReleaseTexture (Rml::TextureHandle texture)
   auto it = m_textures.find (texture);
   if (it == m_textures.end ()) {
     return;
-  }
+}
 
   SDL_ReleaseGPUTexture (m_ctx->gpu_device, it->second.texture);
   m_textures.erase (it);

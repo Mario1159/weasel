@@ -1,17 +1,6 @@
 #pragma once
 
-// clang-format off
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Jolt.h>
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Collision/ObjectLayer.h>
-#endif
-#endif
-// clang-format on
-
-#if !defined(WSL_MODULE_BUILD)
 #include <cstdint>
-#endif
 
 namespace wsl
 {
@@ -25,8 +14,8 @@ namespace phys
 namespace layers
 {
 
-using layer_index_t = uint8_t;
-using layer_mask_t = uint16_t;
+using layer_index_t = std::uint8_t;
+using layer_mask_t = std::uint16_t;
 
 inline constexpr layer_index_t collision_layer_count = 8;
 inline constexpr layer_mask_t all_collision_layers
@@ -34,22 +23,24 @@ inline constexpr layer_mask_t all_collision_layers
 
 // Legacy object layers are kept for non-rigidbody physics objects like
 // character controllers and area sensors.
-inline constexpr JPH::ObjectLayer
+inline constexpr std::uint16_t
     STATIC // NOLINT(readability-identifier-naming)
     = 0;
-inline constexpr JPH::ObjectLayer dynamic = 1;
-inline constexpr JPH::ObjectLayer character = 2;
+inline constexpr std::uint16_t dynamic = 1;
+inline constexpr std::uint16_t character = 2;
 
-inline constexpr JPH::ObjectLayer encoded_rigidbody_flag = 1U << 15;
-inline constexpr uint16_t encoded_layer_bits = 3;
-inline constexpr uint16_t encoded_layer_mask = (1U << encoded_layer_bits) - 1U;
-inline constexpr uint16_t encoded_mask_shift = encoded_layer_bits;
-inline constexpr uint16_t encoded_mask_bits = collision_layer_count;
-inline constexpr uint16_t encoded_collision_mask
+inline constexpr std::uint16_t encoded_rigidbody_flag = 1U << 15;
+inline constexpr std::uint16_t encoded_layer_bits = 3;
+inline constexpr std::uint16_t encoded_layer_mask
+    = (1U << encoded_layer_bits) - 1U;
+inline constexpr std::uint16_t encoded_mask_shift = encoded_layer_bits;
+inline constexpr std::uint16_t encoded_mask_bits = collision_layer_count;
+inline constexpr std::uint16_t encoded_collision_mask
     = ((1U << encoded_mask_bits) - 1U) << encoded_mask_shift;
-inline constexpr uint16_t encoded_motion_shift
+inline constexpr std::uint16_t encoded_motion_shift
     = encoded_mask_shift + encoded_mask_bits;
-inline constexpr uint16_t encoded_motion_mask = 0x3U << encoded_motion_shift;
+inline constexpr std::uint16_t encoded_motion_mask
+    = 0x3U << encoded_motion_shift;
 
 enum class motion_bucket : std::uint8_t
 {
@@ -77,13 +68,13 @@ bit_for_layer (layer_index_t value)
 }
 
 constexpr bool
-is_encoded_rigidbody (JPH::ObjectLayer layer)
+is_encoded_rigidbody (std::uint16_t layer)
 {
   return (layer & encoded_rigidbody_flag) != 0;
 }
 
 constexpr motion_bucket
-get_motion_bucket (JPH::ObjectLayer layer)
+get_motion_bucket (std::uint16_t layer)
 {
   if (!is_encoded_rigidbody (layer)) {
     switch (layer) {
@@ -102,7 +93,7 @@ get_motion_bucket (JPH::ObjectLayer layer)
 }
 
 constexpr layer_index_t
-get_collision_layer (JPH::ObjectLayer layer)
+get_collision_layer (std::uint16_t layer)
 {
   if (!is_encoded_rigidbody (layer)) {
     return 0;
@@ -113,7 +104,7 @@ get_collision_layer (JPH::ObjectLayer layer)
 }
 
 constexpr layer_mask_t
-get_collision_mask (JPH::ObjectLayer layer)
+get_collision_mask (std::uint16_t layer)
 {
   if (!is_encoded_rigidbody (layer)) {
     return all_collision_layers;
@@ -123,11 +114,11 @@ get_collision_mask (JPH::ObjectLayer layer)
       (layer & encoded_collision_mask) >> encoded_mask_shift));
 }
 
-constexpr JPH::ObjectLayer
+constexpr std::uint16_t
 make_rigidbody_object_layer (layer_index_t layer_index, layer_mask_t mask,
                              motion_bucket motion)
 {
-  return static_cast<JPH::ObjectLayer> (
+  return static_cast<std::uint16_t> (
       encoded_rigidbody_flag
       | static_cast<uint16_t> (clamp_layer_index (layer_index))
       | (static_cast<uint16_t> (clamp_layer_mask (mask)) << encoded_mask_shift)
@@ -135,14 +126,14 @@ make_rigidbody_object_layer (layer_index_t layer_index, layer_mask_t mask,
 }
 
 constexpr bool
-layer_mask_allows (JPH::ObjectLayer a, JPH::ObjectLayer b)
+layer_mask_allows (std::uint16_t a, std::uint16_t b)
 {
   return (get_collision_mask (a) & bit_for_layer (get_collision_layer (b)))
          != 0;
 }
 
 constexpr bool
-rigidbodies_can_collide (JPH::ObjectLayer a, JPH::ObjectLayer b)
+rigidbodies_can_collide (std::uint16_t a, std::uint16_t b)
 {
   return layer_mask_allows (a, b) && layer_mask_allows (b, a);
 }

@@ -19,7 +19,7 @@ systems and is where the bulk of the engine lives, including:
   components, singleton components and systems.
 - The **rendering** pipeline built on SDL3's GPU API (2D and 3D, PBR, lighting
   clusters, shader graph).
-- **Physics** integration (3D through Jolt).
+- **Physics** integration (3D through Box3D).
 - **Audio**, **input**, **resources** and **scene** management.
 - **Engine and editor abstractions** -- the data structures, registries and
   services that both the runtime and the Weasel Editor build upon.

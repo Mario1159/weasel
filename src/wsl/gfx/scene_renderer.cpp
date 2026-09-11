@@ -1,5 +1,4 @@
 #include "scene_renderer.hpp"
-#include "gfx/image.hpp"
 
 #include "gfx/lighting.hpp"
 #include "gfx/material.hpp"

@@ -47,7 +47,7 @@ behavior_notes ()
 {
   static const std::map<std::string, std::vector<std::string>> notes = {
     { "Rigid Body",
-      { "Ownership model: once created, the physics engine (Jolt) owns the "
+      { "Ownership model: once created, the physics engine (Box3D) owns the "
         "collision body; the engine copies the simulation result back into "
         "the transform/scale every step.",
         "Dynamic bodies: writing transform.position/rotation/scale directly "
@@ -57,7 +57,7 @@ behavior_notes ()
         "apply_impulse) or remove + re-add the rigid_body component to "
         "teleport.",
         "Kinematic and static bodies DO accept transform writes.",
-        "Mass is derived from Jolt's default density (1000 kg/m^3). A "
+        "Mass is derived from the default density (1000 kg/m^3). A "
         "builtin://sphere (radius 0.5) masses ~524 kg, so apply_force "
         "magnitudes must be in the thousands (≈6500 N yields ≈g lift for "
         "that sphere). Use per-body mass/scale to size your forces.",

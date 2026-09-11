@@ -2,31 +2,33 @@
 
 #include "../../comp/component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/core/type_info.hpp>
 #endif
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/meta/factory.hpp>
 #endif
+
+#ifndef IN_MODULE_INTERFACE
+#include <optional>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
 #endif
 
@@ -138,5 +140,37 @@ struct is_in_place_storage<
 
 template <typename T>
 inline constexpr bool is_in_place_storage_v = is_in_place_storage<T>::value;
+
+/**
+ * Single save entry: writes an entity id and its component data,
+ *         or a tombstone marker for in-place deleted slots.
+ */
+template <typename T> struct component_save_entry
+{
+  entt::entity entity_id{};
+  const T *data = nullptr;
+
+  bool
+  is_tombstone () const
+  {
+    return data == nullptr;
+  }
+};
+
+/**
+ * Single load entry: reads an entity id and its component data,
+ *         or detects a tombstone marker.
+ */
+template <typename T> struct component_load_entry
+{
+  entt::entity entity_id{};
+  std::optional<T> data;
+
+  bool
+  is_tombstone () const
+  {
+    return !data.has_value ();
+  }
+};
 
 } // namespace wsl::reg::detail

@@ -1,5 +1,4 @@
 #include "resource_inspector.hpp"
-#include "wsl/rsc/scene_manager.hpp"
 
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_ref.hpp"

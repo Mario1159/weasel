@@ -1,8 +1,14 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/matrix_transform.hpp>
+#endif
 
 #include "component_meta.hpp"
 #include "world_transform.hpp"
@@ -113,7 +119,6 @@ public:
   }
 
   static void register_meta ();
-
 };
 
 } // namespace comp

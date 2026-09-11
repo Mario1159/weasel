@@ -1,11 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"
-#endif
 #include "component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
@@ -29,6 +27,23 @@ struct camera_2d : world_component
 
   static void register_meta ();
 
+  template <class Archive>
+  void
+  serialize (Archive &archive)
+  {
+    camera_2d def{};
+    serialize_field_if_diff (archive, "zoom", zoom, def.zoom);
+    serialize_field_if_diff (archive, "use_window_as_viewport",
+                             use_window_as_viewport,
+                             def.use_window_as_viewport);
+    serialize_field_if_diff (archive, "viewport_offset", viewport_offset,
+                             def.viewport_offset);
+    serialize_field_if_diff (archive, "viewport_size", viewport_size,
+                             def.viewport_size);
+    serialize_field_if_diff (archive, "layer", layer, def.layer);
+    serialize_field_if_diff (archive, "only_for_editor", only_for_editor,
+                             def.only_for_editor);
+  }
 };
 
 } // namespace wsl::comp

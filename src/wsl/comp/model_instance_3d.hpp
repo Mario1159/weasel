@@ -2,8 +2,8 @@
 
 #include "../rsc/resource_manager.hpp"
 #include "component_meta.hpp"
-#include "singl/runtime_context.hpp"
-#if !defined(WSL_MODULE_BUILD)
+
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
@@ -74,7 +74,6 @@ struct model_instance_3d : world_component
             "Visibility Range",
             "Max draw distance in world units (0 = unlimited)", "" });
   }
-
 };
 
 } // namespace comp

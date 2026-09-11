@@ -3,11 +3,6 @@
 
 #include <SDL3/SDL_filesystem.h>
 
-#include "reg/component_registry.hpp"
-#include "reg/singleton_registry.hpp"
-#include "reg/system_factory_registry.hpp"
-#include "reg/runtime_project_module.hpp"
-#include "reg/singleton_registry.hpp"
 #include "comp/area3d.hpp"
 #include "comp/camera.hpp"
 #include "comp/character_body.hpp"
@@ -570,6 +565,7 @@ cli_handler::parse (int argc, char **argv)
     proj.cubemaps_path = "rsc/textures/cubemaps";
     proj.audio_path = "rsc/audio";
     proj.fonts_path = "rsc/fonts";
+    proj.materials_path = "rsc/materials";
     proj.default_scene_path = "";
 
     wsl::comp::singl::runtime_context rtc{ "Project Generator", 0, 0,

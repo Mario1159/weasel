@@ -12,8 +12,8 @@ parentheses):
 
 - **Transform System** (``Transform``) -- propagates hierarchical transforms,
   computing each entity's world transform from its parent.
-- **Jolt Physics System** (``Physics``) -- runs the 3D physics simulation
-  through Jolt: rigid bodies, areas, character controllers and ray-casts.
+- **Physics System** (``Physics``) -- runs the 3D physics simulation
+  through Box3D: rigid bodies, areas, character controllers and ray-casts.
 - **3D Render System** (``3D Render``) -- renders 3D model instances with PBR
   materials, dynamic lighting clusters and shadows.
 - **2D Render System** (``2D Render``) -- batches and renders 2D sprites and

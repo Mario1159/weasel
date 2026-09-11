@@ -3,7 +3,6 @@
 #include "comp/world_transform.hpp"
 #include "editor/ecs_inspector_utils.hpp"
 #include "wsl/rsc/project.hpp"
-#include "wsl/rsc/scene_manager.hpp"
 #include "wsl/rsc/resource_ids.hpp"
 #include "wsl/reg/singleton_registry.hpp"
 #include "wsl/comp/hierarchy.hpp"
@@ -663,8 +662,10 @@ entities_and_singletons_panel::make_prefab (entt::entity entity)
   }
 
   std::string const filename = filename_base + ".prefab";
+  // Prefabs are scene assets: save them under the project's scenes directory
+  // (scan_assets only registers scenes/prefabs found in scenes_path).
   std::filesystem::path const rel_path
-      = std::filesystem::path ("scenes") / filename;
+      = std::filesystem::path (proj->scenes_path) / filename;
   std::filesystem::path const abs_path
       = std::filesystem::path (proj->root_path) / rel_path;
 

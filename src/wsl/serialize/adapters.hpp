@@ -1,285 +1,314 @@
 #pragma once
 
-// Implementation-only: reflect-cpp adapters for third-party and engine math
-// types. Never include from engine headers (module purview) — .cpp files only.
+// Phase B — rfl adapters for glm, entt, and engine math types
+// Replaces rsc/cereal_glm.hpp and rsc/data_types_serialization.hpp
+// Each glm type is represented as a helper struct with from_class/to_class
+// so rfl can reflect it (glm::vec has anonymous union, not directly
+// reflectable).
 
-#if !defined(WSL_MODULE_BUILD)
-#include <array>
+#ifndef IN_MODULE_INTERFACE
+#include <rfl.hpp>
 #endif
-#include <cstdint>
+#ifndef IN_MODULE_INTERFACE
+#include <rfl/Field.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <rfl/parsing/Parser.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <rfl/parsing/CustomParser.hpp>
+#endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <entt/entity/entity.hpp>
-#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
 #endif
-
-#if !defined(WSL_MODULE_BUILD)
-#include "math/matrix.hpp"
+#ifndef IN_MODULE_INTERFACE
+#include <entt/entt.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
-#include "math/vector.hpp"
+#ifndef IN_MODULE_INTERFACE
+#include "../math/vector.hpp"
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include "../math/matrix.hpp"
 #endif
 
-namespace rfl
+#ifndef IN_MODULE_INTERFACE
+#include <array>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cstdint>
+#endif
+
+namespace wsl::serialize
 {
 
-// --- glm -----------------------------------------------------------------
-
-template <> struct Reflector<glm::vec2>
+// Helper structs — rfl reflects these, then CustomParser converts to glm
+struct Vec2Helper
 {
-  struct ReflType
-  {
-    float x;
-    float y;
-  };
-  static glm::vec2
-  to (const ReflType &v) noexcept
+  float x = 0, y = 0;
+  static Vec2Helper
+  from_class (const glm::vec2 &v)
   {
     return { v.x, v.y };
   }
-  static ReflType
-  from (const glm::vec2 &v)
+  glm::vec2
+  to_class () const
   {
-    return { v.x, v.y };
+    return { x, y };
   }
 };
 
-template <> struct Reflector<glm::vec3>
+struct Vec3Helper
 {
-  struct ReflType
-  {
-    float x;
-    float y;
-    float z;
-  };
-  static glm::vec3
-  to (const ReflType &v) noexcept
+  float x = 0, y = 0, z = 0;
+  static Vec3Helper
+  from_class (const glm::vec3 &v)
   {
     return { v.x, v.y, v.z };
   }
-  static ReflType
-  from (const glm::vec3 &v)
+  glm::vec3
+  to_class () const
   {
-    return { v.x, v.y, v.z };
+    return { x, y, z };
   }
 };
 
-template <> struct Reflector<glm::vec4>
+struct Vec4Helper
 {
-  struct ReflType
-  {
-    float x;
-    float y;
-    float z;
-    float w;
-  };
-  static glm::vec4
-  to (const ReflType &v) noexcept
+  float x = 0, y = 0, z = 0, w = 0;
+  static Vec4Helper
+  from_class (const glm::vec4 &v)
   {
     return { v.x, v.y, v.z, v.w };
   }
-  static ReflType
-  from (const glm::vec4 &v)
+  glm::vec4
+  to_class () const
   {
-    return { v.x, v.y, v.z, v.w };
+    return { x, y, z, w };
   }
 };
 
-template <> struct Reflector<glm::quat>
+struct QuatHelper
 {
-  struct ReflType
+  float w = 1, x = 0, y = 0, z = 0;
+  static QuatHelper
+  from_class (const glm::quat &q)
   {
-    float x;
-    float y;
-    float z;
-    float w;
-  };
-  static glm::quat
-  to (const ReflType &v) noexcept
-  {
-    return { v.w, v.x, v.y, v.z };
+    return { q.w, q.x, q.y, q.z };
   }
-  static ReflType
-  from (const glm::quat &v)
+  glm::quat
+  to_class () const
   {
-    return { v.x, v.y, v.z, v.w };
+    return { w, x, y, z };
   }
 };
 
-template <> struct Reflector<glm::mat4>
+struct Mat4Helper
 {
-  using ReflType = std::array<std::array<float, 4>, 4>;
-  static glm::mat4
-  to (const ReflType &v) noexcept
+  // Column-major 4x4 as flat array for rfl (16 floats)
+  std::array<float, 16> m{};
+  static Mat4Helper
+  from_class (const glm::mat4 &mat)
   {
-    glm::mat4 m{};
-    for (int c = 0; c < 4; ++c) {
-      for (int r = 0; r < 4; ++r) {
-        m[c][r] = v[c][r];
-      }
-    }
-    return m;
+    Mat4Helper h;
+    for (int c = 0; c < 4; ++c)
+      for (int r = 0; r < 4; ++r)
+        h.m[c * 4 + r] = mat[c][r];
+    return h;
   }
-  static ReflType
-  from (const glm::mat4 &m)
+  glm::mat4
+  to_class () const
   {
-    ReflType v{};
-    for (int c = 0; c < 4; ++c) {
-      for (int r = 0; r < 4; ++r) {
-        v[c][r] = m[c][r];
-      }
-    }
-    return v;
+    glm::mat4 mat (1.0f);
+    for (int c = 0; c < 4; ++c)
+      for (int r = 0; r < 4; ++r)
+        mat[c][r] = m[c * 4 + r];
+    return mat;
   }
 };
 
-// --- engine math ----------------------------------------------------------
-
-template <> struct Reflector<wsl::math::vec2f>
+// entt::entity as uint32_t (stable id)
+struct EntityHelper
 {
-  struct ReflType
+  std::uint32_t id = 0;
+  static EntityHelper
+  from_class (const entt::entity &e)
   {
-    float x;
-    float y;
-  };
-  static wsl::math::vec2f
-  to (const ReflType &v) noexcept
-  {
-    return wsl::math::vec2f{ v.x, v.y };
+    return { static_cast<std::uint32_t> (e) };
   }
-  static ReflType
-  from (const wsl::math::vec2f &v)
+  entt::entity
+  to_class () const
+  {
+    return entt::entity{ id };
+  }
+};
+
+// Engine math helpers — wsl::math::quatf/vec* have private members and
+// cannot be reflected directly via structured binding.
+struct QuatfHelper
+{
+  float w = 1, x = 0, y = 0, z = 0;
+  static QuatfHelper
+  from_class (const wsl::math::quatf &q)
+  {
+    return { q.w (), q.x (), q.y (), q.z () };
+  }
+  wsl::math::quatf
+  to_class () const
+  {
+    return wsl::math::quatf{ x, y, z, w };
+  }
+};
+
+struct Vec2fHelper
+{
+  float x = 0, y = 0;
+  static Vec2fHelper
+  from_class (const wsl::math::vec2f &v)
   {
     return { v.x (), v.y () };
   }
+  wsl::math::vec2f
+  to_class () const
+  {
+    return wsl::math::vec2f{ x, y };
+  }
 };
 
-template <> struct Reflector<wsl::math::vec3f>
+struct Vec3fHelper
 {
-  struct ReflType
-  {
-    float x;
-    float y;
-    float z;
-  };
-  static wsl::math::vec3f
-  to (const ReflType &v) noexcept
-  {
-    return wsl::math::vec3f{ v.x, v.y, v.z };
-  }
-  static ReflType
-  from (const wsl::math::vec3f &v)
+  float x = 0, y = 0, z = 0;
+  static Vec3fHelper
+  from_class (const wsl::math::vec3f &v)
   {
     return { v.x (), v.y (), v.z () };
   }
+  wsl::math::vec3f
+  to_class () const
+  {
+    return wsl::math::vec3f{ x, y, z };
+  }
 };
 
-template <> struct Reflector<wsl::math::vec4f>
+struct Vec4fHelper
 {
-  struct ReflType
-  {
-    float x;
-    float y;
-    float z;
-    float w;
-  };
-  static wsl::math::vec4f
-  to (const ReflType &v) noexcept
-  {
-    return wsl::math::vec4f{ v.x, v.y, v.z, v.w };
-  }
-  static ReflType
-  from (const wsl::math::vec4f &v)
+  float x = 0, y = 0, z = 0, w = 0;
+  static Vec4fHelper
+  from_class (const wsl::math::vec4f &v)
   {
     return { v.x (), v.y (), v.z (), v.w () };
   }
+  wsl::math::vec4f
+  to_class () const
+  {
+    return wsl::math::vec4f{ x, y, z, w };
+  }
 };
 
-template <> struct Reflector<wsl::math::quatf>
+struct Mat44fHelper
 {
-  struct ReflType
+  std::array<float, 16> m{};
+  static Mat44fHelper
+  from_class (const wsl::math::mat44f &mat)
   {
-    float x;
-    float y;
-    float z;
-    float w;
-  };
-  static wsl::math::quatf
-  to (const ReflType &v) noexcept
-  {
-    return wsl::math::quatf{ v.x, v.y, v.z, v.w };
+    Mat44fHelper h;
+    const float *src = mat.data ();
+    for (int i = 0; i < 16; ++i)
+      h.m[i] = src[i];
+    return h;
   }
-  static ReflType
-  from (const wsl::math::quatf &v)
+  wsl::math::mat44f
+  to_class () const
   {
-    return { v.x (), v.y (), v.z (), v.w () };
+    wsl::math::mat44f out;
+    for (int i = 0; i < 16; ++i)
+      out.data ()[i] = m[i];
+    return out;
   }
 };
 
-template <> struct Reflector<wsl::math::mat44f>
+} // namespace wsl::serialize
+
+// rfl custom parsers — tell rfl to use HelperStruct for OriginalClass
+namespace rfl::parsing
 {
-  using ReflType = std::array<float, 16>;
-  static wsl::math::mat44f
-  to (const ReflType &v) noexcept
-  {
-    wsl::math::mat44f m{};
-    for (int i = 0; i < 16; ++i) {
-      m.data ()[i] = v[i];
-    }
-    return m;
-  }
-  static ReflType
-  from (const wsl::math::mat44f &m)
-  {
-    ReflType v{};
-    for (int i = 0; i < 16; ++i) {
-      v[i] = m.data ()[i];
-    }
-    return v;
-  }
-};
-
-template <> struct Reflector<wsl::math::mat33f>
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, glm::vec2, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, glm::vec2,
+                          wsl::serialize::Vec2Helper>
 {
-  using ReflType = std::array<float, 9>;
-  static wsl::math::mat33f
-  to (const ReflType &v) noexcept
-  {
-    wsl::math::mat33f m{};
-    for (int i = 0; i < 9; ++i) {
-      m.data ()[i] = v[i];
-    }
-    return m;
-  }
-  static ReflType
-  from (const wsl::math::mat33f &m)
-  {
-    ReflType v{};
-    for (int i = 0; i < 9; ++i) {
-      v[i] = m.data ()[i];
-    }
-    return v;
-  }
 };
 
-// --- entt -----------------------------------------------------------------
-
-template <> struct Reflector<entt::entity>
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, glm::vec3, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, glm::vec3,
+                          wsl::serialize::Vec3Helper>
 {
-  using ReflType = std::uint32_t;
-  static entt::entity
-  to (const ReflType &v) noexcept
-  {
-    return static_cast<entt::entity> (v);
-  }
-  static ReflType
-  from (const entt::entity &v)
-  {
-    return static_cast<std::uint32_t> (entt::to_integral (v));
-  }
 };
 
-} // namespace rfl
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, glm::vec4, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, glm::vec4,
+                          wsl::serialize::Vec4Helper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, glm::quat, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, glm::quat,
+                          wsl::serialize::QuatHelper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, glm::mat4, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, glm::mat4,
+                          wsl::serialize::Mat4Helper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, entt::entity, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, entt::entity,
+                          wsl::serialize::EntityHelper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, wsl::math::quatf, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, wsl::math::quatf,
+                          wsl::serialize::QuatfHelper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, wsl::math::vec2f, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, wsl::math::vec2f,
+                          wsl::serialize::Vec2fHelper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, wsl::math::vec3f, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, wsl::math::vec3f,
+                          wsl::serialize::Vec3fHelper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, wsl::math::vec4f, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, wsl::math::vec4f,
+                          wsl::serialize::Vec4fHelper>
+{
+};
+
+template <class R, class W, class ProcessorsType>
+struct Parser<R, W, wsl::math::mat44f, ProcessorsType>
+    : public CustomParser<R, W, ProcessorsType, wsl::math::mat44f,
+                          wsl::serialize::Mat44fHelper>
+{
+};
+} // namespace rfl::parsing

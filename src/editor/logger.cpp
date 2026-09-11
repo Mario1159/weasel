@@ -35,7 +35,7 @@ editor::logger::~logger ()
     auto loggers_list
         = { wsl::log::core (), wsl::log::gfx (),    wsl::log::rsc (),
             wsl::log::sys (),  wsl::log::editor (), wsl::log::cli (),
-            wsl::log::phys (), wsl::log::net (),    wsl::log::cmake () };
+            wsl::log::phys (), wsl::log::net (),    wsl::log::xmake () };
     for (const auto &l : loggers_list) {
       if (l) {
         l->sinks ().erase (
@@ -69,7 +69,7 @@ editor::logger::attach_to_spdlog ()
   create_sink (wsl::log::cli ());
   create_sink (wsl::log::phys ());
   create_sink (wsl::log::net ());
-  create_sink (wsl::log::cmake ());
+  create_sink (wsl::log::xmake ());
 }
 
 void
@@ -115,7 +115,7 @@ editor::logger::draw (const char *title, bool *open)
   ImGui::SetNextItemWidth (120);
   if (ImGui::BeginCombo ("##sink_select", m_current_category.c_str ())) {
     const char *categories[] = { "All",    "core", "gfx",  "rsc", "sys",
-                                 "editor", "cli",  "phys", "net", "cmake" };
+                                 "editor", "cli",  "phys", "net", "xmake" };
     for (int i = 0; i < 10; ++i) {
       bool const is_selected = (m_current_category == categories[i]);
       if (ImGui::Selectable (categories[i], is_selected)) {

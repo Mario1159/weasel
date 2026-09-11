@@ -6,11 +6,11 @@
 #include "wsl/gfx/shader_program.hpp"
 #include "wsl/rsc/resource_manager.hpp"
 #include "wsl/log/log.hpp"
+#include "wsl/serialize/types.hpp"
 
 #include <ImNodeFlow.h>
-#include <rfl/json.hpp>
-#include "wsl/serialize/component_adapters.hpp"
-#include <sstream>
+#include "wsl/serialize/serialize.hpp"
+#include <cereal/archives/json.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
@@ -629,15 +629,17 @@ shader_graph_editor::load_graph (const std::string &path)
     return false;
   }
 
-  std::stringstream ss;
-  ss << file.rdbuf ();
-  auto parsed = rfl::json::read<wsl::gfx::shader_graph> (ss.str ());
-  if (!parsed) {
-    m_compile_log = std::string ("Load error: ") + parsed.error ().what ();
-    return false;
-  }
-  {
-    m_graph = std::move (parsed).value ();
+  try {
+    std::stringstream ss;
+    ss << file.rdbuf ();
+    // json_reader keeps a view into the buffer for the whole read, so the
+    // content must outlive it.
+    const std::string content = ss.str ();
+    wsl::serialize::json_reader reader (content);
+    if (!reader.read (m_graph)) {
+      m_compile_log = "Deserialization error";
+      return false;
+    }
     m_current_path = path;
     m_compile_log = "Loaded " + path;
     try {
@@ -650,6 +652,9 @@ shader_graph_editor::load_graph (const std::string &path)
         m_next_node_id = n.id + 1;
     sync_graph_to_nodeflow ();
     return true;
+  } catch (const std::exception &e) {
+    m_compile_log = std::string ("Load error: ") + e.what ();
+    return false;
   }
 }
 
@@ -666,8 +671,13 @@ shader_graph_editor::save_graph (const std::string &path)
   // serializing so the on-disk file round-trips correctly.
   sync_nodeflow_to_graph ();
 
-  {
-    file << rfl::json::write (m_graph);
+  try {
+    wsl::serialize::json_writer writer;
+    if (!writer.write (m_graph)) {
+      m_compile_log = "Serialization error";
+      return false;
+    }
+    file << writer.json;
     m_current_path = path;
     m_compile_log = "Saved " + path;
     // Refresh the hot-reload timestamp so the next frame's check does not
@@ -677,6 +687,9 @@ shader_graph_editor::save_graph (const std::string &path)
     } catch (const std::exception &) {
     }
     return true;
+  } catch (const std::exception &e) {
+    m_compile_log = std::string ("Save error: ") + e.what ();
+    return false;
   }
 }
 
@@ -866,9 +879,8 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
     if (!ofs) {
       return;
     }
-    ofs << rfl::json::write (*mat);
-    // `ofs` is flushed and closed when it goes out of scope, so the file is
-    // fully written before we register/load it below.
+    cereal::JSONOutputArchive ar (ofs);
+    ar (cereal::make_nvp ("material", *mat));
   }
   m_preview_material_id = res_mgr.register_material (tmp_path.string ());
   res_mgr.load (m_preview_material_id);
@@ -965,9 +977,8 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
   }
 
   try {
-    ofs << rfl::json::write (*mat);
-    // Flush and close before registering/loading so the on-disk file is
-    // complete when the resource manager reads it back.
+    cereal::JSONOutputArchive ar (ofs);
+    ar (cereal::make_nvp ("material", *mat));
   } catch (const std::exception &e) {
     wsl::log::editor ()->error ("Failed to serialize material: {}", e.what ());
     return wsl::rsc::material_id{};

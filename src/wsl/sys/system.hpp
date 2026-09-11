@@ -1,24 +1,28 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../event/event_hub.hpp"
-#endif
 #include "../comp/component_meta.hpp"
 #include "wsl/log/log.hpp"
 
 #include "entt/entity/fwd.hpp"
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <tracy/Tracy.hpp>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <utility>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

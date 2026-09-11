@@ -1,21 +1,24 @@
 // scene_snapshot_serializer.hpp
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entity/registry.hpp>
+#endif
 
-// Serialization backends are implementation details (see wsl/serialize).
-namespace wsl::serialize
-{
-class json_writer;
-class json_reader;
-class binary_writer;
-class binary_reader;
-}
+#ifndef IN_MODULE_INTERFACE
+#include <type_traits>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/core/hashed_string.hpp>
+#endif
 
+#include "../comp/component_meta.hpp"
+#include "../serialize/types.hpp"
 #include "scene.hpp"
 
 namespace wsl
@@ -58,18 +61,12 @@ struct scene_header
 /**
  * Handles serialization and deserialization of scene snapshots.
  *
- * This class saves and loads the complete state of a scene, including
- * entities, components, and singletons. The JSON format is human readable;
- * the binary format mirrors the same structure with msgpack payloads.
+ * This class uses rfl-based serialization to save and load the complete state
+ * of a scene, including entities, components, and singletons.
  */
 class scene_snapshot_serializer
 {
 public:
-  /**
-   * Constructs a serializer for a specific scene and runtime context.
-   * :param runtime_ctx: Pointer to the runtime context.
-   * :param scene: Reference to the scene to be serialized.
-   */
   /*explicit*/ scene_snapshot_serializer (
       comp::singl::runtime_context *runtime_ctx, scene &scene);
 
@@ -96,23 +93,10 @@ public:
   bool is_prefab = false;
 
 private:
-  /** Serializes the scene into a JSON document. */
-  void save_json_doc (serialize::json_writer &writer) const;
-
-  /** Restores the scene from a JSON document. */
-  void load_json_doc (serialize::json_reader &reader);
-
-  /** Serializes the scene into a binary stream. */
-  void save_binary_stream (serialize::binary_writer &writer) const;
-
-  /** Restores the scene from a binary stream. */
-  void load_binary_stream (serialize::binary_reader &reader);
-
-  /** Builds the scene header from the current scene state. */
-  scene_header build_header () const;
-
-  /** Shared post-load finalization (names, connections, physics, ...). */
-  void post_load_finalize (const scene_header &header);
+  void save (serialize::json_writer &writer) const;
+  void load (serialize::json_reader &reader);
+  void save_binary (serialize::binary_writer &writer) const;
+  void load_binary (serialize::binary_reader &reader);
 };
 
 } // namespace io

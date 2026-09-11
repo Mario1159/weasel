@@ -1,15 +1,13 @@
 #include "runtime_project_module.hpp"
-#include "component_registry.hpp"
-#include "singleton_registry.hpp"
-#include "system_factory_registry.hpp"
 #include "../das/das_engine.hpp"
 
 #include "../rsc/project.hpp"
 #include "../comp/singl/runtime_context.hpp"
 
 #include <cctype>
-#include <rfl.hpp>
-#include <rfl/json.hpp>
+#include <cereal/external/rapidjson/document.h>
+#include <cereal/external/rapidjson/stringbuffer.h>
+#include <cereal/external/rapidjson/writer.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -68,74 +66,50 @@ clear_runtime_registries (comp::singl::runtime_context &runtime_ctx)
   runtime_ctx.system_factory_registry ().clear_runtime_systems ();
 }
 
-// rfl schema for the on-disk registration cache (kept independent of the
-// runtime structs so the format stays stable).
-struct cached_das_field_json
+void
+write_cached_registration (
+    rapidjson::Writer<rapidjson::StringBuffer> &writer,
+    const runtime_project_module::cached_registration &registration)
 {
-  std::string name;
-  std::string type_name;
-  int offset = 0;
-  int size = 0;
-  int kind = 0;
-};
-
-struct cached_registration_json
-{
-  std::uint64_t type_id = 0;
-  std::string type_name;
-  std::string display_name;
-  bool is_das_component = false;
-  int das_struct_size = 0;
-  std::string script_path;
-  std::vector<cached_das_field_json> das_fields;
-};
-
-struct registration_cache_json
-{
-  std::uint32_t version = 2;
-  std::uint64_t source_hash = 0;
-  std::vector<cached_registration_json> components;
-  std::vector<cached_registration_json> singletons;
-  std::vector<cached_registration_json> systems;
-};
-
-cached_das_field_json
-to_json (const runtime_project_module::cached_das_field &f)
-{
-  return { f.name, f.type_name, f.offset, f.size, f.kind };
-}
-
-cached_registration_json
-to_json (const runtime_project_module::cached_registration &r)
-{
-  cached_registration_json out;
-  out.type_id = r.type_id;
-  out.type_name = r.type_name;
-  out.display_name = r.display_name;
-  out.is_das_component = r.is_das_component;
-  out.das_struct_size = r.das_struct_size;
-  out.script_path = r.script_path;
-  for (const auto &f : r.das_fields) {
-    out.das_fields.push_back (to_json (f));
+  writer.StartObject ();
+  writer.Key ("type_id");
+  writer.Uint64 (registration.type_id);
+  writer.Key ("type_name");
+  writer.String (
+      registration.type_name.c_str (),
+      static_cast<rapidjson::SizeType> (registration.type_name.size ()));
+  writer.Key ("display_name");
+  writer.String (
+      registration.display_name.c_str (),
+      static_cast<rapidjson::SizeType> (registration.display_name.size ()));
+  writer.Key ("is_das_component");
+  writer.Bool (registration.is_das_component);
+  writer.Key ("das_struct_size");
+  writer.Int (registration.das_struct_size);
+  writer.Key ("script_path");
+  writer.String (
+      registration.script_path.c_str (),
+      static_cast<rapidjson::SizeType> (registration.script_path.size ()));
+  writer.Key ("das_fields");
+  writer.StartArray ();
+  for (const auto &f : registration.das_fields) {
+    writer.StartObject ();
+    writer.Key ("name");
+    writer.String (f.name.c_str (),
+                   static_cast<rapidjson::SizeType> (f.name.size ()));
+    writer.Key ("type_name");
+    writer.String (f.type_name.c_str (),
+                   static_cast<rapidjson::SizeType> (f.type_name.size ()));
+    writer.Key ("offset");
+    writer.Int (f.offset);
+    writer.Key ("size");
+    writer.Int (f.size);
+    writer.Key ("kind");
+    writer.Int (f.kind);
+    writer.EndObject ();
   }
-  return out;
-}
-
-runtime_project_module::cached_registration
-from_json (const cached_registration_json &j)
-{
-  runtime_project_module::cached_registration out;
-  out.type_id = j.type_id;
-  out.type_name = j.type_name;
-  out.display_name = j.display_name;
-  out.is_das_component = j.is_das_component;
-  out.das_struct_size = j.das_struct_size;
-  out.script_path = j.script_path;
-  for (const auto &f : j.das_fields) {
-    out.das_fields.push_back (
-        { f.name, f.type_name, f.offset, f.size, f.kind });
-  }
-  return out;
+  writer.EndArray ();
+  writer.EndObject ();
 }
 
 runtime_project_module::cached_registration
@@ -163,6 +137,71 @@ make_cached_registration (const Descriptor &descriptor)
   registration.type_name = descriptor.type_name;
   registration.display_name = descriptor.display_name;
   return registration;
+}
+
+bool
+read_cached_registration (const rapidjson::Value &value,
+                          runtime_project_module::cached_registration &out)
+{
+  if (!value.IsObject () || !value.HasMember ("type_id")
+      || !value.HasMember ("type_name") || !value.HasMember ("display_name")
+      || !value["type_id"].IsUint64 () || !value["type_name"].IsString ()
+      || !value["display_name"].IsString ()) {
+    return false;
+  }
+
+  out.type_id = value["type_id"].GetUint64 ();
+  out.type_name = value["type_name"].GetString ();
+  out.display_name = value["display_name"].GetString ();
+
+  // Optional das fields (backward-compatible with old caches)
+  out.is_das_component = value.HasMember ("is_das_component")
+                                 && value["is_das_component"].IsBool ()
+                             ? value["is_das_component"].GetBool ()
+                             : false;
+  out.das_struct_size
+      = value.HasMember ("das_struct_size") && value["das_struct_size"].IsInt ()
+            ? value["das_struct_size"].GetInt ()
+            : 0;
+  out.script_path
+      = value.HasMember ("script_path") && value["script_path"].IsString ()
+            ? value["script_path"].GetString ()
+            : "";
+  if (value.HasMember ("das_fields") && value["das_fields"].IsArray ()) {
+    for (const auto &f : value["das_fields"].GetArray ()) {
+      if (!f.IsObject () || !f.HasMember ("name") || !f["name"].IsString ()
+          || !f.HasMember ("type_name") || !f["type_name"].IsString ()
+          || !f.HasMember ("offset") || !f["offset"].IsInt ()
+          || !f.HasMember ("size") || !f["size"].IsInt ()
+          || !f.HasMember ("kind") || !f["kind"].IsInt ()) {
+        continue;
+      }
+      out.das_fields.push_back (
+          { f["name"].GetString (), f["type_name"].GetString (),
+            f["offset"].GetInt (), f["size"].GetInt (), f["kind"].GetInt () });
+    }
+  }
+  return true;
+}
+
+bool
+read_cached_registration_array (
+    const rapidjson::Document &doc, const char *name,
+    std::vector<runtime_project_module::cached_registration> &out)
+{
+  if (!doc.HasMember (name) || !doc[name].IsArray ()) {
+    return false;
+  }
+
+  for (const rapidjson::Value &value : doc[name].GetArray ()) {
+    runtime_project_module::cached_registration registration{};
+    if (!read_cached_registration (value, registration)) {
+      return false;
+    }
+    out.push_back (std::move (registration));
+  }
+
+  return true;
 }
 
 } // anonymous namespace
@@ -288,27 +327,28 @@ runtime_project_module::read_registration_cache (const fs::path &path,
 
   std::string const content ((std::istreambuf_iterator<char> (input)),
                              std::istreambuf_iterator<char> ());
-
-  auto parsed = rfl::json::read<registration_cache_json> (content);
-  if (!parsed) {
+  rapidjson::Document doc;
+  if (doc.Parse (content.c_str ()).HasParseError () || !doc.IsObject ()) {
     return false;
   }
 
-  registration_cache_json doc = std::move (parsed).value ();
-  if (doc.version != 2 || doc.source_hash != source_hash) {
+  if (!doc.HasMember ("version") || !doc["version"].IsUint ()
+      || doc["version"].GetUint () != 2 || !doc.HasMember ("source_hash")
+      || !doc["source_hash"].IsUint64 ()) {
+    return false;
+  }
+
+  if (static_cast<std::size_t> (doc["source_hash"].GetUint64 ())
+      != source_hash) {
     return false;
   }
 
   registration_cache cache{};
   cache.source_hash = source_hash;
-  for (const auto &j : doc.components) {
-    cache.components.push_back (from_json (j));
-  }
-  for (const auto &j : doc.singletons) {
-    cache.singletons.push_back (from_json (j));
-  }
-  for (const auto &j : doc.systems) {
-    cache.systems.push_back (from_json (j));
+  if (!read_cached_registration_array (doc, "components", cache.components)
+      || !read_cached_registration_array (doc, "singletons", cache.singletons)
+      || !read_cached_registration_array (doc, "systems", cache.systems)) {
+    return false;
   }
 
   out = std::move (cache);
@@ -369,25 +409,34 @@ runtime_project_module::write_registration_cache () const
   std::error_code ec;
   fs::create_directories (path.parent_path (), ec);
   if (ec) {
-    wsl::log::cmake ()->warn ("Could not create runtime cache directory: {}",
+    wsl::log::xmake ()->warn ("Could not create runtime cache directory: {}",
                               ec.message ());
     return false;
   }
 
-  registration_cache_json doc;
-  doc.version = 2;
-  doc.source_hash = static_cast<std::uint64_t> (cache.source_hash);
-  for (const auto &e : cache.components) {
-    doc.components.push_back (to_json (e));
-  }
-  for (const auto &e : cache.singletons) {
-    doc.singletons.push_back (to_json (e));
-  }
-  for (const auto &e : cache.systems) {
-    doc.systems.push_back (to_json (e));
-  }
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer (buffer);
+  writer.StartObject ();
+  writer.Key ("version");
+  writer.Uint (2);
+  writer.Key ("source_hash");
+  writer.Uint64 (static_cast<std::uint64_t> (cache.source_hash));
 
-  const std::string json = rfl::json::write (doc);
+  auto write_array
+      = [&writer] (const char *name,
+                   const std::vector<cached_registration> &entries) {
+          writer.Key (name);
+          writer.StartArray ();
+          for (const cached_registration &entry : entries) {
+            write_cached_registration (writer, entry);
+          }
+          writer.EndArray ();
+        };
+
+  write_array ("components", cache.components);
+  write_array ("singletons", cache.singletons);
+  write_array ("systems", cache.systems);
+  writer.EndObject ();
 
   // Write atomically: write to a temp file then rename
   const fs::path tmp_path
@@ -395,14 +444,14 @@ runtime_project_module::write_registration_cache () const
   {
     std::ofstream out (tmp_path, std::ios::binary | std::ios::trunc);
     if (!out) {
-      wsl::log::cmake ()->warn ("Could not write runtime cache temp file: {}",
+      wsl::log::xmake ()->warn ("Could not write runtime cache temp file: {}",
                                 tmp_path.string ());
       return false;
     }
-    out << json;
+    out << buffer.GetString ();
     out.flush ();
     if (!out.good ()) {
-      wsl::log::cmake ()->warn ("Failed writing to runtime cache temp file: {}",
+      wsl::log::xmake ()->warn ("Failed writing to runtime cache temp file: {}",
                                 tmp_path.string ());
       // attempt to remove temp file
       std::error_code rem_ec;
@@ -414,7 +463,7 @@ runtime_project_module::write_registration_cache () const
   std::error_code rename_ec;
   fs::rename (tmp_path, path, rename_ec);
   if (rename_ec) {
-    wsl::log::cmake ()->warn (
+    wsl::log::xmake ()->warn (
         "Could not move runtime cache into place: {} -> {} ({})",
         tmp_path.string (), path.string (), rename_ec.message ());
     // best-effort cleanup
@@ -534,7 +583,7 @@ runtime_project_module::load_das_registrations_from_cache (
     });
   }
 
-  wsl::log::cmake ()->debug (
+  wsl::log::xmake ()->debug (
       "load_das_registrations_from_cache: Restored {} das registrations",
       m_das_registrations.size ());
 }
@@ -579,7 +628,7 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
         = "Runtime metadata cache is empty although Daslang sources exist; "
           "ignoring it.";
     m_last_error = m_last_status;
-    wsl::log::cmake ()->warn ("{}", m_last_status);
+    wsl::log::xmake ()->warn ("{}", m_last_status);
     std::error_code ec;
     fs::remove (registration_cache_path (project_root), ec);
     return false;
@@ -592,7 +641,7 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
   m_load_state = load_state_t::metadata_cache;
   m_last_error.clear ();
   m_last_status = "Runtime metadata loaded from cache.";
-  wsl::log::cmake ()->debug ("{}", m_last_status);
+  wsl::log::xmake ()->debug ("{}", m_last_status);
   return true;
 }
 
@@ -625,7 +674,7 @@ runtime_project_module::invalidate (const rsc::project *project)
     std::error_code ec;
     fs::remove (registration_cache_path (root), ec);
     if (ec) {
-      wsl::log::cmake ()->debug ("Cache removal ignored: {}", ec.message ());
+      wsl::log::xmake ()->debug ("Cache removal ignored: {}", ec.message ());
     }
   }
 
@@ -693,9 +742,15 @@ runtime_project_module::finalize_load ()
               reg.display_name);
       break;
     case das_registration::system:
+#if WEASEL_HAS_DASLANG
       m_runtime_ctx->system_factory_registry ().register_cached_runtime_system (
           static_cast<entt::id_type> (reg.type_id), reg.type_name,
           reg.display_name, reg.script_path, *get_das_engine ());
+#else
+      m_runtime_ctx->system_factory_registry ().register_cached_runtime_system (
+          static_cast<entt::id_type> (reg.type_id), reg.type_name,
+          reg.display_name);
+#endif
       break;
     }
   }
@@ -712,7 +767,7 @@ runtime_project_module::unload ()
     return;
   }
 
-  wsl::log::cmake ()->trace ("Unloading module");
+  wsl::log::xmake ()->trace ("Unloading module");
 
   // Clear runtime registries before releasing Daslang programs and contexts.
   if (m_runtime_ctx != nullptr) {
@@ -778,24 +833,24 @@ runtime_project_module::compile_and_load (const rsc::project &project)
 {
   const fs::path project_root = fs::weakly_canonical (project.root_path);
 
-  wsl::log::cmake ()->trace ("Compile and load started for project root: {}",
+  wsl::log::xmake ()->trace ("Compile and load started for project root: {}",
                              project_root.string ());
 
   source_set sources;
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "Gathering Daslang files from components, systems, and singletons...");
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "  components_path: {}",
       (project_root / project.components_path).string ());
-  wsl::log::cmake ()->trace ("  systems_path: {}",
+  wsl::log::xmake ()->trace ("  systems_path: {}",
                              (project_root / project.systems_path).string ());
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "  singletons_path: {}",
       (project_root / project.singletons_path).string ());
   gather_files (project_root / project.components_path, sources);
   gather_files (project_root / project.systems_path, sources);
   gather_files (project_root / project.singletons_path, sources);
-  wsl::log::cmake ()->trace (
+  wsl::log::xmake ()->trace (
       "Gathered {} headers, {} cpp sources, and {} das sources",
       sources.headers.size (), sources.cpp_sources.size (),
       sources.das_sources.size ());
@@ -804,7 +859,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     m_last_status = "User C++ runtime components/systems are not supported; "
                     "use Daslang. ";
     m_last_error = m_last_status;
-    wsl::log::cmake ()->error ("{}", m_last_status);
+    wsl::log::xmake ()->error ("{}", m_last_status);
     return false;
   }
 
@@ -814,7 +869,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     m_loaded_project_root = project_root;
     m_last_status
         = "Runtime module is already up to date (no changes detected).";
-    wsl::log::cmake ()->trace ("{}", m_last_status);
+    wsl::log::xmake ()->trace ("{}", m_last_status);
     return true;
   }
 
@@ -828,7 +883,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   // User runtime code is Daslang source. There is no shared-library cache.
   if (sources.cpp_sources.empty () && sources.das_sources.empty ()) {
     m_last_status = "No source files found to compile.";
-    wsl::log::cmake ()->debug ("{}", m_last_status);
+    wsl::log::xmake ()->debug ("{}", m_last_status);
     m_load_state = load_state_t::loaded;
     m_source_hash = current_hash;
     return true;
@@ -838,18 +893,18 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   // successfully. A failed compile must leave the state at `unloaded` so the
   // next attempt is a real retry instead of being short-circuited.
   m_source_hash = current_hash;
-  wsl::log::cmake ()->debug ("Daslang runtime sources discovered.");
+  wsl::log::xmake ()->debug ("Daslang runtime sources discovered.");
 
   // Execute daslang files and store registrations for finalize_load
   m_das_registrations.clear ();
   if (!sources.das_sources.empty ()) {
-    wsl::log::cmake ()->debug ("Executing {} daslang files...",
+    wsl::log::xmake ()->debug ("Executing {} daslang files...",
                                sources.das_sources.size ());
     auto *das_engine = get_das_engine ();
     if (!das_engine->initialize ()) {
       m_last_status = "Failed to initialize daslang engine.";
       m_last_error = m_last_status + "\n" + das_engine->last_error ();
-      wsl::log::cmake ()->error ("{}", m_last_error);
+      wsl::log::xmake ()->error ("{}", m_last_error);
       return false;
     }
 
@@ -871,13 +926,13 @@ runtime_project_module::compile_and_load (const rsc::project &project)
     das_engine->addFsRoot ("systems", sys_dir);
 
     for (const auto &das_file : sources.das_sources) {
-      wsl::log::cmake ()->debug ("Executing daslang file: {}",
+      wsl::log::xmake ()->debug ("Executing daslang file: {}",
                                  das_file.string ());
       if (!das_engine->execute_file (das_file)) {
         m_last_status
             = "Failed to execute daslang file: " + das_file.string () + ".";
         m_last_error = m_last_status + "\n" + das_engine->last_error ();
-        wsl::log::cmake ()->error ("{}", m_last_error);
+        wsl::log::xmake ()->error ("{}", m_last_error);
         return false;
       }
 
@@ -937,7 +992,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
   m_load_state = load_state_t::loaded;
   m_last_error.clear ();
   m_last_status = "Runtime systems/components compiled and registered.";
-  wsl::log::cmake ()->trace ("{}", m_last_status);
+  wsl::log::xmake ()->trace ("{}", m_last_status);
   return true;
 }
 
@@ -955,12 +1010,12 @@ runtime_project_module::compile_and_load_async (const rsc::project &project)
   }
 
   if (is_reloading ()) {
-    wsl::log::cmake ()->warn (
+    wsl::log::xmake ()->warn (
         "Async reload already in progress, ignoring duplicate request");
     return;
   }
 
-  wsl::log::cmake ()->debug ("Starting async runtime reload for project: {}",
+  wsl::log::xmake ()->debug ("Starting async runtime reload for project: {}",
                              project.name);
   m_async_reload_future = std::async (std::launch::async, [this, project] () {
     return this->compile_and_load (project);
@@ -978,11 +1033,11 @@ runtime_project_module::poll_async_reload ()
       == std::future_status::ready) {
     const bool success = m_async_reload_future.get ();
     if (success) {
-      wsl::log::cmake ()->debug (
+      wsl::log::xmake ()->debug (
           "Async reload complete, calling finalize_load on main thread");
       finalize_load ();
     } else {
-      wsl::log::cmake ()->warn ("Async reload failed: {}", m_last_status);
+      wsl::log::xmake ()->warn ("Async reload failed: {}", m_last_status);
     }
     return true;
   }

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "gpu_resources.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
 
 namespace wsl::gfx
 {

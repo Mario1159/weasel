@@ -1,5 +1,4 @@
 #include "clustered_lighting.hpp"
-#include "gfx/cubemap.hpp"
 
 #include "wsl/gfx/shader.hpp"
 #include "wsl/log/log.hpp"

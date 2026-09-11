@@ -1,293 +1,372 @@
 #pragma once
 
-// Implementation-only serialization primitives.
-//
-// This header (and serialize.hpp, which extends it) must NEVER be included
-// from engine headers: they are compiled into module interface purviews, and
-// the serialization backends (yyjson/reflect-cpp) must remain implementation
-// details of .cpp files. Engine headers only forward-declare the classes
-// below for function-pointer signatures.
+#ifndef IN_MODULE_INTERFACE
+#include <rfl/json.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <rfl/msgpack.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <rfl/Result.hpp>
+#endif
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
-#include <type_traits>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cstddef>
+#endif
 
-#include <yyjson.h>
-
-namespace wsl
-{
-namespace serialize
+namespace wsl::serialize
 {
 
-/** Length-prefixed little-endian binary stream writer. */
-class binary_writer
+namespace detail
 {
-public:
-  /** Appends raw bytes without any framing. */
-  void
-  write_bytes (const void *data, std::size_t size)
-  {
-    m_buffer.append (static_cast<const char *> (data), size);
+
+/**
+ * Returns the byte size of the first complete msgpack object in
+ * \p data, or 0 if the object is malformed or truncated.
+ *
+ * The scene serializers stream several msgpack documents into one
+ * buffer, so the reader must know where each document ends.
+ */
+inline std::size_t
+msgpack_object_size (const std::uint8_t *data, std::size_t size)
+{
+  std::size_t pos = 0;
+  std::uint64_t remaining = 1;
+
+  auto read_len = [&] (std::size_t n) -> std::uint64_t {
+    if (pos + n > size) {
+      pos = size + 1;
+      return 0;
+    }
+    std::uint64_t value = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+      value = (value << 8) | static_cast<std::uint64_t> (data[pos + i]);
+    }
+    pos += n;
+    return value;
+  };
+
+  while (remaining > 0) {
+    if (pos >= size) {
+      return 0;
+    }
+    const std::uint8_t b = data[pos++];
+
+    if (b <= 0x7f || b >= 0xe0) {
+      // positive / negative fixint
+    } else if (b == 0xc0 || b == 0xc2 || b == 0xc3) {
+      // nil / false / true
+    } else if ((b & 0xf0) == 0x80) {
+      remaining += static_cast<std::uint64_t> (b & 0x0f) * 2; // fixmap
+    } else if ((b & 0xf0) == 0x90) {
+      remaining += (b & 0x0f); // fixarray
+    } else if ((b & 0xe0) == 0xa0) {
+      const std::size_t n = (b & 0x1f); // fixstr
+      if (n > size || pos > size - n) {
+        return 0;
+      }
+      pos += n;
+    } else {
+      std::uint64_t children = 0;
+      std::uint64_t bytes = 0;
+      switch (b) {
+      case 0xc1: // never used
+        return 0;
+      case 0xc4: // bin 8
+      case 0xd9: // str 8
+        bytes = read_len (1);
+        break;
+      case 0xc5: // bin 16
+      case 0xda: // str 16
+        bytes = read_len (2);
+        break;
+      case 0xc6: // bin 32
+      case 0xdb: // str 32
+        bytes = read_len (4);
+        break;
+      case 0xc7: // ext 8 (length + 1 type byte)
+      case 0xc8: // ext 16
+      case 0xc9: {
+        bytes = read_len (std::size_t{ 1 } << (b - 0xc7)) + 1;
+        break;
+      }
+      case 0xca:
+        bytes = 4;
+        break; // float 32
+      case 0xcb:
+        bytes = 8;
+        break; // float 64
+      case 0xcc:
+        bytes = 1;
+        break; // uint 8
+      case 0xcd:
+        bytes = 2;
+        break; // uint 16
+      case 0xce:
+        bytes = 4;
+        break; // uint 32
+      case 0xcf:
+        bytes = 8;
+        break; // uint 64
+      case 0xd0:
+        bytes = 1;
+        break; // int 8
+      case 0xd1:
+        bytes = 2;
+        break; // int 16
+      case 0xd2:
+        bytes = 4;
+        break; // int 32
+      case 0xd3:
+        bytes = 8;
+        break; // int 64
+      case 0xd4:
+        bytes = 2;
+        break; // fixext 1
+      case 0xd5:
+        bytes = 3;
+        break; // fixext 2
+      case 0xd6:
+        bytes = 5;
+        break; // fixext 4
+      case 0xd7:
+        bytes = 9;
+        break; // fixext 8
+      case 0xd8:
+        bytes = 17;
+        break; // fixext 16
+      case 0xdc:
+        children = read_len (2); // array 16
+        break;
+      case 0xdd:
+        children = read_len (4); // array 32
+        break;
+      case 0xde:
+        children = read_len (2) * 2; // map 16
+        break;
+      case 0xdf:
+        children = read_len (4) * 2; // map 32
+        break;
+      default:
+        return 0;
+      }
+      if (pos > size || bytes > size - pos) {
+        return 0;
+      }
+      pos += static_cast<std::size_t> (bytes);
+      --remaining;
+      remaining += children;
+      continue;
+    }
+    --remaining;
   }
+  return pos;
+}
 
-  /** Appends a trivially copyable value (arithmetic types, enums, PODs). */
+/**
+ * Returns the index one past the end of the first complete JSON value
+ * starting at \p start, or npos if the value is unterminated.
+ */
+inline std::size_t
+json_value_end (std::string_view s, std::size_t start)
+{
+  const char open = s[start];
+  if (open == '"') {
+    std::size_t i = start + 1;
+    while (i < s.size ()) {
+      if (s[i] == '\\') {
+        i += 2;
+        continue;
+      }
+      if (s[i] == '"') {
+        return i + 1;
+      }
+      ++i;
+    }
+    return std::string_view::npos;
+  }
+  if (open != '{' && open != '[') {
+    // scalar: number, true, false, null
+    std::size_t i = start;
+    while (i < s.size ()) {
+      const char c = s[i];
+      if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == ','
+          || c == '}' || c == ']') {
+        break;
+      }
+      ++i;
+    }
+    return i;
+  }
+  int depth = 0;
+  bool in_string = false;
+  std::size_t i = start;
+  while (i < s.size ()) {
+    const char c = s[i];
+    if (in_string) {
+      if (c == '\\') {
+        i += 2;
+        continue;
+      }
+      if (c == '"') {
+        in_string = false;
+      }
+      ++i;
+      continue;
+    }
+    if (c == '"') {
+      in_string = true;
+    } else if (c == '{' || c == '[') {
+      ++depth;
+    } else if (c == '}' || c == ']') {
+      --depth;
+      if (depth == 0) {
+        return i + 1;
+      }
+    }
+    ++i;
+  }
+  return std::string_view::npos;
+}
+
+} // namespace detail
+
+struct binary_writer
+{
+  std::vector<std::uint8_t> bytes;
+
   template <typename T>
-    requires std::is_trivially_copyable_v<T>
-  void
-  write (const T &value)
+  bool
+  write (const T &value, std::string *error = nullptr)
   {
-    write_bytes (&value, sizeof (T));
+    try {
+      auto buf = rfl::msgpack::write (value);
+      bytes.insert (bytes.end (), buf.begin (), buf.end ());
+      return true;
+    } catch (const std::exception &e) {
+      if (error)
+        *error = e.what ();
+      return false;
+    }
   }
-
-  /** Appends a u64 length followed by the string bytes. */
-  void
-  write_string (std::string_view str)
-  {
-    const std::uint64_t size = str.size ();
-    write (size);
-    write_bytes (str.data (), str.size ());
-  }
-
-  /** Appends a u64 length followed by the payload bytes. */
-  void
-  write_blob (const void *data, std::size_t size)
-  {
-    const std::uint64_t n = size;
-    write (n);
-    write_bytes (data, size);
-  }
-
-  /** Appends a u64 length followed by the payload bytes. */
-  void
-  write_blob (const std::string &bytes)
-  {
-    write_blob (bytes.data (), bytes.size ());
-  }
-
-  /** Returns the accumulated buffer. */
-  const std::string &
-  buffer () const
-  {
-    return m_buffer;
-  }
-
-  /** Resets the buffer. */
-  void
-  clear ()
-  {
-    m_buffer.clear ();
-  }
-
-private:
-  std::string m_buffer;
 };
 
-/** Reader for streams produced by binary_writer. */
-class binary_reader
+struct binary_reader
 {
-public:
-  binary_reader (const char *data, std::size_t size)
-      : m_data (data), m_size (size)
+  const std::uint8_t *data = nullptr;
+  std::size_t size = 0;
+
+  explicit binary_reader (const std::vector<std::uint8_t> &buf)
+      : data (buf.data ()), size (buf.size ())
+  {
+  }
+  explicit binary_reader (const std::uint8_t *d, std::size_t s)
+      : data (d), size (s)
   {
   }
 
-  explicit binary_reader (const std::string &buffer)
-      : binary_reader (buffer.data (), buffer.size ())
-  {
-  }
-
-  /** Reads raw bytes; returns false when the stream is exhausted. */
-  bool
-  read_bytes (void *out, std::size_t size)
-  {
-    if (m_offset + size > m_size) {
-      return false;
-    }
-    std::memcpy (out, m_data + m_offset, size);
-    m_offset += size;
-    return true;
-  }
-
-  /** Reads a trivially copyable value. */
   template <typename T>
-    requires std::is_trivially_copyable_v<T>
   bool
-  read (T &value)
+  read (T &out, std::string *error = nullptr)
   {
-    return read_bytes (&value, sizeof (T));
-  }
-
-  /** Reads a u64 length followed by the string bytes. */
-  bool
-  read_string (std::string &out)
-  {
-    std::uint64_t size = 0;
-    if (!read (size)) {
+    std::size_t const n = detail::msgpack_object_size (data, size);
+    if (n == 0) {
+      if (error)
+        *error = "invalid or empty msgpack stream";
       return false;
     }
-    if (m_offset + size > m_size) {
+    auto res = rfl::msgpack::read<T> (data, n);
+    data += n;
+    size -= n;
+    if (!res) {
+      if (error)
+        *error = res.error ().what ();
       return false;
     }
-    out.assign (m_data + m_offset, static_cast<std::size_t> (size));
-    m_offset += size;
+    out = std::move (res.value ());
     return true;
   }
-
-  /** Alias of read_string. */
-  bool
-  read_blob (std::string &out)
-  {
-    return read_string (out);
-  }
-
-  /** Returns true when every byte has been consumed. */
-  bool
-  at_end () const
-  {
-    return m_offset == m_size;
-  }
-
-private:
-  const char *m_data = nullptr;
-  std::size_t m_size = 0;
-  std::size_t m_offset = 0;
 };
 
 /**
- * JSON document writer with object/array composition.
- *
- * Values serialized through reflect-cpp arrive as JSON strings and are
- * parsed + grafted into the document (see serialize.hpp).
+ * Accumulates newline-delimited JSON documents. The scene serializers
+ * stream several documents into one writer, so each write appends
+ * instead of replacing.
  */
-class json_writer
+struct json_writer
 {
-public:
-  json_writer ();
-  ~json_writer ();
+  std::string json;
 
-  json_writer (const json_writer &) = delete;
-  json_writer &operator= (const json_writer &) = delete;
-
-  /** Starts a named child object of the current node. */
-  void begin_object (std::string_view key);
-
-  /** Starts an anonymous child object of the current array. */
-  void begin_element_object ();
-
-  /** Ends the current object. */
-  void end_object ();
-
-  /** Starts a named child array of the current node. */
-  void begin_array (std::string_view key);
-
-  /** Ends the current array. */
-  void end_array ();
-
-  /** Writes a u64 scalar into the current object. */
-  void write_u64 (std::string_view key, std::uint64_t value);
-
-  /** Writes a double scalar into the current object. */
-  void write_double (std::string_view key, double value);
-
-  /** Writes a boolean scalar into the current object. */
-  void write_bool (std::string_view key, bool value);
-  /** Writes a string scalar into the current object. */
-  void write_string (std::string_view key, std::string_view value);
-
-  /** Appends a u64 element to the current array. */
-  void append_u64 (std::uint64_t value);
-
-  /**
-   * Parses a JSON string and grafts it into the current object under key.
-   * :param key: Object key for the grafted value.
-   * :param json: A complete JSON document (e.g. from rfl::json::write).
-   */
-  void attach_json (std::string_view key, const std::string &json);
-
-  /**
-   * Parses a JSON string and appends it as the next element of the current
-   * array.
-   */
-  void append_element_json (const std::string &json);
-
-  /** Returns the document serialized to a JSON string. */
-  std::string to_string () const;
-
-private:
-  yyjson_mut_val *current ();
-  yyjson_mut_val *make_key (std::string_view key);
-  yyjson_mut_val *graft_string (const std::string &json);
-
-  yyjson_mut_doc *m_doc = nullptr;
-  std::vector<yyjson_mut_val *> m_stack;
+  template <typename T>
+  bool
+  write (const T &value, std::string *error = nullptr)
+  {
+    try {
+      std::string const doc = rfl::json::write (value);
+      if (!json.empty ()) {
+        json += '\n';
+      }
+      json += doc;
+      return true;
+    } catch (const std::exception &e) {
+      if (error)
+        *error = e.what ();
+      return false;
+    }
+  }
 };
 
-/**
- * JSON document reader with navigation.
- *
- * Subtrees are handed to reflect-cpp as re-serialized JSON strings
- * (see serialize.hpp).
- */
-class json_reader
+/** Reads one JSON document at a time from a stream written by json_writer. */
+struct json_reader
 {
-public:
-  /** Parses the document; check valid() afterwards. */
-  explicit json_reader (const std::string &json);
-  ~json_reader ();
+  std::string_view json;
 
-  json_reader (const json_reader &) = delete;
-  json_reader &operator= (const json_reader &) = delete;
+  explicit json_reader (std::string_view j) : json (j) {}
 
-  /** Returns true when the document was parsed successfully. */
-  bool valid () const;
-
-  /** Enters the object stored under key; returns false when absent. */
-  bool enter_object (std::string_view key);
-
-  /** Enters the array stored under key; returns false when absent. */
-  bool enter_array (std::string_view key);
-
-  /** Enters element index of the current array. */
-  bool enter_element (std::size_t index);
-  /** Returns the number of elements of the array under key (0 if absent). */
-  std::size_t array_size (std::string_view key) const;
-
-  /** Reads the u64 element at index of the current array. */
-  bool element_u64 (std::size_t index, std::uint64_t &out) const;
-
-  /** Leaves the current node. */
-  void leave ();
-
-  /** Reads a u64 scalar; returns false when absent. */
-  bool read_u64 (std::string_view key, std::uint64_t &out) const;
-
-  /** Reads a double scalar; returns false when absent. */
-  bool read_double (std::string_view key, double &out) const;
-
-  /** Reads a boolean scalar; returns false when absent. */
-  bool read_bool (std::string_view key, bool &out) const;
-
-  /** Reads a string scalar; returns false when absent. */
-  bool read_string (std::string_view key, std::string &out) const;
-
-  /**
-   * Extracts the subtree under key re-serialized as a JSON string.
-   * Returns false when the key is absent.
-   */
-  bool extract_json (std::string_view key, std::string &out) const;
-
-private:
-  yyjson_val *current () const;
-  yyjson_val *find (std::string_view key) const;
-
-  yyjson_doc *m_doc = nullptr;
-  std::vector<yyjson_val *> m_stack;
+  template <typename T>
+  bool
+  read (T &out, std::string *error = nullptr)
+  {
+    std::size_t const start = json.find_first_not_of (" \t\r\n");
+    if (start == std::string_view::npos) {
+      if (error)
+        *error = "no more documents in JSON stream";
+      return false;
+    }
+    std::size_t const end = detail::json_value_end (json, start);
+    if (end == std::string_view::npos) {
+      if (error)
+        *error = "unterminated JSON document";
+      return false;
+    }
+    std::string_view const doc = json.substr (start, end - start);
+    json.remove_prefix (end);
+    auto res = rfl::json::read<T> (doc);
+    if (!res) {
+      if (error)
+        *error = res.error ().what ();
+      return false;
+    }
+    out = std::move (res.value ());
+    return true;
+  }
 };
 
-} // namespace serialize
+} // namespace wsl::serialize
 
-} // namespace wsl
+// Now include adapters and component adapters so parser specializations
+// are visible wherever serialize.hpp is included. (types.hpp alone does
+// NOT pull these in to avoid header cycles with component_registry.hpp.)
+#include "adapters.hpp"

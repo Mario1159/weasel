@@ -1,25 +1,29 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <filesystem>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <csetjmp>
+#endif
 
-#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 struct StructInfo;
 class Context;
 }
-#endif
 
 namespace wsl::das
 {

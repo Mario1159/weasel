@@ -1,7 +1,4 @@
 #include "scene.hpp"
-#include "../reg/component_registry.hpp"
-#include "scene_manager.hpp"
-#include "../reg/singleton_registry.hpp"
 #include "comp/singl/ui_manager.hpp"
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_manager.hpp"

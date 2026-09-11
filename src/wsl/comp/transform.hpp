@@ -1,22 +1,24 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"
-#endif
 #include "component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/matrix_transform.hpp>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/mat4x4.hpp>
+#endif
 
 namespace wsl
 {
@@ -100,7 +102,6 @@ struct transform : world_component
         .custom<comp::meta_info> (meta_info{
             "Scale", "Local non-uniform scale applied after rotation", "" });
   }
-
 };
 
 } // namespace comp

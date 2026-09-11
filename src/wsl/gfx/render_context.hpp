@@ -2,8 +2,12 @@
 
 #include "viewport.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
 
 namespace wsl
 {

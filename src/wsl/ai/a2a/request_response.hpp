@@ -1,8 +1,14 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <variant>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 #include <wsl/ai/a2a/agent_card.hpp>
 #include <wsl/ai/a2a/errors.hpp>

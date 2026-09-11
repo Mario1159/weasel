@@ -3,7 +3,9 @@
 #include "../../rsc/resource_manager.hpp"
 #include "../component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl
 {
@@ -38,7 +40,6 @@ public:
     entt::meta_factory<rsc::cubemap_id> ().type (
         entt::type_hash<rsc::cubemap_id>::value ());
   }
-
 };
 
 } // namespace singl

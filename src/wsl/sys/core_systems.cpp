@@ -1,6 +1,4 @@
 #include "core_systems.hpp"
-#include "../rsc/scene_manager.hpp"
-#include "../reg/singleton_registry.hpp"
 #include "comp/singl/ui_manager.hpp"
 #include "rsc/resource_manager.hpp"
 #include "sys/audio_system.hpp"
@@ -162,7 +160,7 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
     render_2d_sys->set_stage ("render_build");
   }
   if (!physics_sys) {
-    physics_sys = std::make_unique<physics_system> ("Jolt Physics System");
+    physics_sys = std::make_unique<physics_system> ("Physics System");
     physics_sys->set_stage ("physics");
   }
   if (!render_ui_sys) {

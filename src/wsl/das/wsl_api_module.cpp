@@ -1,9 +1,7 @@
+#if WEASEL_HAS_DASLANG
 #include "wsl_api_module.hpp"
-#include "../rsc/scene_manager.hpp"
-#include "../reg/system_factory_registry.hpp"
 #include "wsl_api_component_accessors.hpp"
 #include "das_interop.hpp"
-
 #include "daScript/ast/ast.h"
 #include "daScript/ast/ast_handle.h"
 #include "daScript/ast/ast_interop.h"
@@ -43,9 +41,6 @@
 #include <entt/core/hashed_string.hpp>
 #include <chrono>
 #include <cstring>
-
-#include <Jolt/Physics/Body/BodyInterface.h>
-#include <Jolt/Physics/EActivation.h>
 
 MAKE_TYPE_FACTORY (Transform, wsl::das::TransformProxy)
 MAKE_TYPE_FACTORY (Transform2D, wsl::das::Transform2DProxy)
@@ -2263,11 +2258,10 @@ wsl_apply_impulse (uint32_t entity, float x, float y, float z)
     return;
   }
   auto &rb = reg->get<comp::rigid_body> (e);
-  if (rb.body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (rb.body_id)) {
     return;
   }
-  eng->get_body_interface ().AddImpulse (rb.body_id, JPH::Vec3 (x, y, z));
-  eng->get_body_interface ().ActivateBody (rb.body_id);
+  eng->add_impulse (rb.body_id, { x, y, z });
 }
 
 void
@@ -2283,11 +2277,10 @@ wsl_apply_force (uint32_t entity, float x, float y, float z)
     return;
   }
   auto &rb = reg->get<comp::rigid_body> (e);
-  if (rb.body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (rb.body_id)) {
     return;
   }
-  eng->get_body_interface ().AddForce (rb.body_id, JPH::Vec3 (x, y, z));
-  eng->get_body_interface ().ActivateBody (rb.body_id);
+  eng->add_force (rb.body_id, { x, y, z });
 }
 
 // ── Systems: parallel execution hints ──
@@ -3194,3 +3187,4 @@ wsl_log_error (const char *msg)
 }
 
 } // namespace wsl::das
+#endif

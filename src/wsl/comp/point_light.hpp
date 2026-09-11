@@ -1,13 +1,13 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"
-#endif
 #include "component_meta.hpp"
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/vector_float3.hpp>
+#endif
 
 namespace wsl
 {
@@ -67,7 +67,6 @@ struct point_light : world_component
             meta_info{ "Shadow Bias",
                        "Bias used to reduce self-shadowing artifacts.", "" });
   }
-
 };
 
 } // namespace comp

@@ -2,7 +2,9 @@
 
 #include "../rsc/resource_manager.hpp"
 #include "component_meta.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl
 {
@@ -81,7 +83,6 @@ struct audio : world_component
         .custom<comp::meta_info> (
             meta_info{ "Playing", "Current playback status.", "" });
   }
-
 };
 
 } // namespace comp

@@ -3,7 +3,10 @@
 #include "system.hpp"
 #include "../comp/audio.hpp"
 #include <SDL3_mixer/SDL_mixer.h>
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+
 
 namespace wsl
 {
@@ -15,7 +18,7 @@ class audio_system : public sys::ecs_system_t<audio_system>
 {
 public:
   explicit audio_system (const std::string &name);
-  ~audio_system () override;
+  ~audio_system () override; 
 
   void on_update (entt::registry &registry, double dt) override;
   void on_init (entt::registry &registry) override;

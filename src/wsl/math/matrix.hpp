@@ -1,30 +1,21 @@
 #pragma once
 
-#if defined(WSL_MODULE_BUILD)
-// See vector.hpp: component_meta.hpp is imported by the module unit at top
-// level as a header unit; not included/imported here (imports must be
-// contiguous at the TU top inside a module purview).
-#else
 #include "../comp/component_meta.hpp"
+
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/cereal.hpp>
 #endif
 
-// Inside a C++20 module interface these 3rd-party headers are consumed as
-// header units (imported by the module), so they are skipped here. See
-// vector.hpp.
-#if !defined(WSL_MODULE_BUILD)
-
-// See wsl/math/vector.hpp for why EnTT is skipped inside a module build.
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <imgui.h>
-#endif
 #endif
 
 namespace wsl
@@ -136,7 +127,6 @@ public:
         entt::type_hash<mat33f>::value ());
     (factory.func<&mat33f::custom_inspect>)("custom_inspect"_hs);
   }
-
 };
 
 struct mat44f
@@ -260,9 +250,7 @@ public:
         entt::type_hash<mat44f>::value ());
     (factory.func<&mat44f::custom_inspect>)("custom_inspect"_hs);
   }
-
 };
-
 } // namespace math
 
 } // namespace wsl

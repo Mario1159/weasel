@@ -2,13 +2,11 @@
 
 #include "das_engine.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 class Module;
 class ModuleGroup;
 }
-#endif
 
 namespace wsl::das
 {

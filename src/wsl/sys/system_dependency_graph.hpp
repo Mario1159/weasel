@@ -1,13 +1,27 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 #include "reg/system_factory_registry.hpp"
 #include "sys/stage_registry.hpp"

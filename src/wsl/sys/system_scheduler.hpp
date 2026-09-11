@@ -1,10 +1,18 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 #include "reg/system_factory_registry.hpp"
 #include "sys/stage_registry.hpp"

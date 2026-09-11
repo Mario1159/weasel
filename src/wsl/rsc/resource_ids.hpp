@@ -173,3 +173,119 @@ struct material_id
 } // namespace rsc
 
 } // namespace wsl
+
+// ---------------------------------------------------------------------------
+// cereal serialization helpers for resource id types
+// ---------------------------------------------------------------------------
+
+#include <cereal/cereal.hpp>
+
+namespace wsl
+{
+
+namespace rsc
+{
+
+template <class Archive>
+void
+serialize (Archive &ar, model_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, image_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, cubemap_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, scene_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, audio_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, ui_layout_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, font_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, shader_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, shader_program_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+template <class Archive>
+void
+serialize (Archive &ar, material_id &id)
+{
+  ar (cereal::make_nvp ("value", id.value));
+  if constexpr (std::is_base_of_v<cereal::detail::InputArchiveBase, Archive>) {
+    normalize_resource_id (id.value);
+  }
+}
+
+} // namespace rsc
+
+} // namespace wsl

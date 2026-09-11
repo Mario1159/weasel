@@ -1,19 +1,17 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "vector.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
 #endif
 

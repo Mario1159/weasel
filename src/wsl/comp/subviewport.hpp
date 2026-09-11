@@ -1,11 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"
-#endif
 #include "component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
@@ -88,7 +86,6 @@ struct subviewport : world_component
   bool render_2d_only = false;
 
   static void register_meta ();
-
 };
 
 /**

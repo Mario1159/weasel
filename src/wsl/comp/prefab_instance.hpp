@@ -3,7 +3,9 @@
 #include "component_meta.hpp"
 #include "../rsc/resource_ids.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl
 {
@@ -38,7 +40,6 @@ struct prefab_instance : world_component
     (factory.data<&comp::prefab_instance::prefab_id>)("prefab_id"_hs);
     (factory.data<&comp::prefab_instance::prefab_entity>)("prefab_entity"_hs);
   }
-
 };
 
 } // namespace comp

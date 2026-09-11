@@ -1,17 +1,17 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
-#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 class Module;
 class ModuleGroup;
 }
-#endif
 
 namespace wsl::das
 {

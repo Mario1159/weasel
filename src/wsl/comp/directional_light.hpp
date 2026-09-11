@@ -1,14 +1,14 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"
-#endif
 #include "component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/vector_float3.hpp>
+#endif
 
 namespace wsl
 {
@@ -42,7 +42,6 @@ struct directional_light : world_component
         .custom<comp::meta_info> (meta_info{
             "Intensity", "Brightness multiplier of the light.", "" });
   }
-
 };
 
 } // namespace comp

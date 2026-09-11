@@ -3,7 +3,6 @@
 #include "wsl/comp/component_meta.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/comp/singl/engine_resources.hpp"
-#include "wsl/gfx/image.hpp"
 #include <algorithm>
 #include <entt/entt.hpp>
 #include <imgui.h>

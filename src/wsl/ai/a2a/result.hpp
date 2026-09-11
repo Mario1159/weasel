@@ -1,8 +1,14 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <stdexcept>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <variant>
+#endif
 
 namespace wsl::ai::a2a
 {

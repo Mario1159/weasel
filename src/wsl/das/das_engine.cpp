@@ -21,6 +21,59 @@ using namespace das;
 
 DECLARE_ALL_DEFAULT_MODULES;
 
+// Root of the daslang source tree (daslib/ etc.), resolved at runtime:
+//   1. WEASEL_DASLANG_ROOT env var (manual override)
+//   2. WEASEL_DASLANG_ROOT compile-time define (xmake package install dir),
+//      accepted only if it still exists — package hash dirs change on
+//      reinstall, which would strand a stale baked-in path
+//   3. newest daslang install under the xmake package cache (~/.xmake)
+//   4. CMake-era fallback: <build>/_deps/daslang-src
+static bool
+valid_das_root (const std::string &root)
+{
+  return !root.empty ()
+         && std::filesystem::exists (root + "/daslib/aot_cpp.das");
+}
+
+static std::string
+das_root_dir ()
+{
+  if (const char *env = std::getenv ("WEASEL_DASLANG_ROOT");
+      env != nullptr && valid_das_root (env))
+    return env;
+#if defined(WEASEL_DASLANG_ROOT)
+  if (valid_das_root (WEASEL_DASLANG_ROOT))
+    return std::string (WEASEL_DASLANG_ROOT);
+#endif
+  {
+    std::string base;
+    if (const char *pd = std::getenv ("XMAKE_PKGDIR"); pd != nullptr)
+      base = std::string (pd) + "/d/daslang";
+    else if (const char *home = std::getenv ("HOME"); home != nullptr)
+      base = std::string (home) + "/.xmake/packages/d/daslang";
+    std::string best;
+    std::filesystem::file_time_type best_time{};
+    std::error_code ec;
+    for (auto const &ver : std::filesystem::directory_iterator (base, ec))
+      for (auto const &inst :
+           std::filesystem::directory_iterator (ver.path (), ec)) {
+        if (!valid_das_root (inst.path ().string ()))
+          continue;
+        auto t = std::filesystem::last_write_time (
+            inst.path () / "daslib" / "aot_cpp.das", ec);
+        if (ec)
+          continue;
+        if (best.empty () || t > best_time) {
+          best = inst.path ().string ();
+          best_time = t;
+        }
+      }
+    if (valid_das_root (best))
+      return best;
+  }
+  return std::string (WEASEL_BUILD_DIR) + "/_deps/daslang-src";
+}
+
 namespace
 {
 
@@ -74,7 +127,7 @@ initialize_modules_for_engine (TextPrinter &tout,
   ::das::daScriptEnvironment::ensure ();
 
   // Set up the daslang source tree path and file access.
-  setDasRoot (std::string (WEASEL_BUILD_DIR) + "/_deps/daslang-src");
+  setDasRoot (das_root_dir ());
 
   faccess = smart_ptr<FsFileAccess> (new ProjectFsFileAccess);
   faccess->introduceDaslib ();
@@ -292,8 +345,7 @@ aot_compile_file (const std::string &input, const std::string &output,
     aot_tool_policies.version_2_syntax = true;
     aot_tool_policies.aot_module = true;
     ::das::ModuleGroup dummy_group;
-    std::string aot_cpp_path = std::string (WEASEL_BUILD_DIR)
-                               + "/_deps/daslang-src/daslib/aot_cpp.das";
+    std::string aot_cpp_path = das_root_dir () + "/daslib/aot_cpp.das";
     auto aot_prog = ::das::compileDaScript (
         aot_cpp_path.c_str (), faccess, tout, dummy_group, aot_tool_policies);
     if (!aot_prog || aot_prog->failed ()) {
@@ -469,7 +521,7 @@ struct das_engine::impl
     // on the main thread are invisible to the worker thread's Module::require.
     // We only do minimal global setup here (non-thread-local state).
     ::das::daScriptEnvironment::ensure ();
-    setDasRoot (std::string (WEASEL_BUILD_DIR) + "/_deps/daslang-src");
+    setDasRoot (das_root_dir ());
     return true;
   }
 
@@ -1422,6 +1474,68 @@ das_engine::shutdown ()
 {
 }
 
+bool
+das_engine::initialize_global ()
+{
+  return false;
+}
+
+void
+das_engine::addFsRoot (const std::string &, const std::string &)
+{
+}
+
+das_engine::class_instance
+das_engine::instantiate_class (const std::filesystem::path &,
+                               const std::string &, std::string &error)
+{
+  error = "daslang support not enabled";
+  return {};
+}
+
+bool
+das_engine::has_class (const std::filesystem::path &, const std::string &)
+{
+  return false;
+}
+
+bool
+das_engine::call_void_function (const std::filesystem::path &, const char *)
+{
+  m_last_error = "daslang support not enabled";
+  return false;
+}
+
 } // namespace wsl::das
+
+namespace wsl::das::das_signal
+{
+void
+install ()
+{
+}
+
+void
+restore ()
+{
+}
+
+void
+ensure_sigstack ()
+{
+}
+
+thread_local sigjmp_buf *tls_jmp = nullptr;
+
+} // namespace wsl::das::das_signal
+
+bool
+wsl::das::aot_compile_file (const std::string &, const std::string &,
+                            std::string &error,
+                            const std::vector<std::string> &)
+{
+  error = "daslang support not enabled";
+  return false;
+}
 
 #endif

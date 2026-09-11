@@ -1,7 +1,11 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi/Core.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 #include "entt/entity/fwd.hpp"
 #include "system.hpp"

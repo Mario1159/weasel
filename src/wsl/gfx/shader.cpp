@@ -1,5 +1,4 @@
 #include "shader.hpp"
-#include "gfx/cubemap.hpp"
 #include "wsl/log/log.hpp"
 #include "../rsc/resource_manager.hpp"
 #include "../rsc/shader_loader.hpp"

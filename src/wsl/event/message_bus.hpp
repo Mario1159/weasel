@@ -1,35 +1,30 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "message_event.hpp"
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <cstring>
 #endif
-// See wsl/math/vector.hpp for why EnTT is skipped inside a module build.
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <mutex>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
 #endif
 

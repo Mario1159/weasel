@@ -3,10 +3,18 @@
 #include "gpu_resources.hpp"
 #include "renderer.hpp"
 #include "wsl/rsc/resource_ids.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <map>
+#endif
 
 namespace wsl::gfx
 {

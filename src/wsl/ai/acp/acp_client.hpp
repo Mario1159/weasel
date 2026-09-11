@@ -2,18 +2,42 @@
 
 #include <wsl/ai/acp/acp_types.hpp>
 
+#ifndef IN_MODULE_INTERFACE
 #include <atomic>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <chrono>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <condition_variable>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <deque>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <mutex>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <thread>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::ai::acp
 {

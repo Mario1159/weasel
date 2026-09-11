@@ -1,5 +1,4 @@
 #include "render_frame.hpp"
-#include "../rsc/scene_manager.hpp"
 
 #include "../comp/hierarchy.hpp"
 #include "../comp/model_instance_3d.hpp"

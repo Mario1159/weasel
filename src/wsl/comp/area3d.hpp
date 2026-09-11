@@ -1,25 +1,18 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
-#include "../math/vector.hpp"         // math::vec3f, math::quatf
+#ifndef IN_MODULE_INTERFACE
+#include "../math/vector.hpp" // math::vec3f, math::quatf
 #endif
-#include "component_meta.hpp"
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include "../phys/physics_engine.hpp" // phys::engine
+#include "../phys/layers.hpp"
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
-#endif
-
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Jolt.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Body/BodyID.h>
 #endif
 
 namespace wsl
@@ -39,14 +32,14 @@ struct area : world_component
   {
     entt::entity area_entity{ entt::null };
     entt::entity other_entity{ entt::null };
-    JPH::BodyID other_body;
+    phys::body_id other_body = phys::null_body_id;
   };
 
   struct exited
   {
     entt::entity area_entity{ entt::null };
     entt::entity other_entity{ entt::null };
-    JPH::BodyID other_body;
+    phys::body_id other_body = phys::null_body_id;
   };
 
   enum class shape_type
@@ -105,53 +98,7 @@ struct area : world_component
     radius = std::max (radius, 1e-3F);
   }
 
-  static void
-  register_meta ()
-  {
-    using namespace entt::literals;
-
-    entt::meta_factory<comp::area::shape_type> ()
-        .type (entt::type_hash<comp::area::shape_type>::value ())
-        .conv<int> ()
-        .data<comp::area::shape_type::box> ("box"_hs)
-        .custom<const char *> ("Box")
-        .data<comp::area::shape_type::sphere> ("sphere"_hs)
-        .custom<const char *> ("Sphere");
-
-    entt::meta_factory<comp::area> ()
-        .type (entt::type_hash<comp::area>::value ())
-        .custom<comp::meta_info> (meta_info{
-            "Area3D", "Jolt sensor (trigger) to detect bodies entering/exiting",
-            "" })
-        .func<&comp::area::on_inspector_changed> ("on_inspector_changed"_hs)
-
-        .data<&comp::area::shape> ("shape"_hs)
-        .custom<comp::meta_info> (
-            meta_info{ "Shape", "Sensor collision shape", "" })
-
-        .data<&comp::area::position> ("position"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Position",
-            "Local position offset relative to the entity's Transform position",
-            "" })
-
-        .data<&comp::area::rotation> ("rotation"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Rotation",
-            "Local rotation offset relative to the entity's Transform rotation",
-            "" })
-
-        .data<&comp::area::half_extents> ("half_extents"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Half Extents",
-            "Box half size (scaled by the entity's Transform scale)", "" })
-
-        .data<&comp::area::radius> ("radius"_hs)
-        .custom<comp::meta_info> (meta_info{
-            "Radius", "Sphere radius (scaled by the entity's Transform scale)",
-            "" });
-  }
-
+  static void register_meta ();
 };
 
 } // namespace comp

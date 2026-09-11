@@ -1,6 +1,21 @@
 # `wsl::phys` — Physics Engine
 
-Thin C++ wrapper around [Jolt Physics](https://github.com/jrouwe/JoltPhysics) providing body creation, stepping, collision queries, and sensor overlap detection.
+The current `physics_engine` remains a thin wrapper around
+[Jolt Physics](https://github.com/jrouwe/JoltPhysics) providing body creation,
+stepping, collision queries, and sensor overlap detection.
+
+`box3d_adapter.hpp` contains the first Box3D migration boundary. It exposes
+only Weasel-owned value types and opaque integer body handles; Box3D headers
+and IDs are private to `box3d_adapter.cpp`. xmake builds this adapter with
+Box3D v0.1.0, while the legacy CMake build can enable it with
+`-DWEASEL_ENABLE_BOX3D=ON` without changing the existing Jolt path.
+
+For xmake, select the backend explicitly with:
+
+```sh
+xmake f --with_box3d=y
+xmake build -j2 wsl
+```
 
 ## Key Classes
 
@@ -12,13 +27,29 @@ Thin C++ wrapper around [Jolt Physics](https://github.com/jrouwe/JoltPhysics) pr
 | `object_vs_broad_phase_layer_filter` | `object_vs_broad_phase_layer_filter.hpp` | Filter for broad-phase vs object layer queries. |
 | `object_layer_pair_filter` | `object_layer_pair_filter.hpp` | Filter for object vs object layer collision pairs. |
 
-## Type Aliases
+## Backend-neutral types
 
 ```cpp
-using body_id = JPH::BodyID;
-using motion_type = JPH::EMotionType;       // Static, Kinematic, Dynamic
-using allowed_do_fs = JPH::EAllowedDOFs;    // All, TranslationX, RotationZ, etc.
-using object_layer = JPH::ObjectLayer;
+using body_id = std::uint64_t;
+enum class motion_type;                     // Static, Kinematic, Dynamic
+enum class allowed_do_fs;                   // All, TranslationX, RotationZ, etc.
+using object_layer = std::uint16_t;
+```
+
+Jolt remains available only as the fallback implementation detail. New
+physics-facing code should use `phys::engine` and these Weasel-owned types.
+
+## Box3D adapter
+
+```cpp
+#include <wsl/phys/box3d_adapter.hpp>
+
+wsl::phys::box3d::world physics;
+wsl::phys::box3d::body_desc desc;
+auto body = physics.create_body (desc);
+physics.step (1.0F / 60.0F);
+auto position = physics.body_position (body);
+physics.destroy_body (body);
 ```
 
 ## Usage

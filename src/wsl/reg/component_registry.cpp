@@ -1,15 +1,14 @@
 #include "component_registry.hpp"
 
+#include "../comp/singl/runtime_context.hpp"
+
 #include <algorithm>
 #include <cstring>
 #include <entt/core/fwd.hpp>
 #include <entt/meta/factory.hpp>
 #include <string>
 #include <vector>
-#include "../comp/components.hpp"
 #include "../log/log.hpp"
-#include "../serialize/component_adapters.hpp"
-#include "../serialize/serialize.hpp"
 
 namespace wsl
 {
@@ -37,10 +36,6 @@ try_storage_for (const entt::registry &registry)
   }
   return &registry.ctx ().get<das_component_storage> ();
 }
-
-/** Restores runtime caches for components that declare post_load(). */
-template <typename T>
-concept has_post_load = requires (T &v) { v.post_load (); };
 
 } // namespace
 
@@ -500,7 +495,6 @@ void
 component_registry::save_das_components_json (serialize::json_writer &writer,
                                               entt::registry &registry) const
 {
-  // Build a flat list of all das component entries.
   struct das_entry
   {
     uint32_t type_id;
@@ -528,44 +522,26 @@ component_registry::save_das_components_json (serialize::json_writer &writer,
     }
   }
 
-  writer.write_u64 ("das_component_count", entries.size ());
-  writer.begin_array ("das_components");
-  for (const das_entry &entry : entries) {
-    writer.begin_element_object ();
-    writer.write_u64 ("das_type_id", entry.type_id);
-    writer.write_u64 ("das_entity", entry.entity);
-    writer.write_string ("das_data", entry.data_hex);
-    writer.end_object ();
-  }
-  writer.end_array ();
+  writer.write (entries);
 }
 
 void
 component_registry::load_das_components_json (serialize::json_reader &reader,
                                               entt::registry &registry)
 {
-  const std::size_t count = reader.array_size ("das_components");
-  if (!reader.enter_array ("das_components")) {
-    return;
-  }
-
-  for (std::size_t i = 0; i < count; ++i) {
-    if (!reader.enter_element (i)) {
-      continue;
-    }
-    std::uint64_t type_id_raw = 0;
-    std::uint64_t entity_raw = 0;
+  struct das_entry
+  {
+    uint32_t type_id;
+    uint32_t entity;
     std::string data_hex;
+  };
+  std::vector<das_entry> entries;
+  reader.read (entries);
 
-    reader.read_u64 ("das_type_id", type_id_raw);
-    reader.read_u64 ("das_entity", entity_raw);
-    reader.read_string ("das_data", data_hex);
-    reader.leave ();
+  for (auto &e : entries) {
+    auto tid = static_cast<entt::id_type> (e.type_id);
+    auto entity = static_cast<entt::entity> (e.entity);
 
-    auto tid = static_cast<entt::id_type> (type_id_raw);
-    auto entity = static_cast<entt::entity> (entity_raw);
-
-    // Ensure the component type and entity exist.
     if (!contains_world_component (tid)) {
       register_cached_runtime_world_component (tid, "unknown", "unknown");
     }
@@ -573,8 +549,7 @@ component_registry::load_das_components_json (serialize::json_reader &reader,
       das_component_add (registry, tid, entity);
     }
 
-    // Overwrite with saved data.
-    std::vector<uint8_t> data = hex_to_bytes (data_hex);
+    std::vector<uint8_t> data = hex_to_bytes (e.data_hex);
     uint8_t *dest = das_component_data (registry, tid, entity);
     if (dest) {
       const descriptor *desc = find_world_component (tid);
@@ -585,15 +560,21 @@ component_registry::load_das_components_json (serialize::json_reader &reader,
       std::memcpy (dest, data.data (), copy_size);
     }
   }
-  reader.leave ();
 }
 
 void
 component_registry::save_das_components_binary (
     serialize::binary_writer &writer, entt::registry &registry) const
 {
-  // Count total entries.
-  std::size_t count = 0;
+  struct das_binary_entry
+  {
+    uint32_t type_id;
+    uint32_t entity;
+    uint32_t data_size;
+    std::vector<uint8_t> data;
+  };
+  std::vector<das_binary_entry> entries;
+
   const das_component_storage *storage = try_storage_for (registry);
   if (storage != nullptr) {
     for (const auto *desc :
@@ -602,54 +583,39 @@ component_registry::save_das_components_binary (
         continue;
       }
       if (const auto *component_pool = storage->find_pool (desc->type_id)) {
-        count += component_pool->entries.size ();
+        for (const auto &[entity, block] : component_pool->entries) {
+          entries.push_back (
+              { static_cast<uint32_t> (desc->type_id),
+                static_cast<uint32_t> (entt::to_integral (entity)),
+                static_cast<uint32_t> (block.size),
+                std::vector<uint8_t> (block.data (),
+                                      block.data () + block.size) });
+        }
       }
     }
   }
-  writer.write (count);
 
-  if (storage != nullptr) {
-    for (const auto *desc :
-         get_world_components (world_component_order::type_id)) {
-      if (desc == nullptr || !desc->is_das_component) {
-        continue;
-      }
-      const auto *component_pool = storage->find_pool (desc->type_id);
-      if (component_pool == nullptr) {
-        continue;
-      }
-      for (const auto &[entity, block] : component_pool->entries) {
-        auto tid = static_cast<uint32_t> (desc->type_id);
-        auto ent = static_cast<uint32_t> (entt::to_integral (entity));
-        auto data_size = static_cast<uint32_t> (block.size);
-        writer.write (tid);
-        writer.write (ent);
-        writer.write (data_size);
-        writer.write_bytes (block.data (), block.size);
-      }
-    }
-  }
+  writer.write (entries);
 }
 
 void
 component_registry::load_das_components_binary (
     serialize::binary_reader &reader, entt::registry &registry)
 {
-  std::size_t count = 0;
-  reader.read (count);
+  struct das_binary_entry
+  {
+    uint32_t type_id;
+    uint32_t entity;
+    uint32_t data_size;
+    std::vector<uint8_t> data;
+  };
+  std::vector<das_binary_entry> entries;
+  reader.read (entries);
 
-  for (std::size_t i = 0; i < count; ++i) {
-    uint32_t tid_raw = 0;
-    uint32_t ent_raw = 0;
-    uint32_t data_size = 0;
-    reader.read (tid_raw);
-    reader.read (ent_raw);
-    reader.read (data_size);
+  for (auto &e : entries) {
+    auto tid = static_cast<entt::id_type> (e.type_id);
+    auto entity = static_cast<entt::entity> (e.entity);
 
-    auto tid = static_cast<entt::id_type> (tid_raw);
-    auto entity = static_cast<entt::entity> (ent_raw);
-
-    // Ensure the component type and entity exist.
     if (!contains_world_component (tid)) {
       register_cached_runtime_world_component (tid, "unknown", "unknown");
     }
@@ -657,17 +623,14 @@ component_registry::load_das_components_binary (
       das_component_add (registry, tid, entity);
     }
 
-    // Overwrite with saved data.
     uint8_t *dest = das_component_data (registry, tid, entity);
-    if (dest && data_size > 0) {
-      std::vector<uint8_t> data (data_size);
-      reader.read_bytes (data.data (), data_size);
+    if (dest && e.data_size > 0) {
       const descriptor *desc = find_world_component (tid);
       std::size_t copy_size
           = desc ? static_cast<std::size_t> (desc->das_struct_size)
-                 : data.size ();
-      copy_size = std::min (copy_size, data.size ());
-      std::memcpy (dest, data.data (), copy_size);
+                 : e.data.size ();
+      copy_size = std::min (copy_size, e.data.size ());
+      std::memcpy (dest, e.data.data (), copy_size);
     }
   }
 }
@@ -776,299 +739,6 @@ component_registry::find_component_type_info_by_id (uint64_t type_id) const
   }
   return nullptr;
 }
-
-// ------------------------------------------------------------------
-// Registration (template body moved out of the header so the serialization
-// backends are instantiated only in this translation unit).
-// ------------------------------------------------------------------
-
-template <comp::world_component_type T>
-void
-component_registry::register_world_component (
-    const world_component_registration_options &options)
-{
-  const entt::id_type type_id = wsl::comp::stable_type_id<T> ();
-  const entt::id_type internal_id = entt::type_id<T> ().hash ();
-  m_internal_to_stable[internal_id] = type_id;
-
-  wsl::log::sys ()->trace ("Registering component '{}' (id={})",
-                           entt::type_name<T> ().value (), type_id);
-
-  detail::ensure_meta_registered<T> (type_id, options.runtime_registered);
-
-  descriptor desc{};
-  desc.type_id = type_id;
-  desc.type_name = std::string (entt::type_name<T> ().value ());
-  desc.display_name = detail::resolve_display_name<T> (options.display_name);
-  m_type_name_to_stable[desc.type_name] = type_id;
-  m_display_name_to_stable[desc.display_name] = type_id;
-  desc.runtime_registered = options.runtime_registered;
-  desc.contains = +[] (entt::registry &registry, entt::entity entity) -> bool {
-    return registry.valid (entity) && registry.all_of<T> (entity);
-  };
-
-  if constexpr (std::is_default_constructible_v<T>) {
-    desc.can_add_default = true;
-    desc.emplace_default
-        = +[] (entt::registry &registry, entt::entity entity) -> bool {
-      if (!registry.valid (entity) || registry.all_of<T> (entity)) {
-        return false;
-      }
-
-      registry.emplace<T> (entity);
-      return true;
-    };
-  }
-
-  desc.remove = +[] (entt::registry &registry, entt::entity entity) -> bool {
-    if (!registry.valid (entity) || !registry.all_of<T> (entity)) {
-      return false;
-    }
-
-    (registry.remove<T>)(entity);
-    return true;
-  };
-
-  wsl::log::sys ()->trace ("Registered component '{}' ({})", desc.display_name,
-                           desc.type_name);
-
-  if constexpr (std::is_copy_constructible_v<T>) {
-    desc.copy = +[] (entt::registry &src_reg, entt::entity src_ent,
-                     entt::registry &dst_reg, entt::entity dst_ent) {
-      if (src_reg.all_of<T> (src_ent)) {
-        if constexpr (std::is_empty_v<T>) {
-          dst_reg.emplace_or_replace<T> (dst_ent);
-        } else {
-          dst_reg.emplace_or_replace<T> (dst_ent, src_reg.get<T> (src_ent));
-        }
-      }
-    };
-  }
-
-  // --- JSON: count + per-entity entries with explicit tombstones. ---
-  desc.save_json = +[] (serialize::json_writer &writer,
-                        entt::registry &registry) {
-    using storage_t = entt::registry::storage_for_type<T>;
-    const auto &const_registry = registry;
-    const storage_t *storage = const_registry.template storage<T> ();
-
-    writer.begin_object (entt::type_name<T> ().value ());
-
-    const std::size_t count = storage ? storage->size () : 0;
-    writer.write_u64 ("count", count);
-    writer.begin_array ("entries");
-
-    if (storage != nullptr) {
-      if constexpr (detail::is_in_place_storage_v<T>) {
-        for (auto it = storage->rbegin (), last = storage->rend (); it != last;
-             ++it) {
-          const auto ent = *it;
-          writer.begin_element_object ();
-          if (ent == entt::tombstone) {
-            writer.write_bool ("tombstone", true);
-          } else {
-            writer.write_u64 (
-                "entity", static_cast<std::uint64_t> (entt::to_integral (ent)));
-            serialize::json_write<T> (writer, "data", storage->get (ent));
-          }
-          writer.end_object ();
-        }
-      } else {
-        for (auto elem : storage->reach ()) {
-          writer.begin_element_object ();
-          writer.write_u64 ("entity",
-                            static_cast<std::uint64_t> (
-                                entt::to_integral (std::get<0> (elem))));
-          serialize::json_write<T> (writer, "data", std::get<1> (elem));
-          writer.end_object ();
-        }
-      }
-    }
-
-    writer.end_array ();
-    writer.end_object ();
-  };
-
-  desc.load_json
-      = +[] (serialize::json_reader &reader, entt::registry &registry) {
-          using storage_t = entt::registry::storage_for_type<T>;
-          storage_t &storage = registry.template storage<T> ();
-
-          if (!reader.enter_object (entt::type_name<T> ().value ())) {
-            return;
-          }
-
-          std::uint64_t count = 0;
-          reader.read_u64 ("count", count);
-
-          if (count != 0 && reader.enter_array ("entries")) {
-            const std::size_t entry_count = reader.array_size ("entries");
-            for (std::size_t i = 0; i < entry_count; ++i) {
-              if (!reader.enter_element (i)) {
-                continue;
-              }
-
-              bool tombstone = false;
-              reader.read_bool ("tombstone", tombstone);
-
-              if (!tombstone) {
-                std::uint64_t entity_raw = 0;
-                reader.read_u64 ("entity", entity_raw);
-
-                T value{};
-                if (serialize::json_read<T> (reader, "data", value)) {
-                  if constexpr (has_post_load<T>) {
-                    value.post_load ();
-                  }
-
-                  auto entity = static_cast<entt::entity> (entity_raw);
-                  if (storage.contains (entity)) {
-                    storage.get (entity) = std::move (value);
-                  } else {
-                    storage.emplace (entity, std::move (value));
-                  }
-                }
-              }
-
-              reader.leave ();
-            }
-            reader.leave ();
-          }
-
-          reader.leave ();
-        };
-
-  // --- Binary: identical entry shape; payloads are msgpack blobs. ---
-  desc.save_binary
-      = +[] (serialize::binary_writer &writer, entt::registry &registry) {
-          using storage_t = entt::registry::storage_for_type<T>;
-          const auto &const_registry = registry;
-          const storage_t *storage = const_registry.template storage<T> ();
-
-          std::size_t count = storage ? storage->size () : 0;
-          writer.write (count);
-
-          if (storage != nullptr) {
-            if constexpr (detail::is_in_place_storage_v<T>) {
-              for (auto it = storage->rbegin (), last = storage->rend ();
-                   it != last; ++it) {
-                const auto ent = *it;
-                if (ent == entt::tombstone) {
-                  const std::uint8_t tombstone = 1;
-                  writer.write (tombstone);
-                } else {
-                  const std::uint8_t tombstone = 0;
-                  const std::uint32_t entity
-                      = static_cast<std::uint32_t> (entt::to_integral (ent));
-                  writer.write (tombstone);
-                  writer.write (entity);
-                  serialize::msgpack_write<T> (writer, storage->get (ent));
-                }
-              }
-            } else {
-              for (auto elem : storage->reach ()) {
-                const std::uint8_t tombstone = 0;
-                const std::uint32_t entity = static_cast<std::uint32_t> (
-                    entt::to_integral (std::get<0> (elem)));
-                writer.write (tombstone);
-                writer.write (entity);
-                serialize::msgpack_write<T> (writer, std::get<1> (elem));
-              }
-            }
-          }
-        };
-
-  desc.load_binary
-      = +[] (serialize::binary_reader &reader, entt::registry &registry) {
-          using storage_t = entt::registry::storage_for_type<T>;
-          storage_t &storage = registry.template storage<T> ();
-
-          std::size_t count = 0;
-          if (!reader.read (count)) {
-            return;
-          }
-
-          for (std::size_t i = 0; i < count; ++i) {
-            std::uint8_t tombstone = 0;
-            if (!reader.read (tombstone)) {
-              return;
-            }
-            if (tombstone != 0) {
-              continue;
-            }
-
-            std::uint32_t entity_raw = 0;
-            if (!reader.read (entity_raw)) {
-              return;
-            }
-
-            T value{};
-            if (serialize::msgpack_read<T> (reader, value)) {
-              if constexpr (has_post_load<T>) {
-                value.post_load ();
-              }
-
-              auto entity = static_cast<entt::entity> (entity_raw);
-              if (storage.contains (entity)) {
-                storage.get (entity) = std::move (value);
-              } else {
-                storage.emplace (entity, std::move (value));
-              }
-            }
-          }
-        };
-
-  m_descriptors[type_id] = std::move (desc);
-
-  // Also register in the lookup table for generic dispatch.
-  // Use the display name (or type name) as the daScript-visible key.
-  std::string das_name = desc.display_name.empty ()
-                             ? std::string (entt::type_name<T> ().value ())
-                             : desc.display_name;
-  register_component_type_info (das_name, type_id, ComponentKind::CPP_NATIVE,
-                                sizeof (T));
-}
-
-// Explicit instantiations: the component set is closed (comp/components.hpp).
-template void component_registry::register_world_component<comp::hierarchy> (
-    const world_component_registration_options &);
-template void
-component_registry::register_world_component<comp::world_transform> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::transform> (
-    const world_component_registration_options &);
-template void
-component_registry::register_world_component<comp::model_instance_3d> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::camera> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::camera_2d> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::point_light> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::spot_light> (
-    const world_component_registration_options &);
-template void
-component_registry::register_world_component<comp::directional_light> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::rigid_body> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::area> (
-    const world_component_registration_options &);
-template void
-component_registry::register_world_component<comp::character_body> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::audio> (
-    const world_component_registration_options &);
-template void
-component_registry::register_world_component<comp::prefab_instance> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::sprite_2d> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::subviewport> (
-    const world_component_registration_options &);
-template void component_registry::register_world_component<comp::transform_2d> (
-    const world_component_registration_options &);
 
 } // namespace reg
 

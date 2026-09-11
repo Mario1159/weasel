@@ -1,11 +1,23 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <atomic>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <mutex>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <thread>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 #include <wsl/ai/a2a/transport.hpp>
 #include <wsl/ai/a2a/types.hpp>

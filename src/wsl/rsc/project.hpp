@@ -1,7 +1,14 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <filesystem>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <rfl.hpp>
+#endif
 
 namespace wsl
 {
@@ -50,18 +57,11 @@ struct project
   /** Path to the directory containing shader files. */
   std::string shaders_path;
   /** Path to the directory containing material files. */
-  std::string materials_path = "materials";
+  std::string materials_path = "rsc/materials";
 
   // -------- Default Scene --------
   /** Path to the default scene file, relative to `scenes_path`. */
   std::string default_scene_path;
-
-  // -------- Serialization --------
-  /**
- * Serializes or deserializes the project configuration.
- * :param Archive: The archive type.
- * :param ar: The archive to use for serialization.
- */
 };
 
 } // namespace rsc

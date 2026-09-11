@@ -1,13 +1,29 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <atomic>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <condition_variable>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <functional>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <mutex>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <span>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <thread>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::sys
 {

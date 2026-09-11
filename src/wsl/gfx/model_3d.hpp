@@ -5,12 +5,24 @@
 #include "render_context.hpp"
 #include "tracy_gpu_mem.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/matrix_float4x4.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <limits>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {

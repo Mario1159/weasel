@@ -1,5 +1,4 @@
 #include "system_inspector.hpp"
-#include "wsl/rsc/scene_manager.hpp"
 
 #include "editor/ecs_inspector_utils.hpp"
 #include "rsc/resource_ids.hpp"

@@ -1,5 +1,5 @@
+#if WEASEL_HAS_DASLANG
 #include "wsl_event_binds.hpp"
-
 #include "wsl/das/wsl_api_module.hpp"
 #include "wsl/event/message_bus.hpp"
 #include "wsl/input.hpp"
@@ -875,3 +875,4 @@ register_event_message_bindings (::das::Module &module,
 }
 
 } // namespace wsl::das
+#endif

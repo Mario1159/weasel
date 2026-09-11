@@ -1,9 +1,6 @@
 #include "project_loader.hpp"
 
 #include <algorithm>
-#include <rfl.hpp>
-#include <rfl/json.hpp>
-#include <rfl/msgpack.hpp>
 #include <filesystem>
 #include <fstream>
 #include <ios>
@@ -26,6 +23,8 @@
 #include "wsl/comp/world_transform.hpp"
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/model_instance_3d.hpp"
+
+#include "../serialize/serialize.hpp"
 
 namespace wsl
 {
@@ -124,7 +123,8 @@ rsc::project_loader::create (const project &proj) const
   }
   project project_copy = proj;
   project_copy.default_scene_path = default_scene_rel;
-  file << rfl::json::write (project_copy);
+  std::string json_str = serialize::json_write (project_copy);
+  file << json_str;
 
   // Generate src/main.cpp
   const fs::path main_file = fs::path (proj.root_path) / "src/main.cpp";
@@ -156,60 +156,36 @@ rsc::project_loader::create (const project &proj) const
              << "}\n";
   }
 
-  // Generate CMakeLists.txt
-  const fs::path cmake_file = fs::path (proj.root_path) / "CMakeLists.txt";
-  std::ofstream cmake_out (cmake_file);
-  if (cmake_out) {
-    cmake_out
-        << "cmake_minimum_required(VERSION 3.22)\n"
-        << "project(" << proj.name << " LANGUAGES C CXX)\n\n"
-        << "set(CMAKE_CXX_STANDARD 20)\n"
-        << "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n"
-        << "# Weasel Engine dependency\n"
-        << "find_package(Weasel REQUIRED)\n\n"
-        << "file(GLOB_RECURSE SOURCES\n"
-        << "    \"src/*.cpp\"\n"
-        << "    \"" << proj.components_path << "/*.cpp\"\n"
-        << "    \"" << proj.systems_path << "/*.cpp\"\n"
-        << "    \"" << proj.singletons_path << "/*.cpp\"\n"
-        << ")\n\n"
-        << "# AOT-compile .das files\n"
-        << "file(GLOB_RECURSE DAS_SOURCES\n"
-        << "    \"" << proj.components_path << "/*.das\"\n"
-        << "    \"" << proj.systems_path << "/*.das\"\n"
-        << ")\n"
-        << "if(DAS_SOURCES)\n"
-        << "    weasel_aot_das(FILES ${DAS_SOURCES} OUTPUT_VAR AOT_SRCS)\n"
-        << "    list(APPEND SOURCES ${AOT_SRCS})\n"
-        << "endif()\n\n"
-        << "add_executable(${PROJECT_NAME} ${SOURCES})\n"
-        << "target_link_libraries(${PROJECT_NAME} PRIVATE wsl)\n\n"
-        << "if(NOT DEFINED Weasel_RESOURCE_PATH OR Weasel_RESOURCE_PATH "
-           "STREQUAL \"\")\n"
-        << "  set(Weasel_RESOURCE_PATH \"${Weasel_DIR}\")\n"
-        << "endif()\n"
-        << "target_compile_definitions(${PROJECT_NAME} PRIVATE "
-           "WSL_RESOURCE_PATH=\"${Weasel_RESOURCE_PATH}\")\n\n"
-        << "# --- Installation and Packaging ---\n"
-        << "install(TARGETS ${PROJECT_NAME}\n"
-        << "    RUNTIME DESTINATION bin\n"
-        << ")\n\n"
-        << "# Install project resources\n"
-        << "install(DIRECTORY src DESTINATION share/${PROJECT_NAME})\n"
-        << "install(DIRECTORY audio DESTINATION share/${PROJECT_NAME} "
-           "OPTIONAL)\n"
-        << "install(DIRECTORY textures DESTINATION share/${PROJECT_NAME} "
-           "OPTIONAL)\n"
-        << "install(DIRECTORY rml DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
-        << "install(DIRECTORY otf DESTINATION share/${PROJECT_NAME} OPTIONAL)\n"
-        << "install(DIRECTORY scenes DESTINATION share/${PROJECT_NAME} "
-           "OPTIONAL)\n"
-        << "install(DIRECTORY shaders DESTINATION share/${PROJECT_NAME} "
-           "OPTIONAL)\n\n"
-        << "set(CPACK_PACKAGE_NAME \"${PROJECT_NAME}\")\n"
-        << "set(CPACK_PACKAGE_VERSION \"0.1.0\")\n"
-        << "set(CPACK_GENERATOR \"TGZ;DEB;RPM\")\n\n"
-        << "include(CPack)\n";
+  // Generate xmake.lua
+  const fs::path xmake_file = fs::path (proj.root_path) / "xmake.lua";
+  std::ofstream xmake_out (xmake_file);
+  if (xmake_out) {
+    xmake_out
+        << "set_project(\"" << proj.name << "\")\n"
+        << "set_version(\"0.1.0\")\n"
+        << "set_xmakever(\"3.0.0\")\n"
+        << "set_languages(\"c++20\")\n"
+        << "add_rules(\"mode.debug\", \"mode.release\")\n\n"
+        << "-- Weasel Engine dependency\n"
+        << "-- Configure with: xmake f --weasel_dir=/path/to/weasel (or set "
+           "$WEASEL_DIR)\n"
+        << "option(\"weasel_dir\", {showmenu = true, default = "
+           "os.getenv(\"WEASEL_DIR\") or \"\", description = \"Path to the "
+           "Weasel Engine source tree\"})\n\n"
+        << "target(\"" << proj.name << "\")\n"
+        << "    set_kind(\"binary\")\n"
+        << "    add_files(\"src/*.cpp\", \"" << proj.components_path
+        << "/*.cpp\", \"" << proj.systems_path << "/*.cpp\", \""
+        << proj.singletons_path << "/*.cpp\")\n"
+        << "    -- TODO: AOT-compile .das files (weasel_aot_das equivalent)\n"
+        << "    add_includedirs(\"$(weasel_dir)/src\", "
+           "\"$(weasel_dir)/src/wsl\")\n"
+        << "    add_linkdirs(\"$(weasel_dir)/build/$(plat)/$(arch)/$(mode)\")\n"
+        << "    add_links(\"wsl\")\n"
+        << "    add_defines(\"WSL_RESOURCE_PATH=\\\"$(weasel_dir)\\\"\")\n\n"
+        << "-- --- Installation and Packaging ---\n"
+        << "add_installfiles(\"src\", {prefixdir = \"share/" << proj.name
+        << "\"})\n";
   }
 
   // Generate AGENTS.md so AI agents working in the project get engine
@@ -274,29 +250,33 @@ rsc::project_loader::load (const std::string &path)
     return {};
   }
 
-  std::stringstream ss;
-  ss << file.rdbuf ();
-  const std::string contents = ss.str ();
+  std::string file_content ((std::istreambuf_iterator<char> (file)),
+                            std::istreambuf_iterator<char> ());
 
   if (path.ends_with (".json")) {
-    auto parsed = rfl::json::read<project> (contents);
-    if (!parsed) {
+    try {
+      if (!serialize::json_read (file_content, *proj)) {
+        return {};
+      }
+    } catch (const std::exception &e) {
       wsl::log::rsc ()->error ("Failed to parse project file '{}': {}", path,
-                               parsed.error ().what ());
+                               e.what ());
       return {};
     }
-    *proj = std::move (parsed).value ();
   } else {
-    auto parsed = rfl::msgpack::read<project> (contents);
-    if (!parsed) {
+    try {
+      std::vector<std::uint8_t> bytes (file_content.begin (),
+                                       file_content.end ());
+      if (!serialize::msgpack_read (bytes, *proj)) {
+        return {};
+      }
+    } catch (const std::exception &e) {
       wsl::log::rsc ()->error ("Failed to parse project file '{}': {}", path,
-                               parsed.error ().what ());
+                               e.what ());
       return {};
     }
-    *proj = std::move (parsed).value ();
   }
 
-  // Ensure root_path is absolute and points to the manifest's directory
   auto manifest_dir = fs::path (path).parent_path ();
   if (manifest_dir.empty ())
     manifest_dir = fs::current_path ();

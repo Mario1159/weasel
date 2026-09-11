@@ -1,10 +1,4 @@
 #include "resource_manager.hpp"
-#include "scene_manager.hpp"
-#include "../sys/core_systems.hpp"
-#include "../reg/runtime_project_module.hpp"
-
-#include "../serialize/component_adapters.hpp"
-#include "../serialize/serialize.hpp"
 
 #include "../comp/component_meta.hpp"
 #include "../comp/hierarchy.hpp"
@@ -22,6 +16,8 @@
 #include "rsc/resource_ref.hpp"
 #include "rsc/shader_loader.hpp"
 #include "wsl/log/log.hpp"
+
+#include "../serialize/serialize.hpp"
 
 #include <SDL3/SDL_audio.h>
 #include <SDL3/SDL_error.h>
@@ -2459,26 +2455,27 @@ rsc::resource_manager::load (material_id id)
     return nullptr;
   }
 
-  std::stringstream mss;
-  mss << file.rdbuf ();
-  auto parsed = rfl::json::read<gfx::material_asset> (mss.str ());
-  if (!parsed) {
+  try {
+    std::string json_content ((std::istreambuf_iterator<char> (file)),
+                              std::istreambuf_iterator<char> ());
+    auto asset = std::make_shared<gfx::material_asset> ();
+    if (!serialize::json_read (json_content, *asset)) {
+      return nullptr;
+    }
+    asset->id = id;
+    asset->path = rec->path;
+    if (asset->name.empty ()) {
+      asset->name = rec->name;
+    }
+    rec->shader_program_id = asset->shader_program.value;
+    m_materials[id.value] = asset;
+    rec->state = material_state::loaded;
+    return asset;
+  } catch (const std::exception &e) {
     wsl::log::rsc ()->error ("Failed to parse material '{}': {}", resolved,
-                             parsed.error ().what ());
+                             e.what ());
     return nullptr;
   }
-
-  auto asset
-      = std::make_shared<gfx::material_asset> (std::move (parsed).value ());
-  asset->id = id;
-  asset->path = rec->path;
-  if (asset->name.empty ()) {
-    asset->name = rec->name;
-  }
-  rec->shader_program_id = asset->shader_program.value;
-  m_materials[id.value] = asset;
-  rec->state = material_state::loaded;
-  return asset;
 }
 
 void

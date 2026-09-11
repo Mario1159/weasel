@@ -1,20 +1,22 @@
 #pragma once
 
 #include "../das/das_engine.hpp"
-#if !defined(WSL_MODULE_BUILD)
-#if !defined(WSL_MODULE_BUILD)
-#include <future>
-#endif
-#endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <filesystem>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <future>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
 #endif
 

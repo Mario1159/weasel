@@ -1,8 +1,12 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <utility>
+#endif
 
 namespace wsl::gfx
 {

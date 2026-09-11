@@ -1,5 +1,4 @@
 #include "ui_manager.hpp"
-#include "../../serialize/serialize.hpp"
 #include "wsl/log/log.hpp"
 
 #include <RmlUi/Core/Core.h>
@@ -31,13 +30,13 @@ ui_manager::ui_manager (gfx::render_context &ctx,
                         wsl::gfx::render_window &window,
                         wsl::rsc::resource_manager *res_mgr)
 {
-  if (ctx.gpu_device == nullptr || window.handler () == nullptr) {
+  if (ctx.gpu_device == nullptr || window.handler() == nullptr) {
     wsl::log::editor ()->trace ("Headless mode, skipping RmlUi initialization");
     return;
   }
 
   m_render_interface = std::make_unique<RenderInterface_SDL_GPU> (
-      ctx.gpu_device, window.handler ());
+      ctx.gpu_device, window.handler());
   wsl::log::editor ()->trace ("Using GPU device {}", (void *)ctx.gpu_device);
   Rml::SetRenderInterface (m_render_interface.get ());
   Rml::SetSystemInterface (&m_system_interface);
@@ -106,7 +105,8 @@ ui_manager::custom_inspect (const char *label,
   }
 
   if (ImGui::BeginCombo ("Active Document", preview)) {
-    if (ImGui::Selectable ("None", m_active_document_id.value == entt::null)) {
+    if (ImGui::Selectable ("None",
+                           m_active_document_id.value == entt::null)) {
       if (m_active_document_id.value != entt::null) {
         m_active_document_id.value = entt::null;
         m_needs_reload = true;
@@ -217,23 +217,3 @@ ui_manager::ensure_data_model (entt::registry &registry,
 } // namespace comp
 
 } // namespace wsl
-
-namespace wsl::comp::singl
-{
-
-void
-ui_manager::write_state (wsl::serialize::json_writer &writer) const
-{
-  writer.write_u64 ("active_document_id", active_document_id ().value);
-}
-
-void
-ui_manager::read_state (wsl::serialize::json_reader &reader)
-{
-  std::uint64_t value = 0;
-  if (reader.read_u64 ("active_document_id", value)) {
-    active_document_id ().value = value;
-  }
-}
-
-} // namespace wsl::comp::singl

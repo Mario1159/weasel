@@ -5,7 +5,7 @@ Components
 
 .. das:class:: Area3D
 
-   Jolt sensor (trigger) to detect bodies entering/exiting
+   Sensor (trigger) to detect bodies entering/exiting
 
 .. das:class:: Audio
 
@@ -13,7 +13,7 @@ Components
 
 .. das:class:: Character Body
 
-   Capsule-based kinematic character controller (Jolt)
+   Capsule-based kinematic character controller
 
 .. das:class:: Directional Light
 

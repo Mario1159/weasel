@@ -1,21 +1,29 @@
 #pragma once
 
-namespace wsl::serialize
-{
-class json_writer;
-class json_reader;
-}
-
 #include "editor/ui_system_interface.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi/Core.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi/Core/Math.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi_Platform_SDL.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi_Renderer_SDL_GPU.h>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_set>
+#endif
 
 #include "wsl/comp/component_meta.hpp"
 #include "wsl/gfx/render_context.hpp"
@@ -63,12 +71,12 @@ public:
   // -- getters / setters
   // -------------------------------------------------------
 
-  const ::editor::ui_system_interface &
+  const editor::ui_system_interface &
   system_interface () const
   {
     return m_system_interface;
   }
-  ::editor::ui_system_interface &
+  editor::ui_system_interface &
   system_interface ()
   {
     return m_system_interface;
@@ -118,13 +126,6 @@ public:
     return m_active_document_id;
   }
 
-  /** Serializes editable state (out-of-line; implementation-only API). */
-  void write_state (wsl::serialize::json_writer &writer) const;
-
-  /** Restores editable state in place (out-of-line; implementation-only API).
-   */
-  void read_state (wsl::serialize::json_reader &reader);
-
   const rsc::ui_layout_id &
   loaded_document_id () const
   {
@@ -148,7 +149,7 @@ public:
   }
 
 private:
-  ::editor::ui_system_interface m_system_interface;
+  editor::ui_system_interface m_system_interface;
   std::unique_ptr<RenderInterface_SDL_GPU> m_render_interface;
   Rml::Context *m_context = nullptr;
   Rml::ElementDocument *m_active_document_instance = nullptr;

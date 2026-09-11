@@ -3,12 +3,42 @@
 #include "shader_program.hpp"
 #include "wsl/rsc/resource_ids.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <variant>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/cereal.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/string.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/variant.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/unordered_map.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cereal/types/variant.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include "../rsc/cereal_glm.hpp"
+#endif
 
 namespace wsl
 {
@@ -35,6 +65,12 @@ struct material_parameter
   {
   }
 
+  template <class Archive>
+  void
+  serialize (Archive &ar)
+  {
+    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("value", value));
+  }
 };
 
 /**
@@ -59,7 +95,8 @@ struct material_asset
   std::string vertex_shader_path
       = "engine://compiled_shaders/cube.vert.slang.spv";
 
-  /** Default parameters defined by the asset (populated from the shader graph). */
+  /** Default parameters defined by the asset (populated from the shader graph).
+   */
   std::unordered_map<std::string, material_parameter> default_parameters;
 
   /** Metadata: is this material double-sided? */
@@ -68,6 +105,17 @@ struct material_asset
   /** Metadata: does this material use alpha test / opacity mask? */
   bool alpha_test = false;
 
+  template <class Archive>
+  void
+  serialize (Archive &ar)
+  {
+    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("path", path),
+        cereal::make_nvp ("shader_program", shader_program.value),
+        cereal::make_nvp ("vertex_shader_path", vertex_shader_path),
+        cereal::make_nvp ("double_sided", double_sided),
+        cereal::make_nvp ("alpha_test", alpha_test),
+        cereal::make_nvp ("default_parameters", default_parameters));
+  }
 };
 
 /**
@@ -86,10 +134,10 @@ struct material_instance
   std::unordered_map<std::string, material_parameter> overrides;
 
   /**
- * Build a uniform buffer blob matching the shader reflection layout.
- *
- *  Looks up parameter values from instance overrides then asset defaults.
- */
+   * Build a uniform buffer blob matching the shader reflection layout.
+   *
+   *  Looks up parameter values from instance overrides then asset defaults.
+   */
   std::vector<uint8_t> build_uniform_blob (const shader_reflection &reflection,
                                            const material_asset &asset) const;
 

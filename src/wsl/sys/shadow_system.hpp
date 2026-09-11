@@ -1,8 +1,13 @@
 #pragma once
 
 #include "system.hpp"
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+
 
 namespace wsl
 {

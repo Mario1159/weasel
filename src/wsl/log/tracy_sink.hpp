@@ -1,9 +1,15 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <spdlog/sinks/base_sink.h>
+#endif
 
+#ifndef IN_MODULE_INTERFACE
 #include <mutex>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
 namespace wsl::log
 {

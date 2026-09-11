@@ -1,12 +1,18 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
 #include <wsl/ai/a2a/agent_card.hpp>
 #include <wsl/ai/a2a/transport.hpp>
 
 extern "C" {
+#ifndef IN_MODULE_INTERFACE
+#ifndef IN_MODULE_INTERFACE
 #include <curl/curl.h>
+#endif
+#endif
 }
 
 namespace wsl::ai::a2a

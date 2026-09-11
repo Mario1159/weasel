@@ -3,14 +3,14 @@
 #include "component_registry.hpp"
 #include "singleton_registry.hpp"
 #include "system_factory_registry.hpp"
-#if !defined(WSL_MODULE_BUILD)
 #include "event/event_hub.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl::reg
 {

@@ -1,39 +1,34 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
-#include "../math/vector.hpp"         // math::vec3f, math::quatf
+#ifndef IN_MODULE_INTERFACE
+#include "../math/vector.hpp" // math::vec3f, math::quatf
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include "../phys/physics_engine.hpp" // phys::engine
+#include "../phys/layers.hpp"
 #endif
-#include "singl/runtime_context.hpp"
-#if !defined(WSL_MODULE_BUILD)
+namespace wsl::comp::singl
+{
+class runtime_context;
+}
+#ifndef IN_MODULE_INTERFACE
 #include <exception>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
-
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Jolt.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Body/AllowedDOFs.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Body/BodyID.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Physics/Body/MotionType.h>
 #endif
 
 namespace wsl
@@ -99,7 +94,7 @@ struct rigid_body : world_component
   float radius = 0.5F;
 
   // Material density (kg/m^3) used to derive the body mass from its shape
-  // volume. Defaults to water (1000), matching Jolt's default so existing
+  // volume. Defaults to water (1000), matching the physics engine's default so existing
   // scenes keep their current mass.
   float density = 1000.0F;
   static constexpr float default_density = 1000.0F;
@@ -114,7 +109,7 @@ struct rigid_body : world_component
   collision_layer_ui collision_layer{};
   collision_mask_ui collision_mask{};
 
-  // Jolt surface response parameters
+  // Physics surface response parameters
   float friction = 0.2F;
   float restitution = 0.0F;
 
@@ -169,10 +164,10 @@ struct rigid_body : world_component
 
   // sync current authored values into applied_* cache
   void sync_applied_cache ();
-  JPH::ObjectLayer object_layer () const;
+  phys::object_layer object_layer () const;
 
   // Derive the body mass (kg) from density and shape volume. This mirrors the
-  // mass Jolt assigns at body creation given the configured density.
+  // mass the physics engine assigns at body creation given the configured density.
   float
   mass () const
   {
@@ -212,7 +207,6 @@ struct rigid_body : world_component
   }
 
   static void register_meta ();
-
 };
 
 } // namespace comp

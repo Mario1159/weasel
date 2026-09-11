@@ -9,10 +9,18 @@
 #include "../component_meta.hpp"
 #include "../transform.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
 
 namespace wsl
 {
@@ -281,7 +289,6 @@ struct rendering_manager : singleton_component
         .custom<comp::meta_info> (
             meta_info{ "Cubemap", "Cubemap resource identifier.", "" });
   }
-
 };
 
 } // namespace comp::singl

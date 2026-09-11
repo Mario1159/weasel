@@ -2,7 +2,9 @@
 
 #include "component_meta.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
+#endif
 
 namespace wsl
 {
@@ -54,7 +56,6 @@ struct hierarchy : world_component
         .type (entt::type_hash<std::string>::value ())
         .custom<comp::meta_info> (meta_info{ "String", "A String", "" });
   }
-
 };
 
 } // namespace comp

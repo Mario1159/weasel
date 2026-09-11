@@ -1,11 +1,9 @@
 #pragma once
 
 #include "component_meta.hpp"
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"
-#endif
 #include "wsl/rsc/resource_ids.hpp"
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
 #endif
 
@@ -37,7 +35,6 @@ struct sprite_2d : world_component
   int z_index = 0;
 
   static void register_meta ();
-
 };
 
 } // namespace wsl::comp

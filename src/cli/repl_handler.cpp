@@ -2,11 +2,6 @@
 #include "repl_handler.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/das/das_engine.hpp"
-#include "reg/component_registry.hpp"
-#include "reg/singleton_registry.hpp"
-#include "reg/system_factory_registry.hpp"
-#include "reg/runtime_project_module.hpp"
-#include "sys/core_systems.hpp"
 #include <cstdint>
 
 #include "comp/area3d.hpp"
@@ -37,7 +32,7 @@
 #include "wsl/comp/components.hpp"
 #include "wsl/das/das_api_catalog.gen.hpp"
 
-#include <rfl/json.hpp>
+#include "wsl/serialize/serialize.hpp"
 #include <entt/entt.hpp>
 #include <nlohmann/json.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -923,7 +918,7 @@ command_executor::auto_save_project ()
     m_output << "Auto-save failed for project.\n";
     return;
   }
-  file << rfl::json::write (*m_current_project);
+  file << serialize::json_write (*m_current_project);
 }
 
 std::string
@@ -1136,6 +1131,7 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     proj.cubemaps_path = "rsc/textures/cubemaps";
     proj.audio_path = "rsc/audio";
     proj.fonts_path = "rsc/fonts";
+    proj.materials_path = "rsc/materials";
     proj.ui_layouts_path = "src/ui";
     proj.shaders_path = "rsc/shaders";
 

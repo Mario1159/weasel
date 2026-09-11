@@ -1,6 +1,4 @@
 #include "editor_app.hpp"
-#include "reg/singleton_registry.hpp"
-#include "rsc/scene_manager.hpp"
 
 #include "comp/singl/editor_context.hpp"
 #include "comp/singl/runtime_context.hpp"

@@ -8,7 +8,7 @@ Weasel is an ECS 2D & 3D game engine for C++ and Daslang. It is designed from th
 
 - **PBR Rendering:** Custom clustered forward renderer using SDL3's GPU API, supporting HDR, Bloom, SSAO, and real-time shadows.
 - **Shader Graph:** Material building through nodes and Slang shaders.
-- **Physics:** Full integration with Jolt Physics.
+- **Physics:** Full integration with Box3D.
 - **UI:** HTML & CSS support via RML.
 - **Audio System:** Basic audio playback support.
 - **Developer Tools:** Built-in editor and MCP server.
@@ -17,7 +17,7 @@ Weasel is an ECS 2D & 3D game engine for C++ and Daslang. It is designed from th
 
 ```
 weasel/
-├── cmake/                  # CMake modules (CPM, Daslang integration, stb, etc.)
+├── cmake/                  # Legacy stb_image_impl.c (used by xmake)
 ├── doc/                    # Sphinx documentation sources
 ├── examples/               # Example projects
 ├── packaging/              # Linux packaging (Makefile, etc.)
@@ -27,7 +27,7 @@ weasel/
 │   │   ├── comp/           # ECS components
 │   │   ├── sys/            # ECS systems
 │   │   ├── rsc/            # Resource management
-│   │   ├── phys/           # Physics integration (Jolt)
+│   │   ├── phys/           # Physics integration (Box3D)
 │   │   ├── gfx/            # Rendering (SDL3 GPU, PBR pipeline)
 │   │   ├── math/           # Math utilities
 │   │   ├── reg/            # Registry helpers
@@ -58,8 +58,8 @@ weasel/
 ## Building
 
 ```bash
-make configure
-cmake --build build -j2
+xmake f --toolchain=clang
+xmake build -j2
 ```
 
 ### Running the Editor
@@ -71,7 +71,7 @@ cmake --build build -j2
 ### Generating Documentation
 
 ```bash
-cmake --build build --target docs
+xmake build --target docs
 ```
 
 Output is available at `build/docs/html/index.html`.
@@ -79,3 +79,60 @@ Output is available at `build/docs/html/index.html`.
 ## Code Style
 
 All code in this repository must follow the style defined in [`CODESTYLE.md`](CODESTYLE.md).
+
+## Phase B: rfl Migration (reflect-cpp)
+
+### Overview
+
+Phase B migrates cereal serialization to reflect-cpp (rfl) across the engine's registry, scene, and resource layers. The key changes are:
+
+- **Descriptor function pointers** now use `serialize::binary_writer&`/`serialize::binary_reader&`/`serialize::json_writer&`/`serialize::json_reader&` instead of `cereal::*Archive&`
+- **`has_serialize` concept** simplified to just check for `serialize()` method return type
+- **`component_load_entry<T>::data`** changed from `T` to `std::optional<T>` to support nullable/tombstone entries with rfl
+- **`component_save_entry<T>::data`** remains `const T*` (for save); tombstone represented as `nullptr`
+- **`save_component_json`/`load_component_json`** now use `writer.write(entries)` and `reader.read(entries)` instead of cereal archive operator()
+- **`scene_snapshot_serializer`** uses rfl via `serialize::json_writer`/`json_reader` for JSON, `serialize::binary_writer`/`binary_reader` for binary
+
+### Key Files
+
+| File | Status |
+|------|--------|
+| `serialize/component_adapters.hpp` | ✅ Complete - 18+ component helpers with rfl CustomParser |
+| `reg/component_registry.hpp/cpp` | ✅ Complete |
+| `reg/singleton_registry.hpp/cpp` | ✅ Complete |
+| `reg/registry_helpers.hpp` | ✅ Complete |
+| `rsc/scene_snapshot_serializer.hpp/cpp` | ✅ Complete |
+| `rsc/project.hpp` | ✅ Complete |
+| `rsc/project_loader.cpp` | ✅ Complete |
+| `rsc/resource_ids.hpp` | ✅ Complete |
+| `gfx/material_asset.hpp` | ✅ Complete |
+| `rsc/resource_manager.cpp` | ✅ Complete |
+| `math/vector.hpp` | ✅ Complete |
+| `math/matrix.hpp` | ⚠️ Uses cereal (array-based, complex) |
+| `serialize/types.hpp` | ✅ Binary/JSON reader/writer wrappers |
+| `serialize/adapters.hpp` | ✅ rfl custom parsers for glm/entt types |
+
+### rfl Field Definition Pattern
+
+Types migrated to rfl use `static constexpr auto rfl_fields`:
+
+```cpp
+struct my_type {
+  int x;
+  std::string name;
+  static constexpr auto rfl_fields = rfl::fields(
+    rfl::Field<"x", &my_type::x>(),
+    rfl::Field<"name", &my_type::name>()
+  );
+};
+```
+
+### cereal_glm.hpp / data_types_serialization.hpp
+
+These cereal helper files are **deprecated** and replaced by `serialize/adapters.hpp`. They should not be included in new code. The `core.cppm` module file still references them but will be updated in Phase C.
+
+### Known Issues
+
+- **Stale LSP errors**: The LSP picks up stale system headers at `/usr/local/include/wsl/`. Actual compilation uses correct CPM-installed headers.
+- **Build verification**: Full compile OOMs at ~25% on single-module non-modules build.
+- **Phase C modules build**: Blocked on libarchive include path.

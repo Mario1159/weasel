@@ -18,7 +18,7 @@ static std::shared_ptr<spdlog::logger> s_editor_logger;
 static std::shared_ptr<spdlog::logger> s_cli_logger;
 static std::shared_ptr<spdlog::logger> s_phys_logger;
 static std::shared_ptr<spdlog::logger> s_net_logger;
-static std::shared_ptr<spdlog::logger> s_cmake_logger;
+static std::shared_ptr<spdlog::logger> s_xmake_logger;
 
 static std::shared_ptr<spdlog::logger>
 make_logger (const char *name, const char *info_color)
@@ -56,7 +56,7 @@ init ()
   s_cli_logger = make_logger ("cli", "\033[34m");
   s_phys_logger = make_logger ("phys", "\033[31m");
   s_net_logger = make_logger ("net", "\033[34m");
-  s_cmake_logger = make_logger ("cmake", "\033[37m");
+  s_xmake_logger = make_logger ("xmake", "\033[37m");
 
   spdlog::set_default_logger (s_core_logger);
   spdlog::set_level (spdlog::level::debug);
@@ -111,9 +111,9 @@ net ()
 }
 
 std::shared_ptr<spdlog::logger>
-cmake ()
+xmake ()
 {
-  return s_cmake_logger;
+  return s_xmake_logger;
 }
 
 } // namespace wsl::log

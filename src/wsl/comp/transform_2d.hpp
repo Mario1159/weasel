@@ -1,11 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/vector.hpp"
-#endif
 #include "component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
@@ -26,7 +24,6 @@ struct transform_2d : world_component
   math::vec2f pivot{ 0.5F, 0.5F }; // Normalized pivot (0.5 = center)
 
   static void register_meta ();
-
 };
 
 } // namespace wsl::comp

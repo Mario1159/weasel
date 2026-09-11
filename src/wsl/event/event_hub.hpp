@@ -1,18 +1,12 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../comp/component_meta.hpp"
-#if !defined(WSL_MODULE_BUILD)
-#endif
-#endif
-#if !defined(WSL_MODULE_BUILD)
 #include "event_hub_fwd.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <ranges>
 #endif
 
@@ -157,6 +151,13 @@ struct event_connection_data
   entt::id_type event_type_id{};
   entt::id_type system_type_id{};
   std::string handler_name;
+
+  template <class Archive>
+  void
+  serialize (Archive &archive)
+  {
+    archive (event_type_id, system_type_id, handler_name);
+  }
 };
 
 /** Editor/debug database that mirrors declared signals and connections. */
@@ -434,7 +435,7 @@ struct event_hub
   entt::dispatcher *dispatcher = nullptr;
   event_debug_db *db = nullptr;
   std::function<entt::registry *()> resolve_active_registry;
-  std::function<void *(entt::id_type)> resolve_system_by_type;
+  std::function<::wsl::sys::ecs_system *(entt::id_type)> resolve_system_by_type;
 
   event_hub () = default;
 
@@ -843,7 +844,8 @@ struct event_hub
           continue;
         }
 
-        void *system = resolve_system_by_type (connection.system_type_id);
+        ::wsl::sys::ecs_system *system
+            = resolve_system_by_type (connection.system_type_id);
         if (system == nullptr) {
           continue;
         }
@@ -891,7 +893,8 @@ struct event_hub
 
       void *owner = connection.owner_ptr;
       if (owner == nullptr) {
-        void *system = resolve_system_by_type (connection.system_type_id);
+        ::wsl::sys::ecs_system *system
+            = resolve_system_by_type (connection.system_type_id);
         if (system == nullptr) {
           continue;
         }

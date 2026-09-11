@@ -33,7 +33,6 @@
 #include <optional>
 #include <span>
 #include "gfx/model_3d.hpp"
-#include "gfx/render_context.hpp"
 #include "rsc/cpu_model.hpp"
 
 #include <meshoptimizer.h>
@@ -303,8 +302,7 @@ model_loader::begin_upload (const raw::cpu_model &cpu,
                             const upload_options &options) const
 {
   upload_session session{ options };
-  session.gpu_model = new gfx::model_3d ();
-  session.gpu_model->meshes.resize (cpu.meshes.size ());
+  session.gpu_model.meshes.resize (cpu.meshes.size ());
 
   std::unordered_set<int> keep_meshes;
   if (options.lowest_lod_only) {
@@ -373,7 +371,7 @@ model_loader::upload_next_batch (upload_session &session,
     const auto &task = session.tasks[session.next_task];
     const auto &src_mesh = cpu.meshes[task.mesh_index];
     const auto &src_prim = src_mesh.primitives[task.prim_index];
-    auto &dst_mesh = session.gpu_model->meshes[task.mesh_index];
+    auto &dst_mesh = session.gpu_model.meshes[task.mesh_index];
 
     switch (task.kind) {
     case upload_task::type::primitive_begin: {
@@ -471,7 +469,7 @@ model_loader::is_upload_complete (const upload_session &session)
 gfx::model_3d
 model_loader::finish_upload (upload_session &session, const raw::cpu_model &cpu)
 {
-  auto &model = *session.gpu_model;
+  auto &model = session.gpu_model;
   const bool lowest_lod_only = session.options.lowest_lod_only;
 
   model.scenes.reserve (cpu.scenes.size ());
@@ -544,10 +542,7 @@ model_loader::finish_upload (upload_session &session, const raw::cpu_model &cpu)
 
   model.rebuild_scene_bounds ();
 
-  gfx::model_3d result = std::move (model);
-  delete session.gpu_model;
-  session.gpu_model = nullptr;
-  return result;
+  return std::move (model);
 }
 
 bool

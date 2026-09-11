@@ -1,7 +1,11 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <spdlog/spdlog.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
 
 namespace wsl::log
 {
@@ -16,6 +20,6 @@ std::shared_ptr<spdlog::logger> editor ();
 std::shared_ptr<spdlog::logger> cli ();
 std::shared_ptr<spdlog::logger> phys ();
 std::shared_ptr<spdlog::logger> net ();
-std::shared_ptr<spdlog::logger> cmake ();
+std::shared_ptr<spdlog::logger> xmake ();
 
 } // namespace wsl::log

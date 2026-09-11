@@ -1,48 +1,24 @@
 #pragma once
 
-#if defined(WSL_MODULE_BUILD)
-// Inside a C++20 module interface unit, component_meta.hpp is imported by the
-// module itself (e.g. wsl.math) at top level as a *header unit*; headers pulled
-// into a module purview must not contain `import` statements (they must be
-// contiguous at the TU top), so we intentionally do NOT include/import it here.
-// The module-level header-unit import makes wsl::comp reachable for this TU.
-#else
 #include "../comp/component_meta.hpp"
-#endif
 
-// When this header is compiled inside a C++20 module interface (wsl.math), the
-// 3rd-party dependencies below are consumed as *header units* (imported by the
-// module). They must NOT be included textually here, or the same types would be
-// declared both textually (global fragment) and as a module, which is illegal.
-// In the legacy header build they are included normally.
-#if !defined(WSL_MODULE_BUILD)
-
-// entt/entt.hpp has no include guard, so it is guarded separately below for the
-// same reason it is skipped in the module build.
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Jolt.h>
-#endif
-#if !defined(WSL_MODULE_BUILD)
-#include <Jolt/Math/Vec3.h>
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <glm/glm.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <glm/gtc/quaternion.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <imgui.h>
 #endif
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <imgui_internal.h>
-#endif
 #endif
 
 namespace wsl
@@ -153,9 +129,6 @@ struct vec3f
   {
   }
   vec3f (const glm::vec3 &v) : m_x (v.x), m_y (v.y), m_z (v.z) {}
-  vec3f (const JPH::Vec3 &v) : m_x (v.GetX ()), m_y (v.GetY ()), m_z (v.GetZ ())
-  {
-  }
 
   float
   x () const
@@ -189,7 +162,6 @@ struct vec3f
   }
 
   operator glm::vec3 () const { return glm::vec3{ m_x, m_y, m_z }; }
-  operator JPH::Vec3 () const { return JPH::Vec3{ m_x, m_y, m_z }; }
 
   bool
   operator== (const vec3f &other) const
@@ -565,7 +537,6 @@ struct quatf
 private:
   float m_x{ 0 }, m_y{ 0 }, m_z{ 0 }, m_w{ 1 };
 };
-
 } // namespace math
 
 } // namespace wsl

@@ -1,27 +1,28 @@
 #pragma once
 
-// Inside a C++20 module interface (WSL_MODULE_BUILD) these 3rd-party headers
-// are consumed as *header units* (imported by the module). They must NOT be
-// included textually here, or the same types would be declared both textually
-// (global fragment) and as a module, which is illegal. In the legacy header
-// build they are included normally.
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <cctype>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <concepts>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <optional>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string_view>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <utility>
 #endif
 

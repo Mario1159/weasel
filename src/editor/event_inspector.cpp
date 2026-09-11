@@ -1,6 +1,4 @@
 #include "event_inspector.hpp"
-#include "wsl/reg/registry_queries.hpp"
-#include "wsl/rsc/scene_manager.hpp"
 
 #include "editor/ecs_inspector_utils.hpp"
 #include "wsl/event/event_hub.hpp"

@@ -16,20 +16,20 @@
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/transform_2d.hpp"
 #include "wsl/comp/world_transform.hpp"
-#if !defined(WSL_MODULE_BUILD)
 #include "wsl/math/vector.hpp"
-#endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <daScript/misc/vectypes.h>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <daScript/simulate/runtime_matrices.h>
+#endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <type_traits>
 #endif
 
@@ -62,14 +62,12 @@ static_assert (sizeof (::wsl::math::quatf) == sizeof (::das::float4)
                    && std::is_trivially_copyable_v<::wsl::math::quatf>,
                "::wsl::math::quatf must be layout-identical to das::float4");
 
-#if !defined(WSL_MODULE_BUILD)
 namespace das
 {
 class Module;
 class ModuleLibrary;
 struct LineInfoArg;
 }
-#endif
 
 namespace wsl::das
 {

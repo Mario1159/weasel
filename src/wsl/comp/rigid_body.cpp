@@ -1,23 +1,10 @@
 #include "rigid_body.hpp"
 
-#include "../phys/utils.hpp"
 #include "comp/component_meta.hpp"
 #include "comp/singl/runtime_context.hpp"
 #include "phys/layers.hpp"
 #include "phys/physics_engine.hpp"
 
-#include <Jolt/Core/Reference.h>
-#include <Jolt/Math/Quat.h>
-#include <Jolt/Math/Real.h>
-#include <Jolt/Physics/Body/AllowedDOFs.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Body/BodyInterface.h>
-#include <Jolt/Physics/Collision/ObjectLayer.h>
-#include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Collision/Shape/Shape.h>
-#include <Jolt/Physics/Collision/Shape/SphereShape.h>
-
-#include <Jolt/Physics/EActivation.h>
 #include <cstdint>
 #include <cstdio>
 #include <entt/core/hashed_string.hpp>
@@ -286,7 +273,7 @@ rigid_body::sync_applied_cache ()
   applied_rotation = rotation;
 }
 
-JPH::ObjectLayer
+phys::object_layer
 rigid_body::object_layer () const
 {
   const phys::layers::motion_bucket motion
@@ -351,7 +338,7 @@ rigid_body::create_box_body (phys::engine &engine, const glm::vec3 &pos,
   rb.dynamic = dyn;
   rb.motion_type.value
       = dyn ? phys::motion_type::Dynamic : phys::motion_type::Static;
-  rb.allowed_dofs.value = JPH::EAllowedDOFs::All;
+  rb.allowed_dofs.value = phys::allowed_do_fs::All;
 
   rb.sync_applied_cache ();
   rb.applied_scale = math::vec3f{ 1, 1, 1 };
@@ -362,7 +349,7 @@ rigid_body::create_box_body (phys::engine &engine, const glm::vec3 &pos,
 rigid_body
 rigid_body::create_sphere_body (phys::engine &engine, const glm::vec3 &pos,
                                 float r, phys::motion_type motion,
-                                JPH::EAllowedDOFs dofs)
+                                phys::allowed_do_fs dofs)
 {
   rigid_body rb;
   rb.shape = shape_type::sphere;
@@ -383,12 +370,12 @@ rigid_body::create_sphere_body (phys::engine &engine, const glm::vec3 &pos,
 void
 rigid_body::destroy_body (phys::engine &engine)
 {
-  if (body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (body_id)) {
     return;
   }
 
   engine.on_remove_body (body_id);
-  body_id = phys::body_id{};
+  body_id = phys::null_body_id;
 }
 
 void
@@ -403,67 +390,42 @@ void
 rigid_body::create_body (phys::engine &engine, const glm::vec3 &world_pos,
                          const glm::quat &world_rot, const glm::vec3 &scale)
 {
-  if (!body_id.IsInvalid ()) {
+  if (phys::is_valid_body_id (body_id)) {
     destroy_body (engine);
   }
 
-  JPH::ShapeRefC shape_ref;
-
-  if (shape == shape_type::box) {
-    JPH::RefConst<JPH::ShapeSettings> const s = new JPH::BoxShapeSettings (
-        to_jolt (half_extents) * JPH::Vec3 (scale.x, scale.y, scale.z));
-    shape_ref = s->Create ().Get ();
-  } else {
-    // For spheres we use the average scale or just X
-    float const avg_scale = (scale.x + scale.y + scale.z) / 3.0F;
-    JPH::RefConst<JPH::ShapeSettings> const s
-        = new JPH::SphereShapeSettings (radius * avg_scale);
-    shape_ref = s->Create ().Get ();
-  }
-
   dynamic = (motion_type.value == phys::motion_type::Dynamic);
-
-  const JPH::RVec3 pos = to_jolt (world_pos);
-  const JPH::Quat rot = to_jolt (world_rot);
-
-  JPH::BodyCreationSettings settings (shape_ref, pos, rot, motion_type.value,
-                                      object_layer ());
-
-  settings.mAllowedDOFs = allowed_dofs.value;
-  settings.mFriction = friction;
-  settings.mRestitution = restitution;
-
-  // Derive mass from the configured density and the shape's volume. Jolt's
-  // default density is 1000, so scaling the shape's computed mass properties by
-  // (density / 1000) yields density * volume.
-  if (shape_ref) {
-    JPH::MassProperties mp = shape_ref->GetMassProperties ();
-    const float scaled_mass = mp.mMass * (density / default_density);
-    mp.ScaleToMass (scaled_mass);
-    settings.mOverrideMassProperties
-        = JPH::EOverrideMassProperties::MassAndInertiaProvided;
-    settings.mMassPropertiesOverride = mp;
-  } else {
-    settings.mOverrideMassProperties
-        = JPH::EOverrideMassProperties::CalculateMassAndInertia;
-  }
-
-  body_id = engine.get_body_interface ().CreateAndAddBody (
-      settings, JPH::EActivation::Activate);
+  phys::body_desc desc;
+  desc.motion = motion_type.value;
+  desc.allowed_dofs = allowed_dofs.value;
+  desc.layer = object_layer ();
+  desc.shape = shape == shape_type::box ? phys::shape_type::box
+                                        : phys::shape_type::sphere;
+  desc.position = { world_pos.x, world_pos.y, world_pos.z };
+  desc.rotation = { world_rot.x, world_rot.y, world_rot.z, world_rot.w };
+  desc.half_extents = { half_extents.x () * scale.x,
+                        half_extents.y () * scale.y,
+                        half_extents.z () * scale.z };
+  desc.radius = radius * ((scale.x + scale.y + scale.z) / 3.0F);
+  desc.density = density;
+  desc.friction = friction;
+  desc.restitution = restitution;
+  body_id = engine.create_body (desc);
 }
 
 void
 rigid_body::apply_transform_to_body (phys::engine &engine) const
 {
-  if (body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (body_id)) {
     return;
   }
 
-  auto &bi = engine.get_body_interface ();
-
   // Read current body world position/rotation
-  glm::vec3 const body_pos = to_glm (bi.GetPosition (body_id));
-  glm::quat const body_rot = to_glm (bi.GetRotation (body_id));
+  const phys::vector3 body = engine.get_body_position (body_id);
+  const phys::quaternion rotation_value = engine.get_body_rotation (body_id);
+  glm::vec3 const body_pos (body.x, body.y, body.z);
+  glm::quat const body_rot (rotation_value.w, rotation_value.x,
+                            rotation_value.y, rotation_value.z);
 
   // Undo old offset to recover the transform's world rotation
   glm::quat const old_off_rot = (glm::quat)applied_rotation;
@@ -476,22 +438,20 @@ rigid_body::apply_transform_to_body (phys::engine &engine) const
   glm::vec3 const new_body_pos = body_pos + xform_rot * offset_delta;
   glm::quat const new_body_rot = xform_rot * new_off_rot;
 
-  bi.SetPositionAndRotation (body_id, to_jolt (new_body_pos),
-                             to_jolt (new_body_rot),
-                             JPH::EActivation::Activate);
+  engine.set_body_transform (
+      body_id, { new_body_pos.x, new_body_pos.y, new_body_pos.z },
+      { new_body_rot.x, new_body_rot.y, new_body_rot.z, new_body_rot.w });
 }
 
 void
 rigid_body::apply_surface_properties_to_body (phys::engine &engine) const
 {
-  if (body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (body_id)) {
     return;
   }
 
-  auto &bi = engine.get_body_interface ();
-  bi.SetFriction (body_id, friction);
-  bi.SetRestitution (body_id, restitution);
-  bi.SetObjectLayer (body_id, object_layer ());
+  engine.set_body_surface_properties (body_id, friction, restitution,
+                                      object_layer ());
 }
 
 void
@@ -513,17 +473,20 @@ rigid_body::on_inspector_changed (comp::singl::runtime_context *runtime,
   const bool surface_change = has_surface_change ();
   const bool xform_change = has_transform_change ();
 
-  if (body_id.IsInvalid ()) {
+  if (!phys::is_valid_body_id (body_id)) {
     sync_applied_cache ();
     applied_scale = math::vec3f{ scale.x, scale.y, scale.z };
     return;
   }
 
   if (structural_change) {
-    // Read current body position from Jolt to preserve world placement
-    auto const &bi = engine->get_body_interface ();
-    glm::vec3 const current_pos = to_glm (bi.GetPosition (body_id));
-    glm::quat const current_rot = to_glm (bi.GetRotation (body_id));
+    // Read current body position from physics engine to preserve world placement
+    const phys::vector3 current = engine->get_body_position (body_id);
+    const phys::quaternion current_rotation
+        = engine->get_body_rotation (body_id);
+    glm::vec3 const current_pos (current.x, current.y, current.z);
+    glm::quat const current_rot (current_rotation.w, current_rotation.x,
+                                 current_rotation.y, current_rotation.z);
     rebuild_body (*engine, current_pos, current_rot, scale);
     applied_scale = math::vec3f{ scale.x, scale.y, scale.z };
   } else {
@@ -569,7 +532,7 @@ rigid_body::register_meta ()
   entt::meta_factory<comp::rigid_body> ()
       .type (entt::type_hash<comp::rigid_body>::value ())
       .custom<comp::meta_info> (
-          meta_info{ "Rigid Body", "Physics body simulated by Jolt",
+          meta_info{ "Rigid Body", "Physics body simulated by Box3D",
                      "engine://icons/comp_rigidbody.svg" })
       .func<&comp::rigid_body::on_inspector_changed> ("on_inspector_changed"_hs)
 
@@ -612,7 +575,7 @@ rigid_body::register_meta ()
 
       .data<&comp::rigid_body::motion_type> ("motion_type"_hs)
       .custom<comp::meta_info> (
-          meta_info{ "Motion Type", "Jolt motion type", "" })
+          meta_info{ "Motion Type", "Physics motion type", "" })
 
       .data<&comp::rigid_body::allowed_dofs> ("allowed_dofs"_hs)
       .custom<comp::meta_info> (

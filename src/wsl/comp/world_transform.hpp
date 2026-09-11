@@ -1,11 +1,9 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
 #include "../math/matrix.hpp"
-#endif
 
 #include "component_meta.hpp"
 
@@ -41,7 +39,6 @@ public:
                        comp::singl::runtime_context *runtime);
 
   static void register_meta ();
-
 };
 
 } // namespace comp

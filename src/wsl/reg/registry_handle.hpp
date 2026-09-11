@@ -1,12 +1,10 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entity/fwd.hpp>
 #endif
-#if !defined(WSL_MODULE_BUILD)
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
-#endif
 #endif
 
 namespace wsl

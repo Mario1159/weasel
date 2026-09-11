@@ -1,19 +1,23 @@
 #pragma once
 
-namespace wsl
-{
-namespace gfx
-{
-class image;
-}
-} // namespace wsl
+#include "../gfx/image.hpp"
 
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_gpu.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL_surface.h>
+#endif
 #include <SDL3_image/SDL_image.h>
+#ifndef IN_MODULE_INTERFACE
 #include <entt/resource/loader.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
 
 namespace wsl
 {

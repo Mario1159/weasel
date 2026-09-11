@@ -1,5 +1,6 @@
 #include "das_system_adapter.hpp"
 #include "das_engine.hpp"
+#if WEASEL_HAS_DASLANG
 #include "wsl_api_module.hpp"
 #include "../log/log.hpp"
 #include "../comp/singl/runtime_context.hpp"
@@ -76,12 +77,12 @@ safe_invoke (Context *ctx, const char *method_name,
       if (ctx->exceptionAt.fileInfo) {
         file = ctx->exceptionAt.fileInfo->name;
       }
-      wsl::log::cmake ()->error (
+      wsl::log::xmake ()->error (
           "das_system_adapter::{} failed in '{}': {} (at {}:{})", method_name,
           script_path, ex, file, line);
       ctx->clearException ();
     } else {
-      wsl::log::cmake ()->error (
+      wsl::log::xmake ()->error (
           "das_system_adapter::{} SEGFAULT in '{}' — possible null "
           "dereference or invalid pointer in daslang script",
           method_name, script_path);
@@ -102,7 +103,7 @@ safe_invoke (Context *ctx, const char *method_name,
     if (ctx->exceptionAt.fileInfo) {
       file = ctx->exceptionAt.fileInfo->name;
     }
-    wsl::log::cmake ()->error (
+    wsl::log::xmake ()->error (
         "das_system_adapter::{} failed in '{}': {} (at {}:{})", method_name,
         script_path, ex, file, line);
     ctx->clearException ();
@@ -356,3 +357,66 @@ das_system_adapter::invoke_event_handler (std::size_t index,
 }
 
 } // namespace wsl::das
+#else
+namespace wsl::das
+{
+das_system_adapter::das_system_adapter (const std::string &name,
+                                        const std::string &, das_engine &engine,
+                                        entt::id_type type_id, void *class_ptr,
+                                        const ::das::StructInfo *class_info,
+                                        ::das::Context *ctx)
+    : sys::ecs_system (name), m_engine (engine), m_type_id (type_id),
+      m_class_ptr (class_ptr), m_class_info (class_info), m_ctx (ctx)
+{
+}
+entt::id_type
+das_system_adapter::get_type_id () const
+{
+  return m_type_id;
+}
+const char *
+das_system_adapter::get_type_name () const
+{
+  return "das_system";
+}
+void
+das_system_adapter::on_init (entt::registry &)
+{
+}
+void
+das_system_adapter::on_update (entt::registry &, double)
+{
+}
+void
+das_system_adapter::on_inactive (entt::registry &)
+{
+}
+void
+das_system_adapter::register_event_sources (event::event_hub &)
+{
+}
+void
+das_system_adapter::register_event_sinks (event::event_hub &)
+{
+}
+bool
+das_system_adapter::has_method (const char *) const
+{
+  return false;
+}
+das_system_adapter *
+das_system_adapter::current ()
+{
+  return nullptr;
+}
+void
+das_system_adapter::sink_thunk (void *, entt::registry &, const void *)
+{
+}
+void
+das_system_adapter::invoke_event_handler (std::size_t, entt::registry &,
+                                          const void *)
+{
+}
+} // namespace wsl::das
+#endif

@@ -9,7 +9,6 @@
 // (SV_Target0 scene, SV_Target1 bloom).
 
 #include "render_window.hpp"
-#include "gfx/cubemap.hpp"
 #ifdef WEASEL_ENABLE_RENDERDOC
 #include "renderdoc.hpp"
 #endif

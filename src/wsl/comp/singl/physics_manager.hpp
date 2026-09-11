@@ -1,15 +1,15 @@
 #pragma once
 
-#if !defined(WSL_MODULE_BUILD)
 #include "../../phys/physics_engine.hpp"
-#endif
 #include "../component_meta.hpp"
 
-#if !defined(WSL_MODULE_BUILD)
+#ifndef IN_MODULE_INTERFACE
 #include <algorithm>
 #endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
-#if !defined(WSL_MODULE_BUILD)
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
 #endif
 
@@ -37,13 +37,6 @@ struct physics_manager : singleton_component
     fixed_timestep = std::max (fixed_timestep, 1.0e-4F);
     max_frame_time = std::max (max_frame_time, fixed_timestep);
     max_substeps = std::max (max_substeps, 1);
-  }
-
-  /** Re-clamps settings after deserialization (see registry load). */
-  void
-  post_load ()
-  {
-    sanitize_settings ();
   }
 
   void

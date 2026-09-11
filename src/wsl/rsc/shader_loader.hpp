@@ -1,9 +1,17 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <vector>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <string>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
+#endif
 
 namespace wsl::gfx {
     /** Represents a compiled shader module containing its bytecode. */

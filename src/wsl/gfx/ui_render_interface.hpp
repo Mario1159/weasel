@@ -1,11 +1,18 @@
 #pragma once
 
+#ifndef IN_MODULE_INTERFACE
 #include <RmlUi/Core/RenderInterface.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <SDL3/SDL.h>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <unordered_map>
+#endif
 
 #include "render_context.hpp"
 #include "wsl/gfx/render_window.hpp"
+
 
 namespace rsc { class resource_manager; }
 
