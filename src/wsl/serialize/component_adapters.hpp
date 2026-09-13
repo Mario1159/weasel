@@ -54,6 +54,9 @@
 namespace wsl::serialize
 {
 
+/** Sentinel value used to represent entt::null in serialized form. */
+inline constexpr std::uint32_t serialized_null_entity = 0xFFFFFFFF;
+
 // =============================================================================
 // transform
 // =============================================================================
@@ -97,9 +100,9 @@ struct HierarchyHelper
   to_class () const
   {
     comp::hierarchy h;
-    h.parent = (parent == 0xFFFFFFFF) ? entt::null : entt::entity{ parent };
-    h.first = (first == 0xFFFFFFFF) ? entt::null : entt::entity{ first };
-    h.next = (next == 0xFFFFFFFF) ? entt::null : entt::entity{ next };
+    h.parent = (parent == serialized_null_entity) ? entt::null : entt::entity{ parent };
+    h.first = (first == serialized_null_entity) ? entt::null : entt::entity{ first };
+    h.next = (next == serialized_null_entity) ? entt::null : entt::entity{ next };
     return h;
   }
 };
@@ -291,7 +294,7 @@ struct PrefabInstanceHelper
   {
     return { p.prefab_id.value,
              (p.prefab_entity == entt::null)
-                 ? 0xFFFFFFFF
+                 ? serialized_null_entity
                  : static_cast<std::uint32_t> (p.prefab_entity) };
   }
 
@@ -300,7 +303,7 @@ struct PrefabInstanceHelper
   {
     comp::prefab_instance p;
     p.prefab_id.value = prefab_id_value;
-    p.prefab_entity = (prefab_entity == 0xFFFFFFFF)
+    p.prefab_entity = (prefab_entity == serialized_null_entity)
                           ? entt::null
                           : entt::entity{ prefab_entity };
     return p;
@@ -584,7 +587,7 @@ struct SubviewportCameraUIHelper
   static SubviewportCameraUIHelper
   from_class (const comp::subviewport_camera_ui &c)
   {
-    return { (c.value == entt::null) ? 0xFFFFFFFF
+    return { (c.value == entt::null) ? serialized_null_entity
                                      : static_cast<std::uint32_t> (c.value),
              c.filter_2d };
   }
@@ -593,7 +596,7 @@ struct SubviewportCameraUIHelper
   to_class () const
   {
     comp::subviewport_camera_ui c;
-    c.value = (value == 0xFFFFFFFF) ? entt::null : entt::entity{ value };
+    c.value = (value == serialized_null_entity) ? entt::null : entt::entity{ value };
     c.filter_2d = filter_2d;
     return c;
   }
@@ -875,7 +878,7 @@ struct RenderingManagerHelper
     h.shadow_strength = r.shadow_strength;
     h.viewports = r.viewports;
     h.render_viewport = (r.render_viewport == entt::null)
-                            ? 0xFFFFFFFFu
+                            ? serialized_null_entity
                             : static_cast<std::uint32_t> (
                                   entt::to_integral (r.render_viewport));
     h.root_viewport_virtual_size = r.root_viewport_virtual_size;
@@ -910,7 +913,7 @@ struct RenderingManagerHelper
     r.shadow_bias = shadow_bias;
     r.shadow_strength = shadow_strength;
     r.viewports = viewports;
-    r.render_viewport = (render_viewport == 0xFFFFFFFFu)
+    r.render_viewport = (render_viewport == serialized_null_entity)
                             ? entt::null
                             : entt::entity{ render_viewport };
     r.root_viewport_virtual_size = root_viewport_virtual_size;

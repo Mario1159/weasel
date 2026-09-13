@@ -21,8 +21,8 @@
 #include "spot_light.hpp"
 #include "transform.hpp"
 #include "world_transform.hpp"
-#include "../rsc/resource_manager.hpp"
-#include "../rsc/scene_manager.hpp"
+#include "wsl/rsc/resource_manager.hpp"
+#include "wsl/rsc/scene_manager.hpp"
 
 namespace wsl
 {

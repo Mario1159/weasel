@@ -547,7 +547,7 @@ target("wsl")
     add_cxxflags("-Wall", "-Wextra", "-Wpedantic", "-rdynamic", {force = true})
 
     -- packages — core deps (slang/gns/daslang conditional)
-    add_packages("entt", "glm", "spdlog", "fmt", "cereal", "reflect-cpp", "box3d", "rmlui", "fastgltf", "meshoptimizer", "simdjson", "libsdl3", "libsdl3_image", "libsdl3_mixer", "tracy", "imgui", "imguizmo", "stb", "nlohmann_json", "libarchive", "libcurl", {public = false})
+    add_packages("entt", "glm", "spdlog", "fmt", "reflect-cpp", "box3d", "rmlui", "fastgltf", "meshoptimizer", "simdjson", "libsdl3", "libsdl3_image", "libsdl3_mixer", "tracy", "imgui", "imguizmo", "stb", "nlohmann_json", "libarchive", "libcurl", {public = false})
     add_defines("REFLECT_CPP_C_ARRAYS_OR_INHERITANCE", {public = true})
     if has_config("with_slang") then add_packages("slang") end
     -- Public packages exported to downstream targets (editor, cli, mcp-server, tests)
@@ -572,11 +572,6 @@ target("wsl")
     add_packages("stb", {public = true})
     add_packages("nlohmann_json", {public = true})
     add_packages("imguizmo", {public = true})
-    add_packages("libsdl3_image", {public = true})
-    add_packages("libsdl3_mixer", {public = true})
-    add_packages("simdjson", {public = true})
-    add_packages("libarchive", {public = true})
-    add_packages("libcurl", {public = true})
 
     if is_config("weasel_enable_multiplayer", true) then
         add_packages("gamenetworkingsockets", {optional = true})
@@ -594,8 +589,6 @@ target("wsl")
     -- (WEASEL_DASLANG_ROOT env var, then the newest xmake package install).
     -- Target hooks (on_load/after_load/on_config) proved unreliable across
     -- xmake runs for injecting the package installdir as a define.
-
-    -- editor UI helpers that wsl links (mirrors CMake wsl target) — optional
 
     -- editor UI helpers that wsl links (mirrors CMake wsl target) — optional
     add_packages("imguitextselect", {optional = true})
@@ -799,6 +792,27 @@ target("compile_shaders")
             end
         end
         print("compile_shaders: done (" .. #shaders .. " shaders processed)")
+    end)
+
+-- ---------------------------------------------------------------------------
+-- docs — sphinx + hawkmoth + das_api_gen (mirrors the old CMake docs target)
+-- ---------------------------------------------------------------------------
+target("docs")
+    set_kind("phony")
+    on_build(function (target)
+        import("lib.detect.find_tool")
+        local projectdir = os.projectdir()
+        local py = find_tool("python3") and "python3" or "python"
+        os.execv(py, {
+            path.join(projectdir, "doc/source/das_api_gen.py"),
+            "--source", path.join(projectdir, "src"),
+            "--output", path.join(projectdir, "doc/source/stdlib")
+        })
+        os.execv("sphinx-build", {
+            "--keep-going", "-b", "html",
+            path.join(projectdir, "doc/source"),
+            path.join(projectdir, "build/docs")
+        })
     end)
 
 -- ---------------------------------------------------------------------------

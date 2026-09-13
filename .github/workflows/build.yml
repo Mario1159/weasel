@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [main, master, dev]
 
-env:
-  # Enable vcpkg binary caching via GitHub Actions cache
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-
 jobs:
   build:
     strategy:
@@ -31,198 +27,81 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup xmake
+        uses: xmake-io/xmake-action@v1
+        with:
+          xmake-version: latest
+
+      - name: Cache xmake packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.xmake
+          key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua') }}
+          restore-keys: |
+            ${{ runner.os }}-xmake-
+
       - name: Install dependencies (Linux)
         if: matrix.name == 'linux'
         run: |
           pacman -Syu --noconfirm
           pacman -S --noconfirm \
-            base-devel git cmake ninja \
-            sdl3 libarchive glm pkgconf \
+            base-devel git clang cmake ninja python nodejs pkgconf \
             libx11 libxext libxrandr libxcursor libxfixes libxi libxss libxtst libxinerama libxkbcommon libxrender \
+            alsa-lib libpulse mesa \
             opus opusfile libvorbis flac libgme mpg123 fluidsynth wavpack \
             brotli zlib freetype2 openssl protobuf libsodium \
             libavif libtiff libwebp libpng libjpeg-turbo \
-            abseil-cpp re2 gtest nlohmann-json boost \
-            llvm clang python nodejs
-
-      - name: Configure (Linux)
-        if: matrix.name == 'linux'
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DLLVM20_PREFIX=/usr \
-            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-            -G Ninja
+            abseil-cpp re2 nlohmann-json boost
 
       - name: Install dependencies (Windows)
         if: matrix.name == 'windows'
         run: |
-          choco install llvm python nodejs nsis ninja
-          vcpkg install sdl3 libarchive glm pkgconf openssl protobuf libsodium boost freetype curl directx-dxc --triplet x64-windows
-          Add-Content -Path $env:GITHUB_PATH -Value "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\msys64\mingw64\bin"
-
-      - name: Find dumpbin (Windows)
-        if: matrix.name == 'windows'
-        shell: powershell
-        run: |
-          $dumpbin = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\2022", "C:\Program Files (x86)\Microsoft Visual Studio\2022", "C:\Program Files (x86)\Microsoft Visual Studio\2019" -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-Not $dumpbin) {
-            $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-            $dumpbin = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
-          if (-Not $dumpbin) {
-            Write-Error "dumpbin.exe not found"
-            exit 1
-          }
-          Add-Content -Path $env:GITHUB_PATH -Value $dumpbin.DirectoryName
-          Write-Host "Found dumpbin at $($dumpbin.FullName)"
+          choco install llvm python nodejs ninja cmake -y
 
       - name: Setup MSVC dev environment (Windows)
         if: matrix.name == 'windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Configure (Windows)
-        if: matrix.name == 'windows'
-        run: |
-          cmake -B build `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows `
-            -DVCPKG_HOST_TRIPLET=x64-windows `
-            -DLLVM20_PREFIX="C:\Program Files\LLVM" `
-            -DCMAKE_C_COMPILER="C:/Program Files/LLVM/bin/clang.exe" `
-            -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang++.exe" `
-            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} `
-            -G Ninja
-
       - name: Install dependencies (macOS)
         if: matrix.name == 'macos'
         run: |
           brew update
-          brew install sdl3 libarchive glm pkg-config \
-            opus opusfile libvorbis flac game-music-emu mpg123 fluid-synth wavpack \
-            jpeg-turbo libpng libtiff webp libavif \
-            brotli zlib freetype openssl protobuf libsodium \
-            abseil re2 googletest nlohmann-json boost \
-            cmake ninja llvm python node
-          echo "CMAKE_PREFIX_PATH=$(brew --prefix libarchive)" >> $GITHUB_ENV
+          brew install llvm python node cmake ninja pkg-config
 
-      - name: Configure (macOS)
-        if: matrix.name == 'macos'
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH;$(brew --prefix)" \
-            -DLLVM20_PREFIX="$(brew --prefix llvm)" \
-            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-            -G Ninja
+      - name: Configure
+        run: xmake f -y --toolchain=clang
+        # Shaders are compiled with slangc (--with_slang=y). Left disabled to
+        # keep CI lean; set it here if compiled_shaders must ship in artifacts.
 
-      - name: Stage DXC for Slang (Windows)
-        if: matrix.name == 'windows'
-        shell: powershell
-        run: |
-          $dxcDir = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\tools\directx-dxc"
-          $files = @("dxc.exe", "dxcompiler.dll", "dxil.dll")
-          # Verify source files exist
-          foreach ($f in $files) {
-            $src = "$dxcDir\$f"
-            if (-Not (Test-Path $src)) { Write-Error "Missing: $src"; exit 1 }
-          }
-          # Copy next to every slangc.exe (prebuilt and built)
-          $slangBins = Get-ChildItem -Recurse -Filter "slangc.exe" build
-          $destDirs = @()
-          foreach ($bin in $slangBins) {
-            $destDirs += Split-Path $bin.FullName
-          }
-          $destDirs += "build\bin"
-          foreach ($dir in $destDirs | Select-Object -Unique) {
-            New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            foreach ($f in $files) {
-              Copy-Item "$dxcDir\$f" "$dir\" -Force
-            }
-            Write-Host "=== $dir ==="
-            Get-ChildItem $dir | Where-Object { $_.Name -match '^(dxc|dxcompiler|dxil)' } | Format-Table Name
-          }
+      - name: Build
+        run: xmake build -j4
 
-      - name: Build (Linux / macOS)
+      - name: Test
+        run: xmake run -g tests
+
+      - name: Collect artifacts (Linux / macOS)
         if: matrix.name != 'windows'
-        run: cmake --build build
-
-      - name: Build (Windows)
-        if: matrix.name == 'windows'
-        run: cmake --build build
-
-      - name: Collect artifacts (Linux)
-        if: matrix.name == 'linux'
         shell: bash
         run: |
           mkdir -p artifacts/bin artifacts/lib artifacts/share/weasel
-          cp build/weasel build/weasel-cli artifacts/bin/
-          cp build/libwsl.so artifacts/lib/
-          cp -r build/compiled_shaders artifacts/share/weasel/
-          cp -r build/otf artifacts/share/weasel/
-          cp -r build/icons artifacts/share/weasel/
+          cp build/*/*/release/weasel build/*/*/release/weasel-cli build/*/*/release/weasel-mcp-server artifacts/bin/
+          cp build/*/*/release/libwsl.a artifacts/lib/
+          cp -r build/otf build/icons artifacts/share/weasel/ 2>/dev/null || true
+          cp -r build/compiled_shaders artifacts/share/weasel/ 2>/dev/null || true
           cp packaging/linux/Makefile artifacts/
-
-      - name: Collect artifacts (macOS)
-        if: matrix.name == 'macos'
-        shell: bash
-        run: |
-          mkdir -p artifacts/bin artifacts/lib
-          cp build/weasel build/weasel-cli artifacts/bin/
-          cp build/libwsl.dylib artifacts/lib/ 2>/dev/null || true
-          cp -L build/*.dylib artifacts/lib/ 2>/dev/null || true
-          cp -r build/compiled_shaders build/otf build/icons artifacts/ 2>/dev/null || true
 
       - name: Collect artifacts (Windows)
         if: matrix.name == 'windows'
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts\bin, artifacts\lib | Out-Null
-          Copy-Item build\weasel.exe artifacts\bin\ -ErrorAction SilentlyContinue
-          Copy-Item build\weasel-cli.exe artifacts\bin\ -ErrorAction SilentlyContinue
-          Copy-Item build\wsl.dll artifacts\lib\ -ErrorAction SilentlyContinue
-          Copy-Item build\*.dll artifacts\lib\ -ErrorAction SilentlyContinue
-          Copy-Item -Recurse -Force build\compiled_shaders, build\otf, build\icons artifacts\ -ErrorAction SilentlyContinue
-
-      - name: Package (Linux / macOS / Windows)
-        if: matrix.name != 'windows'
-        shell: bash
-        run: cd build && cpack
-
-      - name: Package (Windows)
-        if: matrix.name == 'windows'
-        shell: powershell
-        run: |
-          cd build
-          cpack -G ZIP
-          cpack -G NSIS
-
-      - name: Collect packages
-        if: matrix.name != 'windows'
         shell: bash
         run: |
-          mkdir -p packages
-          cp build/*.tar.gz build/*.deb build/*.rpm build/*.pkg build/*.dmg packages/ 2>/dev/null || true
-
-      - name: Collect packages (Windows)
-        if: matrix.name == 'windows'
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path packages | Out-Null
-          Copy-Item build\*.exe packages\ -ErrorAction SilentlyContinue
-          Copy-Item build\*.zip packages\ -ErrorAction SilentlyContinue
+          mkdir -p artifacts/bin artifacts/lib artifacts/share/weasel
+          cp build/*/*/release/weasel.exe build/*/*/release/weasel-cli.exe build/*/*/release/weasel-mcp-server.exe artifacts/bin/
+          cp build/*/*/release/libwsl.a artifacts/lib/
+          cp -r build/otf build/icons artifacts/share/weasel/ 2>/dev/null || true
+          cp -r build/compiled_shaders artifacts/share/weasel/ 2>/dev/null || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: weasel-release-${{ matrix.name }}
           path: artifacts/**
-
-      - name: Upload packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: weasel-packages-${{ matrix.name }}
-          path: packages/**

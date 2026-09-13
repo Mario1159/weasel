@@ -386,7 +386,7 @@ public:
   void update_async_uploads ();
 
   /** Register a model path and return its id without loading. */
-  model_id register_model (const std::string &path);
+  [[nodiscard]] model_id register_model (const std::string &path);
 
   /**
    * Import a model into the project and optionally request loading.
@@ -394,14 +394,14 @@ public:
    * :param request_load: If true, start asynchronous loading immediately.
    * :return: The assigned model id.
    */
-  model_id import_model (const std::string &path, bool request_load = true);
+  [[nodiscard]] model_id import_model (const std::string &path, bool request_load = true);
 
   /**
    * Load a model resource handle (may start loading if not ready).
    * :param id: Model id to load.
    * :return: A handle to the model resource.
    */
-  model_handle load (model_id id);
+  [[nodiscard]] model_handle load (model_id id);
 
   /** Load a resource given a generic resource_ref. */
   void load (io::resource_ref ref);
@@ -420,22 +420,22 @@ public:
    * :return: An entt::resource handle; if the resource is not loaded the
    *         returned handle may be empty or trigger a load when accessed.
    */
-  model_handle get (model_id id);
+  [[nodiscard]] model_handle get (model_id id);
 
   /** Query the current loading state of a model id. */
-  model_state state (model_id id) const;
+  [[nodiscard]] model_state state (model_id id) const;
 
   /** Check whether the manager knows about the given model id. */
-  bool contains (model_id id) const;
+  [[nodiscard]] bool contains (model_id id) const;
 
   /** Find a registered model id by the original path if present. */
-  std::optional<model_id> find_model_by_path (const std::string &path) const;
+  [[nodiscard]] std::optional<model_id> find_model_by_path (const std::string &path) const;
 
   /** Retrieve metadata about a registered model id. */
-  std::optional<model_resource_info> info (model_id id) const;
+  [[nodiscard]] std::optional<model_resource_info> info (model_id id) const;
 
   /** List metadata for all known models. */
-  std::vector<model_resource_info> list_models () const;
+  [[nodiscard]] std::vector<model_resource_info> list_models () const;
 
   /**
    * Load a preview model optimized to the lowest LOD for quick display.
@@ -459,112 +459,112 @@ public:
   bool is_preview_owned (model_id id) const;
 
   /** Register an image asset path without loading. */
-  image_id register_image (const std::string &path);
+  [[nodiscard]] image_id register_image (const std::string &path);
 
   /**
    * Import an image into the project and optionally request loading.
    * :param path: Path to the image file.
    * :param request_load: If true, start loading immediately.
    */
-  image_id import_image (const std::string &path, bool request_load = true);
+  [[nodiscard]] image_id import_image (const std::string &path, bool request_load = true);
 
   /** Load an image handle for use by the renderer. */
-  image_handle load (image_id id);
+  [[nodiscard]] image_handle load (image_id id);
 
   /** Unload the image resource referenced by id. */
   void unload (image_id id);
 
   /** Get an image handle for the given id. */
-  image_handle get (image_id id);
+  [[nodiscard]] image_handle get (image_id id);
 
   /** Query the loading state of an image id. */
-  image_state state (image_id id) const;
+  [[nodiscard]] image_state state (image_id id) const;
 
   /** Check if an image id is known to the manager. */
-  bool contains (image_id id) const;
+  [[nodiscard]] bool contains (image_id id) const;
 
   /** Retrieve metadata for an image id. */
-  std::optional<image_resource_info> info (image_id id) const;
+  [[nodiscard]] std::optional<image_resource_info> info (image_id id) const;
 
   /** List all registered images and their metadata. */
-  std::vector<image_resource_info> list_images () const;
+  [[nodiscard]] std::vector<image_resource_info> list_images () const;
 
   /** Register a cubemap asset path. */
-  cubemap_id register_cubemap (const std::string &path);
+  [[nodiscard]] cubemap_id register_cubemap (const std::string &path);
 
   /** Import a cubemap and optionally request loading. */
-  cubemap_id import_cubemap (const std::string &path, bool request_load = true);
+  [[nodiscard]] cubemap_id import_cubemap (const std::string &path, bool request_load = true);
 
   /** Load a cubemap handle for rendering. */
-  cubemap_handle load (cubemap_id id);
+  [[nodiscard]] cubemap_handle load (cubemap_id id);
 
   /** Unload a cubemap by id. */
   void unload (cubemap_id id);
 
   /** Get a cubemap handle for the given id. */
-  cubemap_handle get (cubemap_id id);
+  [[nodiscard]] cubemap_handle get (cubemap_id id);
 
   /** Query the load state of a cubemap id. */
-  cubemap_state state (cubemap_id id) const;
+  [[nodiscard]] cubemap_state state (cubemap_id id) const;
 
   /** Check presence of cubemap id in manager. */
-  bool contains (cubemap_id id) const;
+  [[nodiscard]] bool contains (cubemap_id id) const;
 
   /** Get metadata for a cubemap id. */
-  std::optional<cubemap_resource_info> info (cubemap_id id) const;
+  [[nodiscard]] std::optional<cubemap_resource_info> info (cubemap_id id) const;
 
   /** List all registered cubemaps. */
-  std::vector<cubemap_resource_info> list_cubemaps () const;
+  [[nodiscard]] std::vector<cubemap_resource_info> list_cubemaps () const;
 
   /** Register a scene asset path. */
-  scene_id register_scene (const std::string &path);
+  [[nodiscard]] scene_id register_scene (const std::string &path);
 
   /**
    * Import a scene (or prefab) and optionally start loading.
    * :param path: Filesystem path to the scene or prefab.
    * :param request_load: Start asynchronous load if true.
    */
-  scene_id import_scene (const std::string &path, bool request_load = true);
+  [[nodiscard]] scene_id import_scene (const std::string &path, bool request_load = true);
 
   /** Load a scene resource handle. */
-  scene_handle load (scene_id id);
+  [[nodiscard]] scene_handle load (scene_id id);
 
   /** Unload a scene resource. */
   void unload (scene_id id);
 
   /** Get a scene resource handle for the given id. */
-  scene_handle get (scene_id id);
+  [[nodiscard]] scene_handle get (scene_id id);
 
   /**
    * Return a raw pointer to a loaded scene instance or nullptr if not
    * loaded. The returned pointer is non-owning and valid until the scene is
    * unloaded.
    */
-  scene *find_loaded_scene (scene_id id) const;
+  [[nodiscard]] scene *find_loaded_scene (scene_id id) const;
 
   /**
    * Activate the scene with the provided id as the active scene.
    * :return: True if activation succeeded.
    */
-  bool activate_scene (scene_id id);
+  [[nodiscard]] bool activate_scene (scene_id id);
 
   /** Instantiate a prefab scene under the optional parent entity.
    *  :return: The root entity of the first instantiated copy, or entt::null on
    * failure. */
-  entt::entity instantiate_prefab (scene_id id,
+  [[nodiscard]] entt::entity instantiate_prefab (scene_id id,
                                    entt::entity parent = entt::null);
 
   /** Query the loading state of a scene id. */
-  scene_state state (scene_id id) const;
+  [[nodiscard]] scene_state state (scene_id id) const;
 
   /** Check whether the manager knows about the provided scene id. */
-  bool contains (scene_id id) const;
+  [[nodiscard]] bool contains (scene_id id) const;
 
   /** Retrieve metadata for a scene id. */
-  std::optional<scene_resource_info> info (scene_id id) const;
+  [[nodiscard]] std::optional<scene_resource_info> info (scene_id id) const;
 
   /** List metadata for all registered scenes. */
-  std::vector<scene_resource_info> list_scenes () const;
+  [[nodiscard]] std::vector<scene_resource_info> list_scenes () const;
 
   /**
    * Save a scene to disk.
@@ -578,129 +578,129 @@ public:
                    bool is_prefab = false);
 
   /** Register an audio asset path. */
-  audio_id register_audio (const std::string &path);
+  [[nodiscard]] audio_id register_audio (const std::string &path);
 
   /** Import audio and optionally request loading. */
-  audio_id import_audio (const std::string &path, bool request_load = true);
+  [[nodiscard]] audio_id import_audio (const std::string &path, bool request_load = true);
 
   /**
    * Load audio and return a raw MIX_Audio pointer owned by the mixer.
    * The pointer is non-owning; do not free it manually.
    */
-  MIX_Audio *load (audio_id id);
+  [[nodiscard]] MIX_Audio *load (audio_id id);
 
   /** Unload an audio asset by id. */
   void unload (audio_id id);
 
   /** Get the raw MIX_Audio pointer for the given id. */
-  MIX_Audio *get (audio_id id);
+  [[nodiscard]] MIX_Audio *get (audio_id id);
 
   /** Query the state of an audio id. */
-  audio_state state (audio_id id) const;
+  [[nodiscard]] audio_state state (audio_id id) const;
 
   /** Check presence of audio id. */
-  bool contains (audio_id id) const;
+  [[nodiscard]] bool contains (audio_id id) const;
 
   /** Get metadata for an audio id. */
-  std::optional<audio_resource_info> info (audio_id id) const;
+  [[nodiscard]] std::optional<audio_resource_info> info (audio_id id) const;
 
   /** List all registered audio assets. */
-  std::vector<audio_resource_info> list_audio () const;
+  [[nodiscard]] std::vector<audio_resource_info> list_audio () const;
 
   /** Register a UI layout asset path. */
-  ui_layout_id register_ui_layout (const std::string &path);
+  [[nodiscard]] ui_layout_id register_ui_layout (const std::string &path);
 
   /** Get metadata for a UI layout id. */
-  std::optional<ui_layout_resource_info> info (ui_layout_id id) const;
+  [[nodiscard]] std::optional<ui_layout_resource_info> info (ui_layout_id id) const;
 
   /** List all registered UI layouts. */
-  std::vector<ui_layout_resource_info> list_ui_layouts () const;
+  [[nodiscard]] std::vector<ui_layout_resource_info> list_ui_layouts () const;
 
   /** Register a font asset path. */
-  font_id register_font (const std::string &path);
+  [[nodiscard]] font_id register_font (const std::string &path);
 
   /** Get metadata for a font id. */
-  std::optional<font_resource_info> info (font_id id) const;
+  [[nodiscard]] std::optional<font_resource_info> info (font_id id) const;
 
   /** List all registered fonts. */
-  std::vector<font_resource_info> list_fonts () const;
+  [[nodiscard]] std::vector<font_resource_info> list_fonts () const;
 
   /** Register a shader asset path. */
-  shader_id register_shader (const std::string &path);
+  [[nodiscard]] shader_id register_shader (const std::string &path);
 
   /** Load a shader module handle for the given id. */
-  shader_handle load (shader_id id);
+  [[nodiscard]] shader_handle load (shader_id id);
 
   /** Unload a shader module. */
   void unload (shader_id id);
 
   /** Get a shader handle for the given id. */
-  shader_handle get (shader_id id);
+  [[nodiscard]] shader_handle get (shader_id id);
 
   /** Query shader loading state. */
-  shader_state state (shader_id id) const;
+  [[nodiscard]] shader_state state (shader_id id) const;
 
   /** Check whether a shader id is registered. */
-  bool contains (shader_id id) const;
+  [[nodiscard]] bool contains (shader_id id) const;
 
   /** Get metadata for a shader id. */
-  std::optional<shader_resource_info> info (shader_id id) const;
+  [[nodiscard]] std::optional<shader_resource_info> info (shader_id id) const;
 
   /** List all registered shaders and metadata. */
-  std::vector<shader_resource_info> list_shaders () const;
+  [[nodiscard]] std::vector<shader_resource_info> list_shaders () const;
 
   // ---- Materials ----
   /** Register a material asset path. */
-  material_id register_material (const std::string &path);
+  [[nodiscard]] material_id register_material (const std::string &path);
 
   /** Import a material asset and optionally request loading. */
-  material_id import_material (const std::string &path,
+  [[nodiscard]] material_id import_material (const std::string &path,
                                bool request_load = true);
 
   /** Load a material handle for the given id. */
-  material_handle load (material_id id);
+  [[nodiscard]] material_handle load (material_id id);
 
   /** Unload a material asset. */
   void unload (material_id id);
 
   /** Get a material handle for the given id. */
-  material_handle get (material_id id);
+  [[nodiscard]] material_handle get (material_id id);
 
   /** Query material loading state. */
-  material_state state (material_id id) const;
+  [[nodiscard]] material_state state (material_id id) const;
 
   /** Check whether a material id is registered. */
-  bool contains (material_id id) const;
+  [[nodiscard]] bool contains (material_id id) const;
 
   /** Get metadata for a material id. */
-  std::optional<material_resource_info> info (material_id id) const;
+  [[nodiscard]] std::optional<material_resource_info> info (material_id id) const;
 
   /** List all registered materials. */
-  std::vector<material_resource_info> list_materials () const;
+  [[nodiscard]] std::vector<material_resource_info> list_materials () const;
 
   // ---- Shader Programs ----
   /** Register a shader program (runtime generated or file path). */
-  shader_program_id register_shader_program (const std::string &path);
+  [[nodiscard]] shader_program_id register_shader_program (const std::string &path);
 
   /** Store a runtime-generated shader program. */
-  shader_program_id
+  [[nodiscard]] shader_program_id
   register_shader_program (std::shared_ptr<gfx::shader_program> prog,
                            const std::string &name);
 
   /** Get a shader program handle for the given id. */
-  shader_program_handle get (shader_program_id id);
+  [[nodiscard]] shader_program_handle get (shader_program_id id);
 
   /** Query shader program state. */
-  shader_program_state state (shader_program_id id) const;
+  [[nodiscard]] shader_program_state state (shader_program_id id) const;
 
   /** Check whether a shader program id is registered. */
-  bool contains (shader_program_id id) const;
+  [[nodiscard]] bool contains (shader_program_id id) const;
 
   /** Get metadata for a shader program id. */
-  std::optional<shader_program_resource_info> info (shader_program_id id) const;
+  [[nodiscard]] std::optional<shader_program_resource_info> info (shader_program_id id) const;
 
   /** List all registered shader programs. */
-  std::vector<shader_program_resource_info> list_shader_programs () const;
+  [[nodiscard]] std::vector<shader_program_resource_info> list_shader_programs () const;
 
   /**
    * Set the base engine resource path used to resolve engine-provided
@@ -709,20 +709,20 @@ public:
   void set_engine_resource_path (const std::string &path);
 
   /** Get the configured engine resource base path. */
-  std::string
+  [[nodiscard]] std::string
   get_engine_resource_path () const
   {
     return m_wsl_resource_path;
   }
 
   /** Create a new project from the provided project descriptor. */
-  bool new_project (const rsc::project &proj);
+  [[nodiscard]] bool new_project (const rsc::project &proj);
 
   /** Load a project file from disk and set it as active. */
-  bool load_project (const std::string &path);
+  [[nodiscard]] bool load_project (const std::string &path);
 
   /** Return the currently active project if any. */
-  std::shared_ptr<rsc::project> current_project () const;
+  [[nodiscard]] std::shared_ptr<rsc::project> current_project () const;
 
   /**
    * Unload and clear all managed resources, releasing GPU and CPU
@@ -742,22 +742,22 @@ public:
    * Resolve a possibly-relative asset path to an absolute
    * engine/project path.
    */
-  std::string resolve_path (const std::string &path) const;
+  [[nodiscard]] std::string resolve_path (const std::string &path) const;
 
   /** Get the filesystem path for a registered model id. */
-  std::string get_resource_path (model_id id) const;
+  [[nodiscard]] std::string get_resource_path (model_id id) const;
 
   /** Get the filesystem path for a registered cubemap id. */
-  std::string get_resource_path (cubemap_id id) const;
+  [[nodiscard]] std::string get_resource_path (cubemap_id id) const;
 
   /** Get the filesystem path for a registered audio id. */
-  std::string get_resource_path (audio_id id) const;
+  [[nodiscard]] std::string get_resource_path (audio_id id) const;
 
   /** Get the filesystem path for a registered material id. */
-  std::string get_resource_path (material_id id) const;
+  [[nodiscard]] std::string get_resource_path (material_id id) const;
 
   /** Get the filesystem path for a generic resource reference. */
-  std::string get_path (io::resource_ref ref) const;
+  [[nodiscard]] std::string get_path (io::resource_ref ref) const;
 
   /**
    * Helper providing thread-local access to the active resource manager

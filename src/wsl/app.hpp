@@ -47,8 +47,6 @@ protected:
   {
     (components::register_meta (), ...);
   }
-
-private:
 };
 
 } // namespace wsl

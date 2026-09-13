@@ -3,17 +3,9 @@ Components
 
 .. das:module:: weasel_components
 
-.. das:class:: Area3D
-
-   Sensor (trigger) to detect bodies entering/exiting
-
 .. das:class:: Audio
 
    Provides audio playback functionality for the entity.
-
-.. das:class:: Character Body
-
-   Capsule-based kinematic character controller
 
 .. das:class:: Directional Light
 

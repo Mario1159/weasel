@@ -24,19 +24,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup xmake
+        uses: xmake-io/xmake-action@v1
+        with:
+          xmake-version: latest
+
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
           pacman -S --noconfirm \
-            base-devel git cmake ninja \
-            sdl3 libarchive glm pkgconf \
-            libx11 libxext libxrandr libxcursor libxfixes libxi libxss libxtst libxinerama libxkbcommon libxrender \
-            opus opusfile libvorbis flac libgme mpg123 fluidsynth wavpack \
-            brotli zlib freetype2 openssl protobuf libsodium \
-            libavif libtiff libwebp libpng libjpeg-turbo \
-            abseil-cpp re2 gtest nlohmann-json boost \
-            llvm clang python python-sphinx \
-            nodejs
+            base-devel git clang cmake ninja python python-sphinx nodejs
 
       - name: Install yay and AUR packages
         run: |
@@ -50,15 +47,10 @@ jobs:
           "
 
       - name: Configure
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLLVM20_PREFIX=/usr \
-            -DSLANG_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-            -G Ninja
+        run: xmake f -y
 
       - name: Build docs
-        run: cmake --build build --target docs
+        run: xmake build --target docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

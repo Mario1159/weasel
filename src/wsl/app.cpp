@@ -303,8 +303,6 @@ app::run ()
       s_smoothed_fps = (0.1 * instant) + (0.9 * s_smoothed_fps);
     }
 
-    on_update (dt);
-
     SDL_Event e;
     while (SDL_PollEvent (&e) != 0) {
       wsl::engine_event we (e);
