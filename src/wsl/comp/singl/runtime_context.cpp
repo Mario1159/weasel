@@ -3,9 +3,14 @@
 #include "../../rsc/resource_manager.hpp"
 #include "../../rsc/scene.hpp"
 #include "../../rsc/scene_snapshot_serializer.hpp"
+#include "../../reg/registry_queries.hpp"
+#include "../../sys/core_systems.hpp"
+#include "../../event/event_hub.hpp"
+#include "../../event/message_bus.hpp"
 #include "comp/component_meta.hpp"
 #include "comp/singl/physics_manager.hpp"
 #include "comp/singl/rendering_manager.hpp"
+#include "ui_manager.hpp"
 #include "editor_context.hpp"
 #include "events.hpp"
 #include "gfx/scene_renderer.hpp"
@@ -105,29 +110,43 @@ comp::singl::runtime_context::sdl_init_guard::~sdl_init_guard ()
 comp::singl::runtime_context::runtime_context (
     const char *name, int width, int height, const std::string &engine_res_path,
     bool headless)
-    : m_world (this), m_scene_manager (m_world), m_event_hub (m_event_db),
-      m_reg_queries (m_component_registry, m_system_factory_registry,
-                     m_event_hub),
-      m_runtime_project_module (this), sdl_init_guard_ (headless),
-      m_render_ctx (headless), m_resource_manager (this, engine_res_path),
-      m_resource_manager_view (&m_resource_manager),
-      m_window (name, width, height, &m_render_ctx, &m_resource_manager,
-                headless),
-      m_ui_manager (m_render_ctx, m_window, &m_resource_manager),
-      m_headless (headless)
+    : sdl_init_guard_ (headless), m_world (this), m_scene_manager (m_world),
+      m_headless (headless), m_runtime_project_module (this)
 {
-  m_system_factory_registry.set_event_hub (&m_event_hub);
+  // Allocate heavy subsystems via unique_ptr in dependency order.
+  m_component_registry = std::make_unique<reg::component_registry> ();
+  m_singleton_registry = std::make_unique<reg::singleton_registry> ();
+  m_system_factory_registry = std::make_unique<reg::system_factory_registry> ();
+  m_event_db = std::make_unique<event::event_debug_db> ();
+  m_event_hub = std::make_unique<event::event_hub> (*m_event_db);
+  m_message_bus = std::make_unique<event::message_bus> ();
+
+  m_reg_queries = std::make_unique<reg::registry_queries> (
+      *m_component_registry, *m_system_factory_registry, *m_event_hub);
+
+  m_render_ctx = std::make_unique<gfx::render_context> (headless);
+  m_resource_manager
+      = std::make_unique<rsc::resource_manager> (this, engine_res_path);
+  m_resource_manager_view = std::make_unique<rsc::resource_manager_view> (
+      m_resource_manager.get ());
+  m_window = std::make_unique<gfx::render_window> (
+      name, width, height, m_render_ctx.get (), m_resource_manager.get (),
+      headless);
+  m_ui_manager = std::make_unique<comp::singl::ui_manager> (
+      *m_render_ctx, *m_window, m_resource_manager.get ());
+
+  m_system_factory_registry->set_event_hub (m_event_hub.get ());
   if (!headless)
     wsl::log::core ()->trace ("GPU device status: {}",
-                              (void *)m_render_ctx.gpu_device);
+                              (void *)m_render_ctx->gpu_device);
   m_current_input_map = &m_app_input_map;
 
-  m_event_hub.resolve_active_registry = [this] () -> entt::registry * {
+  m_event_hub->resolve_active_registry = [this] () -> entt::registry * {
     auto *scene = m_scene_manager.get_active ();
     return scene ? &scene->get_registry () : nullptr;
   };
 
-  m_event_hub.resolve_system_by_type
+  m_event_hub->resolve_system_by_type
       = [this] (entt::id_type system_type_id) -> sys::ecs_system * {
     if (auto *scene = m_scene_manager.get_active ()) {
       for (sys::ecs_system *system : scene->get_systems ()) {
@@ -154,17 +173,17 @@ comp::singl::runtime_context::runtime_context (
   // handler is invoked via a captured `void *` owner, so no `ecs_system`
   // inheritance is required.
   m_event_hub
-      .declare_event_source<wsl::event::scene_changed, rsc::scene_manager> ();
-  m_event_hub.declare_event_sink<wsl::event::scene_changed, runtime_context> (
+      ->declare_event_source<wsl::event::scene_changed, rsc::scene_manager> ();
+  m_event_hub->declare_event_sink<wsl::event::scene_changed, runtime_context> (
       "on_scene_changed",
       +[] (void *owner, entt::registry &, const void *ev) {
         static_cast<runtime_context *> (owner)->on_scene_changed (
             *static_cast<const wsl::event::scene_changed *> (ev));
       },
       this);
-  m_event_hub.connect (comp::stable_type_id<wsl::event::scene_changed> (),
-                       comp::stable_type_id<runtime_context> (),
-                       "on_scene_changed");
+  m_event_hub->connect (comp::stable_type_id<wsl::event::scene_changed> (),
+                        comp::stable_type_id<runtime_context> (),
+                        "on_scene_changed");
 
   // Register core system factories so CLI can discover them via `sys avail`,
   // even in headless mode.  The actual system instances are only created
@@ -187,7 +206,7 @@ comp::singl::runtime_context::~runtime_context ()
   // The main resource manager depends on the runtime world, core systems, and
   // GPU device still being alive. Shut it down explicitly before member
   // destruction starts.
-  m_resource_manager.shutdown ();
+  m_resource_manager->shutdown ();
 }
 
 void
@@ -199,7 +218,7 @@ comp::singl::runtime_context::set_editor_ctx (
     m_current_input_map = &editor_ctx->editor_input_map ();
   }
   m_world.set_editor_context (editor_ctx);
-  m_resource_manager.set_editor_context (editor_ctx);
+  m_resource_manager->set_editor_context (editor_ctx);
   if (m_core_systems != nullptr) {
     m_core_systems->set_editor_ctx (editor_ctx);
   }
@@ -303,14 +322,14 @@ comp::singl::runtime_context::stop ()
   // Ensure GPU is idle before we start destroying renderers and restoring
   // states. This prevents VRAM exhaustion from deferred releases during rapid
   // play/stop cycles.
-  if (m_render_ctx.gpu_device != nullptr) {
-    SDL_WaitForGPUIdle (m_render_ctx.gpu_device);
+  if (m_render_ctx->gpu_device != nullptr) {
+    SDL_WaitForGPUIdle (m_render_ctx->gpu_device);
   }
 
   // Restore ALL scenes state
   for (auto &[sid_val, snapshot] : m_scene_save_states) {
     const rsc::scene_id sid{ sid_val };
-    rsc::scene *scene = m_resource_manager.find_loaded_scene (sid);
+    rsc::scene *scene = m_resource_manager->find_loaded_scene (sid);
     if (scene != nullptr) {
       rsc::io::scene_snapshot_serializer serializer (this, *scene);
       serializer.load_from_binary_string (snapshot);
@@ -326,9 +345,10 @@ comp::singl::runtime_context::stop ()
 
   if (!restored_origin_scene
       && m_play_session_origin_scene_id.value != entt::null) {
-    if (m_resource_manager.activate_scene (m_play_session_origin_scene_id)) {
+    if (m_resource_manager->activate_scene (m_play_session_origin_scene_id)) {
       restored_origin_scene = true;
-    } else if (rsc::scene *loaded_scene = m_resource_manager.find_loaded_scene (
+    } else if (rsc::scene *loaded_scene
+               = m_resource_manager->find_loaded_scene (
                    m_play_session_origin_scene_id)) {
       m_scene_manager.set_active (loaded_scene);
       restored_origin_scene = true;
@@ -387,8 +407,8 @@ comp::singl::runtime_context::get_active_scene_renderer ()
 {
   comp::singl::rendering_manager *rendering = get_active_rendering_manager ();
   assert (rendering && "Active scene is missing its rendering manager.");
-  return rendering->ensure_renderer (m_window, m_render_ctx,
-                                     &m_resource_manager);
+  return rendering->ensure_renderer (*m_window, *m_render_ctx,
+                                     m_resource_manager.get ());
 }
 
 comp::singl::physics_manager *

@@ -1,5 +1,7 @@
 #include "inspector.hpp"
 
+#include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/reg/component_registry.hpp"
 #include "comp/component_meta.hpp"
 #include "comp/singl/ui_manager.hpp"
 #include "wsl/das/das_engine.hpp"
@@ -16,7 +18,6 @@
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "renderer_imgui.hpp"
-#include "wsl/comp/singl/runtime_context.hpp"
 #include "ecs_inspector_utils.hpp"
 
 #include <cstdint>

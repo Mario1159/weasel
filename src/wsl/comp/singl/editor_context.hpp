@@ -2,7 +2,7 @@
 
 #include "wsl/comp/component_meta.hpp"
 #include "wsl/comp/singl/engine_resources.hpp"
-#include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "wsl/input.hpp"
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/camera_2d.hpp"

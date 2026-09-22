@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include <wsl/ai/acp/acp_agent_manager.hpp>
 #include <wsl/ai/acp/acp_client.hpp>
 #include <wsl/ai/acp/acp_session.hpp>
@@ -15,12 +16,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-namespace wsl::comp::singl
-{
-class runtime_context;
-class editor_context;
-}
 
 namespace editor
 {

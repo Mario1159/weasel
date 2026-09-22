@@ -1,5 +1,6 @@
 #include "editor_app.hpp"
 
+#include "wsl/comp/singl/runtime_context.hpp"
 #include "editor_server.hpp"
 #include "cli/command_executor.hpp"
 #include "renderer_imgui.hpp"

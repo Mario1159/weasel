@@ -1,15 +1,12 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include <string>
 #include <vector>
 #include <filesystem>
 #include <imgui.h>
 #include <imsearch.h>
 
-namespace wsl::comp::singl
-{
-class runtime_context;
-}
 namespace wsl::rsc
 {
 class resource_manager;

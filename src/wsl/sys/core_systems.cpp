@@ -1,5 +1,7 @@
 #include "core_systems.hpp"
 #include "comp/singl/ui_manager.hpp"
+#include "reg/singleton_registry.hpp"
+#include "reg/system_factory_registry.hpp"
 #include "rsc/resource_manager.hpp"
 #include "sys/audio_system.hpp"
 #include "sys/lighting_system.hpp"

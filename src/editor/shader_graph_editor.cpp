@@ -8,6 +8,7 @@
 #include "wsl/log/log.hpp"
 #include "wsl/serialize/types.hpp"
 
+#include <glm/gtc/type_ptr.hpp>
 #include <ImNodeFlow.h>
 #include "wsl/serialize/serialize.hpp"
 #include <cereal/archives/json.hpp>

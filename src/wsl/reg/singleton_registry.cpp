@@ -1,6 +1,5 @@
 #include "singleton_registry.hpp"
 
-#include "../comp/singl/runtime_context.hpp"
 #include "../rsc/scene.hpp"
 #include "../rsc/world.hpp"
 

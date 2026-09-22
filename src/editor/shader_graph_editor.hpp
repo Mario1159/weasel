@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "wsl/gfx/shader_graph.hpp"
 #include "wsl/gfx/shader_graph_codegen.hpp"
 #include "wsl/gfx/shader_compiler.hpp"
@@ -11,12 +12,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-namespace wsl::comp::singl
-{
-class runtime_context;
-class editor_context;
-}
 
 namespace editor
 {

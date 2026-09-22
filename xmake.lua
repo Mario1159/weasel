@@ -240,7 +240,7 @@ package("daslang")
                "daslang: failed to patch CMakeCommon.txt for RTTI")
         local configs = {}
         table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
-        table.insert(configs, "-DCMAKE_CXX_FLAGS=-Wno-error=deprecated-declarations")
+        table.insert(configs, "-DCMAKE_CXX_FLAGS=-Wno-error=deprecated-declarations -Wno-error=uninitialized -Wno-error=stringop-overflow -Wno-error=array-bounds")
         table.insert(configs, "-DBUILD_TESTING=OFF")
         table.insert(configs, "-DDAS_UNIT_TEST_DISABLED=ON")
         table.insert(configs, "-DDAS_GLFW_DISABLED=ON")

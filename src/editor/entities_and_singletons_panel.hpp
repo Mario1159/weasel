@@ -1,11 +1,14 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "ecs_inspector_utils.hpp"
 #include <entt/entt.hpp>
 #include <string>
 
-namespace wsl::comp::singl { class runtime_context; class editor_context; }
-namespace wsl::rsc { class scene; }
+namespace wsl::rsc
+{
+class scene;
+}
 
 namespace editor
 {
@@ -14,8 +17,8 @@ class entities_and_singletons_panel
 {
 public:
   entities_and_singletons_panel (wsl::comp::singl::runtime_context *runtime_ctx,
-                     wsl::comp::singl::editor_context *editor_ctx,
-                     ecs_selection &selection);
+                                 wsl::comp::singl::editor_context *editor_ctx,
+                                 ecs_selection &selection);
 
   void draw ();
 
@@ -28,11 +31,11 @@ private:
   void draw_core_singleton_list ();
   void draw_scene_singleton_list ();
   void draw_add_singleton_ui ();
-  
-  entt::entity duplicate_entity (entt::entity original, entt::entity parent = entt::null);
+
+  entt::entity duplicate_entity (entt::entity original,
+                                 entt::entity parent = entt::null);
   void delete_entity (entt::entity entity);
   void make_prefab (entt::entity entity);
-
 
   wsl::comp::singl::runtime_context *m_runtime_ctx;
   wsl::comp::singl::editor_context *m_editor_ctx;

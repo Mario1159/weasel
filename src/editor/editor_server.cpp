@@ -2,7 +2,6 @@
 #include "editor_app.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/net/command_protocol.hpp"
-#include "wsl/comp/singl/runtime_context.hpp"
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <tracy/Tracy.hpp>

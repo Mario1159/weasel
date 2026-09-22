@@ -33,6 +33,11 @@
 namespace wsl
 {
 
+// The ui_system_interface class lives in ::editor (not wsl::editor).
+// Pull it into wsl:: so that unqualified "editor::ui_system_interface"
+// resolves correctly inside wsl::comp::singl below.
+using ::editor::ui_system_interface;
+
 namespace comp
 {
 
@@ -71,12 +76,12 @@ public:
   // -- getters / setters
   // -------------------------------------------------------
 
-  const editor::ui_system_interface &
+  const wsl::ui_system_interface &
   system_interface () const
   {
     return m_system_interface;
   }
-  editor::ui_system_interface &
+  wsl::ui_system_interface &
   system_interface ()
   {
     return m_system_interface;
@@ -149,7 +154,7 @@ public:
   }
 
 private:
-  editor::ui_system_interface m_system_interface;
+  wsl::ui_system_interface m_system_interface;
   std::unique_ptr<RenderInterface_SDL_GPU> m_render_interface;
   Rml::Context *m_context = nullptr;
   Rml::ElementDocument *m_active_document_instance = nullptr;

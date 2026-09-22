@@ -1,17 +1,12 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "root.hpp"
 #include "wsl/event/event_hub.hpp"
 #include "wsl/editor/editor_ui_layer_interface.hpp"
 
 #include <entt/entity/fwd.hpp>
 #include <imgui.h>
-
-namespace wsl::comp::singl
-{
-class runtime_context;
-class editor_context;
-}
 
 namespace editor
 {

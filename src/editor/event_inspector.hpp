@@ -1,13 +1,9 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include <entt/entt.hpp>
 #include <string>
 
-namespace wsl::comp::singl
-{
-class runtime_context;
-class editor_context;
-}
 namespace editor
 {
 struct ecs_selection;

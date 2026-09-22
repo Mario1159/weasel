@@ -4,6 +4,7 @@
 #include "comp/singl/runtime_context.hpp"
 #include "das/das_engine.hpp"
 #include "reg/runtime_project_module.hpp"
+#include "reg/singleton_registry.hpp"
 #include "sys/core_systems.hpp"
 #include <spdlog/spdlog.h>
 

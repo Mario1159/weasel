@@ -1,26 +1,10 @@
 #pragma once
 
-#include "../../rsc/resource_manager.hpp"
-#include "../../rsc/scene_manager.hpp"
 #include "../../rsc/world.hpp"
-#include "../../reg/component_registry.hpp"
-#include "../../reg/singleton_registry.hpp"
-#include "../../reg/system_factory_registry.hpp"
+#include "../../rsc/scene_manager.hpp"
 #include "../../reg/runtime_project_module.hpp"
-#include "../../reg/registry_queries.hpp"
-
-#include "../../sys/core_systems.hpp"
-#include "../../sys/audio_system.hpp"
-#include "../../gfx/render_window.hpp"
-#include "../../gfx/scene_renderer.hpp"
-#include "../../phys/physics_engine.hpp"
 #include "../../events.hpp"
 #include "../../input.hpp"
-#include "../../event/event_hub.hpp"
-#include "../../event/message_bus.hpp"
-#include "rendering_manager.hpp"
-#include "ui_manager.hpp"
-#include "physics_manager.hpp"
 
 #ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
@@ -34,6 +18,50 @@
 #ifndef IN_MODULE_INTERFACE
 #include <memory>
 #endif
+
+// Forward declarations for heavy subsystems stored by unique_ptr.
+// Full definitions are only needed in runtime_context.cpp.
+namespace wsl
+{
+namespace rsc
+{
+class resource_manager;
+struct resource_manager_view;
+} // namespace rsc
+namespace reg
+{
+class component_registry;
+class singleton_registry;
+class system_factory_registry;
+class registry_queries;
+} // namespace reg
+namespace event
+{
+struct event_debug_db;
+struct event_hub;
+class message_bus;
+} // namespace event
+namespace gfx
+{
+class render_context;
+class render_window;
+class scene_renderer;
+} // namespace gfx
+namespace sys
+{
+class core_systems;
+} // namespace sys
+namespace phys
+{
+class engine;
+} // namespace phys
+namespace comp::singl
+{
+class ui_manager;
+struct rendering_manager;
+struct physics_manager;
+} // namespace comp::singl
+} // namespace wsl
 
 namespace wsl
 {
@@ -75,6 +103,11 @@ public:
                             bool headless = false);
 
   ~runtime_context ();
+
+  runtime_context (const runtime_context &) = delete;
+  runtime_context &operator= (const runtime_context &) = delete;
+  runtime_context (runtime_context &&) = delete;
+  runtime_context &operator= (runtime_context &&) = delete;
 
   /** Register reflection metadata for this class. */
   static void register_meta ();
@@ -182,72 +215,72 @@ public:
   reg::component_registry const &
   component_registry () const
   {
-    return m_component_registry;
+    return *m_component_registry;
   }
   reg::component_registry &
   component_registry ()
   {
-    return m_component_registry;
+    return *m_component_registry;
   }
   reg::singleton_registry const &
   singleton_registry () const
   {
-    return m_singleton_registry;
+    return *m_singleton_registry;
   }
   reg::singleton_registry &
   singleton_registry ()
   {
-    return m_singleton_registry;
+    return *m_singleton_registry;
   }
   reg::system_factory_registry const &
   system_factory_registry () const
   {
-    return m_system_factory_registry;
+    return *m_system_factory_registry;
   }
   reg::system_factory_registry &
   system_factory_registry ()
   {
-    return m_system_factory_registry;
+    return *m_system_factory_registry;
   }
   event::event_debug_db const &
   event_db () const
   {
-    return m_event_db;
+    return *m_event_db;
   }
   event::event_debug_db &
   event_db ()
   {
-    return m_event_db;
+    return *m_event_db;
   }
   event::event_hub const &
   event_hub () const
   {
-    return m_event_hub;
+    return *m_event_hub;
   }
   event::event_hub &
   event_hub ()
   {
-    return m_event_hub;
+    return *m_event_hub;
   }
   event::message_bus const &
   message_bus () const
   {
-    return m_message_bus;
+    return *m_message_bus;
   }
   event::message_bus &
   message_bus ()
   {
-    return m_message_bus;
+    return *m_message_bus;
   }
   reg::registry_queries const &
   reg_queries () const
   {
-    return m_reg_queries;
+    return *m_reg_queries;
   }
   reg::registry_queries &
   reg_queries ()
   {
-    return m_reg_queries;
+    return *m_reg_queries;
   }
   reg::runtime::runtime_project_module const &
   runtime_project_module () const
@@ -263,52 +296,52 @@ public:
   gfx::render_context const &
   render_ctx () const
   {
-    return m_render_ctx;
+    return *m_render_ctx;
   }
   gfx::render_context &
   render_ctx ()
   {
-    return m_render_ctx;
+    return *m_render_ctx;
   }
   rsc::resource_manager const &
   resource_manager () const
   {
-    return m_resource_manager;
+    return *m_resource_manager;
   }
   rsc::resource_manager &
   resource_manager ()
   {
-    return m_resource_manager;
+    return *m_resource_manager;
   }
   rsc::resource_manager_view const &
   resource_manager_view () const
   {
-    return m_resource_manager_view;
+    return *m_resource_manager_view;
   }
   rsc::resource_manager_view &
   resource_manager_view ()
   {
-    return m_resource_manager_view;
+    return *m_resource_manager_view;
   }
   gfx::render_window const &
   window () const
   {
-    return m_window;
+    return *m_window;
   }
   gfx::render_window &
   window ()
   {
-    return m_window;
+    return *m_window;
   }
   comp::singl::ui_manager const &
   ui_manager () const
   {
-    return m_ui_manager;
+    return *m_ui_manager;
   }
   comp::singl::ui_manager &
   ui_manager ()
   {
-    return m_ui_manager;
+    return *m_ui_manager;
   }
 
   std::unique_ptr<sys::core_systems> const &
@@ -365,24 +398,35 @@ private:
   };
   sdl_init_guard sdl_init_guard_;
 
+  // By-value (lightweight or needed by other by-value members)
   rsc::world m_world;
   rsc::scene_manager m_scene_manager;
-  reg::component_registry m_component_registry;
-  reg::singleton_registry m_singleton_registry;
-  reg::system_factory_registry m_system_factory_registry;
-  event::event_debug_db m_event_db;
-  event::event_hub m_event_hub;
-  event::message_bus m_message_bus;
-  reg::registry_queries m_reg_queries;
-  reg::runtime::runtime_project_module m_runtime_project_module;
-
-  gfx::render_context m_render_ctx;
-  rsc::resource_manager m_resource_manager;
-  rsc::resource_manager_view m_resource_manager_view;
-  gfx::render_window m_window;
-  comp::singl::ui_manager m_ui_manager;
   bool m_headless = false;
+
+  // By-pointer (heavy, only needed in .cpp)
+  std::unique_ptr<reg::component_registry> m_component_registry;
+  std::unique_ptr<reg::singleton_registry> m_singleton_registry;
+  std::unique_ptr<reg::system_factory_registry> m_system_factory_registry;
+
+  // Must be declared after the registries: its destructor calls
+  // clear_runtime_registries() which accesses the registries above.
+  // C++ destroys members in reverse declaration order, so this must
+  // be destroyed before the unique_ptrs it references.
+  reg::runtime::runtime_project_module m_runtime_project_module;
+  std::unique_ptr<event::event_debug_db> m_event_db;
+  std::unique_ptr<event::event_hub> m_event_hub;
+  std::unique_ptr<event::message_bus> m_message_bus;
+  std::unique_ptr<gfx::render_context> m_render_ctx;
+  std::unique_ptr<rsc::resource_manager> m_resource_manager;
+  std::unique_ptr<rsc::resource_manager_view> m_resource_manager_view;
+  std::unique_ptr<reg::registry_queries> m_reg_queries;
+  std::unique_ptr<gfx::render_window> m_window;
+  std::unique_ptr<comp::singl::ui_manager> m_ui_manager;
+
+  // System core (already unique_ptr)
   std::unique_ptr<sys::core_systems> m_core_systems;
+
+  // Simple state
   bool m_is_running = false;
   bool m_in_play_session = false;
   class editor_context *m_editor_ctx = nullptr;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "editor_client.hpp"
 #include "command_executor.hpp"
 #include <string>
@@ -16,6 +16,7 @@ class repl_handler
 {
 public:
   repl_handler (const std::string &engine_res_path, bool attach = false);
+  ~repl_handler ();
   bool prepare (std::optional<std::string> initial_project = std::nullopt,
                 std::optional<std::string> initial_scene = std::nullopt);
   void run (std::optional<std::string> initial_project = std::nullopt,
@@ -35,8 +36,8 @@ public:
 private:
   void ensure_local_executor ();
 
-  std::unique_ptr<wsl::comp::singl::runtime_context> m_rtc;
   std::shared_ptr<wsl::rsc::project> m_current_project;
+  std::unique_ptr<wsl::comp::singl::runtime_context> m_rtc;
   bool m_running = true;
   std::string m_engine_res_path;
   bool m_attach = false;

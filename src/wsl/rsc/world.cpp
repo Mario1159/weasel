@@ -1,14 +1,13 @@
 #include "world.hpp"
 
 #include "wsl/comp/singl/editor_context.hpp"
-#include "../comp/singl/runtime_context.hpp"
+#include "../comp/singl/runtime_context_fwd.hpp"
 
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-
 
 namespace wsl
 {
@@ -29,8 +28,8 @@ rsc::world::create_scene (const std::string &name)
 rsc::scene &
 rsc::world::add_scene (scene &&ready_scene)
 {
-  scene &new_scene
-      = *m_scenes.emplace_back (std::make_unique<scene> (std::move (ready_scene)));
+  scene &new_scene = *m_scenes.emplace_back (
+      std::make_unique<scene> (std::move (ready_scene)));
   return new_scene;
 }
 

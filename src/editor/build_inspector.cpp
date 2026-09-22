@@ -1,6 +1,7 @@
 #include "build_inspector.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/rsc/resource_manager.hpp"
 #include "job_manager.hpp"
 #include "wsl/log/log.hpp"
 #include <algorithm>

@@ -5,6 +5,7 @@
 #include "wsl/comp/singl/editor_context.hpp"
 #include "renderer_imgui.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/reg/registry_queries.hpp"
 #include "ecs_inspector.hpp"
 #include "imgui_internal.h"
 

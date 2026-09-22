@@ -16,6 +16,7 @@
 #include "wsl/comp/component_meta.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
+#include "wsl/reg/system_factory_registry.hpp"
 #include "wsl/comp/rigid_body.hpp"
 #include "wsl/comp/character_body.hpp"
 #include "wsl/comp/transform_2d.hpp"

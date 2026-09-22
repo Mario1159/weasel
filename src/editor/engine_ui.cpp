@@ -1,5 +1,6 @@
 #include "engine_ui.hpp"
 
+#include "wsl/event.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/event/event_hub.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
@@ -64,8 +65,8 @@ engine_ui::handle_event (const wsl::engine_event &event)
                                     !m_game_focus);
     SDL_ShowCursor ();
 
-    wsl::event::emit<game_focus_toggled> (
-        m_runtime_ctx->event_hub (), game_focus_toggled{ m_game_focus });
+    wsl::event::emit<game_focus_toggled> (m_runtime_ctx->event_hub (),
+                                          game_focus_toggled{ m_game_focus });
     return;
   }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include <SDL3/SDL_gpu.h>
 #include <imgui.h>
 #include <ImGuizmo.h>
@@ -22,7 +23,8 @@ public:
   void set_render_texture (const wsl::gfx::texture &texture);
 
   void draw (entt::registry &registry, wsl::gfx::render_window &rw);
-  void draw_camera_header (entt::registry &registry, wsl::gfx::render_window &rw);
+  void draw_camera_header (entt::registry &registry,
+                           wsl::gfx::render_window &rw);
 
   void set_selection (ecs_selection *sel);
 

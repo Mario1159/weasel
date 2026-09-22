@@ -3,6 +3,7 @@
 #include "../comp/directional_light.hpp"
 #include "../comp/singl/editor_context.hpp"
 #include "../comp/singl/runtime_context.hpp"
+#include "../gfx/scene_renderer.hpp"
 #include "comp/camera.hpp"
 #include "comp/world_transform.hpp"
 #include <cmath>

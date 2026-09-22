@@ -19,8 +19,14 @@
 #include "comp/transform.hpp"
 #include "comp/world_transform.hpp"
 #include "math/vector.hpp"
+#include "reg/component_registry.hpp"
+#include "reg/singleton_registry.hpp"
+#include "reg/system_factory_registry.hpp"
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_manager.hpp"
+#include "rsc/project_loader.hpp"
+#include "rsc/resource_manager.hpp"
+#include "sys/core_systems.hpp"
 #include "wsl/rsc/project_loader.hpp"
 #include "wsl/rsc/project.hpp"
 #include "wsl/rsc/scene.hpp"
@@ -3829,6 +3835,8 @@ repl_handler::repl_handler (const std::string &engine_res_path, bool attach)
     : m_engine_res_path (engine_res_path), m_attach (attach)
 {
 }
+
+repl_handler::~repl_handler () = default;
 
 void
 repl_handler::set_auto_save (bool enabled)

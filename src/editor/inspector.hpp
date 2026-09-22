@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "wsl/reg/singleton_registry.hpp"
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -9,11 +10,6 @@
 namespace wsl::sys
 {
 class ecs_system;
-}
-namespace wsl::comp::singl
-{
-class runtime_context;
-class editor_context;
 }
 
 namespace editor

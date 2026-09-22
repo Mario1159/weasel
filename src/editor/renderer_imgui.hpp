@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
 #include <entt/entt.hpp>
@@ -14,8 +15,10 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlgpu3.h>
 
-namespace wsl::comp::singl { class runtime_context; }
-namespace wsl::rsc { class resource_manager; }
+namespace wsl::rsc
+{
+class resource_manager;
+}
 
 namespace editor
 {
@@ -23,7 +26,8 @@ namespace editor
 class renderer_imgui : public wsl::gfx::imgui_renderer_interface
 {
 public:
-  renderer_imgui (wsl::gfx::render_window &window, wsl::gfx::render_context *ctx);
+  renderer_imgui (wsl::gfx::render_window &window,
+                  wsl::gfx::render_context *ctx);
   ~renderer_imgui () override;
 
   void begin_frame () override;
@@ -35,22 +39,36 @@ public:
 
   void request_model_preview (wsl::comp::singl::runtime_context *runtime_ctx,
                               wsl::rsc::resource_manager *resource_manager,
-                              entt::id_type model_eid, uint32_t w, uint32_t h) override;
+                              entt::id_type model_eid, uint32_t w,
+                              uint32_t h) override;
 
   void on_resize (uint32_t w, uint32_t h) override;
 
   void preview_set_camera_from_gizmo (const glm::vec3 &pos,
                                       const glm::quat &rot) override;
-  void preview_get_camera (glm::vec3 &out_pos, glm::quat &out_rot) const override;
+  void preview_get_camera (glm::vec3 &out_pos,
+                           glm::quat &out_rot) const override;
   void preview_reset_camera_to_default () override;
 
   SDL_GPUTexture *get_model_preview_texture () const override;
 
   void apply_editor_style (const wsl::gfx::editor_theme &t) override;
-  const wsl::gfx::editor_theme &get_theme () const override { return m_theme; }
+  const wsl::gfx::editor_theme &
+  get_theme () const override
+  {
+    return m_theme;
+  }
 
-  wsl::gfx::imgui_fonts &get_fonts () override { return fonts; }
-  const wsl::gfx::imgui_fonts &get_fonts () const override { return fonts; }
+  wsl::gfx::imgui_fonts &
+  get_fonts () override
+  {
+    return fonts;
+  }
+  const wsl::gfx::imgui_fonts &
+  get_fonts () const override
+  {
+    return fonts;
+  }
 
   wsl::gfx::imgui_fonts fonts;
 
@@ -104,15 +122,15 @@ private:
   bool m_preview_rotate = true;
   double m_preview_last_gizmo_time = 0.0;
   float m_preview_yaw = 0.0F;
-  
+
   float m_preview_idle_reset_seconds = 5.0F;
   float m_preview_yaw_speed = 0.5F;
 
   wsl::gfx::editor_theme m_theme{};
 
-  bool render_model_preview_low_lod (wsl::comp::singl::runtime_context &runtime_ctx,
-                                     entt::id_type model_id,
-                                     uint32_t w, uint32_t h);
+  bool
+  render_model_preview_low_lod (wsl::comp::singl::runtime_context &runtime_ctx,
+                                entt::id_type model_id, uint32_t w, uint32_t h);
 };
 
 } // namespace editor

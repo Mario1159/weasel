@@ -1,6 +1,7 @@
 #pragma once
 
-#include "comp/singl/runtime_context.hpp"
+#include "comp/singl/runtime_context_fwd.hpp"
+#include "wsl/comp/component_meta.hpp"
 #include "wsl/event.hpp"
 
 #ifndef IN_MODULE_INTERFACE

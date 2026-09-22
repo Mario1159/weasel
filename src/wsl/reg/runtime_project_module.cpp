@@ -3,6 +3,9 @@
 
 #include "../rsc/project.hpp"
 #include "../comp/singl/runtime_context.hpp"
+#include "component_registry.hpp"
+#include "singleton_registry.hpp"
+#include "system_factory_registry.hpp"
 
 #include <cctype>
 #include <cereal/external/rapidjson/document.h>

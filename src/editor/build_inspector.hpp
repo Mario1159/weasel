@@ -1,15 +1,10 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "wsl/rsc/xmake_file_api.hpp"
 #include <string>
 #include <vector>
 #include <future>
-
-namespace wsl::comp::singl
-{
-class runtime_context;
-class editor_context;
-}
 
 namespace editor
 {

@@ -1,13 +1,12 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "entities_and_singletons_panel.hpp"
 #include "inspector.hpp"
 #include "ecs_inspector_utils.hpp"
 
 #include <entt/entt.hpp>
 #include "wsl/events.hpp"
-
-namespace wsl::comp::singl { class runtime_context; class editor_context; }
 
 namespace editor
 {

@@ -1,15 +1,11 @@
 #pragma once
 
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include <entt/entt.hpp>
 #include <string>
 #include <vector>
 #include <SDL3_mixer/SDL_mixer.h>
 
-namespace wsl::comp::singl
-{
-class runtime_context;
-class editor_context;
-}
 namespace wsl::rsc
 {
 class resource_manager;

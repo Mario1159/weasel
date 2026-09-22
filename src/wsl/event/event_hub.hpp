@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../comp/component_meta.hpp"
+#include "../log/log.hpp"
 #include "event_hub_fwd.hpp"
 
 #ifndef IN_MODULE_INTERFACE
@@ -8,6 +9,9 @@
 #endif
 #ifndef IN_MODULE_INTERFACE
 #include <ranges>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <unordered_set>
 #endif
 
 namespace wsl::event
@@ -494,6 +498,31 @@ struct event_hub
     return result;
   }
 
+  /**
+   * Returns connections only for systems whose type_id is in *allowed*.
+   * Connections with a non-null ``owner_ptr`` (i.e. non-ecs_system owners
+   * such as ``runtime_context``) are always included regardless of the
+   * allowed set, because they are global handlers that are not tied to a
+   * specific scene.
+   */
+  std::vector<event_connection_data>
+  get_connections_for_systems (
+      const std::unordered_set<entt::id_type> &allowed) const
+  {
+    std::vector<event_connection_data> result;
+    result.reserve (connected_handlers.size ());
+
+    for (const connected_sink &handler : connected_handlers) {
+      if (handler.owner_ptr != nullptr
+          || allowed.contains (handler.system_type_id)) {
+        result.push_back ({ handler.event_type_id, handler.system_type_id,
+                            handler.handler_name });
+      }
+    }
+
+    return result;
+  }
+
   std::vector<const event_source_debug_entry *>
   get_events_for_system (entt::id_type system_type_id) const
   {
@@ -749,6 +778,9 @@ struct event_hub
     }
 
     if (registered_handler == nullptr) {
+      wsl::log::rsc ()->trace (
+          "connect: no sink found for event={:#x} system={:#x} handler='{}'",
+          event_type_id, system_type_id, handler_name);
       return false;
     }
 
@@ -756,7 +788,16 @@ struct event_hub
       if (connection.event_type_id == event_type_id
           && connection.system_type_id == system_type_id
           && connection.handler_name == handler_name) {
-        return false;
+        // Connection already exists — the desired state is already
+        // achieved.  This is expected when scenes load in parallel
+        // (each scene's snapshot may redundantly carry connections
+        // established by another scene) or when restoring from old
+        // scene files that were saved with the global-connections
+        // snapshot.
+        wsl::log::rsc ()->trace (
+            "connect: already connected event={:#x} system={:#x} handler='{}'",
+            event_type_id, system_type_id, handler_name);
+        return true;
       }
     }
 

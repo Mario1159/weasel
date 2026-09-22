@@ -1,6 +1,6 @@
 #pragma once
 
-#include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/comp/singl/runtime_context_fwd.hpp"
 #include "wsl/rsc/scene.hpp"
 #include <entt/entt.hpp>
 #include <string>

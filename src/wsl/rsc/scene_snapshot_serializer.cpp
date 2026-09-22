@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <entt/core/fwd.hpp>
+#include <unordered_set>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 #include <exception>
@@ -78,7 +79,16 @@ scene_snapshot_serializer::save (serialize::json_writer &writer) const
         static_cast<uint32_t> (entt::to_integral (entry.first)), entry.second);
   }
 
-  header.connections = runtime_ctx->event_hub ().get_all_connections ();
+  // Only persist connections for systems in this scene (plus global
+  // non-scene-system handlers such as runtime_context).  Saving all
+  // global connections causes spurious warnings when loading scenes
+  // that do not contain the referenced systems.
+  std::unordered_set<entt::id_type> scene_system_ids;
+  for (const auto &sys : scene_ref.systems) {
+    scene_system_ids.insert (sys->get_type_id ());
+  }
+  header.connections
+      = runtime_ctx->event_hub ().get_connections_for_systems (scene_system_ids);
 
   for (const resource_ref &ref : scene_ref.get_load_list ()) {
     std::string path = runtime_ctx->resource_manager ().get_path (ref);
@@ -392,7 +402,15 @@ scene_snapshot_serializer::save_binary (serialize::binary_writer &writer) const
         static_cast<uint32_t> (entt::to_integral (entry.first)), entry.second);
   }
 
-  header.connections = runtime_ctx->event_hub ().get_all_connections ();
+  // Only persist connections for systems in this scene (plus global
+  // non-scene-system handlers such as runtime_context).  See save() for
+  // rationale.
+  std::unordered_set<entt::id_type> scene_system_ids;
+  for (const auto &sys : scene_ref.systems) {
+    scene_system_ids.insert (sys->get_type_id ());
+  }
+  header.connections
+      = runtime_ctx->event_hub ().get_connections_for_systems (scene_system_ids);
 
   for (const resource_ref &ref : scene_ref.get_load_list ()) {
     std::string path = runtime_ctx->resource_manager ().get_path (ref);

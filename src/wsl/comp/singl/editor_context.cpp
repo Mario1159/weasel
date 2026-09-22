@@ -7,6 +7,8 @@
 #include "wsl/comp/camera.hpp"
 #include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
+#include "wsl/comp/singl/rendering_manager.hpp"
+#include "wsl/gfx/render_window.hpp"
 #include "wsl/comp/subviewport.hpp"
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/transform_2d.hpp"

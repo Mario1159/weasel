@@ -4,6 +4,8 @@
 #include "../comp/hierarchy.hpp"
 #include "../comp/singl/editor_context.hpp"
 #include "../comp/singl/runtime_context.hpp"
+#include "../comp/singl/rendering_manager.hpp"
+#include "../sys/core_systems.hpp"
 #include "gfx/cubemap.hpp"
 #include "gfx/image.hpp"
 #include "gfx/model_3d.hpp"
