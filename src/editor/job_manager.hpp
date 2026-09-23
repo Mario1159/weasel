@@ -35,6 +35,8 @@ private:
     std::mutex m_mutex;
     std::vector<job> m_jobs;
     std::string m_last_finished_job_name;
+    // Error message of the last finished job; empty when it succeeded.
+    std::string m_last_finished_error;
     std::chrono::milliseconds m_last_job_duration{0};
 };
 

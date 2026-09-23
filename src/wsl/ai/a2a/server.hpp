@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef IN_MODULE_INTERFACE
-#include <atomic>
+#include <cstdint>
 #endif
 #ifndef IN_MODULE_INTERFACE
 #include <memory>
@@ -16,12 +16,17 @@
 namespace wsl::ai::a2a
 {
 
+class http_json_server_transport;
+
 /**
  * A2A server.
  *
- * Hosts an agent card and dispatches incoming requests to the provided
- * handler. The server uses libcurl's socket action API for non-blocking
- * HTTP I/O.
+ * Hosts an agent card and dispatches incoming requests to the
+ * provided handler. The server binds a TCP port and serves one HTTP
+ * request per connection, routing every request through
+ * ``http_json_server_transport::dispatch`` (agent card discovery at
+ * ``/.well-known/agent-card.json``, ``/message:send``,
+ * ``/tasks/{id}``, ``:cancel``).
  *
  * Example::
  *
@@ -49,29 +54,29 @@ public:
   a2a_server &operator= (const a2a_server &) = delete;
 
   /**
-   * Start serving on the given port. Blocks until ``stop()`` is called.
+   * Start serving on the given port. Blocks until ``stop()`` is
+   * called from another thread.
    *
    * :param port: TCP port to listen on.
    */
   void serve (uint16_t port);
 
   /**
-   * Start serving in a background thread.
+   * Start serving in a background thread. Calling it while a
+   * background instance is running stops that instance first.
    *
    * :param port: TCP port to listen on.
    */
   void serve_async (uint16_t port);
 
-  /** Signal the server to stop. Thread-safe. */
+  /** Signal the server to stop and join the background thread. */
   void stop ();
 
   /** Returns ``true`` while the server is running. */
   bool is_running () const;
 
 private:
-  agent_card m_card;
-  std::shared_ptr<request_handler> m_handler;
-  std::atomic<bool> m_running{ false };
+  std::unique_ptr<http_json_server_transport> m_transport;
   std::thread m_thread;
 };
 

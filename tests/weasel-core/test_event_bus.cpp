@@ -4,6 +4,7 @@
 #include "wsl/event/event_hub.hpp"
 #include "wsl/event/message_bus.hpp"
 #include "wsl/event/message_event.hpp"
+#include "wsl/log/log.hpp"
 #include "wsl/sys/system.hpp"
 
 #include <entt/entt.hpp>
@@ -13,6 +14,20 @@
 #include <vector>
 
 using namespace wsl;
+
+// Global log initializer (idempotent, safe to call multiple times).
+// Several engine paths (e.g. event_hub::connect) log through
+// wsl::log::* unconditionally; without init() those accessors return
+// empty shared_ptr s and the dereference segfaults. Every other test
+// target bootstraps logging the same way (see weasel-cli tests).
+namespace
+{
+struct log_initializer
+{
+  log_initializer () { wsl::log::init (); }
+};
+static log_initializer init_log;
+} // namespace
 
 // A trivially-copyable payload used by both message-bus and observer-event
 // tests.
@@ -206,8 +221,12 @@ TEST_CASE ("event_hub: connect / disconnect / dispatch at runtime")
   REQUIRE (handler.hits == 1);
   REQUIRE (handler.last_victim == entt::entity{ 20 });
 
-  // Double connect is idempotent (returns false).
-  REQUIRE_FALSE (hub.connect (ev_id, h_id, "on_hit"));
+  // Double connect is idempotent and reports success: the desired
+  // state is already achieved (scene loads rely on this — see the
+  // "already connected" branch in event_hub::connect) and no
+  // duplicate connection may be added.
+  REQUIRE (hub.connect (ev_id, h_id, "on_hit"));
+  REQUIRE (hub.get_all_connections ().size () == 1);
 
   REQUIRE (hub.disconnect (ev_id, h_id, "on_hit"));
   REQUIRE (hub.get_all_connections ().empty ());

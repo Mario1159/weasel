@@ -41,9 +41,6 @@ module;
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/base_sink.h>
 #include <tracy/Tracy.hpp>
-#include <cereal/cereal.hpp>
-#include <cereal/archives/binary.hpp>
-#include <cereal/archives/json.hpp>
 #include <simdjson.h>
 #include <stb_image.h>
 #include <curl/curl.h>
@@ -60,15 +57,7 @@ module;
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <future>
-#include <filesystem>
-#include <functional>
-#include <string_view>
-#include <unordered_map>
-#include <memory>
-#include <vector>
-#include <string>
 #include <tuple>
-#include <variant>
 #include <setjmp.h>
 #include "phys/layers.hpp"
 
@@ -174,7 +163,6 @@ export module wsl.core;
 #include "math/mikktspace.hpp"
 #include "net/command_protocol.hpp"
 #include "phys/box3d_adapter.hpp"
-#include "phys/layers.hpp"
 #include "phys/physics_engine.hpp"
 #include "ray.hpp"
 #include "reg/component_registry.hpp"

@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <wsl/ai/a2a/http/http_listener.hpp>
 #include <wsl/ai/a2a/json_util.hpp>
 
 namespace wsl::ai::a2a
@@ -147,14 +148,16 @@ void
 http_json_server_transport::serve (uint16_t port)
 {
   m_running.store (true);
-
-  spdlog::info ("[a2a] HTTP server listening on port {}", port);
-
-  while (m_running.load ()) {
-    std::this_thread::sleep_for (std::chrono::milliseconds{ 100 });
+  const bool started = http::run_http_listener (
+      m_running, port, "[a2a]",
+      [this] (const std::string &method, const std::string &path,
+              const std::string &body) -> std::string {
+        return dispatch (method, path, body);
+      });
+  m_running.store (false);
+  if (started) {
+    spdlog::info ("[a2a] HTTP server stopped");
   }
-
-  spdlog::info ("[a2a] HTTP server stopped");
 }
 
 void

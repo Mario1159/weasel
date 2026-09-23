@@ -145,7 +145,12 @@ model_loader::parse_lod_name (const std::string &name)
     int const lod = std::stoi (num);
     info.base = base;
     info.lod = lod;
+  } catch (const std::exception &e) {
+    wsl::log::rsc ()->debug ("Failed to parse LOD info for '{}': {}", name,
+                             e.what ());
   } catch (...) {
+    wsl::log::rsc ()->debug ("Failed to parse LOD info for '{}': unknown error",
+                             name);
   }
 
   return info;

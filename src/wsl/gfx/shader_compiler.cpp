@@ -159,7 +159,11 @@ parse_reflection (const std::filesystem::path &json_path,
   nlohmann::json j;
   try {
     is >> j;
+  } catch (const std::exception &e) {
+    wsl::log::gfx ()->warn ("Shader metadata JSON parse failed: {}", e.what ());
+    return;
   } catch (...) {
+    wsl::log::gfx ()->warn ("Shader metadata JSON parse failed: unknown error");
     return;
   }
 

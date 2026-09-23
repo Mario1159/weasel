@@ -95,9 +95,10 @@ public:
     /** Per-instance max draw distance (0 = unlimited). */
     float visibility_range = 0.0F;
     /**
-     * Optional per-instance material override. When set (non-null) the
-     * renderer should use this material instead of the model's own mesh
-     * materials. TODO: hook into the draw path (custom-material / PBR).
+     * Optional per-instance material override. When set (non-null), the
+     * renderer renders every primitive of this instance with the assigned
+     * material instead of the model's own materials (consumed via
+     * ``m_active_material_override`` in ``render_mesh``).
      */
     rsc::material_id material_override{};
   };
@@ -435,7 +436,6 @@ private:
   SDL_GPUGraphicsPipeline *m_pipeline_unlit_double_sided = nullptr;
 
   // Shared material fallback resources.
-  SDL_GPUTexture *m_default_texture = nullptr;
   SDL_GPUTexture *m_default_basecolor_tex = nullptr;
   SDL_GPUTexture *m_default_mr_tex = nullptr;
   SDL_GPUTexture *m_default_normal_tex = nullptr;

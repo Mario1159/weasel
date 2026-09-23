@@ -123,6 +123,19 @@ editor::root::draw (entt::registry &registry,
 
   draw_new_project_popup ();
 
+  // A project opened outside the welcome flow (e.g. `weasel --project`)
+  // never passes through the dialog handlers below, so dismiss the welcome
+  // tab as soon as a project is available. Only the first load is handled so
+  // the tab can still be reopened from the View menu.
+  if (!m_project_load_seen
+      && runtime_ctx.resource_manager ().current_project () != nullptr) {
+    m_project_load_seen = true;
+    if (m_show_welcome) {
+      m_show_welcome = false;
+      select_game_view_tab ();
+    }
+  }
+
   if (m_show_welcome) {
     draw_welcome_tab ();
   }

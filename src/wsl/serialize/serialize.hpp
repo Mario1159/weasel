@@ -10,6 +10,9 @@
 #include <rfl/json.hpp>
 #endif
 #ifndef IN_MODULE_INTERFACE
+#include <rfl/AddTagsToVariants.hpp>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <rfl/msgpack.hpp>
 #endif
 
@@ -55,6 +58,41 @@ inline bool
 json_read (std::string_view json, T &out, std::string *error = nullptr)
 {
   return json_read (std::string (json), out, error);
+}
+
+/**
+ * json_write_p / json_read_p: json_write/json_read with rfl processors.
+ *
+ * Materials pass rfl::AddTagsToVariants so the std::variant inside
+ * material_parameter is written with stable type tags. reflect-cpp's
+ * default index-based variant encoding can drift across a round trip
+ * (e.g. an int reads back as a float), silently corrupting parameters.
+ */
+template <typename... Ps>
+inline std::string
+json_write_p (const auto &value, std::string *error = nullptr)
+{
+  try {
+    return rfl::json::write<Ps...> (value);
+  } catch (const std::exception &e) {
+    if (error)
+      *error = e.what ();
+    return {};
+  }
+}
+
+template <typename T, typename... Ps>
+inline bool
+json_read_p (const std::string &json, T &out, std::string *error = nullptr)
+{
+  auto res = rfl::json::read<T, Ps...> (json);
+  if (!res) {
+    if (error)
+      *error = res.error ().what ();
+    return false;
+  }
+  out = std::move (res.value ());
+  return true;
 }
 
 template <typename T>

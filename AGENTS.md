@@ -42,6 +42,7 @@ weasel/
 │   └── mcp-server/         # weasel-mcp-server (AI assistant integration)
 └── tests/
     ├── weasel-cli/         # CLI unit tests (doctest)
+    ├── weasel-core/        # Core engine tests: event bus, resource ids, ACP, math module (doctest)
     ├── weasel-das/         # Engine daslang component-accessor smoke test (doctest)
     └── mcp-server/         # MCP server unit tests (doctest)
 ```
@@ -100,7 +101,7 @@ Phase B migrates cereal serialization to reflect-cpp (rfl) across the engine's r
 | `serialize/component_adapters.hpp` | ✅ Complete - 18+ component helpers with rfl CustomParser |
 | `reg/component_registry.hpp/cpp` | ✅ Complete |
 | `reg/singleton_registry.hpp/cpp` | ✅ Complete |
-| `reg/registry_helpers.hpp` | ✅ Complete |
+| `reg/detail/registry_helpers.hpp` | ✅ Complete |
 | `rsc/scene_snapshot_serializer.hpp/cpp` | ✅ Complete |
 | `rsc/project.hpp` | ✅ Complete |
 | `rsc/project_loader.cpp` | ✅ Complete |
@@ -134,5 +135,5 @@ These cereal helper files are **deprecated** and replaced by `serialize/adapters
 ### Known Issues
 
 - **Stale LSP errors**: The LSP picks up stale system headers at `/usr/local/include/wsl/`. Actual compilation uses correct CPM-installed headers.
-- **Build verification**: Full compile OOMs at ~25% on single-module non-modules build.
-- **Phase C modules build**: Blocked on libarchive include path.
+- **Build verification**: A full from-scratch compile may OOM on memory-constrained machines; build with `-j2` (or lower) if needed.
+- **Phase C modules build**: Blocked on libarchive include path. In addition, `phys/phys.cppm` lists several headers that were removed during the Box3D migration (`broad_phase_layer_interface.hpp`, `jolt_runtime.hpp`, etc.) and must be pruned before `with_modules` builds again. Jolt itself is gone: only `phys/jolt_all.hpp` and a few module-file includes still reference it.

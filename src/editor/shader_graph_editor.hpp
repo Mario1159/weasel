@@ -13,6 +13,11 @@
 #include <string>
 #include <vector>
 
+namespace ImFlow
+{
+class ImNodeFlow;
+} // namespace ImFlow
+
 namespace editor
 {
 
@@ -49,9 +54,11 @@ private:
   std::unique_ptr<wsl::gfx::shader_graph_codegen> m_codegen;
   std::unique_ptr<wsl::gfx::shader_compiler> m_compiler;
 
-  // Opaque handle to ImFlow::ImNodeFlow ( avoids pulling ImNodeFlow.h into
-  // root.hpp )
-  void *m_nodeflow_handle = nullptr;
+  // Owned ImNodeFlow canvas, forward-declared so ImNodeFlow.h stays
+  // out of this header (and everything that includes it, e.g.
+  // root.hpp). The destructor that needs the complete type is
+  // defined in shader_graph_editor.cpp.
+  std::unique_ptr<ImFlow::ImNodeFlow> m_nodeflow_handle;
 
   std::string m_current_path;
   std::string m_compile_log;

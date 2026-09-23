@@ -109,12 +109,12 @@ sys_reg.declare_system_conflict<wsl::sys::my_custom_physics, wsl::sys::physics_s
 
 ## Serialization Support
 
-Component and singleton registries provide function pointers (`save_binary`, `load_binary`, `save_json`, `load_json`) for each registered type. These are used by the scene snapshot serializer:
+Component and singleton registries provide function pointers (`save_binary`, `load_binary`, `save_json`, `load_json`) for each registered type. They take the rfl-based wrappers from `serialize/types.hpp` and are used by the scene snapshot serializer:
 
 ```cpp
-cereal::JSONOutputArchive archive(ss);
-for (auto &desc : comp_reg.ordered()) {
-    desc->save_json(archive, registry);
+serialize::json_writer writer(ss);
+for (auto &desc : comp_reg.ordered ()) {
+    desc->save_json(writer, registry);
 }
 ```
 

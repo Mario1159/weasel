@@ -8,9 +8,9 @@
 #include "system_factory_registry.hpp"
 
 #include <cctype>
-#include <cereal/external/rapidjson/document.h>
-#include <cereal/external/rapidjson/stringbuffer.h>
-#include <cereal/external/rapidjson/writer.h>
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>

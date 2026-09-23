@@ -1,19 +1,12 @@
 # `wsl::phys` — Physics Engine
 
-The current `physics_engine` remains a thin wrapper around
-[Jolt Physics](https://github.com/jrouwe/JoltPhysics) providing body creation,
-stepping, collision queries, and sensor overlap detection.
-
-`box3d_adapter.hpp` contains the first Box3D migration boundary. It exposes
-only Weasel-owned value types and opaque integer body handles; Box3D headers
-and IDs are private to `box3d_adapter.cpp`. xmake builds this adapter with
-Box3D v0.1.0, while the legacy CMake build can enable it with
-`-DWEASEL_ENABLE_BOX3D=ON` without changing the existing Jolt path.
-
-For xmake, select the backend explicitly with:
+Physics is backed by [Box3D](https://github.com/erincatto/box2d) (v0.1.0,
+pulled via `xmake.lua`). `phys::engine` is the public, backend-neutral API:
+body creation, fixed-step simulation, collision queries, and sensor overlap
+detection. Box3D headers and IDs never leak past the adapter.
 
 ```sh
-xmake f --with_box3d=y
+xmake f --toolchain=clang
 xmake build -j2 wsl
 ```
 
@@ -21,36 +14,21 @@ xmake build -j2 wsl
 
 | Class | Header | Description |
 |-------|--------|-------------|
-| `engine` | `physics_engine.hpp` | Owns the Jolt `PhysicsSystem`, job system, temp allocator, and layer filters. Main API for physics simulation. |
-| `contact_listener_impl` | `physics_engine.hpp` | Jolt `ContactListener` that generates `sensor_overlap_event` for sensor/non-sensor pairs. |
-| `broad_phase_layer_interface` | `broad_phase_layer_interface.hpp` | Maps object layers to broad-phase layers for collision filtering. |
-| `object_vs_broad_phase_layer_filter` | `object_vs_broad_phase_layer_filter.hpp` | Filter for broad-phase vs object layer queries. |
-| `object_layer_pair_filter` | `object_layer_pair_filter.hpp` | Filter for object vs object layer collision pairs. |
+| `engine` | `physics_engine.hpp` | Public physics API. Owns the `box3d::world`, fixed-step accumulator, and sensor event queue. |
+| `box3d::world` | `box3d_adapter.hpp` | Weasel-owned boundary over the Box3D C API. Exposes only value types and opaque `body_handle`s; Box3D headers stay private to `box3d_adapter.cpp`. |
 
 ## Backend-neutral types
 
 ```cpp
 using body_id = std::uint64_t;
-enum class motion_type;                     // Static, Kinematic, Dynamic
-enum class allowed_do_fs;                   // All, TranslationX, RotationZ, etc.
+enum class motion_type;      // Static, Kinematic, Dynamic
+enum class allowed_dofs;    // All, TranslationX, RotationZ, etc.
+enum class shape_type;       // box, sphere
 using object_layer = std::uint16_t;
 ```
 
-Jolt remains available only as the fallback implementation detail. New
-physics-facing code should use `phys::engine` and these Weasel-owned types.
-
-## Box3D adapter
-
-```cpp
-#include <wsl/phys/box3d_adapter.hpp>
-
-wsl::phys::box3d::world physics;
-wsl::phys::box3d::body_desc desc;
-auto body = physics.create_body (desc);
-physics.step (1.0F / 60.0F);
-auto position = physics.body_position (body);
-physics.destroy_body (body);
-```
+New physics-facing code should use `phys::engine` and these Weasel-owned
+types — never Box3D types directly.
 
 ## Usage
 
@@ -60,26 +38,26 @@ physics.destroy_body (body);
 wsl::phys::engine physics;
 
 // Configure
-physics.set_gravity(-9.8);
-physics.set_fixed_step(1.0 / 60.0);
+physics.set_gravity (-9.8);
+physics.set_fixed_step (1.0 / 60.0);
+
+// Body creation
+wsl::phys::body_desc desc;
+desc.shape = wsl::phys::shape_type::box;
+desc.half_extents = { 0.5F, 0.5F, 0.5F };
+desc.position = { 0.0F, 5.0F, 0.0F };
+desc.motion = wsl::phys::motion_type::Dynamic;
+wsl::phys::body_id id = physics.create_body (desc);
 
 // Per-frame step
-physics.step(dt);
+physics.step (dt);
 
-// Body creation (via Jolt BodyInterface)
-JPH::BodyInterface &bi = physics.get_body_interface();
-
-JPH::BodyCreationSettings settings(
-    new JPH::BoxShape(JPH::Vec3(1, 1, 1)),
-    JPH::RVec3(0, 5, 0),
-    JPH::Quat::sIdentity(),
-    JPH::EMotionType::Dynamic,
-    Layers::MOVING);
-
-JPH::BodyID body_id = bi.CreateAndAddBody(settings, JPH::EActivation::Activate);
+// Read back state
+wsl::phys::vector3 pos = physics.get_body_position (id);
 
 // Sensor overlap events
-std::vector<wsl::phys::sensor_overlap_event> events = physics.drain_sensor_events();
+physics.register_sensor (sensor_id);
+std::vector<wsl::phys::sensor_overlap_event> events = physics.drain_sensor_events ();
 for (auto &ev : events) {
     if (ev.entered) {
         // sensor hit something
@@ -87,11 +65,26 @@ for (auto &ev : events) {
 }
 
 // Cleanup
-bi.RemoveBody(body_id);
-bi.DestroyBody(body_id);
-physics.clear();
+physics.clear ();
+```
+
+## Box3D adapter
+
+The adapter is the only translation layer between `phys::engine` and Box3D:
+
+```cpp
+#include <wsl/phys/box3d_adapter.hpp>
+
+wsl::phys::box3d::world world;
+wsl::phys::box3d::body_desc desc;
+auto body = world.create_body (desc);
+world.step (1.0F / 60.0F);
+auto position = world.body_position (body);
+world.destroy_body (body);
 ```
 
 ## Collision Layers
 
-Defined in `layers.hpp`. Customize `broad_phase_layer_interface` and pair filters to control which object layers interact.
+Defined in `layers.hpp` as backend-neutral `object_layer` values. Map them
+onto Box3D collision categories inside the adapter to control which layers
+interact.

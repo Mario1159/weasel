@@ -3,10 +3,6 @@
 #include "../comp/component_meta.hpp"
 
 #ifndef IN_MODULE_INTERFACE
-#include <cereal/cereal.hpp>
-#endif
-
-#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 

@@ -50,7 +50,7 @@ struct rigid_body : world_component
 
   struct allowed_dofs_ui
   {
-    phys::allowed_do_fs value = phys::allowed_do_fs::All;
+    phys::allowed_dofs value = phys::allowed_dofs::All;
 
     bool custom_inspect (const char *label,
                          comp::singl::runtime_context *runtime);
@@ -122,7 +122,7 @@ struct rigid_body : world_component
   float applied_radius = 0.5F;
   bool applied_dynamic = true;
   phys::motion_type applied_motion = phys::motion_type::Dynamic;
-  phys::allowed_do_fs applied_dofs = phys::allowed_do_fs::All;
+  phys::allowed_dofs applied_dofs = phys::allowed_dofs::All;
   phys::layers::layer_index_t applied_collision_layer = 0;
   phys::layers::layer_mask_t applied_collision_mask
       = phys::layers::all_collision_layers;
@@ -141,7 +141,7 @@ struct rigid_body : world_component
   static rigid_body create_sphere_body (phys::engine &engine,
                                         const glm::vec3 &pos, float r,
                                         phys::motion_type motion,
-                                        phys::allowed_do_fs dofs);
+                                        phys::allowed_dofs dofs);
 
   // runtime ops
   // world_pos and world_rot must be the entity's world-space position/rotation

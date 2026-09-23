@@ -141,6 +141,10 @@ private:
 
   std::vector<std::string> m_recent_projects;
   bool m_show_welcome = true;
+  // Set the first time a project becomes available, so a project opened
+  // from the command line (weasel --project) can dismiss the welcome tab
+  // once without preventing the user from reopening it from the View menu.
+  bool m_project_load_seen = false;
 };
 
 } // namespace editor

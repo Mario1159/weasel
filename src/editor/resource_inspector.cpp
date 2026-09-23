@@ -15,12 +15,12 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
-#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 #include <filesystem>
+#include <system_error>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/fwd.hpp>
 #include <imgui.h>
@@ -930,9 +930,10 @@ resource_inspector::draw_models ()
           }
         }
         uintmax_t fsize = 0;
-        try {
-          fsize = std::filesystem::file_size (mgr.resolve_path (m.path));
-        } catch (...) {
+        std::error_code fsize_ec;
+        fsize = std::filesystem::file_size (mgr.resolve_path (m.path), fsize_ec);
+        if (fsize_ec) {
+          fsize = 0;
         }
         entries.push_back ({ m.id, m.name, m.path, "gltf model",
                              to_string (m.state), fsize, lod_count });

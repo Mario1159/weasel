@@ -6,7 +6,7 @@ Weasel is an ECS 2D & 3D engine for C++ and Daslang. Made for flexibility and hi
 
 - **PBR Rendering:** Custom clustered forward renderer using SDL3's GPU API, supporting HDR, Bloom, SSAO, and real-time shadows.
 - **Shader Graph:** Material building through nodes and slang shaders.
-- **Physics:** Full integration with `Jolt Physics` engine.
+- **Physics:** Full integration with `Box3D`.
 - **UI:** HTML & CSS support for defining UI in scenes through `RML`. 
 - **Audio System:** Basic audio playback support, 3D audio planned.
 - **Developer Tools:** Built-in editor and MCP server.
@@ -24,18 +24,19 @@ Editor UI and the Core Weasel-lib Architecture.
 ## Getting Started
 
 Download the pre-built binaries from the Release page or get them through your package manager.
-You can also easily build the engine using CMake:
+You can also build the engine from source with [xmake](https://xmake.io):
 
 ### Prerequisites
 
-- **CMake 3.22+**
-- **C++20 Compatible Compiler** (GCC 11+, Clang 13+, MSVC 2022+)
+- **xmake 3.0+**
+- **Clang** (the supported toolchain; GCC 16 also works)
+- **C++20 Compatible Compiler**
 
 ### Building
 
 ```bash
-cmake -B build -S .
-cmake --build build
+xmake f --toolchain=clang
+xmake build -j2
 ```
 
 ### Running the Weasel Editor
@@ -50,13 +51,13 @@ Start learning how to use the weasel engine through our `Documentation` pages.
 
 ## Local Documentation
 
-API documentation can be generated using Doxygen:
+API documentation is generated with Sphinx + hawkmoth:
 
 ```bash
-ninja -C build docs
+xmake build --target docs
 ```
 
-The output will be available in `build/docs/html/index.html`.
+The output will be available at `build/docs/html/index.html`.
 
 ## License
 

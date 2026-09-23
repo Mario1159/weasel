@@ -77,9 +77,6 @@ gfx::scene_renderer::create_default_texture ()
     wsl::log::gfx ()->error ("Failed creating default textures/sampler: {}",
                              SDL_GetError ());
   }
-  // Keep legacy "m_default_texture" valid for older code paths
-  // (preview_bg bind + IBL fallbacks).
-  m_default_texture = m_default_basecolor_tex;
 }
 
 auto
@@ -388,8 +385,8 @@ gfx::scene_renderer::run_clustered_lighting (
   TracyPlot ("point_lights", (int64_t)point_lights.size ());
 
   // Convert the lighting system's `gpu_point_light` array (already in
-  // world space) into the layout expected by the compute shader.
-  // Both structs are identical for now; copy via span.
+  // world space) into the layout expected by the compute shader. The two
+  // structs are layout-compatible, so this is a plain field copy.
   std::vector<gpu_cluster_light> cluster_lights;
   cluster_lights.reserve (point_lights.size ());
   for (const auto &src : point_lights) {
@@ -1353,8 +1350,11 @@ gfx::scene_renderer::render_custom_primitive (
   gfx::pipeline_key key{};
   key.shader_program_hash
       = std::hash<entt::id_type>{}(mat_asset->shader_program.value);
-  key.vertex_layout_hash = 0; // fixed for now
-  key.render_target_hash = 0; // fixed for now
+  // The custom-material path always builds the same 4-attribute interleaved
+  // layout (position/normal/uv/tangent) and renders into the main window
+  // target, so both dimensions are constant for every key produced here.
+  key.vertex_layout_hash = 0;
+  key.render_target_hash = 0;
   key.flags = mat_asset->double_sided ? 1 : 0;
 
   SDL_GPUGraphicsPipeline *gfx_pipe = m_pipeline_cache.acquire (key, pipe);
@@ -1680,11 +1680,9 @@ gfx::scene_renderer::destroy_default_resources ()
   }
 
   if (m_default_brdf_lut_tex != nullptr) {
-    SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_brdf_lut_tex),
-        m_default_brdf_lut_tex = nullptr;
+    SDL_ReleaseGPUTexture (m_ctx->gpu_device, m_default_brdf_lut_tex);
+    m_default_brdf_lut_tex = nullptr;
   }
-
-  m_default_texture = nullptr;
 }
 
 void

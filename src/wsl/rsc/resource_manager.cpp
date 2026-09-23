@@ -820,7 +820,14 @@ rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
           rec->state = scene_state::not_loaded;
           return entt::null;
         }
+      } catch (const std::exception &e) {
+        wsl::log::rsc ()->error ("Scene load job for '{}' threw: {}", id.value,
+                                 e.what ());
+        rec->state = scene_state::not_loaded;
+        return entt::null;
       } catch (...) {
+        wsl::log::rsc ()->error (
+            "Scene load job for '{}' threw an unknown exception", id.value);
         rec->state = scene_state::not_loaded;
         return entt::null;
       }
@@ -2461,7 +2468,14 @@ rsc::resource_manager::load (material_id id)
     std::string json_content ((std::istreambuf_iterator<char> (file)),
                               std::istreambuf_iterator<char> ());
     auto asset = std::make_shared<gfx::material_asset> ();
-    if (!serialize::json_read (json_content, *asset)) {
+    // Materials are written with tagged variants (see
+    // shader_graph_editor); mirror that dialect here so the variant
+    // inside material_parameter round-trips without type drift.
+    std::string read_error;
+    if (!serialize::json_read_p<gfx::material_asset, rfl::AddTagsToVariants> (
+            json_content, *asset, &read_error)) {
+      wsl::log::rsc ()->error ("Failed to parse material '{}': {}", resolved,
+                               read_error);
       return nullptr;
     }
     asset->id = id;

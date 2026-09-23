@@ -105,20 +105,20 @@ rigid_body::allowed_dofs_ui::custom_inspect (
                                        "Rotation XZ",
                                        "Rotation YZ" };
 
-  static const phys::allowed_do_fs vals[] = {
-    phys::allowed_do_fs::All,
-    phys::allowed_do_fs::TranslationX,
-    phys::allowed_do_fs::TranslationY,
-    phys::allowed_do_fs::TranslationZ,
-    phys::allowed_do_fs::RotationX,
-    phys::allowed_do_fs::RotationY,
-    phys::allowed_do_fs::RotationZ,
-    phys::allowed_do_fs::TranslationX | phys::allowed_do_fs::TranslationY,
-    phys::allowed_do_fs::TranslationX | phys::allowed_do_fs::TranslationZ,
-    phys::allowed_do_fs::TranslationY | phys::allowed_do_fs::TranslationZ,
-    phys::allowed_do_fs::RotationX | phys::allowed_do_fs::RotationY,
-    phys::allowed_do_fs::RotationX | phys::allowed_do_fs::RotationZ,
-    phys::allowed_do_fs::RotationY | phys::allowed_do_fs::RotationZ,
+  static const phys::allowed_dofs vals[] = {
+    phys::allowed_dofs::All,
+    phys::allowed_dofs::TranslationX,
+    phys::allowed_dofs::TranslationY,
+    phys::allowed_dofs::TranslationZ,
+    phys::allowed_dofs::RotationX,
+    phys::allowed_dofs::RotationY,
+    phys::allowed_dofs::RotationZ,
+    phys::allowed_dofs::TranslationX | phys::allowed_dofs::TranslationY,
+    phys::allowed_dofs::TranslationX | phys::allowed_dofs::TranslationZ,
+    phys::allowed_dofs::TranslationY | phys::allowed_dofs::TranslationZ,
+    phys::allowed_dofs::RotationX | phys::allowed_dofs::RotationY,
+    phys::allowed_dofs::RotationX | phys::allowed_dofs::RotationZ,
+    phys::allowed_dofs::RotationY | phys::allowed_dofs::RotationZ,
   };
 
   int cur = 0;
@@ -338,7 +338,7 @@ rigid_body::create_box_body (phys::engine &engine, const glm::vec3 &pos,
   rb.dynamic = dyn;
   rb.motion_type.value
       = dyn ? phys::motion_type::Dynamic : phys::motion_type::Static;
-  rb.allowed_dofs.value = phys::allowed_do_fs::All;
+  rb.allowed_dofs.value = phys::allowed_dofs::All;
 
   rb.sync_applied_cache ();
   rb.applied_scale = math::vec3f{ 1, 1, 1 };
@@ -349,7 +349,7 @@ rigid_body::create_box_body (phys::engine &engine, const glm::vec3 &pos,
 rigid_body
 rigid_body::create_sphere_body (phys::engine &engine, const glm::vec3 &pos,
                                 float r, phys::motion_type motion,
-                                phys::allowed_do_fs dofs)
+                                phys::allowed_dofs dofs)
 {
   rigid_body rb;
   rb.shape = shape_type::sphere;

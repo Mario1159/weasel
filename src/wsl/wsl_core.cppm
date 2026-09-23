@@ -13,7 +13,6 @@ module;
 #define WSL_MODULE_BUILD
 #define RMLUI_SDL_VERSION_MAJOR 3
 #define CPP_RTTI_ENABLED
-#define JPH_DEBUG_RENDERER
 
 // STL (the old stl_all.hpp set)
 #include <string>
@@ -140,9 +139,6 @@ export module wsl.core;
 
 // Cross-module dependencies (imported after the module declaration, before
 // any purview declaration).
-// Jolt as a single shared header unit (see math.cppm note).
-import "phys/jolt_all.hpp";
-
 import wsl.math;
 import wsl.event;
 import wsl.phys;

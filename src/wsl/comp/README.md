@@ -11,7 +11,7 @@ Entity-owned data types that define *what an entity is* in the ECS. Components a
 | `hierarchy` | `hierarchy.hpp` | Parent/child/sibling links for entity tree structure. |
 | `camera` | `camera.hpp` | Perspective projection (fov, near, far, aspect). View derived from `world_transform`. |
 | `model_instance_3d` | `model_instance_3d.hpp` | Reference to a `gfx::model_3d` resource for rendering. |
-| `rigid_body` | `rigid_body.hpp` | Physics body definition (shape, collision layer, motion type). Wraps Jolt body lifecycle. |
+| `rigid_body` | `rigid_body.hpp` | Physics body definition (shape, collision layer, motion type). Wraps the `phys::engine` body lifecycle. |
 | `area` | `area3d.hpp` | 3D trigger zone for overlap events. |
 | `character_body` | `character_body.hpp` | Character controller physics body. |
 | `audio` | `audio.hpp` | Audio source reference. |

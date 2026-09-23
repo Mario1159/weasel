@@ -1,7 +1,7 @@
 // Consumer validation for the promoted named modules — `wsl.math` and
-// `wsl.event` (Phases 2-3 of CXX_MODULES_PLAN_V2.md). Compiled with module
-// flags by CMake when WEASEL_ENABLE_MODULES is ON; otherwise it falls back
-// to the legacy header includes so the file stays in the suite either way.
+// `wsl.event`. Compiled with module flags when `with_modules` is enabled;
+// otherwise it falls back to the legacy header includes so the file works
+// in both build modes.
 
 // GCC 16's std declarations conflict with doctest's forward-declaration
 // block when real std headers are included first (via wsl.math's deps).

@@ -11,7 +11,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <ImNodeFlow.h>
 #include "wsl/serialize/serialize.hpp"
-#include <cereal/archives/json.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
@@ -311,14 +310,11 @@ shader_graph_editor::shader_graph_editor (
       m_codegen (std::make_unique<wsl::gfx::shader_graph_codegen> (m_graph)),
       m_compiler (std::make_unique<wsl::gfx::shader_compiler> ())
 {
-  m_nodeflow_handle = new ImFlow::ImNodeFlow ();
+  m_nodeflow_handle = std::make_unique<ImFlow::ImNodeFlow> ();
   new_graph ();
 }
 
-shader_graph_editor::~shader_graph_editor ()
-{
-  delete static_cast<ImFlow::ImNodeFlow *> (m_nodeflow_handle);
-}
+shader_graph_editor::~shader_graph_editor () = default;
 
 void
 shader_graph_editor::new_graph ()
@@ -376,7 +372,7 @@ shader_graph_editor::build_default_graph ()
 void
 shader_graph_editor::sync_nodeflow_to_graph ()
 {
-  auto *nf = static_cast<ImFlow::ImNodeFlow *> (m_nodeflow_handle);
+  auto *nf = m_nodeflow_handle.get ();
   if (!nf)
     return;
 
@@ -439,10 +435,9 @@ void
 shader_graph_editor::sync_graph_to_nodeflow ()
 {
   // Blow away the old ImNodeFlow instance and start fresh.
-  delete static_cast<ImFlow::ImNodeFlow *> (m_nodeflow_handle);
-  m_nodeflow_handle = new ImFlow::ImNodeFlow ();
+  m_nodeflow_handle = std::make_unique<ImFlow::ImNodeFlow> ();
 
-  auto *nf = static_cast<ImFlow::ImNodeFlow *> (m_nodeflow_handle);
+  auto *nf = m_nodeflow_handle.get ();
 
   // Recreate every graph_node as a GraphNodeWrapper.
   for (const auto &node : m_graph.nodes) {
@@ -615,7 +610,7 @@ shader_graph_editor::add_node (wsl::gfx::graph_node_kind kind,
   m_graph.nodes.push_back (std::move (node));
   uint64_t const stored_id = m_graph.nodes.back ().id;
 
-  auto *nf = static_cast<ImFlow::ImNodeFlow *> (m_nodeflow_handle);
+  auto *nf = m_nodeflow_handle.get ();
   if (nf) {
     nf->placeNodeAt<GraphNodeWrapper> (pos, &m_graph, stored_id, m_runtime_ctx);
   }
@@ -880,8 +875,18 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
     if (!ofs) {
       return;
     }
-    cereal::JSONOutputArchive ar (ofs);
-    ar (cereal::make_nvp ("material", *mat));
+    // Write with the same rfl dialect (tagged variants) that
+    // resource_manager::load (material_id) reads back.
+    std::string write_error;
+    std::string const json
+        = wsl::serialize::json_write_p<rfl::AddTagsToVariants> (*mat,
+                                                                 &write_error);
+    if (json.empty ()) {
+      wsl::log::editor ()->error ("Failed to serialize preview material: {}",
+                                  write_error);
+      return;
+    }
+    ofs << json;
   }
   m_preview_material_id = res_mgr.register_material (tmp_path.string ());
   res_mgr.load (m_preview_material_id);
@@ -977,13 +982,16 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
     return wsl::rsc::material_id{};
   }
 
-  try {
-    cereal::JSONOutputArchive ar (ofs);
-    ar (cereal::make_nvp ("material", *mat));
-  } catch (const std::exception &e) {
-    wsl::log::editor ()->error ("Failed to serialize material: {}", e.what ());
+  std::string write_error;
+  std::string const json
+      = wsl::serialize::json_write_p<rfl::AddTagsToVariants> (*mat,
+                                                               &write_error);
+  if (json.empty ()) {
+    wsl::log::editor ()->error ("Failed to serialize material: {}",
+                                write_error);
     return wsl::rsc::material_id{};
   }
+  ofs << json;
 
   auto mid = res_mgr.register_material (mat_path.string ());
   res_mgr.load (mid);
@@ -1050,7 +1058,7 @@ shader_graph_editor::draw (const char *title, bool *open)
       ImGui::OpenPopup ("AddNodeMenu");
     }
 
-    auto *nf = static_cast<ImFlow::ImNodeFlow *> (m_nodeflow_handle);
+    auto *nf = m_nodeflow_handle.get ();
     if (nf) {
       nf->update ();
     }

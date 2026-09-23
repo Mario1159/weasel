@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <wsl/ai/a2a/http/http_listener.hpp>
 #include <wsl/ai/a2a/json_util.hpp>
 
 namespace wsl::ai::a2a
@@ -287,14 +288,29 @@ void
 json_rpc_server_transport::serve (uint16_t port)
 {
   m_running.store (true);
-
-  spdlog::info ("[a2a] JSON-RPC server listening on port {}", port);
-
-  while (m_running.load ()) {
-    std::this_thread::sleep_for (std::chrono::milliseconds{ 100 });
+  const bool started = http::run_http_listener (
+      m_running, port, "[a2a-rpc]",
+      [this] (const std::string &method, const std::string &path,
+              const std::string &body) -> std::string {
+        // Discovery endpoint is part of every A2A server.
+        if (path == "/.well-known/agent-card.json") {
+          return to_json (m_card);
+        }
+        if (method == "POST") {
+          return dispatch_rpc (body);
+        }
+        json_builder jb;
+        jb.begin_object ();
+        jb.add_int ("code",
+                    static_cast<int64_t> (error_code::method_not_found));
+        jb.add_string ("message", "Endpoint not found");
+        jb.end_object ();
+        return jb.str ();
+      });
+  m_running.store (false);
+  if (started) {
+    spdlog::info ("[a2a] JSON-RPC server stopped");
   }
-
-  spdlog::info ("[a2a] JSON-RPC server stopped");
 }
 
 void

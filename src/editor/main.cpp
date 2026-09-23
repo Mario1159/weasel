@@ -1,6 +1,6 @@
-#include "cli/cli_handler.hpp"
 #include "editor_app.hpp"
 #include <SDL3/SDL_filesystem.h>
+#include <CLI/CLI.hpp>
 #include <filesystem>
 
 namespace
@@ -43,18 +43,37 @@ default_engine_resource_path ()
 int
 main (int argc, char **argv)
 {
-  wsl::cli::cli_handler cli;
-  auto const result = cli.parse (argc, argv);
+  // The editor deliberately exposes fewer options than weasel-cli: it can
+  // open a project and optionally a scene, everything else lives in
+  // weasel-cli. Unknown arguments are rejected instead of being treated
+  // as headless commands.
+  CLI::App app{ "Weasel Engine Editor" };
+  app.get_formatter ()->column_width (42);
 
-  if (result.should_exit) {
-    return result.exit_code;
+  std::string project_to_load;
+  auto *project_opt = app.add_option ("--project", project_to_load,
+                                      "Path to the project to load");
+
+  std::string scene_to_load;
+  auto *scene_opt = app.add_option ("--scene", scene_to_load,
+                                    "Path to the scene to open at startup");
+  scene_opt->needs (project_opt);
+
+  try {
+    app.parse (argc, argv);
+  } catch (const CLI::ParseError &e) {
+    return app.exit (e);
   }
 
   editor::editor_app g ("Incantation", 1280, 720,
                         default_engine_resource_path ());
 
-  if (result.project_to_load) {
-    g.set_project_path (*result.project_to_load);
+  if (!project_to_load.empty () && !g.set_project_path (project_to_load)) {
+    return 1;
+  }
+
+  if (!scene_to_load.empty ()) {
+    g.set_scene_path (scene_to_load);
   }
 
   return g.run ();

@@ -21,24 +21,6 @@
 #ifndef IN_MODULE_INTERFACE
 #include <cstdint>
 #endif
-#ifndef IN_MODULE_INTERFACE
-#include <cereal/cereal.hpp>
-#endif
-#ifndef IN_MODULE_INTERFACE
-#include <cereal/types/string.hpp>
-#endif
-#ifndef IN_MODULE_INTERFACE
-#include <cereal/types/variant.hpp>
-#endif
-#ifndef IN_MODULE_INTERFACE
-#include <cereal/types/unordered_map.hpp>
-#endif
-#ifndef IN_MODULE_INTERFACE
-#include <cereal/types/variant.hpp>
-#endif
-#ifndef IN_MODULE_INTERFACE
-#include "../rsc/cereal_glm.hpp"
-#endif
 
 namespace wsl
 {
@@ -63,13 +45,6 @@ struct material_parameter
   explicit material_parameter (const std::string &n, value_type v)
       : value (v), name (n)
   {
-  }
-
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("value", value));
   }
 };
 
@@ -105,17 +80,6 @@ struct material_asset
   /** Metadata: does this material use alpha test / opacity mask? */
   bool alpha_test = false;
 
-  template <class Archive>
-  void
-  serialize (Archive &ar)
-  {
-    ar (cereal::make_nvp ("name", name), cereal::make_nvp ("path", path),
-        cereal::make_nvp ("shader_program", shader_program.value),
-        cereal::make_nvp ("vertex_shader_path", vertex_shader_path),
-        cereal::make_nvp ("double_sided", double_sided),
-        cereal::make_nvp ("alpha_test", alpha_test),
-        cereal::make_nvp ("default_parameters", default_parameters));
-  }
 };
 
 /**

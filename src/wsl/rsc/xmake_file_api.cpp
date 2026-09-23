@@ -2,7 +2,7 @@
 #include "resource_manager.hpp"
 
 #include "wsl/log/log.hpp"
-#include <cereal/external/rapidjson/document.h>
+#include <rapidjson/document.h>
 #include <array>
 #include <cctype>
 #include <cstddef>

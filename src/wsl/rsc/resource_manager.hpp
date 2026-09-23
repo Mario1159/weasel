@@ -85,9 +85,24 @@ namespace xmake
 {
 }
 
-using namespace entt::literals;
+namespace detail
+{
+/**
+ * constexpr hash of the procedural skybox builtin. Keeping the entt
+ * literal in a function scope avoids a file-scope
+ * `using namespace entt::literals;`, which used to leak into every
+ * translation unit that includes this header.
+ */
+constexpr entt::id_type
+skybox_procedural_id ()
+{
+  using namespace entt::literals;
+  return "builtin/skybox_procedural"_hs;
+}
+} // namespace detail
+
 constexpr entt::id_type builtin_skybox_procedural
-    = "builtin/skybox_procedural"_hs;
+    = detail::skybox_procedural_id ();
 
 /** Represents the current loading state of a 3D model. */
 enum class model_state

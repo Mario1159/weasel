@@ -27,7 +27,7 @@ enum class motion_type : std::uint8_t
   Dynamic
 };
 
-enum class allowed_do_fs : std::uint16_t
+enum class allowed_dofs : std::uint16_t
 {
   All = 0,
   TranslationX = 1U << 0U,
@@ -38,10 +38,10 @@ enum class allowed_do_fs : std::uint16_t
   RotationZ = 1U << 5U
 };
 
-constexpr allowed_do_fs
-operator| (allowed_do_fs lhs, allowed_do_fs rhs) noexcept
+constexpr allowed_dofs
+operator| (allowed_dofs lhs, allowed_dofs rhs) noexcept
 {
-  return static_cast<allowed_do_fs> (
+  return static_cast<allowed_dofs> (
       static_cast<std::uint16_t> (lhs) | static_cast<std::uint16_t> (rhs));
 }
 
@@ -71,7 +71,7 @@ enum class shape_type : std::uint8_t
 struct body_desc
 {
   motion_type motion = motion_type::Dynamic;
-  allowed_do_fs allowed_dofs = allowed_do_fs::All;
+  allowed_dofs allowed_dofs = allowed_dofs::All;
   object_layer layer = 0;
   shape_type shape = shape_type::box;
   vector3 position{};
@@ -126,14 +126,6 @@ public:
   bool is_sensor (body_id id) const;
   void push_sensor_event (const sensor_overlap_event &ev);
   std::vector<sensor_overlap_event> drain_sensor_events ();
-
-  // Legacy backend escape hatch. The returned pointers are consumed only by
-  // private backend adapters and are intentionally untyped here.
-  void *native_system () noexcept;
-  void *native_body_interface () noexcept;
-  void *native_body_lock_interface () noexcept;
-  void *native_narrow_phase_query () noexcept;
-  void *native_temp_allocator () noexcept;
 
 private:
   struct impl;

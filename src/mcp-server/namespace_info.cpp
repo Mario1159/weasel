@@ -569,8 +569,8 @@ Designed for seamless interop between GLM and ImGui.
     // Editor: ImGui drag-float with colored stripes (X=red, Y=green, Z=blue)
     v.custom_inspect("label");
 
-    // Serialization (Cereal)
-    ar(cereal::make_nvp("position", v));
+    // Serialization: handled by rfl adapters (serialize/adapters.hpp)
+    rfl::Field<"position", &Transform::pos>()
 
     // EnTT meta reflection
     v.register_meta();
@@ -585,8 +585,7 @@ Designed for seamless interop between GLM and ImGui.
     glm::quat gq = q;            // implicit
     math::quatf q2 = glm::quat{};
 
-    // Serialization
-    ar(cereal::make_nvp("rotation", q));
+    // Serialization: rfl adapters (CustomParser in serialize/adapters.hpp)
 
 ── MikkTSpace (mikktspace*.hpp) ──
 

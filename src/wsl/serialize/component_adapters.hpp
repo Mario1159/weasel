@@ -471,7 +471,7 @@ struct RigidBodyHelper
     r.density = density;
     r.dynamic = dynamic;
     r.motion_type.value = static_cast<phys::motion_type> (motion_type);
-    r.allowed_dofs.value = static_cast<phys::allowed_do_fs> (allowed_dofs);
+    r.allowed_dofs.value = static_cast<phys::allowed_dofs> (allowed_dofs);
     r.collision_layer.value = phys::layers::clamp_layer_index (
         static_cast<phys::layers::layer_index_t> (collision_layer));
     r.collision_mask.value = phys::layers::clamp_layer_mask (

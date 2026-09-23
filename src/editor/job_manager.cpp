@@ -1,4 +1,5 @@
 #include "job_manager.hpp"
+#include "wsl/log/log.hpp"
 #include <chrono>
 #include <cstdio>
 #include <future>
@@ -38,8 +39,15 @@ job_manager::update ()
         == std::future_status::ready) {
       try {
         it->future.get ();
+        m_last_finished_error.clear ();
+      } catch (const std::exception &e) {
+        m_last_finished_error = e.what ();
+        wsl::log::editor ()->error ("Job '{}' failed: {}", it->name,
+                                    m_last_finished_error);
       } catch (...) {
-        // Ignore errors
+        m_last_finished_error = "unknown error";
+        wsl::log::editor ()->error ("Job '{}' failed with an unknown exception",
+                                    it->name);
       }
       m_last_finished_job_name = it->name;
       auto end_time = std::chrono::steady_clock::now ();
@@ -76,6 +84,12 @@ job_manager::get_last_finished_info ()
   char buf[512];
   double const seconds
       = static_cast<double> (m_last_job_duration.count ()) / 1000.0;
+  if (!m_last_finished_error.empty ()) {
+    std::snprintf (buf, sizeof (buf), "%s failed after %.2fs: %s",
+                   m_last_finished_job_name.c_str (), seconds,
+                   m_last_finished_error.c_str ());
+    return std::string (buf);
+  }
   std::snprintf (buf, sizeof (buf), "%s finished successfully in %.2fs",
                  m_last_finished_job_name.c_str (), seconds);
   return std::string (buf);

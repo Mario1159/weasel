@@ -223,10 +223,4 @@ std::vector<sensor_overlap_event> engine::drain_sensor_events ()
   return result;
 }
 
-void *engine::native_system () noexcept { return nullptr; }
-void *engine::native_body_interface () noexcept { return nullptr; }
-void *engine::native_body_lock_interface () noexcept { return nullptr; }
-void *engine::native_narrow_phase_query () noexcept { return nullptr; }
-void *engine::native_temp_allocator () noexcept { return nullptr; }
-
 } // namespace wsl::phys
