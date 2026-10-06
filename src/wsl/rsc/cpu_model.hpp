@@ -4,6 +4,9 @@
 #include <glm/glm.hpp>
 #endif
 #ifndef IN_MODULE_INTERFACE
+#include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <memory>
 #endif
 #ifndef IN_MODULE_INTERFACE
@@ -103,13 +106,17 @@ struct cpu_material
 struct cpu_vertex
 {
   /** Position of the vertex. */
-  glm::vec3 pos;
+  glm::vec3 pos{ 0.0F };
   /** Normal vector of the vertex. */
-  glm::vec3 normal;
+  glm::vec3 normal{ 0.0F };
   /** UV coordinates of the vertex. */
-  glm::vec2 uv;
+  glm::vec2 uv{ 0.0F };
   /** Tangent vector and sign. */
-  glm::vec4 tangent; // xyz = tangent, w = sign
+  glm::vec4 tangent{ 0.0F, 0.0F, 0.0F, 0.0F }; // xyz = tangent, w = sign
+  /** Indices into the owning node's skin joint list. */
+  glm::uvec4 joints{ 0U };
+  /** Linear blend weights corresponding to joints. */
+  glm::vec4 weights{ 0.0F };
 };
 
 /** Represents a geometric primitive within a mesh. */
@@ -130,6 +137,19 @@ struct cpu_mesh
   std::vector<cpu_primitive> primitives;
 };
 
+/** Represents a glTF skin in CPU memory. */
+struct cpu_skin
+{
+  /** glTF node indices in the exact order referenced by vertex joint indices.
+   */
+  std::vector<std::size_t> joint_nodes;
+  /** glTF node names in joint_nodes order, used for runtime skeleton remapping.
+   */
+  std::vector<std::string> joint_names;
+  /** Inverse bind matrices in joint_nodes order. */
+  std::vector<glm::mat4> inverse_binds;
+};
+
 /** Represents a node in a scene hierarchy. */
 struct cpu_node
 {
@@ -137,6 +157,8 @@ struct cpu_node
   glm::mat4 local_transform;
   /** Indices of meshes (LODs) attached to this node. */
   std::vector<int> mesh_lods;
+  /** Index of the skin applied to this node's mesh, or -1 for no skin. */
+  int skin_index = -1;
   /** Child nodes in the hierarchy. */
   std::vector<cpu_node> children;
 };
@@ -155,6 +177,16 @@ struct cpu_model
   std::vector<cpu_mesh> meshes;
   /** List of scenes in the model. */
   std::vector<cpu_scene> scenes;
+  /** Skin definitions referenced by scene nodes. */
+  std::vector<cpu_skin> skins;
+  /**
+   * Names of the animation clips declared by the source file, in file order.
+   *
+   * Names only. The engine never decodes glTF animation data; this list is
+   * what lets the asset pipeline decide whether a model needs a gltf2ozz
+   * conversion and what to label the resulting clips with.
+   */
+  std::vector<std::string> animation_names;
 
   /** Groups of meshes for Level of Detail (LOD) management. */
   std::vector<std::vector<int>> lod_groups;

@@ -283,19 +283,6 @@ extract_translation (const glm::mat4 &m)
   return glm::vec3 (m[3]);
 }
 
-static glm::quat
-look_at_rotation (const glm::vec3 &eye, const glm::vec3 &target,
-                  const glm::vec3 &up = glm::vec3 (0.0F, 1.0F, 0.0F))
-{
-  glm::vec3 const f = glm::normalize (target - eye);
-
-  if (glm::length2 (f) < 1e-8F) {
-    return glm::quat (1.0F, 0.0F, 0.0F, 0.0F);
-  }
-
-  return glm::quatLookAtRH (f, up);
-}
-
 static void
 extract_trs (const glm::mat4 &m, glm::vec3 &pos, glm::quat &rot,
              glm::vec3 &scale)
@@ -931,7 +918,11 @@ game_view::draw_camera_header (entt::registry &registry,
     draw_icon_button (m_editor_ctx, m_editor_ctx->icon_stop (), "Stop",
                       &do_stop, true, false, btn_size);
     if (do_stop) {
-      runtime_ctx.stop ();
+      // Deferred, not stop(): this runs from inside render_impl's draw-data
+      // pass. Tearing the session down here would release GPU pipelines that
+      // the driver may still be executing, and the next frame's fence wait then
+      // blocks forever inside vkDestroyGraphicsPipeline.
+      runtime_ctx.request_stop ();
     }
   } else {
     bool do_play = false;

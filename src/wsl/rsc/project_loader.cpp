@@ -10,6 +10,7 @@
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_manager.hpp"
 #include "rsc/resource_ref.hpp"
+#include "rsc/animation_importer.hpp"
 #include <string>
 #include <vector>
 #include "wsl/log/log.hpp"
@@ -336,6 +337,46 @@ rsc::project_loader::scan_assets (const project &proj)
   scan_dir (resolve (proj.materials_path), { ".wslmat", ".wslgraph" },
             assets.materials);
 
+  // Convert any model that declares animation clips but has no current ozz
+  // runtime data yet. This runs *before* the .ozz scan below so the resources
+  // it produces are registered in the same pass, and before it so the scan
+  // never observes a half-written output. Conversion is cached (see
+  // animation_importer) and best-effort: a model that cannot be converted
+  // still loads and renders, it just has no clips.
+  for (const std::string &model : assets.models) {
+    static_cast<void> (animation_importer::ensure_imported (model));
+  }
+
+  // ozz outputs sit next to the models they were imported from; match the
+  // full filename because fs::path::extension() only sees ".ozz".
+  const auto scan_dir_suffix
+      = [] (const fs::path &dir, const std::vector<std::string> &suffixes,
+            std::vector<std::string> &out) {
+          if (!fs::exists (dir)) {
+            return;
+          }
+
+          for (const fs::directory_entry &entry :
+               fs::recursive_directory_iterator (dir)) {
+            if (!entry.is_regular_file ()) {
+              continue;
+            }
+
+            const std::string name = entry.path ().filename ().string ();
+            for (const std::string &suffix : suffixes) {
+              if (name.ends_with (suffix)) {
+                out.push_back (entry.path ().string ());
+                break;
+              }
+            }
+          }
+        };
+
+  scan_dir_suffix (resolve (proj.models_path), { ".skel.ozz" },
+                   assets.skeletons);
+  scan_dir_suffix (resolve (proj.models_path), { ".anim.ozz" },
+                   assets.animations);
+
   std::sort (assets.models.begin (), assets.models.end ());
   std::sort (assets.images.begin (), assets.images.end ());
   std::sort (assets.cubemaps.begin (), assets.cubemaps.end ());
@@ -344,6 +385,8 @@ rsc::project_loader::scan_assets (const project &proj)
   std::sort (assets.ui_layouts.begin (), assets.ui_layouts.end ());
   std::sort (assets.fonts.begin (), assets.fonts.end ());
   std::sort (assets.shaders.begin (), assets.shaders.end ());
+  std::sort (assets.skeletons.begin (), assets.skeletons.end ());
+  std::sort (assets.animations.begin (), assets.animations.end ());
 
   wsl::log::rsc ()->debug ("Project assets scanned.");
   return assets;

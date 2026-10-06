@@ -8,6 +8,9 @@
 #include <algorithm>
 #endif
 #ifndef IN_MODULE_INTERFACE
+#include <mutex>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <ranges>
 #endif
 #ifndef IN_MODULE_INTERFACE
@@ -432,9 +435,77 @@ struct event_hub
     void *owner_ptr = nullptr;
   };
 
+  /**
+   * Guards the registration/connection vectors below.
+   *
+   * Scene loading runs on a background thread -- `resource_manager::load`
+   * dispatches the scene loader through `std::async` -- and the scene
+   * serializer calls `clear_connections()` / `connect()` on the shared hub
+   * while the main thread may be dispatching events. A concurrent `push_back`
+   * reallocates `connected_handlers` underneath the other thread, which
+   * relocates `connected_sink` elements with a stale data pointer and aborts in
+   * the allocator ("free(): invalid pointer" / "unaligned tcache chunk").
+   *
+   * Recursive because the dispatch helpers lock it, and a handler running
+   * under a dispatch is allowed to connect or disconnect.
+   */
+  mutable std::recursive_mutex mutex;
+
   std::vector<registered_event_source> registered_signal_sources;
   std::vector<registered_event_sink> registered_event_sinks;
   std::vector<connected_sink> connected_handlers;
+
+  /**
+   * A dispatch-ready copy of one connection. Handlers are invoked outside the
+   * lock, so dispatch must not iterate `connected_handlers` directly: a handler
+   * may call `connect`/`disconnect` and invalidate the iteration.
+   */
+  struct dispatch_entry
+  {
+    entt::id_type system_type_id{};
+    handler_invoke_fn invoke = nullptr;
+    void *owner_ptr = nullptr;
+  };
+
+  /**
+   * Snapshots the connections registered for *event_type_id*.
+   */
+  std::vector<dispatch_entry>
+  collect_handlers (entt::id_type event_type_id) const
+  {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
+
+    std::vector<dispatch_entry> result;
+    for (const connected_sink &connection : connected_handlers) {
+      if (connection.event_type_id == event_type_id
+          && connection.invoke != nullptr) {
+        result.push_back ({ connection.system_type_id, connection.invoke,
+                            connection.owner_ptr });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Resolves the owner of a snapshotted connection, falling back to the
+   * system's instance for `ecs_system` owners.
+   */
+  void *
+  resolve_owner (const dispatch_entry &entry) const
+  {
+    if (entry.owner_ptr != nullptr) {
+      return entry.owner_ptr;
+    }
+
+    if (!resolve_system_by_type) {
+      return nullptr;
+    }
+
+    ::wsl::sys::ecs_system *system
+        = resolve_system_by_type (entry.system_type_id);
+    return system;
+  }
 
   entt::dispatcher *dispatcher = nullptr;
   event_debug_db *db = nullptr;
@@ -453,6 +524,7 @@ struct event_hub
   void
   clear_connections ()
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     connected_handlers.clear ();
     if (db != nullptr) {
       db->clear_connections ();
@@ -462,6 +534,7 @@ struct event_hub
   void
   clear_system_declarations (entt::id_type system_type_id)
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     std::erase_if (registered_signal_sources,
                    [system_type_id] (const registered_event_source &entry) {
                      return entry.owner_system_type_id == system_type_id;
@@ -487,6 +560,7 @@ struct event_hub
   std::vector<event_connection_data>
   get_all_connections () const
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     std::vector<event_connection_data> result;
     result.reserve (connected_handlers.size ());
 
@@ -509,6 +583,7 @@ struct event_hub
   get_connections_for_systems (
       const std::unordered_set<entt::id_type> &allowed) const
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     std::vector<event_connection_data> result;
     result.reserve (connected_handlers.size ());
 
@@ -610,6 +685,7 @@ struct event_hub
                               std::string_view owner_system_type_name,
                               std::size_t event_size)
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     if (db != nullptr) {
       db->declare_event_source_by_id (event_type_id, event_type_name,
                                       owner_system_type_id,
@@ -650,6 +726,7 @@ struct event_hub
                             const char *handler_name, handler_invoke_fn invoke,
                             void *owner = nullptr)
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     if (db != nullptr) {
       db->declare_event_sink_by_id (event_type_id, event_type_name,
                                     system_type_id, system_type_name,
@@ -756,6 +833,7 @@ struct event_hub
   bool
   has_event_source (entt::id_type event_type_id) const
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     return std::ranges::any_of (
         registered_signal_sources,
         [event_type_id] (const registered_event_source &source) {
@@ -767,6 +845,7 @@ struct event_hub
   connect (entt::id_type event_type_id, entt::id_type system_type_id,
            const std::string &handler_name)
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     const registered_event_sink *registered_handler = nullptr;
     for (const registered_event_sink &handler : registered_event_sinks) {
       if (handler.event_type_id == event_type_id
@@ -825,6 +904,7 @@ struct event_hub
   disconnect (entt::id_type event_type_id, entt::id_type system_type_id,
               const std::string &handler_name)
   {
+    std::lock_guard<std::recursive_mutex> lock (mutex);
     const std::size_t old_size = connected_handlers.size ();
     std::erase_if (connected_handlers,
                    [event_type_id, system_type_id,
@@ -873,27 +953,16 @@ struct event_hub
 
     const entt::id_type event_type_id = comp::stable_type_id<Signal> ();
 
-    for (const connected_sink &connection : connected_handlers) {
-      if (connection.event_type_id != event_type_id
-          || connection.invoke == nullptr) {
+    // Iterate a snapshot rather than `connected_handlers`: handlers run
+    // unlocked, and one of them may connect or disconnect, which would
+    // invalidate an iteration over the live vector.
+    for (const dispatch_entry &entry : collect_handlers (event_type_id)) {
+      void *owner = resolve_owner (entry);
+      if (owner == nullptr) {
         continue;
       }
 
-      void *owner = connection.owner_ptr;
-      if (owner == nullptr) {
-        if (!resolve_system_by_type) {
-          continue;
-        }
-
-        ::wsl::sys::ecs_system *system
-            = resolve_system_by_type (connection.system_type_id);
-        if (system == nullptr) {
-          continue;
-        }
-        owner = system;
-      }
-
-      connection.invoke (owner, *registry, &event);
+      entry.invoke (owner, *registry, &event);
     }
   }
 
@@ -926,23 +995,13 @@ struct event_hub
       return;
     }
 
-    for (const connected_sink &connection : connected_handlers) {
-      if (connection.event_type_id != event_type_id
-          || connection.invoke == nullptr) {
+    for (const dispatch_entry &entry : collect_handlers (event_type_id)) {
+      void *owner = resolve_owner (entry);
+      if (owner == nullptr) {
         continue;
       }
 
-      void *owner = connection.owner_ptr;
-      if (owner == nullptr) {
-        ::wsl::sys::ecs_system *system
-            = resolve_system_by_type (connection.system_type_id);
-        if (system == nullptr) {
-          continue;
-        }
-        owner = system;
-      }
-
-      connection.invoke (owner, *registry, data);
+      entry.invoke (owner, *registry, data);
     }
   }
 };

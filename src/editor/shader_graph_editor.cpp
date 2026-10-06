@@ -124,7 +124,7 @@ public:
         addIN_uid<float> (pin.id, label, 0.0f,
                           ImFlow::ConnectionFilter::SameType (), style);
       } else {
-        addOUT_uid<float> (pin.id, label, style);
+        static_cast<void> (addOUT_uid<float> (pin.id, label, style));
       }
     }
   }
@@ -231,7 +231,8 @@ public:
           std::string item = image_info.name + " (" + image_info.path + ")";
           if (ImGui::Selectable (item.c_str (), is_selected)) {
             n->properties["image_id"] = std::to_string (image_info.id);
-            res_mgr.load (wsl::rsc::image_id{ image_info.id });
+            static_cast<void> (
+                res_mgr.load (wsl::rsc::image_id{ image_info.id }));
           }
           if (is_selected) {
             ImGui::SetItemDefaultFocus ();
@@ -862,7 +863,7 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
               parsed) };
           mat->default_parameters[uniform_name]
               = wsl::gfx::material_parameter (uniform_name, image_id);
-          res_mgr.load (image_id);
+          static_cast<void> (res_mgr.load (image_id));
         }
       }
     }
@@ -879,8 +880,8 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
     // resource_manager::load (material_id) reads back.
     std::string write_error;
     std::string const json
-        = wsl::serialize::json_write_p<rfl::AddTagsToVariants> (*mat,
-                                                                 &write_error);
+        = wsl::serialize::json_write_p<rfl::AddNamespacedTagsToVariants> (
+            *mat, &write_error);
     if (json.empty ()) {
       wsl::log::editor ()->error ("Failed to serialize preview material: {}",
                                   write_error);
@@ -889,7 +890,7 @@ shader_graph_editor::update_preview (const wsl::gfx::shader_program &prog)
     ofs << json;
   }
   m_preview_material_id = res_mgr.register_material (tmp_path.string ());
-  res_mgr.load (m_preview_material_id);
+  static_cast<void> (res_mgr.load (m_preview_material_id));
 }
 
 wsl::rsc::material_id
@@ -967,7 +968,7 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
               parsed) };
           mat->default_parameters[uniform_name]
               = wsl::gfx::material_parameter (uniform_name, image_id);
-          res_mgr.load (image_id);
+          static_cast<void> (res_mgr.load (image_id));
         }
       }
     }
@@ -984,8 +985,8 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
 
   std::string write_error;
   std::string const json
-      = wsl::serialize::json_write_p<rfl::AddTagsToVariants> (*mat,
-                                                               &write_error);
+      = wsl::serialize::json_write_p<rfl::AddNamespacedTagsToVariants> (
+          *mat, &write_error);
   if (json.empty ()) {
     wsl::log::editor ()->error ("Failed to serialize material: {}",
                                 write_error);
@@ -994,7 +995,7 @@ shader_graph_editor::create_material_from_graph (const std::string &name)
   ofs << json;
 
   auto mid = res_mgr.register_material (mat_path.string ());
-  res_mgr.load (mid);
+  static_cast<void> (res_mgr.load (mid));
   wsl::log::editor ()->info ("Created material '{}' at {}", name,
                              mat_path.string ());
   return mid;
@@ -1032,7 +1033,7 @@ shader_graph_editor::draw (const char *title, bool *open)
           m_mat_file_mtime = mat_mtime;
           auto &res_mgr = m_runtime_ctx->resource_manager ();
           auto mid = res_mgr.register_material (mat_path);
-          res_mgr.load (mid);
+          static_cast<void> (res_mgr.load (mid));
           m_compile_log = "Hot-reloaded material from disk.";
         }
       }

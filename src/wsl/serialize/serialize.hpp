@@ -63,7 +63,7 @@ json_read (std::string_view json, T &out, std::string *error = nullptr)
 /**
  * json_write_p / json_read_p: json_write/json_read with rfl processors.
  *
- * Materials pass rfl::AddTagsToVariants so the std::variant inside
+ * Materials pass rfl::AddNamespacedTagsToVariants so the std::variant inside
  * material_parameter is written with stable type tags. reflect-cpp's
  * default index-based variant encoding can drift across a round trip
  * (e.g. an int reads back as a float), silently corrupting parameters.

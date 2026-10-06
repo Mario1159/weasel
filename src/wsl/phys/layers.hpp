@@ -8,13 +8,13 @@ namespace wsl
 namespace phys
 {
 
-/**
- * Collision layer definitions and filtering logic.
- */
+// Collision layer definitions and filtering logic.
 namespace layers
 {
 
+/** Index of a collision layer. */
 using layer_index_t = std::uint8_t;
+/** Bit mask containing multiple collision layers. */
 using layer_mask_t = std::uint16_t;
 
 inline constexpr layer_index_t collision_layer_count = 8;
@@ -23,8 +23,7 @@ inline constexpr layer_mask_t all_collision_layers
 
 // Legacy object layers are kept for non-rigidbody physics objects like
 // character controllers and area sensors.
-inline constexpr std::uint16_t
-    STATIC // NOLINT(readability-identifier-naming)
+inline constexpr std::uint16_t STATIC // NOLINT(readability-identifier-naming)
     = 0;
 inline constexpr std::uint16_t dynamic = 1;
 inline constexpr std::uint16_t character = 2;
@@ -39,8 +38,8 @@ inline constexpr std::uint16_t encoded_collision_mask
     = ((1U << encoded_mask_bits) - 1U) << encoded_mask_shift;
 inline constexpr std::uint16_t encoded_motion_shift
     = encoded_mask_shift + encoded_mask_bits;
-inline constexpr std::uint16_t encoded_motion_mask
-    = 0x3U << encoded_motion_shift;
+inline constexpr std::uint16_t encoded_motion_mask = 0x3U
+                                                     << encoded_motion_shift;
 
 enum class motion_bucket : std::uint8_t
 {

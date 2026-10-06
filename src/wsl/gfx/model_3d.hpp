@@ -9,6 +9,9 @@
 #include <SDL3/SDL_gpu.h>
 #endif
 #ifndef IN_MODULE_INTERFACE
+#include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <glm/ext/matrix_float4x4.hpp>
 #endif
 #ifndef IN_MODULE_INTERFACE
@@ -71,12 +74,32 @@ struct aabb
   }
 };
 
+/** Skin metadata imported alongside a skinned model. */
+struct skin
+{
+  /** glTF node indices in the order referenced by mesh vertex joint indices. */
+  std::vector<std::size_t> joint_nodes;
+  /** glTF node names in joint_nodes order, used for ozz skeleton remapping. */
+  std::vector<std::string> joint_names;
+  /** Inverse bind matrices in joint_nodes order. */
+  std::vector<glm::mat4> inverse_binds;
+
+  /** Returns the number of joints in this skin. */
+  [[nodiscard]] std::size_t
+  joint_count () const
+  {
+    return joint_names.size ();
+  }
+};
+
 /** Scene graph node used by a model scene. */
 struct node
 {
   glm::mat4 world_transform{ 1.0F };
   glm::mat4 local_transform{ 1.0F };
   std::vector<gfx::mesh *> mesh_lods;
+  /** Index of the skin applied to this node's mesh, or -1 for no skin. */
+  int skin_index = -1;
   std::vector<node> children;
 };
 
@@ -91,6 +114,16 @@ struct model_3d
 {
   std::vector<mesh> meshes;
   std::vector<scene> scenes;
+  /** Skin definitions referenced by scene nodes. */
+  std::vector<skin> skins;
+  /**
+   * Names of the animation clips declared by the source file, in file order.
+   *
+   * Names only: the engine does not decode glTF animation data. Clip playback
+   * uses ozz `.anim.ozz` files produced by `animation_importer`; these names
+   * are what lets the editor offer a per-model clip list.
+   */
+  std::vector<std::string> animation_names;
 
   /** Set of meshes representing different LOD levels for a base mesh. */
   struct lod_group
@@ -117,6 +150,8 @@ struct model_3d
 
       meshes = std::move (other.meshes);
       scenes = std::move (other.scenes);
+      skins = std::move (other.skins);
+      animation_names = std::move (other.animation_names);
       lod_groups = std::move (other.lod_groups);
       default_scene = other.default_scene;
 

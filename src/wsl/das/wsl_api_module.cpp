@@ -2625,6 +2625,97 @@ wsl_audio_set_volume (uint32_t entity, float volume)
 
 // ── Model instance ──
 
+// ── Animation ──
+//
+// These write straight to comp::animator rather than going through the event
+// hub: the animation system already diffs clip_path every frame, so changing
+// it is what starts a crossfade. There is no need to bounce the request off a
+// system callback to reach the same state.
+
+/** Resolves the registry and an entity carrying comp::animator, or null. */
+static comp::animator *
+animator_of (uint32_t entity)
+{
+  auto *reg = get_registry ();
+  if (!reg) {
+    return nullptr;
+  }
+  auto e = static_cast<entt::entity> (entity);
+  if (!reg->valid (e) || !reg->all_of<comp::animator> (e)) {
+    return nullptr;
+  }
+  return &reg->get<comp::animator> (e);
+}
+
+void
+wsl_anim_play (uint32_t entity, const char *clip)
+{
+  if (!clip) {
+    return;
+  }
+  if (comp::animator *anim = animator_of (entity); anim != nullptr) {
+    anim->clip_path = clip;
+    anim->time = 0.0F;
+    anim->finished = false;
+    anim->playing = true;
+    anim->paused = false;
+  }
+}
+
+void
+wsl_anim_crossfade (uint32_t entity, const char *clip, float duration)
+{
+  if (!clip) {
+    return;
+  }
+  if (comp::animator *anim = animator_of (entity); anim != nullptr) {
+    // Changing clip_path is what the animation system watches to begin a
+    // crossfade, so this matches anim_play apart from the fade length.
+    anim->clip_path = clip;
+    anim->crossfade_duration = std::max (0.0F, duration);
+    anim->time = 0.0F;
+    anim->finished = false;
+    anim->playing = true;
+    anim->paused = false;
+  }
+}
+
+void
+wsl_anim_stop (uint32_t entity)
+{
+  if (comp::animator *anim = animator_of (entity); anim != nullptr) {
+    anim->playing = false;
+    anim->paused = false;
+    anim->time = 0.0F;
+    anim->finished = false;
+  }
+}
+
+void
+wsl_anim_set_speed (uint32_t entity, float speed)
+{
+  if (comp::animator *anim = animator_of (entity); anim != nullptr) {
+    anim->speed = speed;
+  }
+}
+
+void
+wsl_anim_set_time (uint32_t entity, float time)
+{
+  if (comp::animator *anim = animator_of (entity); anim != nullptr) {
+    anim->time = std::max (0.0F, time);
+    anim->finished = false;
+  }
+}
+
+void
+wsl_anim_set_loop (uint32_t entity, bool loop)
+{
+  if (comp::animator *anim = animator_of (entity); anim != nullptr) {
+    anim->loop = loop;
+  }
+}
+
 void
 wsl_set_model (uint32_t entity, const char *path)
 {
@@ -3038,6 +3129,32 @@ public:
         *this, lib, "audio_set_volume", ::das::SideEffects::modifyExternal,
         "wsl::das::wsl_audio_set_volume")
         ->args ({ "entity", "volume" });
+
+    // ── Animation ──
+    addExtern<DAS_BIND_FUN (wsl_anim_play)> (*this, lib, "anim_play",
+                                             ::das::SideEffects::modifyExternal,
+                                             "wsl::das::wsl_anim_play")
+        ->args ({ "entity", "clip" });
+    addExtern<DAS_BIND_FUN (wsl_anim_crossfade)> (
+        *this, lib, "anim_crossfade", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_anim_crossfade")
+        ->args ({ "entity", "clip", "duration" });
+    addExtern<DAS_BIND_FUN (wsl_anim_stop)> (*this, lib, "anim_stop",
+                                             ::das::SideEffects::modifyExternal,
+                                             "wsl::das::wsl_anim_stop")
+        ->arg ("entity");
+    addExtern<DAS_BIND_FUN (wsl_anim_set_speed)> (
+        *this, lib, "anim_set_speed", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_anim_set_speed")
+        ->args ({ "entity", "speed" });
+    addExtern<DAS_BIND_FUN (wsl_anim_set_time)> (
+        *this, lib, "anim_set_time", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_anim_set_time")
+        ->args ({ "entity", "time" });
+    addExtern<DAS_BIND_FUN (wsl_anim_set_loop)> (
+        *this, lib, "anim_set_loop", ::das::SideEffects::modifyExternal,
+        "wsl::das::wsl_anim_set_loop")
+        ->args ({ "entity", "loop" });
 
     // ── Systems: parallel execution hints ──
     addExtern<DAS_BIND_FUN (wsl_set_system_stage)> (

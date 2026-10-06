@@ -322,6 +322,7 @@ comp::singl::runtime_context::stop ()
   // Ensure GPU is idle before we start destroying renderers and restoring
   // states. This prevents VRAM exhaustion from deferred releases during rapid
   // play/stop cycles.
+
   if (m_render_ctx->gpu_device != nullptr) {
     SDL_WaitForGPUIdle (m_render_ctx->gpu_device);
   }
@@ -374,6 +375,24 @@ comp::singl::runtime_context::stop ()
   m_play_session_origin_scene = nullptr;
 
   wsl::log::core ()->debug ("Play session stopped");
+}
+
+void
+comp::singl::runtime_context::request_stop ()
+{
+  m_stop_requested = true;
+}
+
+void
+comp::singl::runtime_context::process_pending_stop ()
+{
+  if (!m_stop_requested) {
+    return;
+  }
+  // Clear first: stop() can be re-entered indirectly (scene restoration may
+  // trigger further requests), and we do not want to loop on one request.
+  m_stop_requested = false;
+  stop ();
 }
 
 comp::singl::rendering_manager *

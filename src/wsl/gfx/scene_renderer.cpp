@@ -40,6 +40,64 @@
 namespace wsl
 {
 
+namespace
+{
+
+void
+configure_mesh_vertex_input (SDL_GPUGraphicsPipelineCreateInfo &pipe)
+{
+  static SDL_GPUVertexBufferDescription vertex_buffer{};
+  static SDL_GPUVertexAttribute attributes[6]{};
+
+  vertex_buffer = {};
+  vertex_buffer.slot = 0;
+  vertex_buffer.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+  vertex_buffer.pitch = static_cast<Uint32> (sizeof (gfx::vertex));
+
+  attributes[0] = {};
+  attributes[0].location = 0;
+  attributes[0].buffer_slot = 0;
+  attributes[0].offset = offsetof (gfx::vertex, pos);
+  attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+
+  attributes[1] = {};
+  attributes[1].location = 1;
+  attributes[1].buffer_slot = 0;
+  attributes[1].offset = offsetof (gfx::vertex, normal);
+  attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+
+  attributes[2] = {};
+  attributes[2].location = 2;
+  attributes[2].buffer_slot = 0;
+  attributes[2].offset = offsetof (gfx::vertex, uv);
+  attributes[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+
+  attributes[3] = {};
+  attributes[3].location = 3;
+  attributes[3].buffer_slot = 0;
+  attributes[3].offset = offsetof (gfx::vertex, tangent);
+  attributes[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+
+  attributes[4] = {};
+  attributes[4].location = 4;
+  attributes[4].buffer_slot = 0;
+  attributes[4].offset = offsetof (gfx::vertex, joints);
+  attributes[4].format = SDL_GPU_VERTEXELEMENTFORMAT_UINT4;
+
+  attributes[5] = {};
+  attributes[5].location = 5;
+  attributes[5].buffer_slot = 0;
+  attributes[5].offset = offsetof (gfx::vertex, weights);
+  attributes[5].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+
+  pipe.vertex_input_state.num_vertex_buffers = 1;
+  pipe.vertex_input_state.vertex_buffer_descriptions = &vertex_buffer;
+  pipe.vertex_input_state.num_vertex_attributes = 6;
+  pipe.vertex_input_state.vertex_attributes = attributes;
+}
+
+} // namespace
+
 void
 gfx::scene_renderer::create_default_texture ()
 {
@@ -273,10 +331,12 @@ gfx::scene_renderer::draw_visible_models ()
       }
 
       m_active_material_override = draw.material_override;
+      m_active_palette = draw.palette;
       draw_model (*draw.model, draw.scene_index, draw.transform,
                   m_active_view.view_proj, draw.mip_lod_bias,
                   draw.geometry_lod_bias, draw.visibility_range);
       m_active_material_override = {};
+      m_active_palette = nullptr;
     }
 
     // Pass 2: blend primitives only (no depth write, reads depth from pass 1).
@@ -287,10 +347,12 @@ gfx::scene_renderer::draw_visible_models ()
       }
 
       m_active_material_override = draw.material_override;
+      m_active_palette = draw.palette;
       draw_model (*draw.model, draw.scene_index, draw.transform,
                   m_active_view.view_proj, draw.mip_lod_bias,
                   draw.geometry_lod_bias, draw.visibility_range);
       m_active_material_override = {};
+      m_active_palette = nullptr;
     }
 
     m_alpha_pass = alpha_render_pass::all;
@@ -310,7 +372,7 @@ gfx::scene_renderer::draw_visible_model_outlines ()
     }
 
     draw_model_outline (*draw.model, draw.scene_index, draw.transform,
-                        m_active_view.view_proj);
+                        m_active_view.view_proj, draw.palette);
   }
 }
 
@@ -334,8 +396,10 @@ gfx::scene_renderer::build_ssao_for_visible_models ()
       continue;
     }
 
+    m_active_palette = draw.palette;
     draw_model_ssao (*draw.model, draw.scene_index, draw.transform,
                      m_active_view.view, m_active_view.proj);
+    m_active_palette = nullptr;
   }
 
   end_ssao_prepass ();
@@ -693,12 +757,22 @@ gfx::scene_renderer::create_pipeline ()
   }
 
   // Helper: create a pipeline with specified alpha mode and cull mode.
-  auto make_pipeline = [&] (alpha_mode a_mode,
-                            SDL_GPUCullMode cull) -> SDL_GPUGraphicsPipeline * {
+  //
+  // `vs` defaults to the plain (non-skinned) vertex shader. The skinned
+  // variants pass the skinning variant instead, so the two sets are built from
+  // exactly the same state description and cannot drift apart. Deriving the
+  // skinned set by hand-copying this function instead is what previously let
+  // the vertex input layout and the 4x MSAA sample count silently go missing
+  // from the skinned pipelines -- the mesh then vanished with no API error.
+  //
+  // `vs` is passed explicitly rather than defaulted: a lambda default argument
+  // may not reference a captured local.
+  auto make_pipeline = [&] (alpha_mode a_mode, SDL_GPUCullMode cull,
+                            SDL_GPUShader *vs) -> SDL_GPUGraphicsPipeline * {
     SDL_GPUGraphicsPipelineCreateInfo pipe{};
     SDL_zero (pipe);
 
-    pipe.vertex_shader = vert;
+    pipe.vertex_shader = vs;
     pipe.fragment_shader = frag;
     pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
     pipe.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
@@ -776,60 +850,66 @@ gfx::scene_renderer::create_pipeline ()
     pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
     pipe.multisample_state.sample_mask = 0;
 
-    static SDL_GPUVertexBufferDescription vbuf{};
-    vbuf.slot = 0;
-    vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    vbuf.pitch = (Uint32)sizeof (vertex);
-
-    pipe.vertex_input_state.num_vertex_buffers = 1;
-    pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
-
-    static SDL_GPUVertexAttribute attrs[4];
-    memset (attrs, 0, sizeof (attrs));
-
-    attrs[0].location = 0;
-    attrs[0].buffer_slot = 0;
-    attrs[0].offset = offsetof (vertex, pos);
-    attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-    attrs[1].location = 1;
-    attrs[1].buffer_slot = 0;
-    attrs[1].offset = offsetof (vertex, normal);
-    attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-    attrs[2].location = 2;
-    attrs[2].buffer_slot = 0;
-    attrs[2].offset = offsetof (vertex, uv);
-    attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-
-    attrs[3].location = 3;
-    attrs[3].buffer_slot = 0;
-    attrs[3].offset = offsetof (vertex, tangent);
-    attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-
-    pipe.vertex_input_state.num_vertex_attributes = 4;
-    pipe.vertex_input_state.vertex_attributes = attrs;
+    configure_mesh_vertex_input (pipe);
 
     return SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
   };
 
   // Lit, single-sided: 3 alpha mode variants
   m_pipelines.opaque
-      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_BACK);
-  m_pipelines.mask = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_BACK);
-  m_pipelines.blend = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_BACK);
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_BACK, vert);
+  m_pipelines.mask
+      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_BACK, vert);
+  m_pipelines.blend
+      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_BACK, vert);
 
   // Lit, double-sided: 3 alpha mode variants
   m_pipelines_double_sided.opaque
-      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_NONE);
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_NONE, vert);
   m_pipelines_double_sided.mask
-      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE);
+      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE, vert);
   m_pipelines_double_sided.blend
-      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_NONE);
+      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_NONE, vert);
 
   // Legacy pointers point to opaque variants (for backwards compatibility).
   m_pipeline = m_pipelines.opaque;
   m_pipeline_double_sided = m_pipelines_double_sided.opaque;
+
+  // ---- skinned variants ----
+  // Identical to the lit pipelines above except for the vertex shader, so they
+  // are built through the same helper. Only draws that actually carry a
+  // palette bind these; everything else keeps the plain pipelines and pays
+  // nothing for skinning. Built before the shaders below are released, since
+  // `frag` is still referenced here.
+  if (SDL_GPUShader *skinned_vert = create_skinned_vertex_shader (
+          "engine://compiled_shaders/cube_skinned.vert.slang.spv");
+      skinned_vert != nullptr) {
+    m_pipelines_skinned.opaque = make_pipeline (
+        alpha_mode::opaque, SDL_GPU_CULLMODE_BACK, skinned_vert);
+    m_pipelines_skinned.mask
+        = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE, skinned_vert);
+    m_pipelines_skinned.blend = make_pipeline (
+        alpha_mode::blend, SDL_GPU_CULLMODE_NONE, skinned_vert);
+
+    m_pipelines_skinned_double_sided.opaque = make_pipeline (
+        alpha_mode::opaque, SDL_GPU_CULLMODE_NONE, skinned_vert);
+    m_pipelines_skinned_double_sided.mask
+        = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE, skinned_vert);
+    m_pipelines_skinned_double_sided.blend = make_pipeline (
+        alpha_mode::blend, SDL_GPU_CULLMODE_NONE, skinned_vert);
+
+    // A null pipeline is skipped silently by the draw loop, so an animated mesh
+    // would just vanish with nothing in the log. Surface it once here instead.
+    if (m_pipelines_skinned.opaque == nullptr
+        || m_pipelines_skinned_double_sided.opaque == nullptr) {
+      wsl::log::gfx ()->warn (
+          "Skinned lit pipelines unavailable ({}); animated meshes will not "
+          "render",
+          SDL_GetError ());
+    }
+
+    SDL_ReleaseGPUShader (m_ctx->gpu_device, skinned_vert);
+  }
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -855,6 +935,8 @@ gfx::scene_renderer::destroy_pipeline ()
 
   destroy_set (m_pipelines);
   destroy_set (m_pipelines_double_sided);
+  destroy_set (m_pipelines_skinned);
+  destroy_set (m_pipelines_skinned_double_sided);
 
   m_pipeline = nullptr;
   m_pipeline_double_sided = nullptr;
@@ -932,6 +1014,66 @@ gfx::scene_renderer::draw_model (gfx::model_3d &model, size_t scene_index,
                 visibility_range);
 }
 
+SDL_GPUShader *
+gfx::scene_renderer::create_skinned_vertex_shader (const char *path,
+                                                   uint32_t num_uniform_buffers)
+{
+  auto id = m_res_mgr->register_shader (path);
+  // Slot 0 is the per-draw matrices, slot 1 the joint palette; the outline
+  // pass additionally keeps its own params cbuffer in between.
+  SDL_GPUShader *shader = gfx::shader::load_from_manager (
+      m_ctx->gpu_device, m_res_mgr, id, SDL_GPU_SHADERSTAGE_VERTEX,
+      num_uniform_buffers, 0);
+  if (shader == nullptr) {
+    wsl::log::gfx ()->warn ("Skinned vertex shader unavailable ({}): {}", path,
+                            SDL_GetError ());
+  }
+  return shader;
+}
+
+size_t
+gfx::scene_renderer::pack_joint_palette (const joint_palette &palette,
+                                         std::vector<uint8_t> &scratch)
+{
+  const size_t count
+      = std::min (palette.matrices.size (), joint_palette::max_joints);
+
+  // Whole block, always. The count leads the block and the array follows at the
+  // std140-aligned offset 16, so there is no "used prefix" variant: the shader
+  // indexes the array directly and a short upload would leave stale entries
+  // behind for indices inside the count.
+  scratch.resize (joint_palette_layout::total_bytes);
+
+  // A rig with no joints still needs a count of 0 so the shader blends nothing
+  // rather than reading uninitialised memory.
+  const auto count_value = static_cast<uint32_t> (count);
+  std::memcpy (scratch.data () + joint_palette_layout::count_offset,
+               &count_value, sizeof (count_value));
+
+  if (count > 0) {
+    std::memcpy (scratch.data () + joint_palette_layout::matrix_offset,
+                 palette.matrices.data (), count * sizeof (glm::mat4));
+  }
+
+  return scratch.size ();
+}
+
+void
+gfx::scene_renderer::push_active_palette (SDL_GPUCommandBuffer *cmd,
+                                          uint32_t slot)
+{
+  if (m_active_palette == nullptr) {
+    return;
+  }
+
+  // Layout must match the JointPalette cbuffer exactly: the full 128-entry
+  // mat4 array, then the uint count at joint_palette_layout::count_offset.
+  const std::size_t bytes
+      = pack_joint_palette (*m_active_palette, m_palette_scratch);
+
+  SDL_PushGPUVertexUniformData (cmd, slot, m_palette_scratch.data (), bytes);
+}
+
 void
 gfx::scene_renderer::render_mesh (const glm::mat4 &model,
                                   const glm::mat4 &view_proj, const mesh &m,
@@ -958,6 +1100,10 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
   matrices mat{ model, view_proj, n4, view };
 
   SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &mat, sizeof (matrices));
+
+  // Joint palette lives in vertex uniform slot 1 for the main pass, matching
+  // the JointPalette cbuffer in skinning.slang.
+  push_active_palette (m_ctx->main_cmd, 1);
 
   // Push ClusterParams cbuffer (b4, space3 in Slang -> slot 4 here).
   if (m_clustered.is_active ()) {
@@ -996,9 +1142,19 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
 
     SDL_GPUGraphicsPipeline *pipe = nullptr;
 
+    // A draw that carries a palette must use a pipeline built from the
+    // skinned vertex shader, because only that one declares the palette
+    // cbuffer. Custom-material primitives take their own pipeline path above
+    // and do not participate in the variant set.
+    const bool skinned = m_active_palette != nullptr;
+
     if (m_force_unlit || prim.mat.unlit) {
-      const auto &ps = prim.mat.double_sided ? m_pipelines_unlit_double_sided
-                                             : m_pipelines_unlit;
+      const pipeline_set &ps
+          = !skinned ? (prim.mat.double_sided ? m_pipelines_unlit_double_sided
+                                              : m_pipelines_unlit)
+                     : (prim.mat.double_sided
+                            ? m_pipelines_skinned_unlit_double_sided
+                            : m_pipelines_skinned_unlit);
       switch (prim.mat.mode) {
       case alpha_mode::mask:
         pipe = ps.mask;
@@ -1012,8 +1168,11 @@ gfx::scene_renderer::render_mesh (const glm::mat4 &model,
         break;
       }
     } else {
-      const auto &ps
-          = prim.mat.double_sided ? m_pipelines_double_sided : m_pipelines;
+      const pipeline_set &ps
+          = !skinned ? (prim.mat.double_sided ? m_pipelines_double_sided
+                                              : m_pipelines)
+                     : (prim.mat.double_sided ? m_pipelines_skinned_double_sided
+                                              : m_pipelines_skinned);
       switch (prim.mat.mode) {
       case alpha_mode::mask:
         pipe = ps.mask;
@@ -1318,41 +1477,14 @@ gfx::scene_renderer::render_custom_primitive (
   pipe.multisample_state.sample_mask = 0;
   pipe.multisample_state.enable_mask = false;
 
-  static SDL_GPUVertexBufferDescription vbuf{};
-  vbuf.slot = 0;
-  vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-  vbuf.pitch = (Uint32)sizeof (vertex);
-
-  pipe.vertex_input_state.num_vertex_buffers = 1;
-  pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
-
-  static SDL_GPUVertexAttribute attrs[4];
-  memset (attrs, 0, sizeof (attrs));
-  attrs[0].location = 0;
-  attrs[0].buffer_slot = 0;
-  attrs[0].offset = offsetof (vertex, pos);
-  attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-  attrs[1].location = 1;
-  attrs[1].buffer_slot = 0;
-  attrs[1].offset = offsetof (vertex, normal);
-  attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-  attrs[2].location = 2;
-  attrs[2].buffer_slot = 0;
-  attrs[2].offset = offsetof (vertex, uv);
-  attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-  attrs[3].location = 3;
-  attrs[3].buffer_slot = 0;
-  attrs[3].offset = offsetof (vertex, tangent);
-  attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-  pipe.vertex_input_state.num_vertex_attributes = 4;
-  pipe.vertex_input_state.vertex_attributes = attrs;
+  configure_mesh_vertex_input (pipe);
 
   gfx::pipeline_key key{};
   key.shader_program_hash
       = std::hash<entt::id_type>{}(mat_asset->shader_program.value);
-  // The custom-material path always builds the same 4-attribute interleaved
-  // layout (position/normal/uv/tangent) and renders into the main window
-  // target, so both dimensions are constant for every key produced here.
+  // The custom-material path always builds the same 6-attribute interleaved
+  // mesh layout and renders into the main window target, so both dimensions
+  // are constant for every key produced here.
   key.vertex_layout_hash = 0;
   key.render_target_hash = 0;
   key.flags = mat_asset->double_sided ? 1 : 0;
@@ -1821,12 +1953,16 @@ gfx::scene_renderer::create_unlit_pipeline ()
     return;
   }
 
-  auto make_pipeline = [&] (alpha_mode a_mode,
-                            SDL_GPUCullMode cull) -> SDL_GPUGraphicsPipeline * {
+  // The skinned set passes the skinning vertex shader so both are built from
+  // one state description and cannot drift apart. `vs` is explicit because a
+  // lambda default argument may not reference a captured local. See the lit
+  // equivalent in create_pipeline().
+  auto make_pipeline = [&] (alpha_mode a_mode, SDL_GPUCullMode cull,
+                            SDL_GPUShader *vs) -> SDL_GPUGraphicsPipeline * {
     SDL_GPUGraphicsPipelineCreateInfo pipe{};
     SDL_zero (pipe);
 
-    pipe.vertex_shader = vert;
+    pipe.vertex_shader = vs;
     pipe.fragment_shader = frag;
     pipe.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 
@@ -1842,39 +1978,7 @@ gfx::scene_renderer::create_unlit_pipeline ()
     pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
     pipe.multisample_state.sample_mask = 0;
 
-    static SDL_GPUVertexBufferDescription vbuf{};
-    vbuf.slot = 0;
-    vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    vbuf.pitch = (Uint32)sizeof (vertex);
-
-    pipe.vertex_input_state.num_vertex_buffers = 1;
-    pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
-
-    static SDL_GPUVertexAttribute attrs[4];
-    memset (attrs, 0, sizeof (attrs));
-
-    attrs[0].location = 0;
-    attrs[0].buffer_slot = 0;
-    attrs[0].offset = offsetof (vertex, pos);
-    attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-    attrs[1].location = 1;
-    attrs[1].buffer_slot = 0;
-    attrs[1].offset = offsetof (vertex, normal);
-    attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-    attrs[2].location = 2;
-    attrs[2].buffer_slot = 0;
-    attrs[2].offset = offsetof (vertex, uv);
-    attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-
-    attrs[3].location = 3;
-    attrs[3].buffer_slot = 0;
-    attrs[3].offset = offsetof (vertex, tangent);
-    attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-
-    pipe.vertex_input_state.num_vertex_attributes = 4;
-    pipe.vertex_input_state.vertex_attributes = attrs;
+    configure_mesh_vertex_input (pipe);
 
     SDL_GPUColorTargetDescription ctd[2]{};
     ctd[0].format = SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
@@ -1941,23 +2045,50 @@ gfx::scene_renderer::create_unlit_pipeline ()
 
   // Unlit, single-sided
   m_pipelines_unlit.opaque
-      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_BACK);
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_BACK, vert);
   m_pipelines_unlit.mask
-      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_BACK);
+      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_BACK, vert);
   m_pipelines_unlit.blend
-      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_BACK);
+      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_BACK, vert);
 
   // Unlit, double-sided
   m_pipelines_unlit_double_sided.opaque
-      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_NONE);
+      = make_pipeline (alpha_mode::opaque, SDL_GPU_CULLMODE_NONE, vert);
   m_pipelines_unlit_double_sided.mask
-      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE);
+      = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE, vert);
   m_pipelines_unlit_double_sided.blend
-      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_NONE);
+      = make_pipeline (alpha_mode::blend, SDL_GPU_CULLMODE_NONE, vert);
 
-  // Legacy pointers
-  m_pipeline_unlit = m_pipelines_unlit.opaque;
-  m_pipeline_unlit_double_sided = m_pipelines_unlit_double_sided.opaque;
+  // ---- skinned unlit variants ----
+  // Built through the same helper as the plain unlit set; only the vertex
+  // shader differs. Created before `vert`/`frag` are released below.
+  if (SDL_GPUShader *skinned_vert = create_skinned_vertex_shader (
+          "engine://compiled_shaders/cube_skinned.vert.slang.spv");
+      skinned_vert != nullptr) {
+    m_pipelines_skinned_unlit.opaque = make_pipeline (
+        alpha_mode::opaque, SDL_GPU_CULLMODE_BACK, skinned_vert);
+    m_pipelines_skinned_unlit.mask
+        = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE, skinned_vert);
+    m_pipelines_skinned_unlit.blend = make_pipeline (
+        alpha_mode::blend, SDL_GPU_CULLMODE_NONE, skinned_vert);
+
+    m_pipelines_skinned_unlit_double_sided.opaque = make_pipeline (
+        alpha_mode::opaque, SDL_GPU_CULLMODE_NONE, skinned_vert);
+    m_pipelines_skinned_unlit_double_sided.mask
+        = make_pipeline (alpha_mode::mask, SDL_GPU_CULLMODE_NONE, skinned_vert);
+    m_pipelines_skinned_unlit_double_sided.blend = make_pipeline (
+        alpha_mode::blend, SDL_GPU_CULLMODE_NONE, skinned_vert);
+
+    if (m_pipelines_skinned_unlit.opaque == nullptr
+        || m_pipelines_skinned_unlit_double_sided.opaque == nullptr) {
+      wsl::log::gfx ()->warn (
+          "Skinned unlit pipelines unavailable ({}); animated unlit meshes "
+          "will not render",
+          SDL_GetError ());
+    }
+
+    SDL_ReleaseGPUShader (m_ctx->gpu_device, skinned_vert);
+  }
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -1966,15 +2097,42 @@ gfx::scene_renderer::create_unlit_pipeline ()
 void
 gfx::scene_renderer::destroy_unlit_pipeline ()
 {
-  if (m_pipeline_unlit != nullptr) {
-    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_pipeline_unlit);
-    m_pipeline_unlit = nullptr;
-  }
-  if (m_pipeline_unlit_double_sided != nullptr) {
-    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
-                                    m_pipeline_unlit_double_sided);
-    m_pipeline_unlit_double_sided = nullptr;
-  }
+  // The pipeline_set members are the sole owners; each is released and nulled
+  // exactly once here. They previously also had `m_pipeline_unlit` /
+  // `m_pipeline_unlit_double_sided` aliases (assigned straight from
+  // `.opaque`), and this function released the alias before releasing the set
+  // -- releasing the same SDL_GPUGraphicsPipeline twice.
+  //
+  // SDL does not guard against that: VULKAN_ReleaseGraphicsPipeline() appends
+  // unconditionally, so the pointer lands in graphicsPipelinesToDestroy[]
+  // twice. PerformPendingDestroys() then destroys the first entry --
+  // vkDestroyPipeline succeeds, SDL_free() frees the struct -- and reaches the
+  // duplicate, reads referenceCount out of freed memory, and calls
+  // vkDestroyPipeline again with a handle loaded from freed memory. The RADON
+  // driver blocked in there, freezing the editor on teardown, and it reproduced
+  // even under vkDeviceWaitIdle because it was never an in-flight-work problem.
+  //
+  // The aliases are now removed rather than merely left unreleased, so the
+  // ownership invariant cannot drift again.
+  auto destroy_set = [this] (pipeline_set &ps) {
+    if (ps.opaque != nullptr) {
+      SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, ps.opaque);
+      ps.opaque = nullptr;
+    }
+    if (ps.mask != nullptr) {
+      SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, ps.mask);
+      ps.mask = nullptr;
+    }
+    if (ps.blend != nullptr) {
+      SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, ps.blend);
+      ps.blend = nullptr;
+    }
+  };
+
+  destroy_set (m_pipelines_unlit);
+  destroy_set (m_pipelines_unlit_double_sided);
+  destroy_set (m_pipelines_skinned_unlit);
+  destroy_set (m_pipelines_skinned_unlit_double_sided);
 }
 
 void
@@ -2687,6 +2845,15 @@ gfx::scene_renderer::destroy_shadow_resources ()
                                     m_shadow_pipe_double_sided);
     m_shadow_pipe_double_sided = nullptr;
   }
+  if (m_shadow_pipe_skinned != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_shadow_pipe_skinned);
+    m_shadow_pipe_skinned = nullptr;
+  }
+  if (m_shadow_pipe_skinned_double_sided != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
+                                    m_shadow_pipe_skinned_double_sided);
+    m_shadow_pipe_skinned_double_sided = nullptr;
+  }
   if (m_shadow_sampler != nullptr) {
     SDL_ReleaseGPUSampler (m_ctx->gpu_device, m_shadow_sampler),
         m_shadow_sampler = nullptr;
@@ -2726,6 +2893,17 @@ gfx::scene_renderer::destroy_shadow_resources ()
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
                                     m_point_shadow_pipe_double_sided);
     m_point_shadow_pipe_double_sided = nullptr;
+  }
+
+  if (m_point_shadow_pipe_skinned != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
+                                    m_point_shadow_pipe_skinned);
+    m_point_shadow_pipe_skinned = nullptr;
+  }
+  if (m_point_shadow_pipe_skinned_double_sided != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
+                                    m_point_shadow_pipe_skinned_double_sided);
+    m_point_shadow_pipe_skinned_double_sided = nullptr;
   }
 }
 
@@ -2775,22 +2953,7 @@ gfx::scene_renderer::create_shadow_pipeline ()
 
   pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
 
-  static SDL_GPUVertexBufferDescription vbuf{};
-  vbuf.slot = 0;
-  vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-  vbuf.pitch = (Uint32)sizeof (vertex);
-
-  pipe.vertex_input_state.num_vertex_buffers = 1;
-  pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
-
-  static SDL_GPUVertexAttribute attrs[1]{};
-  attrs[0].location = 0;
-  attrs[0].buffer_slot = 0;
-  attrs[0].offset = offsetof (vertex, pos);
-  attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-  pipe.vertex_input_state.num_vertex_attributes = 1;
-  pipe.vertex_input_state.vertex_attributes = attrs;
+  configure_mesh_vertex_input (pipe);
 
   pipe.rasterizer_state.enable_depth_bias = true;
   pipe.rasterizer_state.depth_bias_constant_factor = 2.0F;
@@ -2805,6 +2968,24 @@ gfx::scene_renderer::create_shadow_pipeline ()
   pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
   m_shadow_pipe_double_sided
       = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+  // Skinned variants: same state, but the vertex shader declares the palette
+  // cbuffer, so an animated mesh casts a deforming shadow.
+  if (SDL_GPUShader *skinned_vert = create_skinned_vertex_shader (
+          "engine://compiled_shaders/shadow_depth_skinned.vert.slang.spv");
+      skinned_vert != nullptr) {
+    pipe.vertex_shader = skinned_vert;
+
+    pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
+    m_shadow_pipe_skinned
+        = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+    pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+    m_shadow_pipe_skinned_double_sided
+        = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+    SDL_ReleaseGPUShader (m_ctx->gpu_device, skinned_vert);
+  }
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -2990,11 +3171,19 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
         } sm{ n.world_transform, m_light_vp };
 
         SDL_PushGPUVertexUniformData (cmd, 0, &sm, sizeof (sm));
+        push_active_palette (cmd, 1);
 
         for (const primitive &prim : m->primitives) {
-          SDL_GPUGraphicsPipeline *pipe = prim.mat.double_sided
-                                              ? m_shadow_pipe_double_sided
-                                              : m_shadow_pipe;
+          // An animated instance must draw with the skinned pipeline, whose
+          // vertex shader declares the palette cbuffer.
+          SDL_GPUGraphicsPipeline *pipe = nullptr;
+          if (m_active_palette != nullptr) {
+            pipe = prim.mat.double_sided ? m_shadow_pipe_skinned_double_sided
+                                         : m_shadow_pipe_skinned;
+          } else {
+            pipe = prim.mat.double_sided ? m_shadow_pipe_double_sided
+                                         : m_shadow_pipe;
+          }
           if (!pipe || !m_shadow_pass) {
             continue;
           }
@@ -3092,8 +3281,10 @@ gfx::scene_renderer::make_spot_light_vp (const glm::vec3 &light_pos,
 void
 gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
                                         size_t scene_index,
-                                        const glm::mat4 &model_matrix)
+                                        const glm::mat4 &model_matrix,
+                                        const joint_palette *palette)
 {
+  m_active_palette = palette;
   if (m_shadow_pass == nullptr) {
     return;
   }
@@ -3144,6 +3335,7 @@ gfx::scene_renderer::draw_model_shadow (gfx::model_3d &model,
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
+    m_active_palette = nullptr;
   }
 }
 
@@ -3338,8 +3530,10 @@ gfx::scene_renderer::end_point_shadow_pass ()
 void
 gfx::scene_renderer::draw_model_point_shadow (
     gfx::model_3d &model, size_t scene_index, const glm::mat4 &model_matrix,
-    const glm::mat4 &light_vp_mat, const glm::vec3 &light_pos, float far_plane)
+    const glm::mat4 &light_vp_mat, const glm::vec3 &light_pos, float far_plane,
+    const joint_palette *palette)
 {
+  m_active_palette = palette;
   if (m_shadow_pass == nullptr) {
     return;
   }
@@ -3366,6 +3560,7 @@ gfx::scene_renderer::draw_model_point_shadow (
         } sm{ n.world_transform, light_vp_mat };
 
         SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &sm, sizeof (sm));
+        push_active_palette (m_ctx->main_cmd, 1);
 
         struct alignas (16) point_shadow_params
         {
@@ -3376,9 +3571,15 @@ gfx::scene_renderer::draw_model_point_shadow (
         SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &psp, sizeof (psp));
 
         for (const primitive &prim : m->primitives) {
-          SDL_GPUGraphicsPipeline *pipe = prim.mat.double_sided
-                                              ? m_point_shadow_pipe_double_sided
-                                              : m_point_shadow_pipe;
+          SDL_GPUGraphicsPipeline *pipe = nullptr;
+          if (m_active_palette != nullptr) {
+            pipe = prim.mat.double_sided
+                       ? m_point_shadow_pipe_skinned_double_sided
+                       : m_point_shadow_pipe_skinned;
+          } else {
+            pipe = prim.mat.double_sided ? m_point_shadow_pipe_double_sided
+                                         : m_point_shadow_pipe;
+          }
           if (!pipe || !m_shadow_pass) {
             continue;
           }
@@ -3399,6 +3600,7 @@ gfx::scene_renderer::draw_model_point_shadow (
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
+    m_active_palette = nullptr;
   }
 }
 
@@ -3447,22 +3649,7 @@ gfx::scene_renderer::create_point_shadow_pipeline ()
 
   pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
 
-  static SDL_GPUVertexBufferDescription vbuf{};
-  vbuf.slot = 0;
-  vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-  vbuf.pitch = (Uint32)sizeof (vertex);
-
-  pipe.vertex_input_state.num_vertex_buffers = 1;
-  pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
-
-  static SDL_GPUVertexAttribute attrs[1]{};
-  attrs[0].location = 0;
-  attrs[0].buffer_slot = 0;
-  attrs[0].offset = offsetof (vertex, pos);
-  attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-  pipe.vertex_input_state.num_vertex_attributes = 1;
-  pipe.vertex_input_state.vertex_attributes = attrs;
+  configure_mesh_vertex_input (pipe);
 
   pipe.rasterizer_state.enable_depth_bias = true;
   pipe.rasterizer_state.depth_bias_constant_factor = 2.0F;
@@ -3476,6 +3663,22 @@ gfx::scene_renderer::create_point_shadow_pipeline ()
   pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
   m_point_shadow_pipe_double_sided
       = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+  if (SDL_GPUShader *skinned_vert = create_skinned_vertex_shader (
+          "engine://compiled_shaders/point_shadow_skinned.vert.slang.spv");
+      skinned_vert != nullptr) {
+    pipe.vertex_shader = skinned_vert;
+
+    pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
+    m_point_shadow_pipe_skinned
+        = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+    pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+    m_point_shadow_pipe_skinned_double_sided
+        = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+    SDL_ReleaseGPUShader (m_ctx->gpu_device, skinned_vert);
+  }
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -3759,37 +3962,7 @@ gfx::scene_renderer::create_ssao_pipeline ()
     pipe.target_info.num_color_targets = 1;
     pipe.target_info.color_target_descriptions = &ctd;
 
-    static SDL_GPUVertexBufferDescription vbuf{};
-    vbuf.slot = 0;
-    vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    vbuf.pitch = (Uint32)sizeof (vertex);
-
-    pipe.vertex_input_state.num_vertex_buffers = 1;
-    pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
-
-    static SDL_GPUVertexAttribute attrs[4]{};
-    attrs[0].location = 0;
-    attrs[0].buffer_slot = 0;
-    attrs[0].offset = offsetof (vertex, pos);
-    attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-    attrs[1].location = 1;
-    attrs[1].buffer_slot = 0;
-    attrs[1].offset = offsetof (vertex, normal);
-    attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-    attrs[2].location = 2;
-    attrs[2].buffer_slot = 0;
-    attrs[2].offset = offsetof (vertex, uv);
-    attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-
-    attrs[3].location = 3;
-    attrs[3].buffer_slot = 0;
-    attrs[3].offset = offsetof (vertex, tangent);
-    attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-
-    pipe.vertex_input_state.num_vertex_attributes = 4;
-    pipe.vertex_input_state.vertex_attributes = attrs;
+    configure_mesh_vertex_input (pipe);
 
     pipe.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
     pipe.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
@@ -3801,6 +3974,23 @@ gfx::scene_renderer::create_ssao_pipeline ()
     pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
     m_ssao_prepass_pipe_double_sided
         = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+    // Skinned prepass, so ambient occlusion follows the deformed surface.
+    if (SDL_GPUShader *skinned_vert = create_skinned_vertex_shader (
+            "engine://compiled_shaders/ssao_prepass_skinned.vert.slang.spv");
+        skinned_vert != nullptr) {
+      pipe.vertex_shader = skinned_vert;
+
+      pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
+      m_ssao_prepass_pipe_skinned
+          = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+      pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+      m_ssao_prepass_pipe_skinned_double_sided
+          = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+      SDL_ReleaseGPUShader (m_ctx->gpu_device, skinned_vert);
+    }
 
     SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
     SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -3896,6 +4086,16 @@ gfx::scene_renderer::destroy_ssao_pipeline ()
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
                                     m_ssao_prepass_pipe_double_sided);
     m_ssao_prepass_pipe_double_sided = nullptr;
+  }
+  if (m_ssao_prepass_pipe_skinned != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
+                                    m_ssao_prepass_pipe_skinned);
+    m_ssao_prepass_pipe_skinned = nullptr;
+  }
+  if (m_ssao_prepass_pipe_skinned_double_sided != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
+                                    m_ssao_prepass_pipe_skinned_double_sided);
+    m_ssao_prepass_pipe_skinned_double_sided = nullptr;
   }
   if (m_ssao_pipe != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device, m_ssao_pipe);
@@ -4006,11 +4206,18 @@ gfx::scene_renderer::draw_model_ssao (gfx::model_3d &model, size_t scene_index,
         } mats{ n.world_transform, view, proj, n4 };
 
         SDL_PushGPUVertexUniformData (m_ctx->main_cmd, 0, &mats, sizeof (mats));
+        push_active_palette (m_ctx->main_cmd, 1);
 
         for (const primitive &prim : m->primitives) {
-          SDL_GPUGraphicsPipeline *pipe = prim.mat.double_sided
-                                              ? m_ssao_prepass_pipe_double_sided
-                                              : m_ssao_prepass_pipe;
+          SDL_GPUGraphicsPipeline *pipe = nullptr;
+          if (m_active_palette != nullptr) {
+            pipe = prim.mat.double_sided
+                       ? m_ssao_prepass_pipe_skinned_double_sided
+                       : m_ssao_prepass_pipe_skinned;
+          } else {
+            pipe = prim.mat.double_sided ? m_ssao_prepass_pipe_double_sided
+                                         : m_ssao_prepass_pipe;
+          }
           if (!pipe || !m_ssao_prepass) {
             continue;
           }
@@ -4191,38 +4398,7 @@ gfx::scene_renderer::create_outline_pipeline ()
   pipe.multisample_state.sample_mask = 0;
   pipe.multisample_state.enable_mask = false;
 
-  static SDL_GPUVertexBufferDescription vbuf{};
-  vbuf.slot = 0;
-  vbuf.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-  vbuf.pitch = (Uint32)sizeof (vertex);
-
-  pipe.vertex_input_state.num_vertex_buffers = 1;
-  pipe.vertex_input_state.vertex_buffer_descriptions = &vbuf;
-
-  static SDL_GPUVertexAttribute attrs[4]{};
-
-  attrs[0].location = 0;
-  attrs[0].buffer_slot = 0;
-  attrs[0].offset = offsetof (vertex, pos);
-  attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-  attrs[1].location = 1;
-  attrs[1].buffer_slot = 0;
-  attrs[1].offset = offsetof (vertex, normal);
-  attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-
-  attrs[2].location = 2;
-  attrs[2].buffer_slot = 0;
-  attrs[2].offset = offsetof (vertex, uv);
-  attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-
-  attrs[3].location = 3;
-  attrs[3].buffer_slot = 0;
-  attrs[3].offset = offsetof (vertex, tangent);
-  attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-
-  pipe.vertex_input_state.num_vertex_attributes = 4;
-  pipe.vertex_input_state.vertex_attributes = attrs;
+  configure_mesh_vertex_input (pipe);
 
   // IMPORTANT:
   // front-face culling so only expanded backfaces remain visible
@@ -4234,6 +4410,23 @@ gfx::scene_renderer::create_outline_pipeline ()
   pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_FRONT;
   m_pipeline_outline_double_sided
       = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+  // Skinned outline. This shader needs 3 vertex uniform buffers: matrices,
+  // outline params, and the joint palette.
+  if (SDL_GPUShader *skinned_vert = create_skinned_vertex_shader (
+          "engine://compiled_shaders/outline_skinned.vert.slang.spv", 3);
+      skinned_vert != nullptr) {
+    pipe.vertex_shader = skinned_vert;
+
+    pipe.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_FRONT;
+    m_pipeline_outline_skinned
+        = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+    m_pipeline_outline_skinned_double_sided
+        = SDL_CreateGPUGraphicsPipeline (m_ctx->gpu_device, &pipe);
+
+    SDL_ReleaseGPUShader (m_ctx->gpu_device, skinned_vert);
+  }
 
   SDL_ReleaseGPUShader (m_ctx->gpu_device, vert);
   SDL_ReleaseGPUShader (m_ctx->gpu_device, frag);
@@ -4252,14 +4445,26 @@ gfx::scene_renderer::destroy_outline_pipeline ()
                                     m_pipeline_outline_double_sided);
     m_pipeline_outline_double_sided = nullptr;
   }
+  if (m_pipeline_outline_skinned != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
+                                    m_pipeline_outline_skinned);
+    m_pipeline_outline_skinned = nullptr;
+  }
+  if (m_pipeline_outline_skinned_double_sided != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline (m_ctx->gpu_device,
+                                    m_pipeline_outline_skinned_double_sided);
+    m_pipeline_outline_skinned_double_sided = nullptr;
+  }
 }
 
 void
 gfx::scene_renderer::draw_model_outline (gfx::model_3d &model,
                                          size_t scene_index,
                                          const glm::mat4 &model_matrix,
-                                         const glm::mat4 &view_proj)
+                                         const glm::mat4 &view_proj,
+                                         const joint_palette *palette)
 {
+  m_active_palette = palette;
   if (scene_index >= model.scenes.size ()) {
     return;
   }
@@ -4308,11 +4513,20 @@ gfx::scene_renderer::draw_model_outline (gfx::model_3d &model,
                                       sizeof (outline));
         SDL_PushGPUFragmentUniformData (m_ctx->main_cmd, 0, &outline,
                                         sizeof (outline));
+        // The outline pass keeps its own params in slot 1, so the skinning
+        // palette binds slot 2 here (see WEASEL_PALETTE_BINDING).
+        push_active_palette (m_ctx->main_cmd, 2);
 
         for (const primitive &prim : m->primitives) {
-          SDL_GPUGraphicsPipeline *pipe = prim.mat.double_sided
-                                              ? m_pipeline_outline_double_sided
-                                              : m_pipeline_outline;
+          SDL_GPUGraphicsPipeline *pipe = nullptr;
+          if (m_active_palette != nullptr) {
+            pipe = prim.mat.double_sided
+                       ? m_pipeline_outline_skinned_double_sided
+                       : m_pipeline_outline_skinned;
+          } else {
+            pipe = prim.mat.double_sided ? m_pipeline_outline_double_sided
+                                         : m_pipeline_outline;
+          }
           if (!pipe || !m_ctx->main_pass) {
             continue;
           }
@@ -4333,6 +4547,7 @@ gfx::scene_renderer::draw_model_outline (gfx::model_3d &model,
 
   for (gfx::node &root : scene.roots) {
     draw_node (root);
+    m_active_palette = nullptr;
   }
 }
 

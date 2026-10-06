@@ -33,11 +33,15 @@ struct texture
 /** Single vertex layout used by mesh primitives. */
 struct vertex
 {
-  glm::vec3 pos;
-  glm::vec3 normal;
-  glm::vec2 uv;
+  glm::vec3 pos{ 0.0F };
+  glm::vec3 normal{ 0.0F };
+  glm::vec2 uv{ 0.0F };
   /** xyz = tangent, w = sign used to reconstruct the bitangent. */
-  glm::vec4 tangent;
+  glm::vec4 tangent{ 0.0F, 0.0F, 0.0F, 0.0F };
+  /** Indices into the owning node's skin joint list. */
+  glm::uvec4 joints{ 0U };
+  /** Linear blend weights corresponding to joints. */
+  glm::vec4 weights{ 0.0F };
 };
 
 /** Indexed primitive with a single material assignment. */

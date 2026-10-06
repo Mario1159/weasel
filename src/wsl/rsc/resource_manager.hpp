@@ -1,5 +1,6 @@
 #pragma once
 
+#include "animation_loader.hpp"
 #include "cubemap_loader.hpp"
 #include "image_loader.hpp"
 #include "model_loader.hpp"
@@ -7,6 +8,7 @@
 #include "resource_ids.hpp"
 #include "resource_ref.hpp"
 #include "scene_loader.hpp"
+#include "skeleton_loader.hpp"
 #include "../comp/component_meta.hpp"
 #include "shader_loader.hpp"
 #include "wsl/gfx/material_asset.hpp"
@@ -172,6 +174,20 @@ enum class shader_program_state
   loaded
 };
 
+/** Represents the current loading state of a skeleton asset. */
+enum class skeleton_state
+{
+  not_loaded,
+  loaded
+};
+
+/** Represents the current loading state of an animation clip asset. */
+enum class animation_state
+{
+  not_loaded,
+  loaded
+};
+
 /** Metadata for a 3D model resource. */
 struct model_resource_info
 {
@@ -266,6 +282,24 @@ struct shader_program_resource_info
   shader_program_state state{}; // Current loading state.
 };
 
+/** Metadata for a skeleton resource (`.skel.ozz`). */
+struct skeleton_resource_info
+{
+  entt::id_type id{};     // Unique identifier.
+  std::string path;       // Path to the .skel.ozz file.
+  std::string name;       // Human-readable name.
+  skeleton_state state{}; // Current loading state.
+};
+
+/** Metadata for an animation clip resource (`.anim.ozz`). */
+struct animation_resource_info
+{
+  entt::id_type id{};      // Unique identifier.
+  std::string path;        // Path to the .anim.ozz file.
+  std::string name;        // Human-readable name.
+  animation_state state{}; // Current loading state.
+};
+
 namespace detail
 {
 
@@ -357,6 +391,26 @@ struct shader_program_record
   std::string name; // Human-readable name.
   shader_program_state state
       = shader_program_state::not_loaded; // Current loading state.
+};
+
+/** Internal record tracking the state and data of a skeleton resource. */
+struct skeleton_record
+{
+  std::string path;         // Path to the .skel.ozz file.
+  std::string name;         // Human-readable name.
+  skeleton_state state = skeleton_state::not_loaded; // Loading state.
+  /** Loaded runtime skeleton; owns its ozz-allocated memory. */
+  ozz::unique_ptr<ozz::animation::Skeleton> skeleton{};
+};
+
+/** Internal record tracking the state and data of an animation resource. */
+struct animation_record
+{
+  std::string path;          // Path to the .anim.ozz file.
+  std::string name;          // Human-readable name.
+  animation_state state = animation_state::not_loaded; // Loading state.
+  /** Loaded runtime animation clip; owns its ozz-allocated memory. */
+  ozz::unique_ptr<ozz::animation::Animation> animation{};
 };
 
 } // namespace detail
@@ -717,6 +771,58 @@ public:
   /** List all registered shader programs. */
   [[nodiscard]] std::vector<shader_program_resource_info> list_shader_programs () const;
 
+  // ---- Skeletons (`.skel.ozz`) ----
+  /** Register a skeleton asset path without loading. */
+  [[nodiscard]] skeleton_id register_skeleton (const std::string &path);
+
+  /** Load skeleton data (lazy); returns nullptr on failure. */
+  [[nodiscard]] ozz::animation::Skeleton *load (skeleton_id id);
+
+  /** Unload a skeleton by id, releasing its ozz memory. */
+  void unload (skeleton_id id);
+
+  /** Get the loaded skeleton without triggering a load. */
+  [[nodiscard]] ozz::animation::Skeleton *get (skeleton_id id);
+
+  /** Query the loading state of a skeleton id. */
+  [[nodiscard]] skeleton_state state (skeleton_id id) const;
+
+  /** Check presence of skeleton id in manager. */
+  [[nodiscard]] bool contains (skeleton_id id) const;
+
+  /** Get metadata for a skeleton id. */
+  [[nodiscard]] std::optional<skeleton_resource_info> info (
+      skeleton_id id) const;
+
+  /** List all registered skeletons. */
+  [[nodiscard]] std::vector<skeleton_resource_info> list_skeletons () const;
+
+  // ---- Animation clips (`.anim.ozz`) ----
+  /** Register an animation clip asset path without loading. */
+  [[nodiscard]] animation_id register_animation (const std::string &path);
+
+  /** Load an animation clip (lazy); returns nullptr on failure. */
+  [[nodiscard]] ozz::animation::Animation *load (animation_id id);
+
+  /** Unload an animation clip by id, releasing its ozz memory. */
+  void unload (animation_id id);
+
+  /** Get the loaded animation clip without triggering a load. */
+  [[nodiscard]] ozz::animation::Animation *get (animation_id id);
+
+  /** Query the loading state of an animation id. */
+  [[nodiscard]] animation_state state (animation_id id) const;
+
+  /** Check presence of animation id in manager. */
+  [[nodiscard]] bool contains (animation_id id) const;
+
+  /** Get metadata for an animation id. */
+  [[nodiscard]] std::optional<animation_resource_info> info (
+      animation_id id) const;
+
+  /** List all registered animation clips. */
+  [[nodiscard]] std::vector<animation_resource_info> list_animations () const;
+
   /**
    * Set the base engine resource path used to resolve engine-provided
    * assets.
@@ -768,6 +874,12 @@ public:
   /** Get the filesystem path for a registered audio id. */
   [[nodiscard]] std::string get_resource_path (audio_id id) const;
 
+  /** Get the filesystem path for a registered skeleton id. */
+  [[nodiscard]] std::string get_resource_path (skeleton_id id) const;
+
+  /** Get the filesystem path for a registered animation id. */
+  [[nodiscard]] std::string get_resource_path (animation_id id) const;
+
   /** Get the filesystem path for a registered material id. */
   [[nodiscard]] std::string get_resource_path (material_id id) const;
 
@@ -806,6 +918,8 @@ private:
   std::unordered_map<entt::id_type, detail::material_record> m_material_table;
   std::unordered_map<entt::id_type, detail::shader_program_record>
       m_shader_program_table;
+  std::unordered_map<entt::id_type, detail::skeleton_record> m_skeleton_table;
+  std::unordered_map<entt::id_type, detail::animation_record> m_animation_table;
 
   entt::resource_cache<rsc::scene, scene_loader> m_scenes;
   std::unordered_map<entt::id_type, rsc::scene *> m_loaded_scene_instances;
@@ -826,6 +940,8 @@ private:
   rsc::project_loader m_project_loader;
   std::unordered_map<std::string, entt::id_type> m_model_ids_by_path;
   std::unordered_map<std::string, entt::id_type> m_audio_ids_by_path;
+  std::unordered_map<std::string, entt::id_type> m_skeleton_ids_by_path;
+  std::unordered_map<std::string, entt::id_type> m_animation_ids_by_path;
 
   // preview temp state
   entt::id_type m_preview_model_id = entt::null;

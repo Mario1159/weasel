@@ -5,6 +5,7 @@
 
 #include "wsl/das/das_engine.hpp"
 #include "wsl/das/wsl_api_module.hpp"
+#include "wsl/comp/animator.hpp"
 #include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/directional_light.hpp"
 #include "wsl/comp/point_light.hpp"
@@ -1266,8 +1267,91 @@ TEST_CASE ("Daslang component copy and snapshot round-trip")
   worker.join ();
   CHECK (ok);
 }
+// Animation bindings
+// ---------------------------------------------------------------------------
 
-#else // !WEASEL_HAS_DASLANG
+static const char *const k_anim_das = R"DAS(
+options gen2
+module anim_bindings
+require weasel_api
+
+def run_anim() {
+    // Fresh registry: the first entity is id 0 (asserted below).
+    let entity = 0u
+
+    anim_play(entity, "res://rsc/models/Fox_Walk.anim.ozz")
+    anim_set_speed(entity, 1.5)
+    anim_set_time(entity, 0.75)
+    anim_set_loop(entity, false)
+    anim_crossfade(entity, "res://rsc/models/Fox_Run.anim.ozz", 0.5)
+    anim_set_time(entity, -3.0)
+    anim_crossfade(entity, "res://rsc/models/Fox_Survey.anim.ozz", -1.0)
+    // No-ops: that entity has no Animator, and this id does not exist.
+    anim_play(entity + 1000, "res://rsc/models/Fox_Walk.anim.ozz")
+    anim_set_speed(entity + 1000, 9.0)
+    anim_stop(entity)
+}
+
+)DAS";
+
+TEST_CASE ("anim bindings drive the animator component from daslang")
+{
+  // The binding functions have internal linkage, so they are exercised the
+  // way scripts use them: compiled from a .das file and run against a live
+  // registry.
+  wsl::das::das_engine::initialize_global ();
+  bool ok = false;
+  std::thread worker ([&] {
+    wsl::das::das_engine engine;
+    if (!engine.initialize ()) {
+      return;
+    }
+    wsl::log::init ();
+
+    const auto script
+        = std::filesystem::temp_directory_path () / "weasel_anim.das";
+    {
+      std::ofstream out (script);
+      out << k_anim_das;
+    }
+    if (!engine.execute_file (script.string ())) {
+      std::fprintf (stderr, "anim execute failed: %s\n",
+                    engine.last_error ().c_str ());
+      return;
+    }
+
+    wsl::comp::singl::runtime_context runtime ("DasTest", 0, 0, "", true);
+    entt::registry reg;
+    reg.ctx ().emplace<wsl::comp::singl::runtime_context *> (&runtime);
+
+    const entt::entity animated = reg.create ();
+    reg.emplace<wsl::comp::animator> (animated);
+
+    wsl::das::wsl_api_set_active_registry (&reg);
+    ok = (entt::to_integral (animated) == 0)
+         && engine.call_void_function_safe (script.string (), "run_anim");
+    wsl::das::wsl_api_set_active_registry (nullptr);
+
+    if (!ok) {
+      return;
+    }
+
+    auto &anim = reg.get<wsl::comp::animator> (animated);
+    // The last clip change wins.
+    CHECK (anim.clip_path == "res://rsc/models/Fox_Survey.anim.ozz");
+    CHECK (anim.speed == doctest::Approx (1.5F));
+    CHECK (anim.loop == false);
+    // anim_stop rewinds and leaves the animator disabled.
+    CHECK (anim.playing == false);
+    CHECK (anim.time == doctest::Approx (0.0F));
+    // Negative inputs are clamped, not pushed into the clock.
+    CHECK (anim.crossfade_duration == doctest::Approx (0.0F));
+  });
+  worker.join ();
+  CHECK (ok);
+}
+
+#else  // !WEASEL_HAS_DASLANG
 
 TEST_CASE ("Component accessors (daslang disabled)")
 {
@@ -1275,4 +1359,5 @@ TEST_CASE ("Component accessors (daslang disabled)")
   CHECK (true);
 }
 
+// ---------------------------------------------------------------------------
 #endif // WEASEL_HAS_DASLANG

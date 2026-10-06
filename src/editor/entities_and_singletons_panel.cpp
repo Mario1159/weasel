@@ -182,8 +182,16 @@ entities_and_singletons_panel::draw ()
       m_entities_height = usable_h / 2.0F;
     }
 
-    // Dynamic clamping to ensure everything fits
-    m_entities_height = std::clamp (m_entities_height, 40.0F, usable_h - 40.0F);
+    // Dynamic clamping to ensure everything fits.
+    //
+    // The upper bound is "leave 40px for the splitter and the Singletons
+    // pane". In a short panel that bound falls below the 40px minimum, which
+    // inverts the clamp range -- and std::clamp asserts on !(hi < lo) in debug
+    // builds, so a small window aborted the editor outright. The minimum has to
+    // win: when there is no room for both, keep the 40px floor and let the
+    // child overflow (ImGui clips it) rather than corrupting the range.
+    m_entities_height = std::clamp (m_entities_height, 40.0F,
+                                    std::max (40.0F, usable_h - 40.0F));
 
     // =========================
     // 1. ENTITIES
@@ -684,8 +692,8 @@ entities_and_singletons_panel::make_prefab (entt::entity entity)
     wsl::rsc::scene_id prefab_id
         = m_runtime_ctx->resource_manager ().register_scene (
             abs_path.string ());
-    m_runtime_ctx->resource_manager ().load (
-        prefab_id); // Start loading it so it's available for overrides
+    static_cast<void> (m_runtime_ctx->resource_manager ().load (
+        prefab_id)); // Start loading it so it's available for overrides
 
     // Tag the original entity (and its children) as instances of this prefab
     // We need to find the root in the temp_scene to get its original ID if we

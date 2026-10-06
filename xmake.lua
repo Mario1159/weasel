@@ -28,6 +28,7 @@ option("weasel_enable_renderdoc", function ()
 end)
 
 
+
 -- ---------------------------------------------------------------------------
 -- Custom packages for forks / packages not in xrepo
 -- These override or supplement xrepo packages.
@@ -265,6 +266,55 @@ package("daslang")
     end)
 package_end()
 
+-- ozz-animation (guillaumeblanc/ozz-animation) — skeletal animation runtime,
+-- offline builders, and the gltf2ozz importer (not in xrepo; M1 of
+-- OZZ_ANIMATION_PLAN.md).
+package("ozz-animation")
+    set_kind("library")
+    set_homepage("https://github.com/guillaumeblanc/ozz-animation")
+    set_description("ozz-animation — skeletal animation runtime & offline libraries")
+    set_license("MIT")
+    add_urls("https://github.com/guillaumeblanc/ozz-animation.git")
+    add_versions("0.17.0", "744eb9d99f606eda849acb0b1204f7a3dc20bca1")
+    add_deps("cmake")
+    add_includedirs("include", {public = true})
+    -- Dependents before dependencies for static link order. gltf2ozz itself
+    -- installs as a standalone executable at bin/tools/gltf2ozz.
+    add_links("ozz_animation_offline", "ozz_animation", "ozz_base", {public = true})
+    on_install(function (package)
+        local configs = {}
+        table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
+        table.insert(configs, "-DBUILD_SHARED_LIBS=OFF")
+        -- Tools stay ON for gltf2ozz; FBX SDK is absent so the fbx pipeline
+        -- is disabled explicitly. Samples/howtos/tests only add build time.
+        table.insert(configs, "-Dozz_build_tools=ON")
+        table.insert(configs, "-Dozz_build_gltf=ON")
+        table.insert(configs, "-Dozz_build_fbx=OFF")
+        table.insert(configs, "-Dozz_build_samples=OFF")
+        table.insert(configs, "-Dozz_build_howtos=OFF")
+        table.insert(configs, "-Dozz_build_tests=OFF")
+        table.insert(configs, "-Dozz_build_data=OFF")
+        -- The default postfix would rename release archives to
+        -- libozz_*_r.a, which breaks add_links("ozz_*").
+        table.insert(configs, "-Dozz_build_postfix=OFF")
+        import("package.tools.cmake").install(package, configs)
+    end)
+    on_test(function (package)
+        assert(package:check_cxxsnippets({test = [[
+            #include <ozz/animation/offline/raw_skeleton.h>
+            #include <ozz/animation/offline/skeleton_builder.h>
+            #include <ozz/animation/runtime/skeleton.h>
+            void test() {
+                ozz::animation::offline::RawSkeleton raw;
+                raw.roots.resize(1);
+                ozz::animation::offline::SkeletonBuilder builder;
+                ozz::unique_ptr<ozz::animation::Skeleton> skel = builder(raw);
+                (void)skel;
+            }
+        ]]}, {configs = {languages = "c++17"}}))
+    end)
+package_end()
+
 -- imguizmo override to force docking imgui
 package("imguizmo")
     set_homepage("https://github.com/CedricGuillemet/ImGuizmo")
@@ -380,6 +430,7 @@ add_requires("cli11 v2.6.2")
 add_requires("nlohmann_json v3.12.0")
 add_requires("libarchive")
 add_requires("libcurl")
+add_requires("ozz-animation")
 -- slang shader compiler (slangc) — enabled by default for shader compilation
 option("with_slang", {default = false, showmenu = true, description = "Enable slang shader compiler (slangc)"})
 if has_config("with_slang") then
@@ -573,6 +624,7 @@ target("wsl")
     add_packages("stb", {public = true})
     add_packages("nlohmann_json", {public = true})
     add_packages("imguizmo", {public = true})
+    add_packages("ozz-animation", {public = true})
 
     if is_config("weasel_enable_multiplayer", true) then
         add_packages("gamenetworkingsockets", {optional = true})
@@ -738,6 +790,9 @@ target("compile_shaders")
         if not os.isdir(outdir) then os.mkdir(outdir) end
         -- copy pbr_common (module/include, not compiled)
         os.cp(path.join(shader_dir, "pbr_common.slang"), path.join(outdir, "pbr_common.slang"))
+        -- skinning is an include-only module, but it is also compiled into
+        -- per-shader skinned variants below.
+        os.cp(path.join(shader_dir, "skinning.slang"), path.join(outdir, "skinning.slang"))
         -- determine target
         local slang_target = "spirv"
         local ext = ".spv"
@@ -761,29 +816,82 @@ target("compile_shaders")
         -- Compute shaders declare explicit [[vk::binding]] attributes;
         -- passing any -fvk-*-shift flag makes slang ignore them.
         local compute_shift = ""
-        local function compile_one(src, entry, profile, shifts)
+        -- Include-only modules. A vertex shader's output depends on these, so
+        -- editing one must invalidate the artifacts that #include it. The
+        -- previous check compared only the entry file's mtime, which made every
+        -- edit to skinning.slang a silent no-op: the `_skinned` variants kept
+        -- their stale bytecode and the build reported success.
+        local shader_includes = {
+            path.join(shader_dir, "skinning.slang"),
+            path.join(shader_dir, "pbr_common.slang"),
+        }
+        -- Newest mtime across a shader and its includes, or nil if any is
+        -- missing (in which case the shader is simply rebuilt).
+        local function newest_input(src)
+            local newest = nil
+            local function consider(f)
+                if not os.isfile(f) then newest = nil; return end
+                local m = os.mtime(f)
+                if newest == nil or m > newest then newest = m end
+            end
+            consider(src)
+            if newest == nil then return nil end
+            for _, inc in ipairs(shader_includes) do
+                consider(inc)
+                if newest == nil then return nil end
+            end
+            return newest
+        end
+        local function compile_one(src, entry, profile, shifts, defines, outname, force)
             local base = path.filename(src)
-            local out = path.join(outdir, base .. ext)
-            -- only compile if src newer than out
-            if os.isfile(out) and os.mtime(out) > os.mtime(src) then return end
+            local out = path.join(outdir, (outname or base) .. ext)
+            -- only compile if src and every include are older than out
+            local input_mtime = newest_input(src)
+            if not force and input_mtime and os.isfile(out) and os.mtime(out) > input_mtime then return end
             local argv = {src, "-target", slang_target}
             if profile ~= "" then table.insert(argv, "-profile"); table.insert(argv, profile) end
             table.insert(argv, "-entry"); table.insert(argv, entry)
+            if defines then for _, d in ipairs(defines) do table.insert(argv, "-D" .. d) end end
             table.insert(argv, "-o"); table.insert(argv, out)
             for _, s in ipairs(shifts:split("%s")) do if s ~= "" then table.insert(argv, s) end end
             for _, f in ipairs(dxc_flags:split("%s")) do if f ~= "" then table.insert(argv, f) end end
             for _, f in ipairs(spirv_flags:split("%s")) do if f ~= "" then table.insert(argv, f) end end
-            print("Compiling shader: " .. path.filename(src))
+            print("Compiling shader: " .. path.filename(out))
             os.execv(slangc, argv)
         end
+        -- Vertex shaders that draw skinned meshes also get a SKINNING build.
+        -- The plain build stays free of the palette cbuffer, so meshes without
+        -- animation neither bind nor pay for it.
+        --
+        -- Output naming: `cube.vert.slang` -> `cube_skinned.vert.slang`. The
+        -- marker goes *before* the stage so the produced name matches what the
+        -- renderer asks for; see the cross-check below.
+        local skinned_vertex_shaders = {
+            ["cube.vert.slang"] = true,
+            ["shadow_depth.vert.slang"] = true,
+            ["point_shadow.vert.slang"] = true,
+            ["ssao_prepass.vert.slang"] = true,
+            ["outline.vert.slang"] = true,
+        }
         -- Compile all shaders
         local shaders = os.files(path.join(shader_dir, "*.slang"))
         for _, src in ipairs(shaders) do
+            -- `name` drops the ".slang" suffix (the patterns below match on
+            -- it); `filename` keeps the full file name for the skinned
+            -- variant lookup and its output name.
+            local filename = path.filename(src)
             local name = path.basename(src)
-            -- pbr_common.slang is a module/include, not compiled standalone
-            if name == "pbr_common" then
+            -- pbr_common.slang / skinning.slang are modules/includes, never
+            -- compiled standalone.
+            if filename == "pbr_common.slang" or filename == "skinning.slang" then
             elseif name:find("%.vert$") then
                 compile_one(src, "vsMain", "vs_6_0", vert_shift)
+                if skinned_vertex_shaders[filename] then
+                    local skinned_name = filename:gsub("%.vert%.slang$",
+                                                       "_skinned.vert.slang")
+                    compile_one(src, "vsMain", "vs_6_0", vert_shift,
+                                {"SKINNING"}, skinned_name)
+                end
             elseif name:find("%.frag$") then
                 compile_one(src, "fsMain", "ps_6_0", shift)
             elseif name == "cluster_build" or name == "light_cull" then
@@ -792,6 +900,34 @@ target("compile_shaders")
                 print("Skipping unknown shader: " .. path.filename(src))
             end
         end
+        -- Cross-check: every `compiled_shaders/*_skinned*.spv` path the
+        -- renderer asks for must correspond to a file this step produces.
+        -- A silent naming drift here is invisible until runtime, where the
+        -- skinned pipelines simply fail to load and animated meshes render
+        -- undeformed, so fail the build instead.
+        local produced = {}
+        for _, f in ipairs(os.files(path.join(outdir, "*.spv"))) do
+            produced[path.filename(f)] = true
+        end
+        local missing = {}
+        for _, f in ipairs(os.files(path.join(os.projectdir(), "src/wsl/**/*.cpp"))) do
+            local text = io.open(f, "r")
+            if text then
+                local content = text:read("*a")
+                text:close()
+                for name in content:gmatch("compiled_shaders/([%w_]+skinned[%w_.]*)%.spv") do
+                    if not produced[name .. ".spv"] then
+                        table.insert(missing, name .. ".spv")
+                    end
+                end
+            end
+        end
+        if #missing > 0 then
+            table.sort(missing)
+            local list = table.concat(missing, ", ")
+            raise("compile_shaders: the renderer requests skinned shaders this step does not produce: " .. list)
+        end
+
         print("compile_shaders: done (" .. #shaders .. " shaders processed)")
     end)
 
@@ -943,11 +1079,12 @@ target("weasel_mcp_server_tests")
 target("weasel_core_tests")
     set_kind("binary")
     set_languages("c++20")
-    add_files("tests/weasel-core/test_event_bus.cpp", "tests/weasel-core/test_acp_client.cpp", "tests/weasel-core/test_resource_ids.cpp", "tests/weasel-core/test_math_module.cpp", "tests/weasel-core/test_serialize_roundtrip.cpp", "tests/weasel-core/test_a2a_server.cpp")
+    add_files("tests/weasel-core/test_event_bus.cpp", "tests/weasel-core/test_acp_client.cpp", "tests/weasel-core/test_resource_ids.cpp", "tests/weasel-core/test_math_module.cpp", "tests/weasel-core/test_serialize_roundtrip.cpp", "tests/weasel-core/test_a2a_server.cpp", "tests/weasel-core/test_ozz_smoke.cpp", "tests/weasel-core/test_ozz_loader.cpp", "tests/weasel-core/test_model_skin.cpp", "tests/weasel-core/test_animation_system.cpp", "tests/weasel-core/test_scene_component_stream.cpp", "tests/weasel-core/test_animation_import.cpp", "tests/weasel-core/test_scene_move.cpp", "tests/weasel-core/test_deferred_stop.cpp")
     add_deps("wsl", "fake_acp_agent")
     add_packages("doctest", "simdjson")
     add_includedirs("src")
     add_defines("FAKE_AGENT_PATH=\"$(projectdir)/build/linux/x86_64/release/fake_acp_agent\"")
+    add_defines("WEASEL_SOURCE_DIR=\"$(projectdir)\"")
     add_tests("weasel_core_tests")
 
 target("fake_acp_agent")

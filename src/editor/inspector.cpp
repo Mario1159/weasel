@@ -14,6 +14,7 @@
 #include "wsl/comp/camera_2d.hpp"
 #include "wsl/comp/hierarchy.hpp"
 #include "wsl/comp/prefab_instance.hpp"
+#include "wsl/comp/skeleton_pose.hpp"
 #include "wsl/comp/subviewport.hpp"
 #include "wsl/comp/transform.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
@@ -479,6 +480,19 @@ inspector::draw_entity_inspector (entt::entity entity)
         = m_runtime_ctx->component_registry ().find (type_id);
     std::string const display_name
         = (descriptor != nullptr) ? descriptor->display_name : "Unknown";
+
+    // Skip runtime-only components.
+    //
+    // `skeleton_pose` is rebuilt by the animation system every frame and is
+    // deliberately absent from component_types, so it never reaches the
+    // registry or the reflected type metadata. Without this filter it surfaced
+    // as an "Unknown" component reading "(No reflection data available)" the
+    // moment an animator produced a pose -- i.e. as soon as a clip was
+    // selected. There is nothing for a user to edit, and saving the entity
+    // would not round-trip it.
+    if (type_id == entt::type_hash<wsl::comp::skeleton_pose>::value ()) {
+      continue;
+    }
 
     // Skip internal/special components
     if (type_id == entt::type_hash<wsl::comp::prefab_instance>::value ()) {

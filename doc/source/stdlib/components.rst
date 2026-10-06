@@ -3,6 +3,10 @@ Components
 
 .. das:module:: weasel_components
 
+.. das:class:: Animator
+
+   Controls ozz skeletal animation playback
+
 .. das:class:: Audio
 
    Provides audio playback functionality for the entity.
@@ -26,6 +30,10 @@ Components
 .. das:class:: Prefab Instance
 
    Tracks the source prefab for this entity
+
+.. das:class:: Skeleton Pose
+
+   Transient model-space joint palette
 
 .. das:class:: Spot Light
 

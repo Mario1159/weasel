@@ -38,11 +38,14 @@ enum class allowed_dofs : std::uint16_t
   RotationZ = 1U << 5U
 };
 
+/** Alias used when declaring a data member named `allowed_dofs`. */
+using allowed_dofs_mask = allowed_dofs;
+
 constexpr allowed_dofs
 operator| (allowed_dofs lhs, allowed_dofs rhs) noexcept
 {
-  return static_cast<allowed_dofs> (
-      static_cast<std::uint16_t> (lhs) | static_cast<std::uint16_t> (rhs));
+  return static_cast<allowed_dofs> (static_cast<std::uint16_t> (lhs)
+                                    | static_cast<std::uint16_t> (rhs));
 }
 
 using object_layer = std::uint16_t;
@@ -71,7 +74,7 @@ enum class shape_type : std::uint8_t
 struct body_desc
 {
   motion_type motion = motion_type::Dynamic;
-  allowed_dofs allowed_dofs = allowed_dofs::All;
+  allowed_dofs_mask allowed_dofs = allowed_dofs::All;
   object_layer layer = 0;
   shape_type shape = shape_type::box;
   vector3 position{};
@@ -105,8 +108,7 @@ public:
   bool is_body_valid (body_id id) const;
   vector3 get_body_position (body_id id) const;
   quaternion get_body_rotation (body_id id) const;
-  void set_body_transform (body_id id, vector3 position,
-                           quaternion rotation);
+  void set_body_transform (body_id id, vector3 position, quaternion rotation);
   void set_body_surface_properties (body_id id, float friction,
                                     float restitution, object_layer layer);
   void add_force (body_id id, vector3 force);

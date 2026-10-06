@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace wsl;
@@ -233,4 +234,96 @@ TEST_CASE ("event_hub: connect / disconnect / dispatch at runtime")
 
   hub.dispatch (combat_event{ {}, {}, 9 });
   REQUIRE (handler.hits == 1); // unchanged after disconnect
+}
+
+TEST_CASE ("event_hub: concurrent connect/dispatch stays consistent")
+{
+  // Regression test for a heap corruption seen in the editor: scene loading
+  // runs on a background thread (`resource_manager::load` dispatches the scene
+  // loader through `std::async`) and its serializer calls `clear_connections()`
+  // and `connect()` on the shared hub while the main thread dispatches events.
+  // A `push_back` on `connected_handlers` racing with the dispatching thread
+  // reallocated the vector underneath it, relocating `connected_sink` elements
+  // with a stale data pointer and aborting in the allocator with
+  // "free(): invalid pointer" / "malloc(): unaligned tcache chunk detected".
+  //
+  // Correctness here is "does not corrupt the heap and ends in a consistent
+  // state", which is what an allocator abort or a wrong connection count would
+  // violate.
+  event::event_hub hub;
+  event::event_debug_db db;
+  hub.db = &db;
+
+  entt::registry reg;
+  test_emitter emitter;
+  test_handler handler;
+
+  emitter.register_event_sources (hub);
+  handler.register_event_sinks (hub);
+
+  hub.resolve_active_registry = [&] () -> entt::registry * { return &reg; };
+  hub.resolve_system_by_type = [&] (entt::id_type id) -> sys::ecs_system * {
+    if (id == comp::stable_type_id<test_handler> ()) {
+      return &handler;
+    }
+    return nullptr;
+  };
+
+  const entt::id_type ev_id = comp::stable_type_id<combat_event> ();
+  const entt::id_type h_id = comp::stable_type_id<test_handler> ();
+  constexpr int iterations = 400;
+
+  // Writer threads: mimic scene loads re-establishing connections.
+  std::vector<std::thread> writers;
+  writers.emplace_back ([&] {
+    for (int i = 0; i < iterations; ++i) {
+      hub.connect (ev_id, h_id, "on_hit");
+    }
+  });
+  writers.emplace_back ([&] {
+    for (int i = 0; i < iterations; ++i) {
+      hub.disconnect (ev_id, h_id, "on_hit");
+    }
+  });
+  // Mimics a scene activation that resets the whole connection set.
+  writers.emplace_back ([&] {
+    for (int i = 0; i < iterations; ++i) {
+      hub.clear_connections ();
+    }
+  });
+  // Readers: dispatching and snapshotting while the above mutate.
+  std::thread dispatcher ([&] {
+    for (int i = 0; i < iterations; ++i) {
+      hub.dispatch (combat_event{ entt::entity{ 1 }, entt::entity{ 2 }, i });
+    }
+  });
+  std::thread snapshotter ([&] {
+    for (int i = 0; i < iterations; ++i) {
+      const auto connections = hub.get_all_connections ();
+      // A connection is the only legal entry, and it is never duplicated.
+      for (const auto &connection : connections) {
+        CHECK (connection.event_type_id == ev_id);
+        CHECK (connection.system_type_id == h_id);
+        CHECK (connection.handler_name == "on_hit");
+      }
+    }
+  });
+
+  for (std::thread &writer : writers) {
+    writer.join ();
+  }
+  dispatcher.join ();
+  snapshotter.join ();
+
+  // Settle into a known state and confirm the hub is coherent rather than
+  // merely un-crashed.
+  hub.clear_connections ();
+  CHECK (hub.get_all_connections ().empty ());
+  REQUIRE (hub.connect (ev_id, h_id, "on_hit"));
+  CHECK (hub.get_all_connections ().size () == 1);
+
+  const int hits_before = handler.hits;
+  hub.dispatch (combat_event{ entt::entity{ 7 }, entt::entity{ 8 }, 3 });
+  CHECK (handler.hits == hits_before + 1);
+  CHECK (handler.last_victim == entt::entity{ 8 });
 }

@@ -324,7 +324,6 @@ event_inspector::draw_signal_connection_modal (entt::registry & /*registry*/)
 
   auto &hub = m_runtime_ctx->event_hub ();
   auto *db = hub.db;
-  auto &queries = m_runtime_ctx->reg_queries ();
 
   const wsl::event::event_source_debug_entry *signal_entry = nullptr;
   if (db != nullptr) {

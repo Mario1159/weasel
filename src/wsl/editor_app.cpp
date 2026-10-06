@@ -74,8 +74,8 @@ editor_app::on_update (double dt)
   m_runtime_context->runtime_project_module ().poll_async_reload ();
 
   if (m_editor_ctx->pending_project_load ()) {
-    m_runtime_context->resource_manager ().load_project (
-        *m_editor_ctx->pending_project_load ());
+    static_cast<void> (m_runtime_context->resource_manager ().load_project (
+        *m_editor_ctx->pending_project_load ()));
     m_editor_ctx->pending_project_load (std::nullopt);
   }
 }

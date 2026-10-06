@@ -7,6 +7,9 @@
 #ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
+#ifndef IN_MODULE_INTERFACE
+#include <deque>
+#endif
 
 namespace wsl
 {
@@ -24,6 +27,19 @@ struct render_submission
   gfx::scene_renderer::view_state view{};
   std::vector<gfx::scene_renderer::draw_command> draw_commands;
   const gfx::cubemap *environment = nullptr;
+
+  /**
+   * Backing storage for `draw_command::palette`.
+   *
+   * The draw commands are copied into the renderer and consumed later in the
+   * frame, so the palettes they point at must live at least as long as this
+   * submission -- they cannot be a local of `build_render_frame`. A deque is
+   * used because references to existing elements stay valid as it grows;
+   * `draw_view.size_hint()` is the size of the *smallest* pool in the view and
+   * is not a bound on how many entities match, so a vector would reallocate
+   * mid-loop and dangle every pointer already handed out.
+   */
+  std::deque<gfx::scene_renderer::joint_palette> palettes;
 
   /**
    * When true, this submission is for a 2D camera/viewport and 3D objects

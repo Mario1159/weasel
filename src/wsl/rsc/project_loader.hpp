@@ -47,6 +47,10 @@ struct project_assets
   std::vector<std::string> shaders;
   /** List of material file paths. */
   std::vector<std::string> materials;
+  /** List of runtime skeleton files (`.skel.ozz`) produced by gltf2ozz. */
+  std::vector<std::string> skeletons;
+  /** List of runtime animation clip files (`.anim.ozz`). */
+  std::vector<std::string> animations;
 };
 
 /** Responsible for creating, loading, and scanning Weasel projects. */

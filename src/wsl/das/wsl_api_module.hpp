@@ -94,4 +94,29 @@ uint32_t wsl_get_component_type_id_by_name (const char *type_name);
 /** Returns a pointer to an existing Daslang component payload, or nullptr. */
 void *wsl_get_component_data (uint32_t entity, uint32_t type_id);
 
+// ── Animation ──
+//
+// These mutate comp::animator directly. The animation system diffs clip_path
+// every frame, so assigning a new path is what starts a crossfade. All of them
+// are no-ops for entities without an Animator or invalid ids, so a script
+// cannot fault the runtime.
+
+/** Selects `clip` and rewinds playback to the start. */
+void wsl_anim_play (uint32_t entity, const char *clip);
+
+/** Selects `clip` and crossfades into it over `duration` seconds. */
+void wsl_anim_crossfade (uint32_t entity, const char *clip, float duration);
+
+/** Stops playback and rewinds. */
+void wsl_anim_stop (uint32_t entity);
+
+/** Sets the playback rate multiplier. */
+void wsl_anim_set_speed (uint32_t entity, float speed);
+
+/** Scrubs to `time` seconds; negative values clamp to zero. */
+void wsl_anim_set_time (uint32_t entity, float time);
+
+/** Enables or disables looping. */
+void wsl_anim_set_loop (uint32_t entity, bool loop);
+
 } // namespace wsl::das

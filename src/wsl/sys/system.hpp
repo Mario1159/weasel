@@ -27,9 +27,7 @@
 namespace wsl
 {
 
-/**
- * Logic and behavior implemented through ECS systems.
- */
+// Logic and behavior implemented through ECS systems.
 namespace sys
 {
 

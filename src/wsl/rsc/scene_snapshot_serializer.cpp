@@ -2,6 +2,8 @@
 
 #include "../log/log.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <entt/core/fwd.hpp>
 #include <unordered_set>
@@ -15,6 +17,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -44,6 +47,94 @@ namespace rsc
 
 namespace io
 {
+
+namespace
+{
+
+/** Component-block format that carries an explicit document manifest. */
+constexpr uint32_t tagged_component_stream_version = 1;
+
+/**
+ * Manifest document written immediately after the scene-data document.
+ *
+ * The manifest lives in its own document rather than in `scene_header`
+ * because rfl treats plain struct fields as required: adding a field to
+ * `scene_header` would make every previously saved scene fail to parse,
+ * leaving the whole header (entity names, entities, systems) empty. A
+ * separate document is simply absent from legacy files, which are then
+ * recognized as untagged.
+ */
+struct component_manifest
+{
+  /** Discriminates the manifest from a component document. */
+  uint32_t version = tagged_component_stream_version;
+  /** Ordered world component type names present in the component block. */
+  std::vector<std::string> component_order;
+};
+
+/**
+ * World components that existed when the untagged (v1) component-block
+ * format was introduced.
+ *
+ * A v1 file contains exactly one document per component registered at the
+ * time it was written, ordered by stable type id, and the documents carry no
+ * type tag. Such a file can therefore only be replayed by consuming one
+ * document per component *of that same set*: consuming a document for a
+ * component added later shifts every following document and silently drops
+ * the real data. Components introduced after v1 must never be added here --
+ * new files record a manifest in `scene_header::component_order` instead.
+ */
+constexpr std::array<std::string_view, 17> legacy_v1_world_components = {
+  "hierarchy",
+  "world_transform",
+  "transform",
+  "model_instance_3d",
+  "camera",
+  "camera_2d",
+  "point_light",
+  "spot_light",
+  "directional_light",
+  "rigid_body",
+  "area",
+  "character_body",
+  "audio",
+  "prefab_instance",
+  "sprite_2d",
+  "subviewport",
+  "transform_2d",
+};
+
+/**
+ * Returns the trailing `short_name` of a fully qualified type name, with the
+ * same trailing-artifact trimming that `comp::stable_type_id` applies, so the
+ * comparison is stable across compilers.
+ */
+std::string_view
+normalized_short_type_name (std::string_view type_name)
+{
+  std::size_t const separator = type_name.rfind ("::");
+  std::string_view name = separator == std::string_view::npos
+                              ? type_name
+                              : type_name.substr (separator + 2);
+  while (!name.empty ()
+         && (name.back () == ']' || name.back () == ' ' || name.back () == '\n'
+             || name.back () == '\r')) {
+    name.remove_suffix (1);
+  }
+  return name;
+}
+
+/** Whether \p type_name belongs to the frozen v1 component set. */
+bool
+is_legacy_v1_component (std::string_view type_name)
+{
+  std::string_view const name = normalized_short_type_name (type_name);
+  return std::find (legacy_v1_world_components.begin (),
+                    legacy_v1_world_components.end (), name)
+         != legacy_v1_world_components.end ();
+}
+
+} // namespace
 
 scene_snapshot_serializer::scene_snapshot_serializer (
     comp::singl::runtime_context *runtime_ctx, scene &scene)
@@ -87,8 +178,8 @@ scene_snapshot_serializer::save (serialize::json_writer &writer) const
   for (const auto &sys : scene_ref.systems) {
     scene_system_ids.insert (sys->get_type_id ());
   }
-  header.connections
-      = runtime_ctx->event_hub ().get_connections_for_systems (scene_system_ids);
+  header.connections = runtime_ctx->event_hub ().get_connections_for_systems (
+      scene_system_ids);
 
   for (const resource_ref &ref : scene_ref.get_load_list ()) {
     std::string path = runtime_ctx->resource_manager ().get_path (ref);
@@ -114,11 +205,26 @@ scene_snapshot_serializer::save (serialize::json_writer &writer) const
     data.entities.push_back (*it);
   }
 
-  writer.write (data);
+  // Collect the component list once: the manifest must describe exactly the
+  // documents that are written below, in the same order.
+  const std::vector<const reg::component_registry::descriptor *>
+      world_components
+      = runtime_ctx->component_registry ().get_world_components (
+          reg::world_component_order::type_id);
 
-  for (const reg::component_registry::descriptor *desc :
-       runtime_ctx->component_registry ().get_world_components (
-           reg::world_component_order::type_id)) {
+  component_manifest manifest;
+  manifest.component_order.reserve (world_components.size ());
+  for (const reg::component_registry::descriptor *desc : world_components) {
+    if (desc == nullptr) {
+      continue;
+    }
+    manifest.component_order.push_back (desc->type_name);
+  }
+
+  writer.write (data);
+  writer.write (manifest);
+
+  for (const reg::component_registry::descriptor *desc : world_components) {
     if (!desc) {
       continue;
     }
@@ -200,18 +306,70 @@ scene_snapshot_serializer::load (serialize::json_reader &reader)
   storage.start_from (next_after_last);
 
   wsl::log::rsc ()->trace ("Loading components");
-  for (const reg::component_registry::descriptor *desc :
-       runtime_ctx->component_registry ().get_world_components (
-           reg::world_component_order::type_id)) {
-    if (!desc) {
-      continue;
+  {
+    reg::component_registry &components = runtime_ctx->component_registry ();
+
+    // A tagged stream carries a manifest document right after the scene data.
+    // Legacy files have no such document, so the peeked text is probed first
+    // and the stream is only advanced when the manifest actually matched --
+    // `read` would consume the document even on a failed parse.
+    component_manifest manifest;
+    bool tagged = false;
+    {
+      std::string const probe (reader.peek ());
+      if (!probe.empty ()) {
+        component_manifest parsed;
+        std::string error;
+        if (wsl::serialize::json_read (probe, parsed, &error)
+            && parsed.version >= tagged_component_stream_version
+            && !parsed.component_order.empty ()) {
+          manifest = std::move (parsed);
+          reader.skip ();
+          tagged = true;
+        }
+      }
     }
 
-    try {
-      runtime_ctx->component_registry ().load_world_component_json (
-          reader, scene_ref.get_registry (), desc->type_id);
-    } catch (const std::exception &) {
-      // JSON: missing component data is expected for empty/new scenes.
+    if (tagged) {
+      // The file lists its own components, so adding or removing a component
+      // in this build cannot shift the stream.
+      for (const std::string &name : manifest.component_order) {
+        const reg::component_registry::descriptor *desc
+            = components.find_world_component (name);
+        if (desc == nullptr) {
+          // Component type is gone: consume its document so the remaining
+          // documents stay aligned.
+          if (!reader.skip ()) {
+            break;
+          }
+          continue;
+        }
+
+        try {
+          components.load_world_component_json (reader, registry,
+                                                desc->type_id);
+        } catch (const std::exception &) {
+          // JSON: missing component data is expected for empty/new scenes.
+        }
+      }
+    } else {
+      // Legacy untagged stream: one document per v1 component, in the same
+      // type-id order the writer used. Components added after v1 must not
+      // consume a document here.
+      for (const reg::component_registry::descriptor *desc :
+           components.get_world_components (
+               reg::world_component_order::type_id)) {
+        if (desc == nullptr || !is_legacy_v1_component (desc->type_name)) {
+          continue;
+        }
+
+        try {
+          components.load_world_component_json (reader, registry,
+                                                desc->type_id);
+        } catch (const std::exception &) {
+          // JSON: missing component data is expected for empty/new scenes.
+        }
+      }
     }
   }
 
@@ -409,8 +567,8 @@ scene_snapshot_serializer::save_binary (serialize::binary_writer &writer) const
   for (const auto &sys : scene_ref.systems) {
     scene_system_ids.insert (sys->get_type_id ());
   }
-  header.connections
-      = runtime_ctx->event_hub ().get_connections_for_systems (scene_system_ids);
+  header.connections = runtime_ctx->event_hub ().get_connections_for_systems (
+      scene_system_ids);
 
   for (const resource_ref &ref : scene_ref.get_load_list ()) {
     std::string path = runtime_ctx->resource_manager ().get_path (ref);
@@ -436,11 +594,24 @@ scene_snapshot_serializer::save_binary (serialize::binary_writer &writer) const
     data.entities.push_back (*it);
   }
 
-  writer.write (data);
+  const std::vector<const reg::component_registry::descriptor *>
+      world_components
+      = runtime_ctx->component_registry ().get_world_components (
+          reg::world_component_order::type_id);
 
-  for (const reg::component_registry::descriptor *desc :
-       runtime_ctx->component_registry ().get_world_components (
-           reg::world_component_order::type_id)) {
+  component_manifest manifest;
+  manifest.component_order.reserve (world_components.size ());
+  for (const reg::component_registry::descriptor *desc : world_components) {
+    if (desc == nullptr) {
+      continue;
+    }
+    manifest.component_order.push_back (desc->type_name);
+  }
+
+  writer.write (data);
+  writer.write (manifest);
+
+  for (const reg::component_registry::descriptor *desc : world_components) {
     if (!desc) {
       continue;
     }
@@ -522,18 +693,63 @@ scene_snapshot_serializer::load_binary (serialize::binary_reader &reader)
   storage.start_from (next_after_last);
 
   wsl::log::rsc ()->trace ("Loading components");
-  for (const reg::component_registry::descriptor *desc :
-       runtime_ctx->component_registry ().get_world_components (
-           reg::world_component_order::type_id)) {
-    if (!desc) {
-      continue;
+  {
+    reg::component_registry &components = runtime_ctx->component_registry ();
+
+    // Peek before consuming: a legacy stream has no manifest document, and
+    // `read` would consume the first component document even on failure.
+    component_manifest manifest;
+    bool tagged = false;
+    {
+      auto const [bytes, length] = reader.peek ();
+      if (bytes != nullptr && length > 0) {
+        serialize::binary_reader probe (bytes, length);
+        component_manifest parsed;
+        if (probe.read (parsed)
+            && parsed.version >= tagged_component_stream_version
+            && !parsed.component_order.empty ()) {
+          manifest = std::move (parsed);
+          reader.skip ();
+          tagged = true;
+        }
+      }
     }
 
-    try {
-      runtime_ctx->component_registry ().load_world_component_binary (
-          reader, scene_ref.get_registry (), desc->type_id);
-    } catch (const std::exception &) {
-      throw;
+    if (tagged) {
+      for (const std::string &name : manifest.component_order) {
+        const reg::component_registry::descriptor *desc
+            = components.find_world_component (name);
+        if (desc == nullptr) {
+          if (!reader.skip ()) {
+            break;
+          }
+          continue;
+        }
+
+        try {
+          components.load_world_component_binary (reader, registry,
+                                                  desc->type_id);
+        } catch (const std::exception &) {
+          throw;
+        }
+      }
+    } else {
+      // Legacy untagged stream: only the frozen v1 component set has a
+      // document, in type-id order.
+      for (const reg::component_registry::descriptor *desc :
+           components.get_world_components (
+               reg::world_component_order::type_id)) {
+        if (desc == nullptr || !is_legacy_v1_component (desc->type_name)) {
+          continue;
+        }
+
+        try {
+          components.load_world_component_binary (reader, registry,
+                                                  desc->type_id);
+        } catch (const std::exception &) {
+          throw;
+        }
+      }
     }
   }
 

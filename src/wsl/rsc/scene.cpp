@@ -330,6 +330,69 @@ scene::scene (comp::singl::runtime_context *runtime_ctx,
   ensure_context_bindings ();
 }
 
+scene::scene (scene &&other)
+    : m_name (std::move (other.m_name)),
+      m_entity_names (std::move (other.m_entity_names)),
+      m_registry (std::move (other.m_registry)),
+      m_load_list (std::move (other.m_load_list)),
+      m_initialized (other.m_initialized), m_runtime_ctx (other.m_runtime_ctx),
+      m_editor_ctx (other.m_editor_ctx), m_running (other.m_running),
+      systems (std::move (other.systems))
+{
+  // The moved registry still carries a delegate bound to `other`'s address.
+  // Nulling the source's context first makes that stale binding inert even
+  // before it is removed, so it can never become a wild dereference.
+  other.m_runtime_ctx = nullptr;
+  connect_destroy_signal (&other);
+  ensure_context_bindings ();
+}
+
+scene &
+scene::operator= (scene &&other)
+{
+  if (this == &other) {
+    return *this;
+  }
+
+  m_name = std::move (other.m_name);
+  m_entity_names = std::move (other.m_entity_names);
+  m_registry = std::move (other.m_registry);
+  m_load_list = std::move (other.m_load_list);
+  m_initialized = other.m_initialized;
+  m_runtime_ctx = other.m_runtime_ctx;
+  m_editor_ctx = other.m_editor_ctx;
+  m_running = other.m_running;
+  systems = std::move (other.systems);
+
+  other.m_runtime_ctx = nullptr;
+  connect_destroy_signal (&other);
+  ensure_context_bindings ();
+  return *this;
+}
+
+void
+scene::connect_destroy_signal (scene *previous)
+{
+  // The handler is invoked through a raw `this`, so the binding must be rebuilt
+  // whenever the scene occupies a new address -- i.e. after every move.
+  //
+  // Removing the old binding first is mandatory, not tidy-up: a moved registry
+  // still holds the *previous* object's delegate, so simply connecting again
+  // would leave both installed and the stale one would fire on the next
+  // clear().
+  //
+  // `on_destroy()` returns a sink, so both operations are direct members.
+  // `disconnect(const void *)` matches on the bound instance; the
+  // `disconnect<Candidate>()` overload matches on a member-function pointer and
+  // only supports free functions when given no instance.
+  if (previous != nullptr) {
+    m_registry.on_destroy<entt::entity> ().disconnect (previous);
+  }
+
+  (m_registry.on_destroy<entt::entity> ()
+       .connect<&scene::on_entity_destroyed>)(this);
+}
+
 void
 scene::on_entity_destroyed (entt::registry &registry, entt::entity entity)
 {

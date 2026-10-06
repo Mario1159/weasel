@@ -170,6 +170,30 @@ struct material_id
                        comp::singl::runtime_context *runtime);
 };
 
+/** Unique identifier for a skeleton resource (`.skel.ozz`). */
+struct skeleton_id
+{
+  /** The hashed identifier value. */
+  entt::id_type value{ no_resource_id };
+  bool
+  operator== (const skeleton_id &other) const
+  {
+    return value == other.value;
+  }
+};
+
+/** Unique identifier for an animation clip resource (`.anim.ozz`). */
+struct animation_id
+{
+  /** The hashed identifier value. */
+  entt::id_type value{ no_resource_id };
+  bool
+  operator== (const animation_id &other) const
+  {
+    return value == other.value;
+  }
+};
+
 } // namespace rsc
 
 } // namespace wsl

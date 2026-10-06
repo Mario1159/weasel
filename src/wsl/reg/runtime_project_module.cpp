@@ -491,8 +491,12 @@ runtime_project_module::apply_registration_cache (
     std::vector<component_registry::descriptor::das_field> fields;
     for (const auto &f : entry.das_fields) {
       fields.push_back (
-          { f.name, f.type_name, f.offset, f.size,
-            static_cast<wsl::das::das_engine::field_type_kind> (f.kind) });
+          { f.name,
+            f.type_name,
+            f.offset,
+            f.size,
+            static_cast<wsl::das::das_engine::field_type_kind> (f.kind),
+            {} });
     }
     m_runtime_ctx->component_registry ()
         .register_cached_runtime_world_component (
@@ -540,8 +544,12 @@ runtime_project_module::load_das_registrations_from_cache (
     fields.reserve (cached.size ());
     for (const auto &f : cached) {
       fields.push_back (
-          { f.name, f.type_name, f.offset, f.size,
-            static_cast<wsl::das::das_engine::field_type_kind> (f.kind) });
+          { f.name,
+            f.type_name,
+            f.offset,
+            f.size,
+            static_cast<wsl::das::das_engine::field_type_kind> (f.kind),
+            {} });
     }
     return fields;
   };

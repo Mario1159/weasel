@@ -78,6 +78,41 @@ constexpr std::array<rsc::model_loader::primitive_model_info, 5>
 namespace rsc
 {
 
+namespace
+{
+
+bool
+is_joint_component_type (fastgltf::ComponentType type)
+{
+  return type == fastgltf::ComponentType::UnsignedByte
+         || type == fastgltf::ComponentType::UnsignedShort
+         || type == fastgltf::ComponentType::UnsignedInt;
+}
+
+bool
+is_weight_component_type (fastgltf::ComponentType type)
+{
+  return type == fastgltf::ComponentType::UnsignedByte
+         || type == fastgltf::ComponentType::UnsignedShort
+         || type == fastgltf::ComponentType::UnsignedInt
+         || type == fastgltf::ComponentType::Float;
+}
+
+bool
+has_additional_skin_sets (const fastgltf::Primitive &primitive)
+{
+  for (const fastgltf::Attribute &attribute : primitive.attributes) {
+    const std::string_view name (attribute.name);
+    if ((name.starts_with ("JOINTS_") && (name != "JOINTS_0"))
+        || (name.starts_with ("WEIGHTS_") && (name != "WEIGHTS_0"))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+} // namespace
+
 template <typename Prim>
 void
 model_loader::generate_tangents_mikktspace_any (Prim &prim) const
@@ -402,8 +437,9 @@ model_loader::upload_next_batch (upload_session &session,
 
       for (size_t i = task.offset; i < end; ++i) {
         const auto &vertex = src_prim.vertices[i];
-        dst_prim.vertices.push_back (
-            { vertex.pos, vertex.normal, vertex.uv, vertex.tangent });
+        dst_prim.vertices.push_back ({ vertex.pos, vertex.normal, vertex.uv,
+                                       vertex.tangent, vertex.joints,
+                                       vertex.weights });
       }
       break;
     }
@@ -477,12 +513,21 @@ model_loader::finish_upload (upload_session &session, const raw::cpu_model &cpu)
   auto &model = session.gpu_model;
   const bool lowest_lod_only = session.options.lowest_lod_only;
 
+  model.skins.reserve (cpu.skins.size ());
+  for (const raw::cpu_skin &cpu_skin : cpu.skins) {
+    model.skins.push_back (
+        { cpu_skin.joint_nodes, cpu_skin.joint_names, cpu_skin.inverse_binds });
+  }
+
+  model.animation_names = cpu.animation_names;
+
   model.scenes.reserve (cpu.scenes.size ());
 
   std::function<gfx::node (const raw::cpu_node &)> build_node;
   build_node = [&] (const raw::cpu_node &src) -> gfx::node {
     gfx::node node;
     node.local_transform = src.local_transform;
+    node.skin_index = src.skin_index;
 
     if (!src.mesh_lods.empty ()) {
       if (lowest_lod_only) {
@@ -673,6 +718,10 @@ model_loader::load_cpu (const std::string &path) const
       | fastgltf::Extensions::KHR_materials_emissive_strength);
 
   auto file = fastgltf::MappedGltfFile::FromPath (p);
+  if (!file) {
+    wsl::log::rsc ()->error ("Failed to open glTF: {}", path);
+    return {};
+  }
 
   constexpr auto options = fastgltf::Options::LoadExternalBuffers
                            | fastgltf::Options::LoadExternalImages
@@ -681,12 +730,116 @@ model_loader::load_cpu (const std::string &path) const
 
   auto asset = parser.loadGltf (file.get (), p.parent_path (), options);
   if (!asset) {
-    wsl::log::rsc ()->error ("Failed to load glTF: {}", path);
+    const fastgltf::Error error = asset.error ();
+    wsl::log::rsc ()->error ("Failed to load glTF '{}': {} ({})", path,
+                             fastgltf::getErrorMessage (error),
+                             fastgltf::getErrorName (error));
     return {};
   }
 
   const auto &gltf = asset.get ();
   const std::filesystem::path base_path = p.parent_path ();
+
+  // -------- skins --------
+  cpu->skins.resize (gltf.skins.size ());
+  for (size_t skin_index = 0; skin_index < gltf.skins.size (); ++skin_index) {
+    const fastgltf::Skin &gltf_skin = gltf.skins[skin_index];
+    raw::cpu_skin &out_skin = cpu->skins[skin_index];
+
+    out_skin.joint_nodes.assign (gltf_skin.joints.begin (),
+                                 gltf_skin.joints.end ());
+    if (out_skin.joint_nodes.empty ()) {
+      wsl::log::rsc ()->error ("Skin {} contains no joints", skin_index);
+      return {};
+    }
+
+    out_skin.joint_names.reserve (out_skin.joint_nodes.size ());
+    out_skin.inverse_binds.assign (out_skin.joint_nodes.size (),
+                                   glm::mat4 (1.0F));
+
+    for (const size_t joint_node : out_skin.joint_nodes) {
+      if (joint_node >= gltf.nodes.size ()) {
+        wsl::log::rsc ()->error ("Skin {} references invalid joint node {}",
+                                 skin_index, joint_node);
+        return {};
+      }
+      out_skin.joint_names.emplace_back (gltf.nodes[joint_node].name);
+    }
+
+    if (!gltf_skin.inverseBindMatrices.has_value ()) {
+      continue;
+    }
+
+    const size_t inverse_bind_index = *gltf_skin.inverseBindMatrices;
+    if (inverse_bind_index >= gltf.accessors.size ()) {
+      wsl::log::rsc ()->error (
+          "Skin {} references invalid inverse-bind accessor {}", skin_index,
+          inverse_bind_index);
+      return {};
+    }
+
+    const fastgltf::Accessor &inverse_bind_acc
+        = gltf.accessors[inverse_bind_index];
+    if ((inverse_bind_acc.type != fastgltf::AccessorType::Mat4)
+        || (inverse_bind_acc.componentType != fastgltf::ComponentType::Float)
+        || inverse_bind_acc.normalized
+        || (inverse_bind_acc.count != out_skin.joint_nodes.size ())) {
+      wsl::log::rsc ()->error ("Skin {} has an invalid inverse-bind accessor",
+                               skin_index);
+      return {};
+    }
+
+    fastgltf::iterateAccessorWithIndex<fastgltf::math::fmat4x4> (
+        gltf, inverse_bind_acc, [&] (const auto &value, size_t index) {
+          out_skin.inverse_binds[index] = fastgltf_mat4_to_glm (value);
+        });
+  }
+
+  // -------- animations (names only) --------
+  // The engine does not decode glTF animation data: playback goes through ozz
+  // `.anim.ozz` files produced by animation_importer. Recording the declared
+  // clip names is enough to decide whether a model needs that conversion and
+  // to label the resulting clips, so nothing here touches samplers or
+  // channels (fastgltf already parsed them and we simply ignore them).
+  cpu->animation_names.reserve (gltf.animations.size ());
+  for (const fastgltf::Animation &animation : gltf.animations) {
+    // fastgltf names are std::pmr::string; convert to the engine's string.
+    cpu->animation_names.emplace_back (animation.name.data (),
+                                       animation.name.size ());
+  }
+
+  // A mesh can be shared by multiple skinned nodes. Remember every skin that
+  // uses it so primitive attributes can be validated against all joint lists.
+  std::vector<std::vector<size_t>> mesh_skins (gltf.meshes.size ());
+  for (const fastgltf::Node &node : gltf.nodes) {
+    if (node.skinIndex.has_value ()
+        && (*node.skinIndex >= cpu->skins.size ())) {
+      wsl::log::rsc ()->error ("Node references invalid skin {}",
+                               *node.skinIndex);
+      return {};
+    }
+
+    if (!node.meshIndex.has_value ()) {
+      continue;
+    }
+
+    const size_t mesh_index = static_cast<size_t> (*node.meshIndex);
+    if (mesh_index >= gltf.meshes.size ()) {
+      wsl::log::rsc ()->error ("Node references invalid mesh {}", mesh_index);
+      return {};
+    }
+
+    if (!node.skinIndex.has_value ()) {
+      continue;
+    }
+
+    const size_t skin_index = *node.skinIndex;
+    std::vector<size_t> &used_skins = mesh_skins[mesh_index];
+    if (std::find (used_skins.begin (), used_skins.end (), skin_index)
+        == used_skins.end ()) {
+      used_skins.push_back (skin_index);
+    }
+  }
 
   cpu->meshes.resize (gltf.meshes.size ());
 
@@ -695,12 +848,25 @@ model_loader::load_cpu (const std::string &path) const
     const fastgltf::Mesh &gltf_mesh = gltf.meshes[mi];
     raw::cpu_mesh &out_mesh = cpu->meshes[mi];
 
-    for (const fastgltf::Primitive &prim : gltf_mesh.primitives) {
+    for (size_t prim_index = 0; prim_index < gltf_mesh.primitives.size ();
+         ++prim_index) {
+      const fastgltf::Primitive &prim = gltf_mesh.primitives[prim_index];
       raw::cpu_primitive &out = out_mesh.primitives.emplace_back ();
 
       // ---- positions ----
-      const auto &pos_acc
-          = gltf.accessors[prim.findAttribute ("POSITION")->accessorIndex];
+      const auto *position_attr = prim.findAttribute ("POSITION");
+      if ((position_attr == prim.attributes.end ())
+          || (position_attr->accessorIndex >= gltf.accessors.size ())) {
+        wsl::log::rsc ()->error ("Mesh {} has no valid POSITION accessor", mi);
+        return {};
+      }
+
+      const auto &pos_acc = gltf.accessors[position_attr->accessorIndex];
+      if (pos_acc.type != fastgltf::AccessorType::Vec3) {
+        wsl::log::rsc ()->error ("Mesh {} has an invalid POSITION accessor",
+                                 mi);
+        return {};
+      }
 
       out.vertices.resize (pos_acc.count);
 
@@ -767,6 +933,106 @@ model_loader::load_cpu (const std::string &path) const
       } else {
         for (auto &v : out.vertices) {
           v.uv = glm::vec2 (0.0F);
+        }
+      }
+
+      // ---- skin joints and weights ----
+      if (has_additional_skin_sets (prim)) {
+        wsl::log::rsc ()->error (
+            "Mesh {} uses more than four skin influences; only JOINTS_0 and "
+            "WEIGHTS_0 are supported",
+            mi);
+        return {};
+      }
+
+      const auto *joints_attr = prim.findAttribute ("JOINTS_0");
+      const auto *weights_attr = prim.findAttribute ("WEIGHTS_0");
+      const bool has_joints = joints_attr != prim.attributes.end ();
+      const bool has_weights = weights_attr != prim.attributes.end ();
+      if (has_joints != has_weights) {
+        wsl::log::rsc ()->error (
+            "Mesh {} must provide JOINTS_0 and WEIGHTS_0 together", mi);
+        return {};
+      }
+
+      if (!mesh_skins[mi].empty () && (!has_joints || !has_weights)) {
+        wsl::log::rsc ()->error (
+            "Skinned mesh {} is missing JOINTS_0 or WEIGHTS_0", mi);
+        return {};
+      }
+
+      if (has_joints && has_weights) {
+        if ((joints_attr->accessorIndex >= gltf.accessors.size ())
+            || (weights_attr->accessorIndex >= gltf.accessors.size ())) {
+          wsl::log::rsc ()->error ("Mesh {} has an invalid skin accessor", mi);
+          return {};
+        }
+
+        const fastgltf::Accessor &joints_acc
+            = gltf.accessors[joints_attr->accessorIndex];
+        const fastgltf::Accessor &weights_acc
+            = gltf.accessors[weights_attr->accessorIndex];
+
+        const bool valid_joints
+            = (joints_acc.type == fastgltf::AccessorType::Vec4)
+              && is_joint_component_type (joints_acc.componentType)
+              && !joints_acc.normalized
+              && (joints_acc.count == out.vertices.size ());
+        const bool valid_weights
+            = (weights_acc.type == fastgltf::AccessorType::Vec4)
+              && ((weights_acc.componentType == fastgltf::ComponentType::Float
+                   && !weights_acc.normalized)
+                  || (is_weight_component_type (weights_acc.componentType)
+                      && weights_acc.normalized))
+              && (weights_acc.count == out.vertices.size ());
+
+        if (!valid_joints || !valid_weights) {
+          wsl::log::rsc ()->error (
+              "Mesh {} primitive {} in '{}' has invalid "
+              "JOINTS_0/WEIGHTS_0 accessors: "
+              "JOINTS accessor {} (type={}, components={}, componentType={}, "
+              "bytes={}, normalized={}, count={}); "
+              "WEIGHTS accessor {} (type={}, components={}, componentType={}, "
+              "bytes={}, normalized={}, count={}); POSITION count={}",
+              mi, prim_index, path, joints_attr->accessorIndex,
+              static_cast<unsigned> (joints_acc.type),
+              fastgltf::getNumComponents (joints_acc.type),
+              fastgltf::getGLComponentType (joints_acc.componentType),
+              fastgltf::getComponentByteSize (joints_acc.componentType),
+              joints_acc.normalized, joints_acc.count,
+              weights_attr->accessorIndex,
+              static_cast<unsigned> (weights_acc.type),
+              fastgltf::getNumComponents (weights_acc.type),
+              fastgltf::getGLComponentType (weights_acc.componentType),
+              fastgltf::getComponentByteSize (weights_acc.componentType),
+              weights_acc.normalized, weights_acc.count, out.vertices.size ());
+          return {};
+        }
+
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::u32vec4> (
+            gltf, joints_acc, [&] (const auto &value, size_t index) {
+              out.vertices[index].joints
+                  = { value.x (), value.y (), value.z (), value.w () };
+            });
+
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4> (
+            gltf, weights_acc, [&] (const auto &value, size_t index) {
+              out.vertices[index].weights
+                  = { value.x (), value.y (), value.z (), value.w () };
+            });
+
+        for (const size_t skin_index : mesh_skins[mi]) {
+          const size_t joint_count = cpu->skins[skin_index].joint_nodes.size ();
+          for (const raw::cpu_vertex &vertex : out.vertices) {
+            if ((vertex.joints.x >= joint_count)
+                || (vertex.joints.y >= joint_count)
+                || (vertex.joints.z >= joint_count)
+                || (vertex.joints.w >= joint_count)) {
+              wsl::log::rsc ()->error (
+                  "Mesh {} references a joint outside skin {}", mi, skin_index);
+              return {};
+            }
+          }
         }
       }
 
@@ -896,12 +1162,22 @@ model_loader::load_cpu (const std::string &path) const
     raw::cpu_scene scn;
 
     for (size_t const node_index : gltf_scene.nodeIndices) {
+      bool build_valid = true;
       std::function<raw::cpu_node (size_t)> build_node;
       build_node = [&] (size_t idx) -> raw::cpu_node {
+        if (idx >= gltf.nodes.size ()) {
+          wsl::log::rsc ()->error ("Scene references invalid node {}", idx);
+          build_valid = false;
+          return {};
+        }
+
         const auto &src = gltf.nodes[idx];
 
         raw::cpu_node n;
         n.local_transform = compute_node_local_transform (src);
+        if (src.skinIndex.has_value ()) {
+          n.skin_index = static_cast<int> (*src.skinIndex);
+        }
 
         if (src.meshIndex.has_value ()) {
           int const mesh_index = static_cast<int> (*src.meshIndex);
@@ -934,6 +1210,9 @@ model_loader::load_cpu (const std::string &path) const
       };
 
       scn.roots.push_back (build_node (node_index));
+      if (!build_valid) {
+        return {};
+      }
     }
 
     cpu->scenes.push_back (std::move (scn));

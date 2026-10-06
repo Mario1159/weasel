@@ -9,8 +9,8 @@
 #include <variant>
 
 // Regression test for the cereal -> rfl material migration: the editor
-// writes .wslmat files with tagged variants (rfl::AddTagsToVariants) and
-// resource_manager::load (material_id) reads them back with the same
+// writes .wslmat files with tagged variants (rfl::AddNamespacedTagsToVariants)
+// and resource_manager::load (material_id) reads them back with the same
 // dialect. Every alternative of material_parameter::value_type must
 // survive the round trip without drifting to a different type (the
 // default index-tagged variant encoding turns int into float and
@@ -26,12 +26,15 @@ TEST_CASE ("material_asset round-trips through rfl with stable variant tags")
   mat.alpha_test = false;
 
   using wsl::gfx::material_parameter;
-  mat.default_parameters["u_Float"]
-      = material_parameter ("u_Float", 0.5f);
+  mat.default_parameters["u_Float"] = material_parameter ("u_Float", 0.5f);
   mat.default_parameters["u_Int"] = material_parameter ("u_Int", 42);
   mat.default_parameters["u_Bool"] = material_parameter ("u_Bool", true);
+  mat.default_parameters["u_Vec2"]
+      = material_parameter ("u_Vec2", glm::vec2{ 1.0f, 2.0f });
   mat.default_parameters["u_Vec3"]
       = material_parameter ("u_Vec3", glm::vec3{ 1.0f, 2.0f, 3.0f });
+  mat.default_parameters["u_Vec4"]
+      = material_parameter ("u_Vec4", glm::vec4{ 1.0f, 2.0f, 3.0f, 4.0f });
   mat.default_parameters["u_Tex"]
       = material_parameter ("u_Tex", wsl::rsc::image_id{ 77 });
   mat.default_parameters["u_Cube"]
@@ -39,15 +42,15 @@ TEST_CASE ("material_asset round-trips through rfl with stable variant tags")
 
   std::string write_error;
   std::string const json
-      = wsl::serialize::json_write_p<rfl::AddTagsToVariants> (mat,
-                                                               &write_error);
+      = wsl::serialize::json_write_p<rfl::AddNamespacedTagsToVariants> (
+          mat, &write_error);
   REQUIRE (json.empty () == false);
 
   wsl::gfx::material_asset back;
   std::string read_error;
   REQUIRE (wsl::serialize::json_read_p<wsl::gfx::material_asset,
-                                       rfl::AddTagsToVariants> (
-              json, back, &read_error));
+                                       rfl::AddNamespacedTagsToVariants> (
+      json, back, &read_error));
 
   CHECK (back.name == "roundtrip");
   CHECK (back.shader_program.value == 1234);
@@ -55,8 +58,7 @@ TEST_CASE ("material_asset round-trips through rfl with stable variant tags")
          == "engine://compiled_shaders/custom.vert.slang.spv");
   CHECK (back.double_sided == true);
   CHECK (back.alpha_test == false);
-  REQUIRE (back.default_parameters.size ()
-           == mat.default_parameters.size ());
+  REQUIRE (back.default_parameters.size () == mat.default_parameters.size ());
 
   auto const &fl = back.default_parameters.at ("u_Float").value;
   REQUIRE (std::holds_alternative<float> (fl));
@@ -70,10 +72,20 @@ TEST_CASE ("material_asset round-trips through rfl with stable variant tags")
   REQUIRE (std::holds_alternative<bool> (b));
   CHECK (std::get<bool> (b) == true);
 
+  auto const &v2 = back.default_parameters.at ("u_Vec2").value;
+  REQUIRE (std::holds_alternative<glm::vec2> (v2));
+  CHECK (std::get<glm::vec2> (v2).x == doctest::Approx (1.0f));
+  CHECK (std::get<glm::vec2> (v2).y == doctest::Approx (2.0f));
+
   auto const &v3 = back.default_parameters.at ("u_Vec3").value;
   REQUIRE (std::holds_alternative<glm::vec3> (v3));
   CHECK (std::get<glm::vec3> (v3).x == doctest::Approx (1.0f));
   CHECK (std::get<glm::vec3> (v3).z == doctest::Approx (3.0f));
+
+  auto const &v4 = back.default_parameters.at ("u_Vec4").value;
+  REQUIRE (std::holds_alternative<glm::vec4> (v4));
+  CHECK (std::get<glm::vec4> (v4).y == doctest::Approx (2.0f));
+  CHECK (std::get<glm::vec4> (v4).w == doctest::Approx (4.0f));
 
   auto const &tex = back.default_parameters.at ("u_Tex").value;
   REQUIRE (std::holds_alternative<wsl::rsc::image_id> (tex)); // not cubemap

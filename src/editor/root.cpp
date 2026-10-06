@@ -222,7 +222,8 @@ editor::root::draw (entt::registry &registry,
       std::snprintf (m_new_project_folder, sizeof (m_new_project_folder), "%s",
                      m_dialog_result->c_str ());
     } else if (m_current_dialog_mode == dialog_mode::load_scene) {
-      m_runtime_ctx->resource_manager ().import_scene (*m_dialog_result);
+      static_cast<void> (
+          m_runtime_ctx->resource_manager ().import_scene (*m_dialog_result));
     } else if (m_current_dialog_mode == dialog_mode::save_scene) {
       wsl::rsc::scene const *scene
           = m_runtime_ctx->scene_manager ().get_active ();
@@ -432,7 +433,7 @@ editor::root::draw_main_menu ()
           if (!info.is_prefab && info.name == active_scene->get_name ()) {
             wsl::rsc::scene_id const sid{ info.id };
             m_runtime_ctx->resource_manager ().unload (sid);
-            m_runtime_ctx->resource_manager ().load (sid);
+            static_cast<void> (m_runtime_ctx->resource_manager ().load (sid));
             break;
           }
         }
@@ -554,7 +555,7 @@ editor::root::draw_new_project_popup ()
 
       m_selection = {};
       m_editor_ctx->reset_editor_camera ();
-      m_runtime_ctx->resource_manager ().new_project (proj);
+      static_cast<void> (m_runtime_ctx->resource_manager ().new_project (proj));
 
       const std::string project_file
           = (std::filesystem::path (proj.root_path) / "wslpro.json").string ();

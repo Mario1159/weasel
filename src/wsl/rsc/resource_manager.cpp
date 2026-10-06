@@ -41,6 +41,7 @@
 #include <filesystem>
 #include <future>
 #include <imgui.h>
+#include <nlohmann/json.hpp>
 #include <memory>
 #include <optional>
 #include <string>
@@ -56,6 +57,57 @@ namespace fs = std::filesystem;
 
 namespace
 {
+
+template <typename T>
+std::string
+variant_tag_name ()
+{
+  return rfl::type_name_t<T>{}.str ();
+}
+
+std::string
+migrate_legacy_material_variant_tags (const std::string &content)
+{
+  nlohmann::json root = nlohmann::json::parse (content, nullptr, false);
+  if (root.is_discarded () || !root.contains ("default_parameters")
+      || !root["default_parameters"].is_object ()) {
+    return content;
+  }
+
+  static const std::unordered_map<std::string, std::string> legacy_tags = {
+    { "vec<2, float>", variant_tag_name<glm::vec2> () },
+    { "vec<3, float>", variant_tag_name<glm::vec3> () },
+    { "vec<4, float>", variant_tag_name<glm::vec4> () },
+    { "image_id", variant_tag_name<rsc::image_id> () },
+    { "cubemap_id", variant_tag_name<rsc::cubemap_id> () },
+  };
+
+  bool changed = false;
+  for (auto &parameter : root["default_parameters"].items ()) {
+    if (!parameter.value ().is_object ()) {
+      continue;
+    }
+
+    auto value_it = parameter.value ().find ("value");
+    if (value_it == parameter.value ().end () || !value_it->is_object ()
+        || (value_it->size () != 1)) {
+      continue;
+    }
+
+    auto alternative = value_it->begin ();
+    auto legacy = legacy_tags.find (alternative.key ());
+    if (legacy == legacy_tags.end ()) {
+      continue;
+    }
+
+    nlohmann::json migrated = nlohmann::json::object ();
+    migrated[legacy->second] = alternative.value ();
+    parameter.value ()["value"] = std::move (migrated);
+    changed = true;
+  }
+
+  return changed ? root.dump () : content;
+}
 
 std::string
 basename_no_ext (const std::string &path)
@@ -311,22 +363,22 @@ rsc::resource_manager::load (io::resource_ref ref)
 {
   switch (ref.type) {
   case io::resource_type::model:
-    load (model_id{ ref.id });
+    static_cast<void> (load (model_id{ ref.id }));
     break;
   case io::resource_type::image:
-    load (image_id{ ref.id });
+    static_cast<void> (load (image_id{ ref.id }));
     break;
   case io::resource_type::cubemap:
-    load (cubemap_id{ ref.id });
+    static_cast<void> (load (cubemap_id{ ref.id }));
     break;
   case io::resource_type::scene:
-    load (scene_id{ ref.id });
+    static_cast<void> (load (scene_id{ ref.id }));
     break;
   case io::resource_type::audio:
-    load (audio_id{ ref.id });
+    static_cast<void> (load (audio_id{ ref.id }));
     break;
   case io::resource_type::material:
-    load (material_id{ ref.id });
+    static_cast<void> (load (material_id{ ref.id }));
     break;
   }
 }
@@ -375,7 +427,7 @@ rsc::resource_manager::import_model (const std::string &path, bool request_load)
   }
   model_id id = register_model (import_path);
   if (request_load) {
-    load (id);
+    static_cast<void> (load (id));
   }
   return id;
 }
@@ -485,7 +537,7 @@ rsc::resource_manager::import_image (const std::string &path, bool request_load)
   }
   image_id id = register_image (import_path);
   if (request_load) {
-    load (id);
+    static_cast<void> (load (id));
   }
   return id;
 }
@@ -601,7 +653,7 @@ rsc::resource_manager::import_cubemap (const std::string &path,
   }
   cubemap_id id = register_cubemap (import_path);
   if (request_load) {
-    load (id);
+    static_cast<void> (load (id));
   }
   return id;
 }
@@ -721,7 +773,7 @@ rsc::resource_manager::import_scene (const std::string &path, bool request_load)
   }
   scene_id id = register_scene (import_path);
   if (request_load) {
-    load (id);
+    static_cast<void> (load (id));
   }
   return id;
 }
@@ -798,7 +850,7 @@ rsc::resource_manager::instantiate_prefab (scene_id id, entt::entity parent)
 
   // Ensure it is loaded.
   if (rec->state == scene_state::not_loaded) {
-    load (id);
+    static_cast<void> (load (id));
   }
 
   // If it's loading, wait for it synchronously for instantiation
@@ -972,7 +1024,7 @@ rsc::resource_manager::import_audio (const std::string &path, bool request_load)
   }
   audio_id id = register_audio (import_path);
   if (request_load) {
-    load (id);
+    static_cast<void> (load (id));
   }
   return id;
 }
@@ -1053,6 +1105,213 @@ rsc::resource_manager::list_audio () const
   infos.reserve (m_audio_table.size ());
   for (const auto &[id, rec] : m_audio_table) {
     infos.push_back (audio_resource_info{
+        .id = id, .path = rec.path, .name = rec.name, .state = rec.state });
+  }
+  sort_infos (infos);
+  return infos;
+}
+
+rsc::skeleton_id
+rsc::resource_manager::register_skeleton (const std::string &path)
+{
+  std::string normalized = path;
+  if (m_active_project && path.rfind ("res://", 0) != 0) {
+    std::filesystem::path const root (m_active_project->root_path);
+    std::filesystem::path const p (path);
+    if (path.find (m_active_project->root_path) == 0) {
+      normalized
+          = "res://" + std::filesystem::relative (p, root).generic_string ();
+    }
+  }
+
+  if (auto it = m_skeleton_ids_by_path.find (normalized);
+      it != m_skeleton_ids_by_path.end ()) {
+    return skeleton_id{ it->second };
+  }
+
+  const entt::id_type id = entt::hashed_string{ normalized.c_str () };
+  m_skeleton_table.try_emplace (
+      id, detail::skeleton_record{ .path = normalized,
+                                   .name = basename_no_ext (normalized),
+                                   .state = skeleton_state::not_loaded });
+  m_skeleton_ids_by_path[normalized] = id;
+  return skeleton_id{ id };
+}
+
+ozz::animation::Skeleton *
+rsc::resource_manager::load (skeleton_id id)
+{
+  detail::skeleton_record *rec = find_record (m_skeleton_table, id.value);
+  if (rec == nullptr) {
+    return nullptr;
+  }
+  if (rec->state == skeleton_state::loaded) {
+    return rec->skeleton.get ();
+  }
+
+  std::string const resolved = resolve_path (rec->path);
+  rec->skeleton = skeleton_loader::load (resolved);
+  rec->state = rec->skeleton != nullptr ? skeleton_state::loaded
+                                        : skeleton_state::not_loaded;
+  return rec->skeleton.get ();
+}
+
+void
+rsc::resource_manager::unload (skeleton_id id)
+{
+  detail::skeleton_record *rec = find_record (m_skeleton_table, id.value);
+  if (rec != nullptr) {
+    rec->skeleton.reset ();
+    rec->state = skeleton_state::not_loaded;
+  }
+}
+
+ozz::animation::Skeleton *
+rsc::resource_manager::get (skeleton_id id)
+{
+  detail::skeleton_record const *rec = find_record (m_skeleton_table, id.value);
+  return (rec != nullptr) ? rec->skeleton.get () : nullptr;
+}
+
+rsc::skeleton_state
+rsc::resource_manager::state (skeleton_id id) const
+{
+  if (const detail::skeleton_record *rec
+      = find_record (m_skeleton_table, id.value)) {
+    return rec->state;
+  }
+  return skeleton_state::not_loaded;
+}
+
+bool
+rsc::resource_manager::contains (skeleton_id id) const
+{
+  return m_skeleton_table.contains (id.value);
+}
+
+std::optional<rsc::skeleton_resource_info>
+rsc::resource_manager::info (skeleton_id id) const
+{
+  if (const detail::skeleton_record *rec
+      = find_record (m_skeleton_table, id.value)) {
+    return skeleton_resource_info{
+      .id = id.value, .path = rec->path, .name = rec->name, .state = rec->state
+    };
+  }
+  return std::nullopt;
+}
+
+std::vector<rsc::skeleton_resource_info>
+rsc::resource_manager::list_skeletons () const
+{
+  std::vector<skeleton_resource_info> infos;
+  infos.reserve (m_skeleton_table.size ());
+  for (const auto &[id, rec] : m_skeleton_table) {
+    infos.push_back (skeleton_resource_info{
+        .id = id, .path = rec.path, .name = rec.name, .state = rec.state });
+  }
+  sort_infos (infos);
+  return infos;
+}
+
+rsc::animation_id
+rsc::resource_manager::register_animation (const std::string &path)
+{
+  std::string normalized = path;
+  if (m_active_project && path.rfind ("res://", 0) != 0) {
+    std::filesystem::path const root (m_active_project->root_path);
+    std::filesystem::path const p (path);
+    if (path.find (m_active_project->root_path) == 0) {
+      normalized
+          = "res://" + std::filesystem::relative (p, root).generic_string ();
+    }
+  }
+
+  if (auto it = m_animation_ids_by_path.find (normalized);
+      it != m_animation_ids_by_path.end ()) {
+    return animation_id{ it->second };
+  }
+
+  const entt::id_type id = entt::hashed_string{ normalized.c_str () };
+  m_animation_table.try_emplace (
+      id, detail::animation_record{ .path = normalized,
+                                    .name = basename_no_ext (normalized),
+                                    .state = animation_state::not_loaded });
+  m_animation_ids_by_path[normalized] = id;
+  return animation_id{ id };
+}
+
+ozz::animation::Animation *
+rsc::resource_manager::load (animation_id id)
+{
+  detail::animation_record *rec = find_record (m_animation_table, id.value);
+  if (rec == nullptr) {
+    return nullptr;
+  }
+  if (rec->state == animation_state::loaded) {
+    return rec->animation.get ();
+  }
+
+  std::string const resolved = resolve_path (rec->path);
+  rec->animation = animation_loader::load (resolved);
+  rec->state = rec->animation != nullptr ? animation_state::loaded
+                                         : animation_state::not_loaded;
+  return rec->animation.get ();
+}
+
+void
+rsc::resource_manager::unload (animation_id id)
+{
+  detail::animation_record *rec = find_record (m_animation_table, id.value);
+  if (rec != nullptr) {
+    rec->animation.reset ();
+    rec->state = animation_state::not_loaded;
+  }
+}
+
+ozz::animation::Animation *
+rsc::resource_manager::get (animation_id id)
+{
+  detail::animation_record const *rec
+      = find_record (m_animation_table, id.value);
+  return (rec != nullptr) ? rec->animation.get () : nullptr;
+}
+
+rsc::animation_state
+rsc::resource_manager::state (animation_id id) const
+{
+  if (const detail::animation_record *rec
+      = find_record (m_animation_table, id.value)) {
+    return rec->state;
+  }
+  return animation_state::not_loaded;
+}
+
+bool
+rsc::resource_manager::contains (animation_id id) const
+{
+  return m_animation_table.contains (id.value);
+}
+
+std::optional<rsc::animation_resource_info>
+rsc::resource_manager::info (animation_id id) const
+{
+  if (const detail::animation_record *rec
+      = find_record (m_animation_table, id.value)) {
+    return animation_resource_info{
+      .id = id.value, .path = rec->path, .name = rec->name, .state = rec->state
+    };
+  }
+  return std::nullopt;
+}
+
+std::vector<rsc::animation_resource_info>
+rsc::resource_manager::list_animations () const
+{
+  std::vector<animation_resource_info> infos;
+  infos.reserve (m_animation_table.size ());
+  for (const auto &[id, rec] : m_animation_table) {
+    infos.push_back (animation_resource_info{
         .id = id, .path = rec.path, .name = rec.name, .state = rec.state });
   }
   sort_infos (infos);
@@ -1192,6 +1451,11 @@ rsc::resource_manager::clear_all_resources (bool restore_builtin_defaults)
   }
   m_audio_table.clear ();
   m_audio_ids_by_path.clear ();
+
+  m_skeleton_table.clear ();
+  m_animation_table.clear ();
+  m_skeleton_ids_by_path.clear ();
+  m_animation_ids_by_path.clear ();
 
   m_model_table.clear ();
   m_image_table.clear ();
@@ -1338,7 +1602,7 @@ void
 rsc::resource_manager::register_builtin_models ()
 {
   for (const auto &primitive : model_loader::builtin_primitives ()) {
-    register_model (std::string (primitive.path));
+    static_cast<void> (register_model (std::string (primitive.path)));
   }
 }
 
@@ -1384,15 +1648,15 @@ rsc::resource_manager::update_async_uploads ()
     m_active_project = proj;
 
     for (const std::string &p : assets.models) {
-      register_model (p);
+      static_cast<void> (register_model (p));
     }
 
     for (const std::string &p : assets.images) {
-      register_image (p);
+      static_cast<void> (register_image (p));
     }
 
     for (const std::string &p : assets.cubemaps) {
-      register_cubemap (p);
+      static_cast<void> (register_cubemap (p));
     }
 
     m_preferred_default_scene_id = entt::null;
@@ -1413,7 +1677,7 @@ rsc::resource_manager::update_async_uploads ()
         m_preferred_default_scene_id = id.value;
         m_waiting_for_preferred_default_scene = true;
       }
-      load (id);
+      static_cast<void> (load (id));
     }
 
     if (m_preferred_default_scene_id == entt::null) {
@@ -1421,19 +1685,27 @@ rsc::resource_manager::update_async_uploads ()
     }
 
     for (const std::string &p : assets.audio) {
-      register_audio (p);
+      static_cast<void> (register_audio (p));
+    }
+
+    for (const std::string &p : assets.skeletons) {
+      static_cast<void> (register_skeleton (p));
+    }
+
+    for (const std::string &p : assets.animations) {
+      static_cast<void> (register_animation (p));
     }
 
     for (const std::string &p : assets.ui_layouts) {
-      register_ui_layout (p);
+      static_cast<void> (register_ui_layout (p));
     }
 
     for (const std::string &p : assets.fonts) {
-      register_font (p);
+      static_cast<void> (register_font (p));
     }
 
     for (const std::string &p : assets.shaders) {
-      register_shader (p);
+      static_cast<void> (register_shader (p));
     }
 
     wsl::log::rsc ()->info (
@@ -1809,7 +2081,7 @@ rsc::resource_manager::load_preview_model_low_lod (model_id id)
   m_low_lod_only_models.insert (id.value);
 
   // request load
-  load (id);
+  static_cast<void> (load (id));
 }
 
 void
@@ -1893,7 +2165,7 @@ rsc::model_id::custom_inspect (const char *label,
 
       if (ImGui::Selectable (item_buf, selected)) {
         value = rec.id;
-        res_mgr->load (model_id{ rec.id });
+        static_cast<void> (res_mgr->load (model_id{ rec.id }));
         changed = true;
       }
 
@@ -2019,6 +2291,48 @@ rsc::resource_manager::get_resource_path (audio_id id) const
     }
 
     // Otherwise try to make it res:// relative if possible.
+    if (m_active_project) {
+      std::filesystem::path const root (m_active_project->root_path);
+      std::filesystem::path const p (rec->path);
+      if (rec->path.find (m_active_project->root_path) == 0) {
+        return "res://" + std::filesystem::relative (p, root).generic_string ();
+      }
+    }
+    return rec->path;
+  }
+  return "None";
+}
+
+std::string
+rsc::resource_manager::get_resource_path (skeleton_id id) const
+{
+  if (const detail::skeleton_record *rec
+      = find_record (m_skeleton_table, id.value)) {
+    if (rec->path.rfind ("res://", 0) == 0) {
+      return rec->path;
+    }
+
+    if (m_active_project) {
+      std::filesystem::path const root (m_active_project->root_path);
+      std::filesystem::path const p (rec->path);
+      if (rec->path.find (m_active_project->root_path) == 0) {
+        return "res://" + std::filesystem::relative (p, root).generic_string ();
+      }
+    }
+    return rec->path;
+  }
+  return "None";
+}
+
+std::string
+rsc::resource_manager::get_resource_path (animation_id id) const
+{
+  if (const detail::animation_record *rec
+      = find_record (m_animation_table, id.value)) {
+    if (rec->path.rfind ("res://", 0) == 0) {
+      return rec->path;
+    }
+
     if (m_active_project) {
       std::filesystem::path const root (m_active_project->root_path);
       std::filesystem::path const p (rec->path);
@@ -2214,7 +2528,7 @@ rsc::material_id::custom_inspect (const char *label,
 
       if (ImGui::Selectable (item_buf, selected)) {
         value = rec.id;
-        res_mgr->load (material_id{ rec.id });
+        static_cast<void> (res_mgr->load (material_id{ rec.id }));
         changed = true;
       }
 
@@ -2283,7 +2597,7 @@ rsc::image_id::custom_inspect (const char *label,
 
       if (ImGui::Selectable (item_buf, selected)) {
         value = rec.id;
-        res_mgr->load (image_id{ rec.id });
+        static_cast<void> (res_mgr->load (image_id{ rec.id }));
         changed = true;
       }
 
@@ -2472,8 +2786,27 @@ rsc::resource_manager::load (material_id id)
     // shader_graph_editor); mirror that dialect here so the variant
     // inside material_parameter round-trips without type drift.
     std::string read_error;
-    if (!serialize::json_read_p<gfx::material_asset, rfl::AddTagsToVariants> (
-            json_content, *asset, &read_error)) {
+    bool parsed = serialize::json_read_p<gfx::material_asset,
+                                         rfl::AddNamespacedTagsToVariants> (
+        json_content, *asset, &read_error);
+    if (!parsed) {
+      // Older Clang builds wrote the unqualified reflect-cpp tags (for
+      // example, "vec<3, float>"). Normalize those before giving up.
+      const std::string migrated_json
+          = migrate_legacy_material_variant_tags (json_content);
+      if (migrated_json != json_content) {
+        auto legacy_asset = std::make_shared<gfx::material_asset> ();
+        std::string legacy_error;
+        parsed = serialize::json_read_p<gfx::material_asset,
+                                        rfl::AddNamespacedTagsToVariants> (
+            migrated_json, *legacy_asset, &legacy_error);
+        if (parsed) {
+          *asset = std::move (*legacy_asset);
+          read_error = std::move (legacy_error);
+        }
+      }
+    }
+    if (!parsed) {
       wsl::log::rsc ()->error ("Failed to parse material '{}': {}", resolved,
                                read_error);
       return nullptr;

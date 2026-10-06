@@ -42,6 +42,7 @@
 #include "../comp/camera.hpp"
 #include "../comp/character_body.hpp"
 #include "../comp/area3d.hpp"
+#include "../comp/animator.hpp"
 #include "../comp/rigid_body.hpp"
 #include "../comp/audio.hpp"
 #include "../comp/model_instance_3d.hpp"
@@ -100,9 +101,12 @@ struct HierarchyHelper
   to_class () const
   {
     comp::hierarchy h;
-    h.parent = (parent == serialized_null_entity) ? entt::null : entt::entity{ parent };
-    h.first = (first == serialized_null_entity) ? entt::null : entt::entity{ first };
-    h.next = (next == serialized_null_entity) ? entt::null : entt::entity{ next };
+    h.parent = (parent == serialized_null_entity) ? entt::null
+                                                  : entt::entity{ parent };
+    h.first = (first == serialized_null_entity) ? entt::null
+                                                : entt::entity{ first };
+    h.next
+        = (next == serialized_null_entity) ? entt::null : entt::entity{ next };
     return h;
   }
 };
@@ -577,6 +581,53 @@ struct ModelInstance3DHelper
 };
 
 // =============================================================================
+// animator — transient ids/transition state are intentionally excluded
+// =============================================================================
+struct AnimatorHelper
+{
+  std::string clip_path = "None";
+  std::string skeleton_path = "None";
+  int skin_index = 0;
+  float speed = 1.0F;
+  bool loop = true;
+  float crossfade_duration = 0.25F;
+  bool playing = true;
+  float time = 0.0F;
+
+  static AnimatorHelper
+  from_class (const comp::animator &a)
+  {
+    return { a.clip_path, a.skeleton_path,      a.skin_index, a.speed,
+             a.loop,      a.crossfade_duration, a.playing,    a.time };
+  }
+
+  comp::animator
+  to_class () const
+  {
+    comp::animator a;
+    a.clip_path = clip_path;
+    a.skeleton_path = skeleton_path;
+    a.skin_index = skin_index;
+    a.speed = speed;
+    a.loop = loop;
+    a.crossfade_duration = crossfade_duration;
+    a.playing = playing;
+    a.time = time;
+
+    auto *mgr = rsc::resource_manager::serialization_context::get ();
+    if (mgr != nullptr) {
+      if (clip_path != "None" && !clip_path.empty ()) {
+        a.current_animation = mgr->register_animation (clip_path);
+      }
+      if (skeleton_path != "None" && !skeleton_path.empty ()) {
+        a.current_skeleton = mgr->register_skeleton (skeleton_path);
+      }
+    }
+    return a;
+  }
+};
+
+// =============================================================================
 // subviewport_camera_ui (used inside subviewport)
 // =============================================================================
 struct SubviewportCameraUIHelper
@@ -596,7 +647,8 @@ struct SubviewportCameraUIHelper
   to_class () const
   {
     comp::subviewport_camera_ui c;
-    c.value = (value == serialized_null_entity) ? entt::null : entt::entity{ value };
+    c.value = (value == serialized_null_entity) ? entt::null
+                                                : entt::entity{ value };
     c.filter_2d = filter_2d;
     return c;
   }
@@ -990,6 +1042,7 @@ WSL_RFL_COMPONENT_PARSER (area, Area3DHelper)
 WSL_RFL_COMPONENT_PARSER (rigid_body, RigidBodyHelper)
 WSL_RFL_COMPONENT_PARSER (audio, AudioHelper)
 WSL_RFL_COMPONENT_PARSER (model_instance_3d, ModelInstance3DHelper)
+WSL_RFL_COMPONENT_PARSER (animator, AnimatorHelper)
 WSL_RFL_COMPONENT_PARSER (subviewport, SubviewportHelper)
 WSL_RFL_FULL_PARSER (wsl::comp::singl::rendering_manager,
                      RenderingManagerHelper)

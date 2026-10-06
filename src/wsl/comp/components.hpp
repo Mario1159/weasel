@@ -2,6 +2,7 @@
 
 #include "area3d.hpp"
 #include "audio.hpp"
+#include "animator.hpp"
 #include "camera_2d.hpp"
 #include "camera.hpp"
 #include "character_body.hpp"
@@ -12,6 +13,7 @@
 #include "sprite_2d.hpp"
 #include "prefab_instance.hpp"
 #include "rigid_body.hpp"
+#include "skeleton_pose.hpp"
 #include "singl/ui_manager.hpp"
 #include "singl/physics_manager.hpp"
 #include "singl/rendering_manager.hpp"
@@ -44,7 +46,7 @@ template <typename... Types> struct for_each_type<entt::type_list<Types...>>
 
 using component_types
     = entt::type_list<hierarchy, world_transform, transform, model_instance_3d,
-                      camera, camera_2d, point_light, spot_light,
+                      animator, camera, camera_2d, point_light, spot_light,
                       directional_light, rigid_body, area, character_body,
                       audio, prefab_instance, sprite_2d, subviewport,
                       transform_2d>;

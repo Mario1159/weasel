@@ -187,6 +187,18 @@ to_string (wsl::rsc::shader_state s)
   return "?";
 }
 
+static const char *
+to_string (wsl::rsc::shader_program_state s)
+{
+  switch (s) {
+  case wsl::rsc::shader_program_state::not_loaded:
+    return "Not loaded";
+  case wsl::rsc::shader_program_state::loaded:
+    return "Loaded";
+  }
+  return "?";
+}
+
 void
 resource_inspector::draw ()
 {
@@ -433,13 +445,14 @@ resource_inspector::draw ()
         ImGui::Button ("Load Scene");
       } else if (is_prefab) {
         if (ImGui::Button ("Instantiate Prefab")) {
-          m_runtime_ctx->resource_manager ().instantiate_prefab (
-              wsl::rsc::scene_id{ m_selected_scene });
+          static_cast<void> (
+              m_runtime_ctx->resource_manager ().instantiate_prefab (
+                  wsl::rsc::scene_id{ m_selected_scene }));
         }
       } else if (!selected_scene_loaded) {
         if (ImGui::Button ("Load Scene")) {
-          m_runtime_ctx->resource_manager ().load (
-              wsl::rsc::scene_id{ m_selected_scene });
+          static_cast<void> (m_runtime_ctx->resource_manager ().load (
+              wsl::rsc::scene_id{ m_selected_scene }));
         }
       } else {
         const bool is_active
@@ -452,8 +465,8 @@ resource_inspector::draw ()
         }
 
         if (ImGui::Button (is_active ? "Active Scene" : "Set Active")) {
-          m_runtime_ctx->resource_manager ().activate_scene (
-              wsl::rsc::scene_id{ m_selected_scene });
+          static_cast<void> (m_runtime_ctx->resource_manager ().activate_scene (
+              wsl::rsc::scene_id{ m_selected_scene }));
         }
 
         if (is_active) {
@@ -486,8 +499,8 @@ resource_inspector::draw ()
             // preview-owned
             switch (type) {
             case wsl::rsc::io::resource_type::model:
-              m_runtime_ctx->resource_manager ().load (
-                  wsl::rsc::model_id{ selected_id });
+              static_cast<void> (m_runtime_ctx->resource_manager ().load (
+                  wsl::rsc::model_id{ selected_id }));
               m_runtime_ctx->resource_manager ()
                   .release_preview_ownership_if_matches (
                       wsl::rsc::model_id{ selected_id });
@@ -496,7 +509,12 @@ resource_inspector::draw ()
             case wsl::rsc::io::resource_type::cubemap:
             case wsl::rsc::io::resource_type::scene:
             case wsl::rsc::io::resource_type::audio:
-              m_runtime_ctx->resource_manager ().load ({ type, selected_id });
+              static_cast<void> (m_runtime_ctx->resource_manager ().load (
+                  { type, selected_id }));
+              break;
+            case wsl::rsc::io::resource_type::material:
+              static_cast<void> (m_runtime_ctx->resource_manager ().load (
+                  wsl::rsc::material_id{ selected_id }));
               break;
             }
           }
@@ -520,6 +538,7 @@ resource_inspector::draw ()
               case wsl::rsc::io::resource_type::cubemap:
               case wsl::rsc::io::resource_type::scene:
               case wsl::rsc::io::resource_type::audio:
+              case wsl::rsc::io::resource_type::material:
                 m_runtime_ctx->resource_manager ().unload (
                     { type, selected_id });
                 break;
@@ -729,7 +748,8 @@ resource_inspector::draw ()
 
         if (audio == nullptr) {
           if (ImGui::Button ("Load Audio", ImVec2 (200, 40))) {
-            mgr.load (wsl::rsc::audio_id{ m_selected_audio });
+            static_cast<void> (
+                mgr.load (wsl::rsc::audio_id{ m_selected_audio }));
           }
         } else {
           if ((m_preview_track == nullptr) && (mgr.mixer () != nullptr)) {
@@ -823,6 +843,26 @@ resource_inspector::draw ()
           if (auto rec = mgr.info (wsl::rsc::font_id{ m_selected_font })) {
             info = "Font\nName: " + rec->name + "\nPath: " + rec->path
                    + "\nID: " + make_hex (m_selected_font);
+          }
+        }
+        break;
+      case active_tab::materials:
+        if (m_selected_material != entt::null) {
+          if (auto rec
+              = mgr.info (wsl::rsc::material_id{ m_selected_material })) {
+            info = "Material\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nState: " + to_string (rec->state)
+                   + "\nID: " + make_hex (m_selected_material);
+          }
+        }
+        break;
+      case active_tab::shaders:
+        if (m_selected_shader != entt::null) {
+          if (auto rec
+              = mgr.info (wsl::rsc::shader_program_id{ m_selected_shader })) {
+            info = "Shader\nName: " + rec->name + "\nPath: " + rec->path
+                   + "\nState: " + to_string (rec->state)
+                   + "\nID: " + make_hex (m_selected_shader);
           }
         }
         break;
@@ -931,7 +971,8 @@ resource_inspector::draw_models ()
         }
         uintmax_t fsize = 0;
         std::error_code fsize_ec;
-        fsize = std::filesystem::file_size (mgr.resolve_path (m.path), fsize_ec);
+        fsize
+            = std::filesystem::file_size (mgr.resolve_path (m.path), fsize_ec);
         if (fsize_ec) {
           fsize = 0;
         }
@@ -962,8 +1003,8 @@ resource_inspector::draw_models ()
                     wsl::rsc::model_id{ e.id });
               }
             } else {
-              m_runtime_ctx->resource_manager ().load (
-                  wsl::rsc::model_id{ e.id });
+              static_cast<void> (m_runtime_ctx->resource_manager ().load (
+                  wsl::rsc::model_id{ e.id }));
               m_runtime_ctx->resource_manager ()
                   .release_preview_ownership_if_matches (
                       wsl::rsc::model_id{ e.id });
@@ -1159,11 +1200,12 @@ resource_inspector::draw_scenes ()
           }
           if (ImGui::IsItemHovered () && ImGui::IsMouseDoubleClicked (0)) {
             if (rec.is_prefab) {
-              m_runtime_ctx->resource_manager ().instantiate_prefab (
-                  wsl::rsc::scene_id{ rec.id });
+              static_cast<void> (
+                  m_runtime_ctx->resource_manager ().instantiate_prefab (
+                      wsl::rsc::scene_id{ rec.id }));
             } else {
-              m_runtime_ctx->resource_manager ().load (
-                  wsl::rsc::scene_id{ rec.id });
+              static_cast<void> (m_runtime_ctx->resource_manager ().load (
+                  wsl::rsc::scene_id{ rec.id }));
             }
           }
           ImGui::TableNextColumn ();
@@ -1190,10 +1232,12 @@ resource_inspector::import_model_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager ().import_model (files[0]);
+        static_cast<void> (
+            self->m_runtime_ctx->resource_manager ().import_model (files[0]));
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler ()
+                                 : nullptr,
       gltf_filters, SDL_arraysize (gltf_filters), nullptr, false);
 }
 
@@ -1206,10 +1250,12 @@ resource_inspector::import_image_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager ().import_image (files[0]);
+        static_cast<void> (
+            self->m_runtime_ctx->resource_manager ().import_image (files[0]));
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler ()
+                                 : nullptr,
       texture_filters, SDL_arraysize (texture_filters), nullptr, false);
 }
 
@@ -1222,10 +1268,12 @@ resource_inspector::import_scene_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager ().import_scene (files[0]);
+        static_cast<void> (
+            self->m_runtime_ctx->resource_manager ().import_scene (files[0]));
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler ()
+                                 : nullptr,
       scene_filters, SDL_arraysize (scene_filters), nullptr, false);
 }
 
@@ -1248,7 +1296,8 @@ resource_inspector::save_scene_dialog ()
         }
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler ()
+                                 : nullptr,
       scene_filters, SDL_arraysize (scene_filters), nullptr);
 }
 
@@ -1271,10 +1320,12 @@ resource_inspector::new_scene_dialog ()
                                                                           true);
         self->m_runtime_ctx->resource_manager ().save_scene (scene, path,
                                                              is_prefab);
-        self->m_runtime_ctx->resource_manager ().register_scene (path);
+        static_cast<void> (
+            self->m_runtime_ctx->resource_manager ().register_scene (path));
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler ()
+                                 : nullptr,
       scene_filters, SDL_arraysize (scene_filters), nullptr);
 }
 
@@ -1287,10 +1338,12 @@ resource_inspector::import_cubemap_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager ().import_cubemap (files[0]);
+        static_cast<void> (
+            self->m_runtime_ctx->resource_manager ().import_cubemap (files[0]));
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler ()
+                                 : nullptr,
       cubemap_filters, SDL_arraysize (cubemap_filters), nullptr, false);
 }
 
@@ -1341,10 +1394,12 @@ resource_inspector::import_audio_dialog ()
         if (!files || !files[0]) {
           return;
         }
-        self->m_runtime_ctx->resource_manager ().import_audio (files[0]);
+        static_cast<void> (
+            self->m_runtime_ctx->resource_manager ().import_audio (files[0]));
       },
       this,
-      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler() : nullptr,
+      (m_runtime_ctx != nullptr) ? m_runtime_ctx->window ().handler ()
+                                 : nullptr,
       audio_filters, SDL_arraysize (audio_filters), nullptr, false);
 }
 

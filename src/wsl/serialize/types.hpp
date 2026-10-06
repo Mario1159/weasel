@@ -25,6 +25,9 @@
 #ifndef IN_MODULE_INTERFACE
 #include <cstddef>
 #endif
+#ifndef IN_MODULE_INTERFACE
+#include <utility>
+#endif
 
 namespace wsl::serialize
 {
@@ -298,6 +301,43 @@ struct binary_reader
     out = std::move (res.value ());
     return true;
   }
+
+  /**
+   * Returns the next document without consuming it.
+   *
+   * Lets a caller probe for an optional document and only advance the stream
+   * once it knows the document is the one it was looking for.
+   */
+  [[nodiscard]] std::pair<const std::uint8_t *, std::size_t>
+  peek () const
+  {
+    std::size_t const n = detail::msgpack_object_size (data, size);
+    if (n == 0) {
+      return { nullptr, 0 };
+    }
+    return { data, n };
+  }
+
+  /**
+   * Consumes one document from the stream without parsing it.
+   *
+   * Used when a self-describing stream references a document whose component
+   * type no longer exists in the current build: the document still has to be
+   * consumed so the following documents stay aligned.
+   */
+  bool
+  skip (std::string *error = nullptr)
+  {
+    std::size_t const n = detail::msgpack_object_size (data, size);
+    if (n == 0) {
+      if (error)
+        *error = "invalid or empty msgpack stream";
+      return false;
+    }
+    data += n;
+    size -= n;
+    return true;
+  }
 };
 
 /**
@@ -360,6 +400,51 @@ struct json_reader
       return false;
     }
     out = std::move (res.value ());
+    return true;
+  }
+
+  /**
+   * Returns the next document without consuming it.
+   *
+   * Lets a caller probe for an optional document and only advance the stream
+   * once it knows the document is the one it was looking for.
+   */
+  [[nodiscard]] std::string_view
+  peek () const
+  {
+    std::size_t const start = json.find_first_not_of (" \t\r\n");
+    if (start == std::string_view::npos) {
+      return {};
+    }
+    std::size_t const end = detail::json_value_end (json, start);
+    if (end == std::string_view::npos) {
+      return {};
+    }
+    return json.substr (start, end - start);
+  }
+
+  /**
+   * Consumes one document from the stream without parsing it.
+   *
+   * Keeps the stream aligned when a self-describing file contains a document
+   * for a component type that the current build no longer registers.
+   */
+  bool
+  skip (std::string *error = nullptr)
+  {
+    std::size_t const start = json.find_first_not_of (" \t\r\n");
+    if (start == std::string_view::npos) {
+      if (error)
+        *error = "no more documents in JSON stream";
+      return false;
+    }
+    std::size_t const end = detail::json_value_end (json, start);
+    if (end == std::string_view::npos) {
+      if (error)
+        *error = "unterminated JSON document";
+      return false;
+    }
+    json.remove_prefix (end);
     return true;
   }
 };

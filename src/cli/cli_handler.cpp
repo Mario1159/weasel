@@ -21,6 +21,7 @@
 #include "comp/transform.hpp"
 #include "comp/world_transform.hpp"
 #include "math/vector.hpp"
+#include "rsc/animation_importer.hpp"
 #include "rsc/resource_ids.hpp"
 #include "rsc/resource_manager.hpp"
 #include "wsl/rsc/project_loader.hpp"
@@ -456,6 +457,14 @@ cli_handler::parse (int argc, char **argv)
   rsc_info->add_option ("name", rsc_info_name, "Resource name or path")
       ->required ();
 
+  auto *import_cmd
+      = app.add_subcommand ("import", "Import engine assets from sources");
+  auto *import_anim = import_cmd->add_subcommand (
+      "anim", "Convert a glTF file to .skel.ozz + .anim.ozz (gltf2ozz)");
+  std::string import_anim_file;
+  import_anim->add_option ("file", import_anim_file, "Path to .gltf/.glb")
+      ->required ();
+
   auto *prefab_cmd = app.add_subcommand ("prefab", "Manage prefab scenes");
   auto *prefab_ls = prefab_cmd->add_subcommand (
       "ls", "List prefab assets in the loaded project");
@@ -526,6 +535,21 @@ cli_handler::parse (int argc, char **argv)
       return { true, 1, std::nullopt };
     }
     wsl::log::cli ()->info ("AOT-compiled {} -> {}", aot_input, aot_output);
+    return { true, 0, std::nullopt };
+  }
+
+  if (*import_anim) {
+    // Offline asset import: convert rigged glTF into ozz runtime data so
+    // the engine can register .skel.ozz / .anim.ozz as resources (M2).
+    const wsl::rsc::animation_import_result result
+        = wsl::rsc::animation_importer::import (import_anim_file);
+    if (!result.ok) {
+      wsl::log::cli ()->error ("Animation import failed: {}", result.error);
+      return { true, 1, std::nullopt };
+    }
+    for (const std::string &out : result.outputs) {
+      wsl::log::cli ()->info ("Imported {}", out);
+    }
     return { true, 0, std::nullopt };
   }
 

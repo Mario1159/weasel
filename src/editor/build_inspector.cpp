@@ -84,8 +84,11 @@ build_inspector::draw ()
   }
   ImGui::EndDisabled ();
 
-  // Clamp Kits height
-  m_kits_height = std::clamp (m_kits_height, 40.0F, total_h * 0.5F);
+  // Clamp Kits height. The 40px floor can exceed the half-height bound in a
+  // short panel, which would invert the clamp range and trip std::clamp's
+  // !(hi < lo) assertion; keep the minimum and let the child overflow.
+  m_kits_height
+      = std::clamp (m_kits_height, 40.0F, std::max (40.0F, total_h * 0.5F));
 
   if (ImGui::BeginChild ("##KitsRegion", ImVec2 (-1, m_kits_height), 1)) {
     for (size_t i = 0; i < m_kits.size (); ++i) {
@@ -123,7 +126,9 @@ build_inspector::draw ()
         - ImGui::GetTextLineHeightWithSpacing () // Tests header line
         - 40.0F; // Minimal room for Tests ListBox
 
-  m_targets_height = std::clamp (m_targets_height, 40.0F, room_left);
+  // Same inverted-range hazard as above when the panel is too short.
+  m_targets_height
+      = std::clamp (m_targets_height, 40.0F, std::max (40.0F, room_left));
 
   if (ImGui::BeginChild ("##TargetsRegion", ImVec2 (-1, m_targets_height), 1)) {
     if (m_project_info.has_value ()) {

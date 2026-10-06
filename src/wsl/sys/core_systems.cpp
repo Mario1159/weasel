@@ -4,6 +4,7 @@
 #include "reg/system_factory_registry.hpp"
 #include "rsc/resource_manager.hpp"
 #include "sys/audio_system.hpp"
+#include "sys/animation_system.hpp"
 #include "sys/lighting_system.hpp"
 #include "sys/physics_system.hpp"
 #include "sys/render_3d_system.hpp"
@@ -124,6 +125,8 @@ core_systems::register_factory_types (comp::singl::runtime_context &rtc)
   using sys_opts = wsl::reg::system_registration_options;
   factory.register_system_type<transform_system> (
       sys_opts{ .display_name = "Transform", .stage = "transform" });
+  factory.register_system_type<animation_system> (
+      sys_opts{ .display_name = "Animation", .stage = "animation" });
   factory.register_system_type<physics_system> (
       sys_opts{ .display_name = "Physics", .stage = "physics" });
   factory.register_system_type<render_3d_system> (
@@ -181,6 +184,10 @@ core_systems::init (comp::singl::runtime_context *runtime_ctx,
   if (!transform_sys) {
     transform_sys = std::make_unique<transform_system> ("Transform System");
     transform_sys->set_stage ("transform");
+  }
+  if (!animation_sys) {
+    animation_sys = std::make_unique<animation_system> ("Animation System");
+    animation_sys->set_stage ("animation");
   }
   if (!shadow_sys) {
     shadow_sys = std::make_unique<shadow_system> ("Shadow System");
@@ -363,6 +370,7 @@ core_systems::rebuild_system_cache ()
   push (audio_sys.get ());
   push (physics_sys.get ());
   push (transform_sys.get ());
+  push (animation_sys.get ());
   push (shadow_sys.get ());
   push (lighting_sys.get ());
   push (skybox_sys.get ());
@@ -432,6 +440,12 @@ core_systems::render_impl (wsl::gfx::render_window &window,
   if (m_runtime_ctx == nullptr) {
     return;
   }
+
+  // Service a deferred play-session stop before any GPU work for this frame is
+  // recorded. Tearing the session down here -- rather than from a UI callback
+  // deeper inside render_impl -- keeps renderer/pipeline release out of the
+  // middle of a frame that is being recorded.
+  m_runtime_ctx->process_pending_stop ();
 
   rsc::scene *scene = nullptr;
   entt::registry *registry_ptr = nullptr;

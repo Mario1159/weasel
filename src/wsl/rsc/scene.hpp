@@ -54,8 +54,22 @@ public:
                   const std::string &name);
   ~scene () = default;
 
-  scene (scene &&) = default;
-  scene &operator= (scene &&) = default;
+  /**
+   * Move constructor.
+   *
+   * NOT defaulted, because the constructor registers an EnTT signal whose
+   * delegate captures a raw `this` (see on_entity_destroyed). A defaulted move
+   * copies that delegate verbatim, so the moved-to scene keeps a signal bound
+   * to the *old* object's address -- which, for `scene_loader::operator()` and
+   * `world::add_scene()`, is a temporary destroyed immediately after the move.
+   * The next `registry.clear()` then invoked the handler through that dangling
+   * pointer and read garbage members from it, crashing the editor on stop.
+   *
+   * The registry moves with the scene (correct: entities and their handlers
+   * belong together), so only the captured `this` needs refreshing.
+   */
+  scene (scene &&other);
+  scene &operator= (scene &&other);
 
   scene (const scene &) = delete;
   scene &operator= (const scene &) = delete;
@@ -177,6 +191,12 @@ private:
   friend class scene_manager;
   void on_system_added (sys::ecs_system &system);
   void ensure_context_bindings ();
+  /**
+   * (Re)binds the on_destroy signal to this object's address.
+   * :param previous: The address this scene previously lived at, when the
+   *   registry arrived here by a move. Its delegate is removed first.
+   */
+  void connect_destroy_signal (scene *previous = nullptr);
   void reset_scene_context ();
   void refresh_system_states ();
   void shutdown_systems ();

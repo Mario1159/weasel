@@ -2,6 +2,7 @@
 
 #include "../comp/hierarchy.hpp"
 #include "../comp/model_instance_3d.hpp"
+#include "../comp/skeleton_pose.hpp"
 #include "../comp/transform.hpp"
 #include "../comp/singl/editor_context.hpp"
 #include "../comp/singl/rendering_manager.hpp"
@@ -31,7 +32,10 @@ void
 sys::render_submission::reset ()
 {
   view = gfx::scene_renderer::view_state{};
+  // Palettes must go with the draw commands that reference them; clearing one
+  // without the other would leave dangling pointers in the other.
   draw_commands.clear ();
+  palettes.clear ();
   environment = nullptr;
 }
 
@@ -282,6 +286,35 @@ sys::build_render_frame (entt::registry &registry,
         continue;
       }
 
+      // Publish the animated joint palette when the animation system produced
+      // one for this entity.
+      //
+      // A null palette is what marks a draw as *not* skinned: the renderer
+      // selects its pipeline from `draw.palette != nullptr`, and the skinned
+      // pipelines declare the six-attribute vertex layout (POSITION, NORMAL,
+      // UV, COLOR, JOINTS, WEIGHTS). Static meshes carry only four, so handing
+      // them a palette would bind a skinned pipeline to buffers that cannot
+      // feed the joint attributes and they would vanish -- which is exactly
+      // what happened before this was made conditional. An entity only gets a
+      // palette when it actually has a sampled pose.
+      //
+      // Storage lives in `out` (render_submission) and is a deque, so the
+      // pointer handed to the draw command stays valid until the frame ends
+      // even as more entities are appended.
+      const comp::skeleton_pose *pose
+          = registry.try_get<comp::skeleton_pose> (entity);
+      const gfx::scene_renderer::joint_palette *palette = nullptr;
+      if (pose != nullptr && !pose->palette.empty ()) {
+        const std::size_t count
+            = std::min (pose->palette.size (),
+                        gfx::scene_renderer::joint_palette::max_joints);
+        out.palettes.emplace_back ();
+        out.palettes.back ().matrices.assign (
+            pose->palette.begin (),
+            pose->palette.begin () + static_cast<ptrdiff_t> (count));
+        palette = &out.palettes.back ();
+      }
+
       out.draw_commands.push_back (gfx::scene_renderer::draw_command{
           .model = &(*model),
           .scene_index = instance.scene_index,
@@ -292,6 +325,7 @@ sys::build_render_frame (entt::registry &registry,
           .geometry_lod_bias = instance.geometry_lod_bias,
           .visibility_range = instance.visibility_range,
           .material_override = instance.material_override,
+          .palette = palette,
       });
     }
 

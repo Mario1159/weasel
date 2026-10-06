@@ -2,12 +2,8 @@
 // Source of truth: src/wsl/das/wsl_api_module.cpp (addExtern calls).
 #pragma once
 
-#ifndef IN_MODULE_INTERFACE
 #include <string>
-#endif
-#ifndef IN_MODULE_INTERFACE
 #include <vector>
-#endif
 
 namespace wsl::mcp_server {
 
@@ -102,6 +98,12 @@ inline const std::vector<das_api_entry>& das_api_catalog() {
     {"audio_pause", "wsl_audio_pause", "modifyExternal", "write", "action", {"entity"}},
     {"audio_resume", "wsl_audio_resume", "modifyExternal", "write", "action", {"entity"}},
     {"audio_set_volume", "wsl_audio_set_volume", "modifyExternal", "write", "action", {"entity", "volume"}},
+    {"anim_play", "wsl_anim_play", "modifyExternal", "write", "action", {"entity", "clip"}},
+    {"anim_crossfade", "wsl_anim_crossfade", "modifyExternal", "write", "action", {"entity", "clip", "duration"}},
+    {"anim_stop", "wsl_anim_stop", "modifyExternal", "write", "action", {"entity"}},
+    {"anim_set_speed", "wsl_anim_set_speed", "modifyExternal", "write", "action", {"entity", "speed"}},
+    {"anim_set_time", "wsl_anim_set_time", "modifyExternal", "write", "action", {"entity", "time"}},
+    {"anim_set_loop", "wsl_anim_set_loop", "modifyExternal", "write", "action", {"entity", "loop"}},
     {"set_system_stage", "wsl_set_system_stage", "modifyExternal", "write", "mutation", {"stage"}},
     {"set_system_dependency", "wsl_set_system_dependency", "modifyExternal", "write", "mutation", {"name"}},
     {"set_system_conflict", "wsl_set_system_conflict", "modifyExternal", "write", "mutation", {"name"}},

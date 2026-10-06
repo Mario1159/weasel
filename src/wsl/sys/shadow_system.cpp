@@ -74,7 +74,7 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
       }
 
       renderer->draw_model_shadow (*draw.model, draw.scene_index,
-                                   draw.transform);
+                                   draw.transform, draw.palette);
     }
     renderer->end_shadow_pass ();
   }
@@ -174,7 +174,7 @@ sys::shadow_system::on_render_record_draw_cmd (entt::registry &registry)
 
         renderer->draw_model_point_shadow (*draw.model, draw.scene_index,
                                            draw.transform, light_vp, position,
-                                           shadow.far_plane);
+                                           shadow.far_plane, draw.palette);
       }
       renderer->end_point_shadow_pass ();
     }

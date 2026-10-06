@@ -2,6 +2,7 @@
 
 #include "lighting_system.hpp"
 #include "audio_system.hpp"
+#include "animation_system.hpp"
 #include "physics_system.hpp"
 #include "render_2d_system.hpp"
 #include "render_3d_system.hpp"
@@ -82,6 +83,7 @@ public:
   std::unique_ptr<lighting_system> lighting_sys;
   std::unique_ptr<skybox_system> skybox_sys;
   std::unique_ptr<transform_system> transform_sys;
+  std::unique_ptr<animation_system> animation_sys;
   std::unique_ptr<shadow_system> shadow_sys;
   std::unique_ptr<audio_system> audio_sys;
 

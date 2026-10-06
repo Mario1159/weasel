@@ -327,30 +327,6 @@ Swap models and material overrides on entities.
    :param:
       msg (var)
 
-.. das:function:: set_model(entity : uint, path : var)
-
-   Sets the model on the entity from a resource path (e.g. "res://...").
-
-   :param:
-      entity (uint)
-      path (var)
-
-.. das:function:: set_model_material_override(entity : uint, path : var)
-
-   Sets a per-instance material override from a resource path.
-
-   :param:
-      entity (uint)
-      path (var)
-
-.. das:function:: set_model_visibility_range(entity : uint, range : float)
-
-   Sets the model max draw distance in world units (0 = unlimited).
-
-   :param:
-      entity (uint)
-      range (float)
-
 Generic component add/remove
 ----------------------------
 
@@ -678,6 +654,69 @@ Name-keyed event declaration / emission
       event_name (var)
       system_name (var)
       handler_name (var)
+
+Animation
+---------
+
+.. das:function:: anim_play(entity : uint, clip : var)
+
+   :param:
+      entity (uint)
+      clip (var)
+
+.. das:function:: anim_crossfade(entity : uint, clip : var, duration : float)
+
+   :param:
+      entity (uint)
+      clip (var)
+      duration (float)
+
+.. das:function:: anim_stop(entity : uint)
+
+   :param:
+      entity (uint)
+
+.. das:function:: anim_set_speed(entity : uint, speed : float)
+
+   :param:
+      entity (uint)
+      speed (float)
+
+.. das:function:: anim_set_time(entity : uint, time : float)
+
+   :param:
+      entity (uint)
+      time (float)
+
+.. das:function:: anim_set_loop(entity : uint, loop : bool)
+
+   :param:
+      entity (uint)
+      loop (bool)
+
+.. das:function:: set_model(entity : uint, path : var)
+
+   Sets the model on the entity from a resource path (e.g. "res://...").
+
+   :param:
+      entity (uint)
+      path (var)
+
+.. das:function:: set_model_material_override(entity : uint, path : var)
+
+   Sets a per-instance material override from a resource path.
+
+   :param:
+      entity (uint)
+      path (var)
+
+.. das:function:: set_model_visibility_range(entity : uint, range : float)
+
+   Sets the model max draw distance in world units (0 = unlimited).
+
+   :param:
+      entity (uint)
+      range (float)
 
 Systems: parallel execution hints
 ---------------------------------

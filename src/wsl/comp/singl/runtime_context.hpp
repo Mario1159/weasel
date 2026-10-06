@@ -149,6 +149,29 @@ public:
   /** Stops the current play session and restores scene states. */
   void stop ();
 
+  /**
+   * Requests a play-session stop that takes effect at the next frame boundary.
+   *
+   * Prefer this over calling stop() from a UI/render callback. `stop()` tears
+   * the session's scene and renderer down, which releases GPU pipelines into
+   * SDL's pending-destroy queue. Calling it from inside `render_impl` means
+   * that destruction is then performed as a side effect of the very next
+   * `begin_frame` fence wait -- while the driver may still have work in flight
+   * referencing those pipelines. On the RADON driver that path blocks
+   * indefinitely inside `vkDestroyGraphicsPipeline`.
+   *
+   * Deferring to a frame boundary keeps the teardown out of the middle of a
+   * frame being recorded.
+   */
+  void request_stop ();
+
+  /**
+   * Performs a stop requested by request_stop(), if one is pending.
+   *
+   * Called at the top of a frame, before any GPU work is recorded.
+   */
+  void process_pending_stop ();
+
   /** Synchronizes deferred state changes. */
   void sync ();
 
@@ -429,6 +452,10 @@ private:
   // Simple state
   bool m_is_running = false;
   bool m_in_play_session = false;
+  // Set by request_stop(), consumed by process_pending_stop() at a frame
+  // boundary. See request_stop() for why the teardown must not run inside
+  // render_impl.
+  bool m_stop_requested = false;
   class editor_context *m_editor_ctx = nullptr;
   std::unordered_map<entt::id_type, std::string> m_scene_save_states;
 

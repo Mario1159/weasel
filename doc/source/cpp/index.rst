@@ -13,6 +13,7 @@ Engine components, systems, and utilities.
    resources
    ecs
    systems
+   animation
    das
    math
    physics

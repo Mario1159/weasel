@@ -75,6 +75,68 @@ public:
     glm::mat4 view_proj{ 1.0F };
   };
 
+  /**
+   * Model-space joint palette for one skinned instance.
+   *
+   * Mirrors the `JointPalette` cbuffer in rsc/shaders/skinning.slang:
+   * `matrices` occupies the first `joint_count` slots, each 64 bytes, and
+   * `count` follows immediately after. Pushing only the used prefix keeps the
+   * per-draw cost proportional to the rig rather than always 8 KB.
+   */
+  struct joint_palette
+  {
+    static constexpr size_t max_joints = 128;
+
+    std::vector<glm::mat4> matrices;
+  };
+
+  /**
+   * Byte layout of the `JointPalette` uniform block, mirrored from
+   * `rsc/shaders/skinning.slang`:
+   *
+   *   uint     u_JointCount;                     // offset 0
+   *   float4x4 u_JointPalette[max_joints];       // offset 16, 64 B per entry
+   *
+   * std140 aligns the array to 16 bytes, hence the 16-byte gap after the count.
+   *
+   * The count leads deliberately. It used to trail the array at offset
+   * `max_joints * 64`, and a RenderDoc capture of a live skinned draw showed
+   * every palette matrix arriving intact while `u_JointCount` read back as 0
+   * from that offset -- despite the CPU packing 24 there and uploading the
+   * whole block in one call, with the SDK's push path memcpy'ing the full
+   * length unclamped into a 32 KB pool buffer. The write is not truncated, so
+   * the loss happens after the upload; keeping the scalar at the head of the
+   * block puts it inside any plausible descriptor range rather than at the
+   * tail.
+   *
+   * This value gates everything: read as 0, the shader's
+   * `index < u_JointCount` test rejects all four influences, `skin_position`
+   * returns 0 for every vertex, and the mesh collapses to the origin with no
+   * API error.
+   */
+  struct joint_palette_layout
+  {
+    /** Byte offset of `u_JointCount`. Always 0 -- see the note above. */
+    static constexpr size_t count_offset = 0;
+    /** Byte offset of the first `u_JointPalette` entry (std140 alignment). */
+    static constexpr size_t matrix_offset = 16;
+    /** Total size of the uniform block in bytes. */
+    static constexpr size_t total_bytes
+        = matrix_offset + joint_palette::max_joints * sizeof (glm::mat4);
+  };
+
+  /**
+   * Packs *palette* into *scratch* in the exact `JointPalette` block layout.
+   *
+   * `scratch` is grown to the full block size so the count always lands at
+   * `count_offset`. The unused tail keeps its previous contents, which the
+   * shader never reads because it bounds-checks against `u_JointCount`.
+   *
+   * @return Total bytes to upload.
+   */
+  static size_t pack_joint_palette (const joint_palette &palette,
+                                    std::vector<uint8_t> &scratch);
+
   /** Single model submission reused by renderer passes. */
   struct draw_command
   {
@@ -101,6 +163,13 @@ public:
      * ``m_active_material_override`` in ``render_mesh``).
      */
     rsc::material_id material_override{};
+    /**
+     * Optional per-instance skinning palette. When set, the renderer binds
+     * the skinned pipeline variant and uploads these model-space joint
+     * matrices. Null for every static instance, which then keeps using the
+     * plain variant that has no palette binding at all.
+     */
+    const joint_palette *palette = nullptr;
   };
 
   /** Creates the renderer and its long-lived GPU resources. */
@@ -261,9 +330,13 @@ public:
   void begin_shadow_pass ();
   /** Ends the directional shadow pass. */
   void end_shadow_pass ();
-  /** Draws a model into the directional shadow map. */
+  /**
+   * Draws a model into the directional shadow map.
+   * `palette` enables skinning for this draw; pass nullptr for static meshes.
+   */
   void draw_model_shadow (gfx::model_3d &model, size_t scene_index,
-                          const glm::mat4 &model_matrix);
+                          const glm::mat4 &model_matrix,
+                          const joint_palette *palette = nullptr);
 
   /** Begins a spotlight shadow pass for a renderer-owned slot. */
   void begin_spot_shadow_pass (int index);
@@ -282,7 +355,8 @@ public:
   void draw_model_point_shadow (gfx::model_3d &model, size_t scene_index,
                                 const glm::mat4 &model_matrix,
                                 const glm::mat4 &light_vp_mat,
-                                const glm::vec3 &light_pos, float far_plane);
+                                const glm::vec3 &light_pos, float far_plane,
+                                const joint_palette *palette = nullptr);
 
   /** Returns the view-projection matrix for a point-light cubemap face. */
   static auto make_point_light_view_proj (const glm::vec3 &light_pos, int face,
@@ -338,8 +412,7 @@ private:
                                 const gfx::material_instance &mat_inst,
                                 float mip_lod_bias);
   void render_node (gfx::node &n, const glm::mat4 &view_proj,
-                    float mip_lod_bias = 0.0F,
-                    float geometry_lod_bias = 0.0F,
+                    float mip_lod_bias = 0.0F, float geometry_lod_bias = 0.0F,
                     float visibility_range = 0.0F);
   void render_scene (gfx::scene &scene, const glm::mat4 &view_proj,
                      float mip_lod_bias = 0.0F, float geometry_lod_bias = 0.0F,
@@ -396,7 +469,8 @@ private:
   void destroy_outline_pipeline ();
   void draw_model_outline (gfx::model_3d &model, size_t scene_index,
                            const glm::mat4 &model_matrix,
-                           const glm::mat4 &view_proj);
+                           const glm::mat4 &view_proj,
+                           const joint_palette *palette = nullptr);
 
   // Grid helpers.
   void create_grid_pipeline ();
@@ -429,11 +503,25 @@ private:
   pipeline_set m_pipelines_unlit;              // unlit, single-sided
   pipeline_set m_pipelines_unlit_double_sided; // unlit, double-sided
 
-  // Legacy single pointers kept for backwards compatibility during transition.
+  /**
+   * Skinned counterparts of the main scene pipelines.
+   *
+   * These are built from the `_skinned` vertex shaders, which declare the
+   * JointPalette cbuffer, so a pipeline that lacks it cannot be used for a
+   * draw that uploads a palette (and vice versa). Static meshes keep using
+   * the plain sets above and never pay for the binding.
+   */
+  pipeline_set m_pipelines_skinned;                    // lit, single-sided
+  pipeline_set m_pipelines_skinned_double_sided;       // lit, double-sided
+  pipeline_set m_pipelines_skinned_unlit;              // unlit, single-sided
+  pipeline_set m_pipelines_skinned_unlit_double_sided; // unlit, double-sided
+
+  // Aliases of `m_pipelines.opaque` / `m_pipelines_double_sided.opaque`, kept
+  // for the bind paths. These are NOT owners: the corresponding pipeline_set
+  // holds the only owning pointer, and destroy_pipeline() releases it there.
+  // Never release a pipeline through one of these.
   SDL_GPUGraphicsPipeline *m_pipeline = nullptr;
   SDL_GPUGraphicsPipeline *m_pipeline_double_sided = nullptr;
-  SDL_GPUGraphicsPipeline *m_pipeline_unlit = nullptr;
-  SDL_GPUGraphicsPipeline *m_pipeline_unlit_double_sided = nullptr;
 
   // Shared material fallback resources.
   SDL_GPUTexture *m_default_basecolor_tex = nullptr;
@@ -476,6 +564,11 @@ private:
   SDL_GPUGraphicsPipeline *m_shadow_pipe_double_sided = nullptr;
   SDL_GPUGraphicsPipeline *m_point_shadow_pipe = nullptr;
   SDL_GPUGraphicsPipeline *m_point_shadow_pipe_double_sided = nullptr;
+  // Skinned shadow variants, so animated meshes cast deforming shadows.
+  SDL_GPUGraphicsPipeline *m_shadow_pipe_skinned = nullptr;
+  SDL_GPUGraphicsPipeline *m_shadow_pipe_skinned_double_sided = nullptr;
+  SDL_GPUGraphicsPipeline *m_point_shadow_pipe_skinned = nullptr;
+  SDL_GPUGraphicsPipeline *m_point_shadow_pipe_skinned_double_sided = nullptr;
   SDL_GPUTexture *m_shadow_depth = nullptr;
   SDL_GPUSampler *m_shadow_sampler = nullptr;
   SDL_GPUCommandBuffer *m_shadow_cmd = nullptr;
@@ -484,6 +577,9 @@ private:
   // SSAO state and resources.
   SDL_GPUGraphicsPipeline *m_ssao_prepass_pipe = nullptr;
   SDL_GPUGraphicsPipeline *m_ssao_prepass_pipe_double_sided = nullptr;
+  // Skinned SSAO prepass, so occlusion follows the deformed surface.
+  SDL_GPUGraphicsPipeline *m_ssao_prepass_pipe_skinned = nullptr;
+  SDL_GPUGraphicsPipeline *m_ssao_prepass_pipe_skinned_double_sided = nullptr;
   SDL_GPUGraphicsPipeline *m_ssao_pipe = nullptr;
   SDL_GPUGraphicsPipeline *m_ssao_blur_pipe = nullptr;
   SDL_GPUTexture *m_ssao_normal_depth = nullptr;
@@ -501,6 +597,10 @@ private:
   // Outline resources.
   SDL_GPUGraphicsPipeline *m_pipeline_outline = nullptr;
   SDL_GPUGraphicsPipeline *m_pipeline_outline_double_sided = nullptr;
+  // Skinned outline, so selection highlight tracks the deformation. Its
+  // palette binds vertex uniform slot 2 (slot 1 is the outline params).
+  SDL_GPUGraphicsPipeline *m_pipeline_outline_skinned = nullptr;
+  SDL_GPUGraphicsPipeline *m_pipeline_outline_skinned_double_sided = nullptr;
 
   // Debug line pipeline (for editor gizmos)
   SDL_GPUGraphicsPipeline *m_pipeline_debug_lines = nullptr;
@@ -523,6 +623,30 @@ private:
    * (set from draw_command::material_override, consumed by render_mesh).
    */
   rsc::material_id m_active_material_override{};
+
+  /**
+   * Per-instance skinning palette currently in effect for the active draw
+   * (set from draw_command::palette, consumed by render_mesh and the
+   * shadow/SSAO/outline passes). Null selects the non-skinned pipeline.
+   */
+  const joint_palette *m_active_palette = nullptr;
+
+  /** Scratch buffer reused when uploading the palette uniform. */
+  std::vector<uint8_t> m_palette_scratch;
+
+  /**
+   * Loads a skinned vertex shader. `num_uniform_buffers` is 2 for the passes
+   * whose only other cbuffer is the per-draw matrices, and 3 for the outline
+   * pass, which keeps its own params cbuffer in slot 1 and puts the palette in
+   * slot 2. Returns nullptr when the compiled variant is unavailable, in which
+   * case the pass keeps its non-skinned pipeline.
+   */
+  [[nodiscard]] SDL_GPUShader *
+  create_skinned_vertex_shader (const char *path,
+                                uint32_t num_uniform_buffers = 2);
+
+  /** Uploads the active palette to a vertex uniform slot, if any. */
+  void push_active_palette (SDL_GPUCommandBuffer *cmd, uint32_t slot);
 
   /** Controls which alpha modes render_mesh draws during the current pass. */
   enum class alpha_render_pass : uint8_t

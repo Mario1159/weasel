@@ -2875,7 +2875,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
             id = register_fn (path);
             m_output << "Registered " << label << ": " << path << "\n";
             if (do_load) {
-              load_fn (id);
+              static_cast<void> (load_fn (id));
               m_output << "Loaded " << label << ": " << path << "\n";
             }
           };
@@ -2884,41 +2884,40 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
       add_and_maybe_load (
           model_id{},
           [&] (const std::string &p) { return mgr.register_model (p); },
-          [&] (model_id id) { mgr.load (id); }, "model");
+          [&] (model_id id) { static_cast<void> (mgr.load (id)); }, "model");
     } else if (type == "image" || type == "images") {
       add_and_maybe_load (
           image_id{},
           [&] (const std::string &p) { return mgr.register_image (p); },
-          [&] (image_id id) { mgr.load (id); }, "image");
+          [&] (image_id id) { static_cast<void> (mgr.load (id)); }, "image");
     } else if (type == "cubemap" || type == "cubemaps") {
       add_and_maybe_load (
           cubemap_id{},
           [&] (const std::string &p) { return mgr.register_cubemap (p); },
-          [&] (cubemap_id id) { mgr.load (id); }, "cubemap");
+          [&] (cubemap_id id) { static_cast<void> (mgr.load (id)); },
+          "cubemap");
     } else if (type == "scene" || type == "scenes") {
       add_and_maybe_load (
           scene_id{},
           [&] (const std::string &p) { return mgr.register_scene (p); },
-          [&] (scene_id id) { mgr.load (id); }, "scene");
+          [&] (scene_id id) { static_cast<void> (mgr.load (id)); }, "scene");
     } else if (type == "audio" || type == "audios") {
       add_and_maybe_load (
           audio_id{},
           [&] (const std::string &p) { return mgr.register_audio (p); },
-          [&] (audio_id id) { mgr.load (id); }, "audio");
+          [&] (audio_id id) { static_cast<void> (mgr.load (id)); }, "audio");
     } else if (type == "font" || type == "fonts") {
-      mgr.register_font (path);
+      static_cast<void> (mgr.register_font (path));
       m_output << "Registered font: " << path << "\n";
     } else if (type == "shader" || type == "shaders") {
-      mgr.register_shader (path);
+      const shader_id id = mgr.register_shader (path);
       m_output << "Registered shader: " << path << "\n";
       if (do_load) {
-        shader_id id{ entt::hashed_string::value (path.c_str (),
-                                                  path.size ()) };
-        mgr.load (id);
+        static_cast<void> (mgr.load (id));
         m_output << "Loaded shader: " << path << "\n";
       }
     } else if (type == "layout" || type == "layouts") {
-      mgr.register_ui_layout (path);
+      static_cast<void> (mgr.register_ui_layout (path));
       m_output << "Registered UI layout: " << path << "\n";
     } else {
       m_output << "Unknown resource type: " << type << "\n";
@@ -2978,7 +2977,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     if (type == "model" || type == "models") {
       auto id = find_model (name);
       if (id) {
-        mgr.load (*id);
+        static_cast<void> (mgr.load (*id));
         m_output << "Loaded model: " << name << "\n";
       } else {
         m_output << "Model not found: " << name << "\n";
@@ -2986,7 +2985,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     } else if (type == "image" || type == "images") {
       auto id = find_image (name);
       if (id) {
-        mgr.load (*id);
+        static_cast<void> (mgr.load (*id));
         m_output << "Loaded image: " << name << "\n";
       } else {
         m_output << "Image not found: " << name << "\n";
@@ -2994,7 +2993,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     } else if (type == "cubemap" || type == "cubemaps") {
       auto id = find_cubemap (name);
       if (id) {
-        mgr.load (*id);
+        static_cast<void> (mgr.load (*id));
         m_output << "Loaded cubemap: " << name << "\n";
       } else {
         m_output << "Cubemap not found: " << name << "\n";
@@ -3002,7 +3001,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     } else if (type == "scene" || type == "scenes") {
       auto id = find_scene (name);
       if (id) {
-        mgr.load (*id);
+        static_cast<void> (mgr.load (*id));
         m_output << "Loaded scene: " << name << "\n";
       } else {
         m_output << "Scene not found: " << name << "\n";
@@ -3010,7 +3009,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     } else if (type == "audio" || type == "audios") {
       auto id = find_audio (name);
       if (id) {
-        mgr.load (*id);
+        static_cast<void> (mgr.load (*id));
         m_output << "Loaded audio: " << name << "\n";
       } else {
         m_output << "Audio not found: " << name << "\n";
@@ -3020,7 +3019,7 @@ command_executor::cmd_rsc (const std::vector<std::string> &tokens)
     } else if (type == "shader" || type == "shaders") {
       auto id = find_shader (name);
       if (id) {
-        mgr.load (*id);
+        static_cast<void> (mgr.load (*id));
         m_output << "Loaded shader: " << name << "\n";
       } else {
         m_output << "Shader not found: " << name << "\n";
@@ -3384,7 +3383,7 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
       }
     }
 
-    mgr.instantiate_prefab (*prefab_id, parent);
+    static_cast<void> (mgr.instantiate_prefab (*prefab_id, parent));
     m_output << "Prefab instantiated";
     if (parent != entt::null)
       m_output << " under entity " << tokens[3];

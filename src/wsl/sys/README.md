@@ -23,6 +23,7 @@ The CRTP helper `ecs_system_t<Derived>` provides automatic type ID and a `regist
 | System | Header | Description |
 |--------|--------|-------------|
 | `transform_system` | `transform_system.hpp` | Recomputes `world_transform` from hierarchy + local transforms. |
+| `animation_system` | `animation_system.hpp` | Samples ozz clips, crossfades them, and writes the model-space joint palette into `skeleton_pose`. |
 | `physics_system` | `physics_system.hpp` | Steps the physics simulation and syncs `rigid_body` ↔ `transform`. |
 | `lighting_system` | `lighting_system.hpp` | Updates GPU lighting UBO from `point_light`/`spot_light`/`directional_light` components. |
 | `shadow_system` | `shadow_system.hpp` | Renders shadow maps for directional lights. |
