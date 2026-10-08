@@ -98,7 +98,7 @@ handle_get_quick_start (const mcp::json &params)
   oss << "1. Create a project:\n";
   oss << "   weasel-cli create-project ./mygame MyGame\n\n";
   oss << "2. Create a scene:\n";
-  oss << "   weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn.json "
+  oss << "   weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn "
          "Level1\n\n";
   oss << "3. Validate a project:\n";
   oss << "   weasel-cli validate-project ./mygame/wslpro.json\n\n";
@@ -234,7 +234,7 @@ handle_cli_capabilities (const mcp::json &params)
   oss << "  - Nested comp set properties (motion_type.value,\n";
   oss << "    collision_layer.value) now persist through scene save\n";
   oss << "  - scene save without a path writes to project's scenes_path\n";
-  oss << "    (no double .wscn.json extension)\n";
+  oss << "    (no double .wscn extension)\n";
   oss << "  - # comments and inline comments are now supported in REPL\n\n";
   oss << "== Scene System Notes ==\n";
   oss << "  - `scene new` creates a scene with no per-scene user systems\n";

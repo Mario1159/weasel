@@ -164,6 +164,13 @@ component_registry::register_cached_runtime_world_component (
   desc.das_struct_size = struct_size;
   desc.das_fields = std::move (fields);
 
+  // Daslang components live in a separate type-erased storage, so the generic
+  // descriptor operations have to forward to das_component_add() /
+  // das_component_remove(), which need the owning component_registry. The
+  // descriptor callbacks are plain function pointers with no user data, so they
+  // cannot be bound here; they stay null and callers must check
+  // is_das_component and use the das_component_* helpers directly (see
+  // weasel-cli's `comp add` / `comp rm`).
   m_type_name_to_stable[desc.type_name] = type_id;
   m_display_name_to_stable[desc.display_name] = type_id;
   m_descriptors[type_id] = std::move (desc);

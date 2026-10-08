@@ -1,6 +1,7 @@
 #include "project_loader.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <ios>
@@ -32,13 +33,196 @@ namespace wsl
 
 namespace fs = std::filesystem;
 
+namespace rsc
+{
+
+std::size_t
+json_document::value_end (std::string_view text, std::size_t start)
+{
+  return wsl::serialize::detail::json_value_end (text, start);
+}
+
+/** Decodes the escape sequences rfl emits inside a JSON string. */
+static std::string
+unescape_string (std::string_view text)
+{
+  std::string out;
+  out.reserve (text.size ());
+  for (std::size_t i = 0; i < text.size (); ++i) {
+    if (text[i] != '\\' || i + 1 == text.size ()) {
+      out += text[i];
+      continue;
+    }
+    switch (text[++i]) {
+    case 'n':
+      out += '\n';
+      break;
+    case 't':
+      out += '\t';
+      break;
+    case 'r':
+      out += '\r';
+      break;
+    case 'b':
+      out += '\b';
+      break;
+    case 'f':
+      out += '\f';
+      break;
+    case '/':
+      out += '/';
+      break;
+    case '\\':
+      out += '\\';
+      break;
+    case '"':
+      out += '"';
+      break;
+    default:
+      out += text[i];
+      break;
+    }
+  }
+  return out;
+}
+
+std::vector<json_document::member>
+json_document::object_members (std::string_view object)
+{
+  std::vector<member> members;
+
+  std::size_t i = 0;
+  auto skip_ws = [&] {
+    while (i < object.size ()
+           && (object[i] == ' ' || object[i] == '\t' || object[i] == '\r'
+               || object[i] == '\n')) {
+      ++i;
+    }
+  };
+
+  skip_ws ();
+  if (i >= object.size () || object[i] != '{') {
+    return members;
+  }
+  ++i;
+
+  while (i < object.size ()) {
+    skip_ws ();
+    if (i < object.size () && object[i] == '}') {
+      break;
+    }
+    if (i >= object.size () || object[i] != '"') {
+      break;
+    }
+
+    const std::size_t key_start = ++i;
+    while (i < object.size () && object[i] != '"') {
+      i += (object[i] == '\\' && i + 1 < object.size ()) ? 2 : 1;
+    }
+    if (i >= object.size ()) {
+      break;
+    }
+    std::string key
+        = unescape_string (object.substr (key_start, i - key_start));
+    ++i; // closing quote
+
+    skip_ws ();
+    if (i >= object.size () || object[i] != ':') {
+      break;
+    }
+    ++i;
+    skip_ws ();
+
+    const std::size_t value_start = i;
+    const std::size_t value_end
+        = json_document::value_end (object, value_start);
+    if (value_end == std::string_view::npos) {
+      break;
+    }
+    members.push_back (
+        { std::move (key),
+          object.substr (value_start, value_end - value_start) });
+    i = value_end;
+
+    skip_ws ();
+    if (i < object.size () && object[i] == ',') {
+      ++i;
+    }
+  }
+
+  return members;
+}
+
+const json_document::member *
+json_document::find (const std::vector<json_document::member> &members,
+                     std::string_view key)
+{
+  for (const json_document::member &member : members) {
+    if (member.key == key) {
+      return &member;
+    }
+  }
+  return nullptr;
+}
+
+} // namespace rsc
+
+std::string
+rsc::scene_file::strip_extension (std::string_view name)
+{
+  const std::size_t length = std::strlen (scene_file::extension);
+  if (name.size () > length
+      && name.compare (name.size () - length, length, scene_file::extension)
+             == 0) {
+    return std::string (name.substr (0, name.size () - length));
+  }
+  return std::string (name);
+}
+
+std::string
+rsc::scene_file::with_extension (std::string_view name)
+{
+  return strip_extension (name) + scene_file::extension;
+}
+
+std::string
+rsc::project_path::normalize (const fs::path &path)
+{
+  std::error_code ec;
+  // weakly_canonical() resolves the existing prefix and normalises the rest,
+  // so it is correct both for a directory that exists and one about to be
+  // created. lexically_normal() is the fallback if resolution fails (an
+  // unreadable parent, for instance).
+  fs::path resolved = fs::weakly_canonical (path, ec);
+  if (ec) {
+    resolved = path.lexically_normal ();
+  }
+
+  // Strip any remaining trailing separator, which makes the string compare
+  // unequal to the same directory written without one. `weakly_canonical`
+  // normalises an interior `.` to `/./`, so check for both.
+  while (resolved.filename ().empty () || (resolved.filename () == ".")) {
+    const fs::path parent = resolved.parent_path ();
+    if (parent.empty () || (parent == resolved)) {
+      break;
+    }
+    resolved = parent;
+  }
+
+  return resolved.string ();
+}
+
 bool
 rsc::project_loader::create (const project &proj) const
 {
-  fs::create_directories (proj.root_path);
+  // Use the normalised root for every filesystem operation and for the
+  // manifest, so the recorded `root_path` matches what a later load computes
+  // from this directory and compares equal against other path strings.
+  const fs::path root_path{ rsc::project_path::normalize (proj.root_path) };
+  fs::create_directories (root_path);
 
   const auto create_dir = [&] (const std::string &relative_path) {
-    fs::create_directories (fs::path (proj.root_path) / relative_path);
+    fs::create_directories (root_path / relative_path);
   };
 
   create_dir (proj.models_path);
@@ -53,9 +237,9 @@ rsc::project_loader::create (const project &proj) const
   create_dir (proj.fonts_path);
   create_dir (proj.shaders_path);
   create_dir (proj.materials_path);
-  fs::create_directories (fs::path (proj.root_path) / "src");
+  fs::create_directories (root_path / "src");
 
-  const fs::path project_file = fs::path (proj.root_path) / manifest_file;
+  const fs::path project_file = root_path / manifest_file;
   std::ofstream file (project_file);
   if (!file) {
     wsl::log::rsc ()->error ("Failed to create project file: {}",
@@ -64,8 +248,9 @@ rsc::project_loader::create (const project &proj) const
   }
 
   // Generate default scene
-  const std::string default_scene_rel = proj.scenes_path + "/main.wscn.json";
-  const fs::path scene_file = fs::path (proj.root_path) / default_scene_rel;
+  const std::string default_scene_rel
+      = proj.scenes_path + "/main" + scene_file::extension;
+  const fs::path scene_file = root_path / default_scene_rel;
 
   if (m_runtime_ctx != nullptr) {
     rsc::scene temp_scene (m_runtime_ctx, nullptr, "Main Scene");
@@ -124,11 +309,14 @@ rsc::project_loader::create (const project &proj) const
   }
   project project_copy = proj;
   project_copy.default_scene_path = default_scene_rel;
+  // Record the normalised root, not the caller's spelling, so every later
+  // comparison against this string agrees with what a load recomputes.
+  project_copy.root_path = root_path.string ();
   std::string json_str = serialize::json_write (project_copy);
   file << json_str;
 
   // Generate src/main.cpp
-  const fs::path main_file = fs::path (proj.root_path) / "src/main.cpp";
+  const fs::path main_file = root_path / "src/main.cpp";
   std::ofstream main_out (main_file);
   if (main_out) {
     std::string sanitized_name = proj.name;
@@ -158,7 +346,7 @@ rsc::project_loader::create (const project &proj) const
   }
 
   // Generate xmake.lua
-  const fs::path xmake_file = fs::path (proj.root_path) / "xmake.lua";
+  const fs::path xmake_file = root_path / "xmake.lua";
   std::ofstream xmake_out (xmake_file);
   if (xmake_out) {
     xmake_out
@@ -191,7 +379,7 @@ rsc::project_loader::create (const project &proj) const
 
   // Generate AGENTS.md so AI agents working in the project get engine
   // context by default.
-  const fs::path agents_file = fs::path (proj.root_path) / "AGENTS.md";
+  const fs::path agents_file = root_path / "AGENTS.md";
   std::ofstream agents_out (agents_file);
   if (agents_out) {
     agents_out
@@ -206,8 +394,7 @@ rsc::project_loader::create (const project &proj) const
         << "ModelInstance3D, ...), and behavior lives in systems.\n\n"
         << "## Project layout\n\n"
         << "- `wslpro.json` - project manifest (paths, default scene)\n"
-        << "- `" << proj.scenes_path
-        << "/` - scenes stored as `.wscn.json` files\n"
+        << "- `" << proj.scenes_path << "/` - scenes stored as `.wscn` files\n"
         << "- `" << proj.components_path << "/`, `" << proj.systems_path
         << "/`, `" << proj.singletons_path << "/` - runtime code\n"
         << "- `src/main.cpp` - standalone game entry point\n"
@@ -278,10 +465,13 @@ rsc::project_loader::load (const std::string &path)
     }
   }
 
-  auto manifest_dir = fs::path (path).parent_path ();
+  fs::path manifest_dir = fs::path (path).parent_path ();
   if (manifest_dir.empty ())
     manifest_dir = fs::current_path ();
-  proj->root_path = fs::absolute (manifest_dir).string ();
+  // Normalised for the same reason `create()` normalises: the manifest is
+  // often opened through a path that still carries `./`, and an un-normalised
+  // root compares unequal to the same directory reached another way.
+  proj->root_path = rsc::project_path::normalize (manifest_dir);
 
   wsl::log::rsc ()->debug ("Loaded project: {}", proj->name);
   return proj;
@@ -325,8 +515,8 @@ rsc::project_loader::scan_assets (const project &proj)
             assets.images);
   scan_dir (resolve (proj.cubemaps_path), { ".tar", ".hdr", ".png" },
             assets.cubemaps);
-  scan_dir (resolve (proj.scenes_path),
-            { ".wscn.json", ".scene", ".json", ".prefab" }, assets.scenes);
+  scan_dir (resolve (proj.scenes_path), { scene_file::extension, ".prefab" },
+            assets.scenes);
   scan_dir (resolve (proj.audio_path), { ".wav", ".mp3", ".ogg" },
             assets.audio);
   scan_dir (resolve (proj.ui_layouts_path), { ".rml", ".rcss" },

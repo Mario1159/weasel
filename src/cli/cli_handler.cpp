@@ -202,8 +202,7 @@ cli_handler::parse (int argc, char **argv)
   validate_scene->alias ("--validate-scene");
   std::string vs_scene_path;
   std::string vs_proj_path;
-  validate_scene
-      ->add_option ("scene_path", vs_scene_path, "Path to scene.wscn.json")
+  validate_scene->add_option ("scene_path", vs_scene_path, "Path to scene.wscn")
       ->required ();
   validate_scene->add_option ("proj_path", vs_proj_path, "Path to wslpro.json")
       ->required ();
@@ -357,6 +356,17 @@ cli_handler::parse (int argc, char **argv)
       "add", "Add a singleton to the active scene");
   std::string singl_add_name;
   singl_add->add_option ("name", singl_add_name, "Singleton name")->required ();
+  // Registered explicitly: an unregistered subcommand name falls through to
+  // CLI11's positional handling and produces a misleading error instead of
+  // reaching the REPL handler.
+  auto *singl_rm = singl_cmd->add_subcommand (
+      "rm", "Remove a singleton from the active scene");
+  std::string singl_rm_name;
+  singl_rm->add_option ("name", singl_rm_name, "Singleton name")->required ();
+  auto *singl_info = singl_cmd->add_subcommand ("info", "Describe a singleton");
+  std::string singl_info_name;
+  singl_info->add_option ("name", singl_info_name, "Singleton name")
+      ->required ();
   auto *singl_create = singl_cmd->add_subcommand (
       "create", "Generate a singleton component template");
   std::string singl_create_name;
@@ -603,8 +613,10 @@ cli_handler::parse (int argc, char **argv)
 
     wsl::rsc::project_loader const loader (&rtc);
     if (loader.create (proj)) {
-      wsl::log::cli ()->info ("Project created successfully at {}",
-                              proj.root_path);
+      // Report the path that was actually written, not the caller's spelling.
+      wsl::log::cli ()->info (
+          "Project created successfully at {}",
+          wsl::rsc::project_path::normalize (proj.root_path));
       return { true, 0, std::nullopt };
     }
     wsl::log::cli ()->error ("Failed to create project");
@@ -612,12 +624,9 @@ cli_handler::parse (int argc, char **argv)
   }
 
   if (*create_scene) {
-    if (cs_path.find (".wscn.json") == std::string::npos) {
-      if (cs_path.ends_with (".json")) {
-        cs_path.replace (cs_path.find (".json"), 5, ".wscn.json");
-      } else {
-        cs_path += ".wscn.json";
-      }
+    // Scene files use the `.wscn` extension.
+    if (!cs_path.ends_with (rsc::scene_file::extension)) {
+      cs_path += rsc::scene_file::extension;
     }
 
     wsl::comp::singl::runtime_context rtc{ "Scene Generator", 0, 0,
@@ -862,6 +871,12 @@ cli_handler::parse (int argc, char **argv)
   }
   if (!repl_command && *singl_add) {
     repl_command = build_repl_command ({ "singl", "add", singl_add_name });
+  }
+  if (!repl_command && *singl_rm) {
+    repl_command = build_repl_command ({ "singl", "rm", singl_rm_name });
+  }
+  if (!repl_command && *singl_info) {
+    repl_command = build_repl_command ({ "singl", "info", singl_info_name });
   }
   if (!repl_command && *singl_create) {
     std::vector<std::string> args{ "singl", "create", singl_create_name };

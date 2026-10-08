@@ -43,7 +43,6 @@ module;
 #include <tracy/Tracy.hpp>
 #include <simdjson.h>
 #include <stb_image.h>
-#include <curl/curl.h>
 #include <archive.h>
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
@@ -67,24 +66,6 @@ export module wsl.core;
 // Purview: engine headers (filtered, no serialize/rfl/stb)
 #include "math/matrix.hpp"
 #include "math/vector.hpp"
-#include "ai/a2a/agent_card.hpp"
-#include "ai/a2a/client.hpp"
-#include "ai/a2a/discovery.hpp"
-#include "ai/a2a/errors.hpp"
-#include "ai/a2a/http/http_client.hpp"
-#include "ai/a2a/http/http_server.hpp"
-#include "ai/a2a/http/json_rpc_server.hpp"
-#include "ai/a2a/json_util.hpp"
-#include "ai/a2a/request_response.hpp"
-#include "ai/a2a/result.hpp"
-#include "ai/a2a/server.hpp"
-#include "ai/a2a/streaming.hpp"
-#include "ai/a2a/transport.hpp"
-#include "ai/a2a/types.hpp"
-#include "ai/acp/acp_agent_manager.hpp"
-#include "ai/acp/acp_client.hpp"
-#include "ai/acp/acp_session.hpp"
-#include "ai/acp/acp_types.hpp"
 #include "app.hpp"
 #include "comp/area3d.hpp"
 #include "comp/audio.hpp"

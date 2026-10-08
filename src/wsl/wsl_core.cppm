@@ -129,7 +129,6 @@ module;
 #include <fastgltf/util.hpp>
 #include <fastgltf/math.hpp>
 #include <fastgltf/tools.hpp>
-#include <curl/curl.h>
 #include <archive.h>
 #include <archive_entry.h>
 #include <nlohmann/json.hpp>

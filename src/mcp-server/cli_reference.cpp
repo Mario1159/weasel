@@ -36,11 +36,11 @@ const std::vector<cli_command_info> g_cli_reference = {
     { "weasel-cli -i -a", "weasel-cli --project ./mygame --interactive" } },
   { "--scene",
     "cli",
-    "Path to a scene file (.wscn.json) to load before running a command.",
+    "Path to a scene file (.wscn) to load before running a command.",
     "weasel-cli [-a] [--project <path>] --scene <scene_path> <command>",
-    { "<scene_path> – Path to the .wscn.json scene file." },
-    { "weasel-cli -a --scene rsc/scenes/level1.wscn.json ent ls",
-      "weasel-cli --project ./mygame --scene rsc/scenes/level1.wscn.json" } },
+    { "<scene_path> – Path to the .wscn scene file." },
+    { "weasel-cli -a --scene rsc/scenes/level1.wscn ent ls",
+      "weasel-cli --project ./mygame --scene rsc/scenes/level1.wscn" } },
   { "create-project",
     "cli",
     "Create a new Weasel Engine project on disk.",
@@ -54,11 +54,11 @@ const std::vector<cli_command_info> g_cli_reference = {
     "cli",
     "Create a new scene file for a project.",
     "weasel-cli create-scene <path> <name> [systems...]",
-    { "<path> – File path for the new scene (.wscn.json).",
+    { "<path> – File path for the new scene (.wscn).",
       "<name> – Scene name.",
       "[systems...] – Optional system names to attach." },
-    { "weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn.json Level1",
-      "weasel-cli --create-scene ./mygame/rsc/scenes/level1.wscn.json "
+    { "weasel-cli create-scene ./mygame/rsc/scenes/level1.wscn Level1",
+      "weasel-cli --create-scene ./mygame/rsc/scenes/level1.wscn "
       "Level1" } },
   { "validate-project",
     "cli",
@@ -71,11 +71,11 @@ const std::vector<cli_command_info> g_cli_reference = {
     "cli",
     "Validate a scene file against a project.",
     "weasel-cli validate-scene <scene_path> <proj_path>",
-    { "<scene_path> – Path to the scene .wscn.json file.",
+    { "<scene_path> – Path to the scene .wscn file.",
       "<proj_path> – Path to the project's wslpro.json file." },
-    { "weasel-cli validate-scene ./mygame/rsc/scenes/main.wscn.json "
+    { "weasel-cli validate-scene ./mygame/rsc/scenes/main.wscn "
       "./mygame/wslpro.json",
-      "weasel-cli --validate-scene ./mygame/rsc/scenes/main.wscn.json "
+      "weasel-cli --validate-scene ./mygame/rsc/scenes/main.wscn "
       "./mygame/wslpro.json" } },
 
   { "proj",
@@ -160,20 +160,20 @@ const std::vector<cli_command_info> g_cli_reference = {
     "repl",
     "Load a scene from disk into the active runtime.",
     "scene load <path>",
-    { "<path> – Path to the .wscn.json scene file." },
-    { "scene load rsc/scenes/level1.wscn.json" } },
+    { "<path> – Path to the .wscn scene file." },
+    { "scene load rsc/scenes/level1.wscn" } },
   { "scene save",
     "repl",
     "Save the active scene to disk. When a project is loaded, the default "
-    "path is {project_root}/{scenes_path}/{scene_name}.wscn.json. "
-    "Without a project, defaults to {scene_name}.wscn.json in the CWD.",
+    "path is {project_root}/{scenes_path}/{scene_name}.wscn. "
+    "Without a project, defaults to {scene_name}.wscn in the CWD.",
     "scene save [path]",
     { "[path] – Optional override path. Default: project's scenes_path + scene "
       "name.",
       "When a project is loaded, saves to the project's configured "
       "scenes_path.",
       "Without a project, saves to the current working directory." },
-    { "scene save", "scene save ./backup.wscn.json" } },
+    { "scene save", "scene save ./backup.wscn" } },
   { "scene ls",
     "repl",
     "List all scene assets in the loaded project.",

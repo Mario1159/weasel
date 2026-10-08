@@ -71,6 +71,19 @@ enum class shape_type : std::uint8_t
   sphere
 };
 
+/**
+ * One world-space line segment produced by debug draw.
+ *
+ * `rgba` holds the red/green/blue channels in 0xRRGGBB order; debug lines
+ * are always drawn fully opaque.
+ */
+struct debug_line
+{
+  vector3 a{};
+  vector3 b{};
+  std::uint32_t rgba = 0xFFFFFFFFU;
+};
+
 struct body_desc
 {
   motion_type motion = motion_type::Dynamic;
@@ -113,6 +126,15 @@ public:
                                     float restitution, object_layer layer);
   void add_force (body_id id, vector3 force);
   void add_impulse (body_id id, vector3 impulse);
+
+  /**
+   * Appends collider wireframes and contact geometry to `out`.
+   *
+   * The lines are expressed in world space, one segment per entry, ready to
+   * be handed to the renderer's debug line pass. Calling this does not
+   * modify the simulation.
+   */
+  void draw_debug (std::vector<debug_line> &out);
 
   double get_gravity () const;
   void set_gravity (double gravity);

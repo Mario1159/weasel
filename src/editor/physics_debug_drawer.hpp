@@ -3,54 +3,63 @@
 #include "wsl/debug/debug_renderer.hpp"
 #include "wsl/gfx/render_context.hpp"
 #include "wsl/gfx/render_window.hpp"
+#include "wsl/phys/physics_engine.hpp"
 
 #include <memory>
-
-namespace wsl::phys
-{
-class engine;
-}
+#include <vector>
 
 namespace editor
 {
 
-void draw_physics_debug (wsl::phys::engine &engine,
-                         wsl::debug::debug_renderer_interface &renderer);
-
 /**
- * No-op debug renderer used until physics debug draw is wired up.
+ * Debug renderer that batches world-space lines and submits them to the
+ * scene renderer's debug line pass.
  *
- * Box3D ships ``b3World_Draw`` callbacks, but
- * ``debug_renderer_interface`` has no primitive methods yet (see
- * ``physics_debug_drawer.cpp`` for the wiring steps), so this renderer
- * absorbs the frame lifecycle calls without emitting geometry.
+ * Physics uses it to visualize colliders: Box3D emits wireframes through
+ * `phys::engine::draw_debug`, `draw_physics_debug` feeds them in during the
+ * build pass, and `end_frame` draws them while the 3D pass is open so they
+ * depth-test against the scene.
  */
-class noop_debug_renderer final
+class physics_debug_renderer final
     : public wsl::debug::debug_renderer_interface
 {
 public:
-  noop_debug_renderer (wsl::gfx::render_window &, wsl::gfx::render_context *)
+  physics_debug_renderer (wsl::gfx::render_window &, wsl::gfx::render_context *)
   {
   }
-  void begin_frame () override
+
+  void begin_frame () override;
+  void draw_segment (const glm::vec3 &begin, const glm::vec3 &end,
+                     const glm::vec4 &color) override;
+  void end_frame (wsl::gfx::scene_renderer &renderer,
+                  const glm::mat4 &view_proj) override;
+
+private:
+  struct line
   {
-  }
-  void end_frame (const glm::mat4 &) override
-  {
-  }
-  void upload_buffers () override
-  {
-  }
-  void set_camera_pos (const glm::vec3 &) override
-  {
-  }
+    glm::vec3 begin{};
+    glm::vec3 end{};
+    glm::vec4 color{};
+  };
+
+  std::vector<line> m_lines;
 };
 
 inline std::unique_ptr<wsl::debug::debug_renderer_interface>
 make_physics_debug_renderer (wsl::gfx::render_window &window,
                              wsl::gfx::render_context *ctx)
 {
-  return std::make_unique<noop_debug_renderer> (window, ctx);
+  return std::make_unique<physics_debug_renderer> (window, ctx);
 }
+
+/**
+ * Appends every collider wireframe and contact line of `engine` to
+ * `renderer`.
+ *
+ * :param engine: Physics engine to visualize.
+ * :param renderer: Debug renderer collecting this frame's lines.
+ */
+void draw_physics_debug (wsl::phys::engine &engine,
+                         wsl::debug::debug_renderer_interface &renderer);
 
 } // namespace editor

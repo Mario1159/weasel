@@ -3,7 +3,7 @@
 #include "renderer_imgui.hpp"
 #include "wsl/comp/singl/editor_context.hpp"
 #include "wsl/comp/singl/runtime_context.hpp"
-#include "wsl/ai/a2a/json_util.hpp"
+#include "agentsdk/a2a/json_util.hpp"
 
 #include <imgui.h>
 #include <spdlog/spdlog.h>
@@ -18,7 +18,7 @@ namespace editor
 namespace
 {
 
-using wsl::ai::acp::tool_call_content_item;
+using agentsdk::acp::tool_call_content_item;
 
 /**
  * Parse the ``content`` array of a tool call update into typed items.
@@ -56,7 +56,7 @@ parse_tool_call_content (const simdjson::dom::element &update)
       }
 
       tool_call_content_item::content_wrapper wrapper;
-      wrapper.content = wsl::ai::acp::text_content{ std::string (text) };
+      wrapper.content = agentsdk::acp::text_content{ std::string (text) };
       item.item = std::move (wrapper);
     } else if (type == "diff") {
       tool_call_content_item::diff_content diff;
@@ -88,7 +88,7 @@ parse_tool_call_content (const simdjson::dom::element &update)
       item.item = std::move (diff);
     } else if (type == "resource_link") {
       tool_call_content_item::content_wrapper wrapper;
-      wsl::ai::acp::resource_link_content link;
+      agentsdk::acp::resource_link_content link;
 
       auto name_el = item_el["name"];
       if (!name_el.error ()) {
@@ -183,7 +183,7 @@ chat_panel::chat_panel (wsl::comp::singl::runtime_context *runtime_ctx,
 
   m_session.set_agent_request_handler (
       [this] (const std::string &method,
-              const std::string &params) -> wsl::ai::acp::agent_response {
+              const std::string &params) -> agentsdk::acp::agent_response {
         return on_agent_request (method, params);
       });
 }
@@ -376,7 +376,7 @@ chat_panel::draw_config_options ()
   ImGui::PushStyleVar (ImGuiStyleVar_FramePadding, ImVec2 (4, 2));
 
   for (auto const &opt : opts) {
-    if (opt.type != wsl::ai::acp::config_option_type::select) {
+    if (opt.type != agentsdk::acp::config_option_type::select) {
       continue;
     }
 
@@ -615,7 +615,7 @@ chat_panel::handle_connect ()
   }
 
   // Find selected agent
-  const wsl::ai::acp::agent_entry *agent = nullptr;
+  const agentsdk::acp::agent_entry *agent = nullptr;
   for (const auto &a : m_available_agents) {
     if (a.name == m_selected_agent) {
       agent = &a;
@@ -666,12 +666,12 @@ chat_panel::handle_connect ()
 void
 chat_panel::connect_async ()
 {
-  wsl::ai::acp::client_capabilities caps;
+  agentsdk::acp::client_capabilities caps;
   caps.fs.read_text_file = true;
   caps.fs.write_text_file = true;
   caps.terminal = true;
 
-  wsl::ai::acp::implementation_info info;
+  agentsdk::acp::implementation_info info;
   info.name = "weasel";
   info.title = "Weasel Engine";
   info.version = "1.0.0";
@@ -757,20 +757,20 @@ chat_panel::handle_cancel ()
 }
 
 void
-chat_panel::render_content_block (const wsl::ai::acp::content_block &block)
+chat_panel::render_content_block (const agentsdk::acp::content_block &block)
 {
-  if (auto *text = std::get_if<wsl::ai::acp::text_content> (&block)) {
+  if (auto *text = std::get_if<agentsdk::acp::text_content> (&block)) {
     ImGui::TextUnformatted (text->text.c_str ());
-  } else if (auto *img = std::get_if<wsl::ai::acp::image_content> (&block)) {
+  } else if (auto *img = std::get_if<agentsdk::acp::image_content> (&block)) {
     ImGui::TextDisabled ("[Image: %s]", img->mime_type.c_str ());
   } else if (auto *res
-             = std::get_if<wsl::ai::acp::resource_link_content> (&block)) {
+             = std::get_if<agentsdk::acp::resource_link_content> (&block)) {
     ImGui::TextDisabled ("[Resource: %s]", res->name.c_str ());
   }
 }
 
 void
-chat_panel::render_tool_call (const wsl::ai::acp::tool_call_update &tc)
+chat_panel::render_tool_call (const agentsdk::acp::tool_call_update &tc)
 {
   // Status color for the header title. Plain "●" is the only glyph
   // used so it renders even with minimal font ranges.
@@ -778,19 +778,19 @@ chat_panel::render_tool_call (const wsl::ai::acp::tool_call_update &tc)
   const char *status_label = "pending";
   if (tc.status) {
     switch (*tc.status) {
-    case wsl::ai::acp::tool_call_status::pending:
+    case agentsdk::acp::tool_call_status::pending:
       status_color = ImVec4 (0.55F, 0.55F, 0.55F, 1.0F);
       status_label = "pending";
       break;
-    case wsl::ai::acp::tool_call_status::in_progress:
+    case agentsdk::acp::tool_call_status::in_progress:
       status_color = ImVec4 (0.9F, 0.75F, 0.25F, 1.0F);
       status_label = "running";
       break;
-    case wsl::ai::acp::tool_call_status::completed:
+    case agentsdk::acp::tool_call_status::completed:
       status_color = ImVec4 (0.45F, 0.8F, 0.45F, 1.0F);
       status_label = "completed";
       break;
-    case wsl::ai::acp::tool_call_status::failed:
+    case agentsdk::acp::tool_call_status::failed:
       status_color = ImVec4 (0.85F, 0.35F, 0.35F, 1.0F);
       status_label = "failed";
       break;
@@ -801,7 +801,7 @@ chat_panel::render_tool_call (const wsl::ai::acp::tool_call_update &tc)
   if (tc.title && !tc.title->empty ()) {
     title = *tc.title;
   } else if (tc.kind) {
-    title = wsl::ai::acp::tool_kind_name (*tc.kind);
+    title = agentsdk::acp::tool_kind_name (*tc.kind);
   }
 
   // One collapsible block per tool call, keyed by its id.
@@ -825,15 +825,15 @@ chat_panel::render_tool_call (const wsl::ai::acp::tool_call_update &tc)
       if (auto *wrapper
           = std::get_if<tool_call_content_item::content_wrapper> (&item.item)) {
         if (auto *text
-            = std::get_if<wsl::ai::acp::text_content> (&wrapper->content)) {
+            = std::get_if<agentsdk::acp::text_content> (&wrapper->content)) {
           const std::string child_id
               = "##tc_output_" + std::to_string (output_index++);
           render_output_block (child_id.c_str (), text->text, 12);
-        } else if (auto *img = std::get_if<wsl::ai::acp::image_content> (
+        } else if (auto *img = std::get_if<agentsdk::acp::image_content> (
                        &wrapper->content)) {
           ImGui::TextDisabled ("[Image: %s]", img->mime_type.c_str ());
         } else if (auto *link
-                   = std::get_if<wsl::ai::acp::resource_link_content> (
+                   = std::get_if<agentsdk::acp::resource_link_content> (
                        &wrapper->content)) {
           ImGui::TextDisabled ("[Resource] %s", link->uri.c_str ());
         }
@@ -976,7 +976,7 @@ chat_panel::on_session_update (const std::string & /*method*/,
     }
   } else if (update_type == "tool_call" || update_type == "tool_call_update") {
     // Tool call creation or progress update
-    wsl::ai::acp::tool_call_update tc;
+    agentsdk::acp::tool_call_update tc;
 
     auto id_el = update["toolCallId"];
     if (!id_el.error ()) {
@@ -998,7 +998,7 @@ chat_panel::on_session_update (const std::string & /*method*/,
     if (!kind_el.error ()) {
       std::string_view kind;
       if (kind_el.get_string ().get (kind) == 0) {
-        auto parsed = wsl::ai::acp::parse_tool_kind (std::string (kind));
+        auto parsed = agentsdk::acp::parse_tool_kind (std::string (kind));
         if (parsed) {
           tc.kind = *parsed;
         }
@@ -1010,7 +1010,7 @@ chat_panel::on_session_update (const std::string & /*method*/,
       std::string_view status;
       if (status_el.get_string ().get (status) == 0) {
         auto parsed
-            = wsl::ai::acp::parse_tool_call_status (std::string (status));
+            = agentsdk::acp::parse_tool_call_status (std::string (status));
         if (parsed) {
           tc.status = *parsed;
         }
@@ -1023,9 +1023,9 @@ chat_panel::on_session_update (const std::string & /*method*/,
     // Files touched by the tool call
     auto locations_el = update["locations"];
     if (!locations_el.error () && locations_el.value ().is_array ()) {
-      std::vector<wsl::ai::acp::tool_call_location> locations;
+      std::vector<agentsdk::acp::tool_call_location> locations;
       for (auto loc_el : locations_el.value ().get_array ()) {
-        wsl::ai::acp::tool_call_location loc;
+        agentsdk::acp::tool_call_location loc;
 
         auto path_el = loc_el["path"];
         if (!path_el.error ()) {
@@ -1057,7 +1057,7 @@ chat_panel::on_session_update (const std::string & /*method*/,
     if (!entries_el.error () && entries_el.value ().is_array ()) {
       m_plan.clear ();
       for (auto entry : entries_el.value ().get_array ()) {
-        wsl::ai::acp::plan_entry pe;
+        agentsdk::acp::plan_entry pe;
 
         auto content_el2 = entry["content"];
         if (!content_el2.error ()) {
@@ -1089,7 +1089,7 @@ chat_panel::on_session_update (const std::string & /*method*/,
     }
   } else if (update_type == "permission") {
     // Permission request
-    wsl::ai::acp::tool_call_update tc;
+    agentsdk::acp::tool_call_update tc;
     tc.tool_call_id = "permission";
 
     auto title_el = update["title"];
@@ -1107,7 +1107,7 @@ chat_panel::on_session_update (const std::string & /*method*/,
     if (!options_el.error () && options_el.value ().is_array ()) {
       m_permission_options.clear ();
       for (auto opt : options_el.value ().get_array ()) {
-        wsl::ai::acp::permission_option po;
+        agentsdk::acp::permission_option po;
 
         auto id_el = opt["id"];
         if (!id_el.error ()) {
@@ -1138,7 +1138,7 @@ chat_panel::on_session_update (const std::string & /*method*/,
 }
 
 void
-chat_panel::apply_tool_call_update (wsl::ai::acp::tool_call_update &&update)
+chat_panel::apply_tool_call_update (agentsdk::acp::tool_call_update &&update)
 {
   if (m_messages.empty ()
       || m_messages.back ().m_role != display_message::role::assistant) {
@@ -1147,7 +1147,7 @@ chat_panel::apply_tool_call_update (wsl::ai::acp::tool_call_update &&update)
 
   auto &tool_calls = m_messages.back ().m_tool_calls;
   auto it = std::find_if (tool_calls.begin (), tool_calls.end (),
-                          [&] (const wsl::ai::acp::tool_call_update &tc) {
+                          [&] (const agentsdk::acp::tool_call_update &tc) {
                             return tc.tool_call_id == update.tool_call_id;
                           });
 
@@ -1176,12 +1176,12 @@ chat_panel::apply_tool_call_update (wsl::ai::acp::tool_call_update &&update)
   }
 }
 
-wsl::ai::acp::agent_response
+agentsdk::acp::agent_response
 chat_panel::on_agent_request (const std::string & /*method*/,
                               const std::string & /*params*/)
 {
   // No editor-specific handling yet: return unhandled so the built-in
-  // protocol handlers in wsl::ai::acp::acp_session answer fs and
+  // protocol handlers in agentsdk::acp::acp_session answer fs and
   // permission requests.
   return {};
 }

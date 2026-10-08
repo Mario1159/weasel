@@ -177,6 +177,20 @@ engine::add_impulse (body_id id, vector3 impulse)
   m_impl->world.add_impulse (id, to_box3d (impulse));
 }
 
+void
+engine::draw_debug (std::vector<debug_line> &out)
+{
+  std::vector<box3d::debug_line> backend_lines;
+  m_impl->world.draw (backend_lines);
+
+  out.reserve (out.size () + backend_lines.size ());
+  for (const box3d::debug_line &line : backend_lines) {
+    out.push_back (debug_line{ { line.a.x, line.a.y, line.a.z },
+                               { line.b.x, line.b.y, line.b.z },
+                               line.rgba });
+  }
+}
+
 double engine::get_gravity () const { return m_gravity_y; }
 void engine::set_gravity (double gravity)
 {

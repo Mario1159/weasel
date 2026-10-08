@@ -3,7 +3,7 @@ Application Build & Playback
 
 In Weasel, an **application** is a *project*: a directory described by a
 project manifest (``wslpro.json``) that points at the scenes, resources and
-daScript source folders, plus the scenes themselves (stored as ``.wscn.json``
+daScript source folders, plus the scenes themselves (stored as ``.wscn``
 files) and the ``.das`` system/component/singleton scripts. The manifest records
 paths such as ``systems_path``, ``components_path``, ``singletons_path``,
 ``scenes_path`` and ``default_scene_path`` so the engine knows where to load

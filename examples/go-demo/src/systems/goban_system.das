@@ -1,3 +1,6 @@
+options gen2
+module goban_system
+
 require weasel_api
 require weasel_ecs
 require weasel_helpers

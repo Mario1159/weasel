@@ -34,6 +34,44 @@ end)
 -- These override or supplement xrepo packages.
 -- ---------------------------------------------------------------------------
 
+-- agentsdk-cpp (ldapx/agentsdk-cpp) — A2A + ACP agent SDK (not in xrepo)
+package("agentsdk")
+    set_kind("library")
+    set_homepage("https://github.com/ldapx/agentsdk-cpp")
+    set_description("AgentSDK C++ — A2A and ACP client SDK")
+    set_license("MIT")
+    add_urls("https://github.com/ldapx/agentsdk-cpp.git")
+    add_versions("dev", "dev")
+    on_install(function (package)
+        io.writefile("xmake.lua", [[
+            add_rules("mode.debug", "mode.release")
+            set_languages("c++20")
+            add_requires("spdlog", "libcurl", "simdjson")
+            target("agentsdk")
+                set_kind("static")
+                add_files("src/agentsdk/**.cpp")
+                add_includedirs("src", {public = true})
+                -- simdjson and curl types appear in the public headers
+                -- (a2a/json_util.hpp, a2a/http/http_client.hpp).
+                add_packages("spdlog", "libcurl", "simdjson", {public = true})
+                if is_plat("linux") then
+                    add_syslinks("pthread")
+                elseif is_plat("windows") then
+                    add_syslinks("ws2_32", "wsock32")
+                end
+        ]])
+        import("package.tools.xmake").install(package)
+        -- Preserve the src/agentsdk/... layout under include/ so that
+        -- consumers keep using <agentsdk/a2a/...>. add_headerfiles would
+        -- flatten every header into a single include/ directory.
+        os.cp("src/agentsdk", package:installdir("include"))
+    end)
+    on_load(function (package)
+        package:add("includedirs", "include")
+        package:add("defines", "SPDLOG_COMPILED_LIB")
+    end)
+package_end()
+
 -- cpp-mcp (hkr04/cpp-mcp) — MCP SDK (static lib, not in xrepo)
 package("cpp-mcp")
     set_kind("library")
@@ -429,8 +467,10 @@ add_requires("stb")
 add_requires("cli11 v2.6.2")
 add_requires("nlohmann_json v3.12.0")
 add_requires("libarchive")
-add_requires("libcurl")
 add_requires("ozz-animation")
+-- A2A/ACP agent SDK — supplies <agentsdk/...> headers and exports
+-- libcurl transitively (only the SDK's HTTP transport uses it now).
+add_requires("agentsdk")
 -- slang shader compiler (slangc) — enabled by default for shader compilation
 option("with_slang", {default = false, showmenu = true, description = "Enable slang shader compiler (slangc)"})
 if has_config("with_slang") then
@@ -568,7 +608,6 @@ target("wsl")
         add_packages("meshoptimizer", {public = true})
         add_packages("fastgltf", {public = true})
         add_packages("simdjson", {public = true})
-        add_packages("libcurl", {public = true})
         add_packages("libarchive", {public = true})
         -- 32 impl units validated in module build; 48 remaining need manual GMF tuning
     end
@@ -600,7 +639,7 @@ target("wsl")
     add_cxxflags("-Wall", "-Wextra", "-Wpedantic", "-rdynamic", {force = true})
 
     -- packages — core deps (slang/gns/daslang conditional)
-    add_packages("entt", "glm", "spdlog", "fmt", "reflect-cpp", "box3d", "rmlui", "fastgltf", "meshoptimizer", "simdjson", "libsdl3", "libsdl3_image", "libsdl3_mixer", "tracy", "imgui", "imguizmo", "stb", "nlohmann_json", "libarchive", "libcurl", "rapidjson", {public = false})
+    add_packages("entt", "glm", "spdlog", "fmt", "reflect-cpp", "box3d", "rmlui", "fastgltf", "meshoptimizer", "simdjson", "libsdl3", "libsdl3_image", "libsdl3_mixer", "tracy", "imgui", "imguizmo", "stb", "nlohmann_json", "libarchive", "rapidjson", {public = false})
     add_defines("REFLECT_CPP_C_ARRAYS_OR_INHERITANCE", {public = true})
     if has_config("with_slang") then add_packages("slang") end
     -- Public packages exported to downstream targets (editor, cli, mcp-server, tests)
@@ -616,7 +655,6 @@ target("wsl")
     add_packages("fastgltf", {public = true})
     add_packages("meshoptimizer", {public = true})
     add_packages("simdjson", {public = true})
-    add_packages("libcurl", {public = true})
     add_packages("libarchive", {public = true})
     add_packages("libsdl3", {public = true})
     add_packages("libsdl3_image", {public = true})
@@ -968,6 +1006,8 @@ target("weasel")
     -- DO NOT re-list wsl's public packages here — xmake links them
     -- BEFORE -lwsl, causing unresolved symbols from cross-archive deps.
     add_packages("cli11")
+    -- chat_panel is the only A2A/ACP consumer left in the engine.
+    add_packages("agentsdk")
     add_packages("imguitextselect", {optional = true})
     add_packages("imsearch", {optional = true})
     add_packages("imviewguizmo", {optional = true})
@@ -1079,20 +1119,12 @@ target("weasel_mcp_server_tests")
 target("weasel_core_tests")
     set_kind("binary")
     set_languages("c++20")
-    add_files("tests/weasel-core/test_event_bus.cpp", "tests/weasel-core/test_acp_client.cpp", "tests/weasel-core/test_resource_ids.cpp", "tests/weasel-core/test_math_module.cpp", "tests/weasel-core/test_serialize_roundtrip.cpp", "tests/weasel-core/test_a2a_server.cpp", "tests/weasel-core/test_ozz_smoke.cpp", "tests/weasel-core/test_ozz_loader.cpp", "tests/weasel-core/test_model_skin.cpp", "tests/weasel-core/test_animation_system.cpp", "tests/weasel-core/test_scene_component_stream.cpp", "tests/weasel-core/test_animation_import.cpp", "tests/weasel-core/test_scene_move.cpp", "tests/weasel-core/test_deferred_stop.cpp")
-    add_deps("wsl", "fake_acp_agent")
+    add_files("tests/weasel-core/test_event_bus.cpp", "tests/weasel-core/test_resource_ids.cpp", "tests/weasel-core/test_math_module.cpp", "tests/weasel-core/test_serialize_roundtrip.cpp", "tests/weasel-core/test_ozz_smoke.cpp", "tests/weasel-core/test_ozz_loader.cpp", "tests/weasel-core/test_model_skin.cpp", "tests/weasel-core/test_animation_system.cpp", "tests/weasel-core/test_scene_component_stream.cpp", "tests/weasel-core/test_animation_import.cpp", "tests/weasel-core/test_scene_move.cpp", "tests/weasel-core/test_deferred_stop.cpp", "tests/weasel-core/test_physics_debug_draw.cpp", "tests/weasel-core/test_scene_loader.cpp")
+    add_deps("wsl")
     add_packages("doctest", "simdjson")
     add_includedirs("src")
-    add_defines("FAKE_AGENT_PATH=\"$(projectdir)/build/linux/x86_64/release/fake_acp_agent\"")
     add_defines("WEASEL_SOURCE_DIR=\"$(projectdir)\"")
     add_tests("weasel_core_tests")
-
-target("fake_acp_agent")
-    set_kind("binary")
-    set_languages("c++20")
-    add_files("tests/weasel-core/fake_acp_agent.cpp")
-    add_packages("simdjson")
-    add_includedirs("src")
 
 target("weasel_das_tests")
     set_kind("binary")

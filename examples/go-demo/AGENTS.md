@@ -12,7 +12,7 @@ ModelInstance3D, ...), and behavior lives in systems.
 ## Project layout
 
 - `wslpro.json` - project manifest (paths, default scene)
-- `rsc/scenes/` - scenes stored as `.wscn.json` files
+- `rsc/scenes/` - scenes stored as `.wscn` files
 - `src/components/`, `src/systems/`, `src/singletons/` - runtime code
 - `src/main.cpp` - standalone game entry point
 - Asset folders: models, images, audio, fonts, shaders, materials

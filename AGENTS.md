@@ -12,6 +12,10 @@ Weasel is an ECS 2D & 3D game engine for C++ and Daslang. It is designed from th
 - **UI:** HTML & CSS support via RML.
 - **Audio System:** Basic audio playback support.
 - **Developer Tools:** Built-in editor and MCP server.
+- **AI Assistance:** A2A/ACP support comes from the external
+  [agentsdk-cpp](https://github.com/ldapx/agentsdk-cpp) package
+  (`<agentsdk/...>` headers, `agentsdk::a2a` / `agentsdk::acp` namespaces),
+  consumed via its GitHub URL in `xmake.lua`.
 
 ## Project Structure
 
@@ -32,7 +36,6 @@ weasel/
 │   │   ├── math/           # Math utilities
 │   │   ├── reg/            # Registry helpers
 │   │   ├── das/            # Daslang bindings and modules
-│   │   ├── ai/             # AI integration (A2A, MCP)
 │   │   ├── net/            # Networking (GameNetworkingSockets)
 │   │   ├── log/            # Logging (spdlog)
 │   │   ├── debug/          # Debug utilities (Tracy profiler)
@@ -42,7 +45,7 @@ weasel/
 │   └── mcp-server/         # weasel-mcp-server (AI assistant integration)
 └── tests/
     ├── weasel-cli/         # CLI unit tests (doctest)
-    ├── weasel-core/        # Core engine tests: event bus, resource ids, ACP, math module (doctest)
+    ├── weasel-core/        # Core engine tests: event bus, resource ids, math module (doctest)
     ├── weasel-das/         # Engine daslang component-accessor smoke test (doctest)
     └── mcp-server/         # MCP server unit tests (doctest)
 ```

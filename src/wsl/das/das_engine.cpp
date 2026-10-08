@@ -113,6 +113,49 @@ private:
   std::map<std::string, std::string> m_project_roots;
 };
 
+// Create the per-engine-instance file access used by compileDaScript().
+// This is instance state, NOT thread state: every das_engine that compiles a
+// user .das file needs its own non-null FileAccess, even when the calling
+// thread already had all builtin modules initialized by
+// das_engine::initialize_global().
+void
+setup_engine_faccess (smart_ptr<FsFileAccess> &faccess)
+{
+  // Set up the daslang source tree path and file access.
+  setDasRoot (das_root_dir ());
+
+  faccess = smart_ptr<FsFileAccess> (new ProjectFsFileAccess);
+  faccess->introduceDaslib ();
+
+  // Add the engine's module directory to ProjectFsFileAccess so that
+  // `require weasel_helpers` can find weasel_helpers.das in interpreted mode.
+  auto engine_modules
+      = std::string (WEASEL_SOURCE_DIR) + "/src/wsl/das/modules";
+  static_cast<ProjectFsFileAccess *> (faccess.get ())
+      ->addProjectRoot ("engine_modules", engine_modules);
+}
+
+// Register the Weasel-specific modules (weasel_api / weasel_ecs) into the
+// instance's ModuleGroup.  Guarded per thread: Module_WeaselApi and
+// Module_Ecs must only ever be constructed once per thread, otherwise daScript
+// aborts with "Module already created".
+void
+register_weasel_modules_once (ModuleGroup &module_group)
+{
+  static thread_local bool s_weasel_modules_registered = false;
+  if (s_weasel_modules_registered) {
+    return;
+  }
+
+  // Register the Weasel API module (ECS, transforms, scene queries).
+  wsl::das::register_wsl_api_module (module_group);
+
+  // Register the Weasel ECS module (engine component types).
+  wsl::das::register_ecs_module (module_group);
+
+  s_weasel_modules_registered = true;
+}
+
 bool
 initialize_modules_for_engine (TextPrinter &tout,
                                smart_ptr<FsFileAccess> &faccess,
@@ -126,18 +169,7 @@ initialize_modules_for_engine (TextPrinter &tout,
   // ensure the environment here rather than relying on the main thread.
   ::das::daScriptEnvironment::ensure ();
 
-  // Set up the daslang source tree path and file access.
-  setDasRoot (das_root_dir ());
-
-  faccess = smart_ptr<FsFileAccess> (new ProjectFsFileAccess);
-  faccess->introduceDaslib ();
-
-  // Add the engine's module directory to ProjectFsFileAccess so that
-  // `require weasel_helpers` can find weasel_helpers.das in interpreted mode.
-  auto engine_modules
-      = std::string (WEASEL_SOURCE_DIR) + "/src/wsl/das/modules";
-  static_cast<ProjectFsFileAccess *> (faccess.get ())
-      ->addProjectRoot ("engine_modules", engine_modules);
+  setup_engine_faccess (faccess);
 
   // Register all default builtin modules (BuiltIn, Math, Strings, etc.)
   // into this thread's local ModuleKarma.  ModuleLibrary::addBuiltInModule()
@@ -147,11 +179,10 @@ initialize_modules_for_engine (TextPrinter &tout,
   // addBuiltInModule).
   PULL_ALL_DEFAULT_MODULES;
 
-  // Register the Weasel API module (ECS, transforms, scene queries).
-  wsl::das::register_wsl_api_module (module_group);
-
-  // Register the Weasel ECS module (engine component types).
-  wsl::das::register_ecs_module (module_group);
+  // Register the Weasel API module (ECS, transforms, scene queries) and the
+  // Weasel ECS module (engine component types).  Both are guarded per thread
+  // so a second das_engine instance on the same thread reuses them.
+  register_weasel_modules_once (module_group);
 
   // NOTE: We intentionally do NOT call require_dynamic_modules here.
   // It compiles .das_module files and stores them in thread-local
@@ -178,10 +209,30 @@ ensure_thread_das_environment (TextPrinter &tout,
                                smart_ptr<FsFileAccess> &faccess,
                                ModuleGroup &module_group)
 {
+  // The guard tests this INSTANCE's `faccess`, never the thread's
+  // g_modulesInitialized.  das_engine::initialize_global() runs
+  // Module::Initialize() on the main thread, which already sets
+  // g_modulesInitialized there.  The CLI calls initialize_global() before
+  // compiling user .das sources, so a g_modulesInitialized-based early return
+  // left `faccess` null and compileDaScript() dereferenced a null FileAccess
+  // inside addExtraDependency() -> FileAccess::getFileInfo() (SIGSEGV, exit
+  // code 139).  When the builtin modules are already present on this thread we
+  // only build the per-instance file access and the Weasel modules; pulling the
+  // builtin modules again aborts with `Module '$' already created`.
+  if (faccess) {
+    return; // This instance already initialized on this thread.
+  }
+
   auto *env = ::das::daScriptEnvironment::getBound ();
   if (env && env->g_modulesInitialized) {
-    return; // Already initialized on this thread.
+    // Builtin modules already exist on this thread; only the per-instance
+    // state and the Weasel-specific modules are still missing.
+    ::das::daScriptEnvironment::ensure ();
+    setup_engine_faccess (faccess);
+    register_weasel_modules_once (module_group);
+    return;
   }
+
   // Initialize ALL modules on this thread's thread-local environment.
   // This creates the "$", Math, Strings, etc. builtin modules AND the
   // weasel_api/weasel_ecs modules on THIS thread, so they are visible
@@ -272,7 +323,17 @@ static void
 das_global_atexit ()
 {
   if (s_das_global_initialized) {
-    ::das::Module::Shutdown ();
+    // resetFusion must stay off.  daScript's fusion engine is a
+    // DAS_THREAD_LOCAL unique_ptr that is only created when a program is
+    // simulated.  Weasel compiles user .das files on a worker thread (async
+    // reload), so the fusion engine exists on THAT thread while the main
+    // thread's instance is still null; Module::Shutdown() ->
+    // resetFusionEngine() then dereferences that null thread-local and jumps
+    // through a garbage function pointer (SIGSEGV, exit code 139, right after
+    // "Shutting down runtime context").
+    // Module::ShutdownStandalone() is the only PUBLIC entry point that keeps
+    // resetFusion off (Module::shutdownInternal() is private).
+    ::das::Module::ShutdownStandalone (/*dumpHandleLeaks=*/true);
   }
 }
 
@@ -789,6 +850,12 @@ struct das_engine::impl
       }
     }
     return 0;
+  }
+
+  bool
+  has_program (const std::string &path) const
+  {
+    return compiled_programs.find (path) != compiled_programs.end ();
   }
 
   das_engine::struct_info
@@ -1318,13 +1385,30 @@ das_engine::instantiate_class (const std::filesystem::path &path,
                                std::string &error)
 {
   if (!m_initialized) {
-    error = "Engine not initialized";
-    return {};
+    // Lazy init.  A scene loaded from the registration cache can instantiate a
+    // user system before anything called initialize() (compile_and_load only
+    // does so on the full-compile path), which used to fail with
+    // "Engine not initialized" and made every cached scene lose its systems.
+    if (!initialize ()) {
+      error = m_last_error.empty () ? "Failed to initialize daslang engine"
+                                    : m_last_error;
+      return {};
+    }
   }
 
-  if (m_impl->program_contexts.empty ()) {
-    error = "No compiled programs available";
-    return {};
+  // Lazy compile.  A scene can be loaded straight from the registration cache
+  // (load_cached_metadata), in which case no .das file has been executed yet
+  // and every instantiate would fail with "No compiled programs available" /
+  // "No context available for path".  Compiling just the file we need keeps the
+  // metadata-cache fast path usable for scenes that reference user systems.
+  if (!m_impl->has_program (path.string ())) {
+    if (!m_impl->execute_file (path.string (), error) && error.empty ()) {
+      error = "Failed to compile: " + path.string ();
+    }
+    if (!m_impl->has_program (path.string ())) {
+      m_last_error = error;
+      return {};
+    }
   }
 
   auto result = m_impl->instantiate_class (path.string (), class_name, error);
@@ -1338,8 +1422,12 @@ bool
 das_engine::has_class (const std::filesystem::path &path,
                        const std::string &class_name)
 {
-  if (!m_initialized) {
+  if (!m_initialized && !initialize ()) {
     return false;
+  }
+  if (!m_impl->has_program (path.string ())) {
+    std::string error;
+    m_impl->execute_file (path.string (), error);
   }
   if (m_impl->program_contexts.empty ()) {
     return false;

@@ -84,7 +84,12 @@ rigid_body::allowed_dofs_ui::register_meta ()
   auto &&f = entt::meta_factory<rigid_body::allowed_dofs_ui> ().type (
       entt::type_hash<rigid_body::allowed_dofs_ui>::value ());
   (f.func<&rigid_body::allowed_dofs_ui::custom_inspect>)("custom_inspect"_hs);
-  (f.data<&rigid_body::allowed_dofs_ui::value>)("value"_hs);
+  (f.data<&rigid_body::allowed_dofs_ui::value>)("value"_hs)
+      .custom<comp::meta_info> (
+          comp::meta_info{ "Allowed DOFs",
+                           "Degree-of-freedom bitmask: All, or any combination "
+                           "of Translation X/Y/Z and Rotation X/Y/Z",
+                           "" });
 }
 
 bool
@@ -156,7 +161,9 @@ rigid_body::motion_type_ui::register_meta ()
   auto &&f = entt::meta_factory<rigid_body::motion_type_ui> ().type (
       entt::type_hash<rigid_body::motion_type_ui>::value ());
   (f.func<&rigid_body::motion_type_ui::custom_inspect>)("custom_inspect"_hs);
-  (f.data<&rigid_body::motion_type_ui::value>)("value"_hs);
+  (f.data<&rigid_body::motion_type_ui::value>)("value"_hs)
+      .custom<comp::meta_info> (comp::meta_info{
+          "Motion Type", "How the physics solver drives this body", "" });
 }
 
 bool
@@ -205,7 +212,11 @@ rigid_body::collision_layer_ui::register_meta ()
       entt::type_hash<rigid_body::collision_layer_ui>::value ());
   (f.func<
       &rigid_body::collision_layer_ui::custom_inspect>)("custom_inspect"_hs);
-  (f.data<&rigid_body::collision_layer_ui::value>)("value"_hs);
+  (f.data<&rigid_body::collision_layer_ui::value>)("value"_hs)
+      .custom<comp::meta_info> (comp::meta_info{
+          "Collision Layer",
+          "Index of the single collision layer this body belongs to (0-7)",
+          "" });
 }
 
 bool
@@ -230,7 +241,12 @@ rigid_body::collision_mask_ui::register_meta ()
   auto &&f = entt::meta_factory<rigid_body::collision_mask_ui> ().type (
       entt::type_hash<rigid_body::collision_mask_ui>::value ());
   (f.func<&rigid_body::collision_mask_ui::custom_inspect>)("custom_inspect"_hs);
-  (f.data<&rigid_body::collision_mask_ui::value>)("value"_hs);
+  (f.data<&rigid_body::collision_mask_ui::value>)("value"_hs)
+      .custom<comp::meta_info> (comp::meta_info{
+          "Collision Mask",
+          "Bitmask of collision layers this body collides with; bit N is "
+          "layer N, e.g. 255 = all 8 layers",
+          "" });
 }
 
 bool
@@ -403,9 +419,9 @@ rigid_body::create_body (phys::engine &engine, const glm::vec3 &world_pos,
                                         : phys::shape_type::sphere;
   desc.position = { world_pos.x, world_pos.y, world_pos.z };
   desc.rotation = { world_rot.x, world_rot.y, world_rot.z, world_rot.w };
-  desc.half_extents = { half_extents.x () * scale.x,
-                        half_extents.y () * scale.y,
-                        half_extents.z () * scale.z };
+  desc.half_extents
+      = { half_extents.x () * scale.x, half_extents.y () * scale.y,
+          half_extents.z () * scale.z };
   desc.radius = radius * ((scale.x + scale.y + scale.z) / 3.0F);
   desc.density = density;
   desc.friction = friction;
@@ -480,7 +496,8 @@ rigid_body::on_inspector_changed (comp::singl::runtime_context *runtime,
   }
 
   if (structural_change) {
-    // Read current body position from physics engine to preserve world placement
+    // Read current body position from physics engine to preserve world
+    // placement
     const phys::vector3 current = engine->get_body_position (body_id);
     const phys::quaternion current_rotation
         = engine->get_body_rotation (body_id);
@@ -528,6 +545,46 @@ rigid_body::register_meta ()
       .custom<const char *> ("Kinematic")
       .data<phys::motion_type::Dynamic> ("dynamic"_hs)
       .custom<const char *> ("Dynamic");
+
+  // `allowed_dofs` is a bitmask whose inspector presents the 13 combinations
+  // below. Registering it as an entt enum is what lets `describe_component`
+  // list usable values instead of an empty list, and lets `comp set` take
+  // their names. Keep in sync with allowed_dofs_ui::custom_inspect.
+  entt::meta_factory<phys::allowed_dofs> ()
+      .type (entt::type_hash<phys::allowed_dofs>::value ())
+      .conv<int> ()
+      .data<phys::allowed_dofs::All> ("all"_hs)
+      .custom<const char *> ("All")
+      .data<phys::allowed_dofs::TranslationX> ("translation_x"_hs)
+      .custom<const char *> ("Translation X")
+      .data<phys::allowed_dofs::TranslationY> ("translation_y"_hs)
+      .custom<const char *> ("Translation Y")
+      .data<phys::allowed_dofs::TranslationZ> ("translation_z"_hs)
+      .custom<const char *> ("Translation Z")
+      .data<phys::allowed_dofs::RotationX> ("rotation_x"_hs)
+      .custom<const char *> ("Rotation X")
+      .data<phys::allowed_dofs::RotationY> ("rotation_y"_hs)
+      .custom<const char *> ("Rotation Y")
+      .data<phys::allowed_dofs::RotationZ> ("rotation_z"_hs)
+      .custom<const char *> ("Rotation Z")
+      .data<phys::allowed_dofs::TranslationX
+            | phys::allowed_dofs::TranslationY> ("translation_xy"_hs)
+      .custom<const char *> ("Translation XY")
+      .data<phys::allowed_dofs::TranslationX
+            | phys::allowed_dofs::TranslationZ> ("translation_xz"_hs)
+      .custom<const char *> ("Translation XZ")
+      .data<phys::allowed_dofs::TranslationY
+            | phys::allowed_dofs::TranslationZ> ("translation_yz"_hs)
+      .custom<const char *> ("Translation YZ")
+      .data<phys::allowed_dofs::RotationX | phys::allowed_dofs::RotationY> (
+          "rotation_xy"_hs)
+      .custom<const char *> ("Rotation XY")
+      .data<phys::allowed_dofs::RotationX | phys::allowed_dofs::RotationZ> (
+          "rotation_xz"_hs)
+      .custom<const char *> ("Rotation XZ")
+      .data<phys::allowed_dofs::RotationY | phys::allowed_dofs::RotationZ> (
+          "rotation_yz"_hs)
+      .custom<const char *> ("Rotation YZ");
 
   entt::meta_factory<comp::rigid_body> ()
       .type (entt::type_hash<comp::rigid_body>::value ())

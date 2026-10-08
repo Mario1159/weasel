@@ -69,6 +69,51 @@ clear_runtime_registries (comp::singl::runtime_context &runtime_ctx)
   runtime_ctx.system_factory_registry ().clear_runtime_systems ();
 }
 
+std::string
+bytes_to_hex (const std::vector<uint8_t> &bytes)
+{
+  static constexpr char digits[] = "0123456789abcdef";
+  std::string hex;
+  hex.reserve (bytes.size () * 2);
+  for (const uint8_t byte : bytes) {
+    hex.push_back (digits[(byte >> 4U) & 0x0FU]);
+    hex.push_back (digits[byte & 0x0FU]);
+  }
+  return hex;
+}
+
+std::vector<uint8_t>
+hex_to_bytes (const std::string &hex)
+{
+  const auto nibble = [] (char c) -> int {
+    if ((c >= '0') && (c <= '9')) {
+      return c - '0';
+    }
+    if ((c >= 'a') && (c <= 'f')) {
+      return 10 + (c - 'a');
+    }
+    if ((c >= 'A') && (c <= 'F')) {
+      return 10 + (c - 'A');
+    }
+    return -1;
+  };
+
+  std::vector<uint8_t> bytes;
+  if ((hex.size () % 2) != 0) {
+    return bytes;
+  }
+  bytes.reserve (hex.size () / 2);
+  for (std::size_t i = 0; i < hex.size (); i += 2) {
+    const int hi = nibble (hex[i]);
+    const int lo = nibble (hex[i + 1]);
+    if ((hi < 0) || (lo < 0)) {
+      return {};
+    }
+    bytes.push_back (static_cast<uint8_t> ((hi << 4) | lo));
+  }
+  return bytes;
+}
+
 void
 write_cached_registration (
     rapidjson::Writer<rapidjson::StringBuffer> &writer,
@@ -109,6 +154,9 @@ write_cached_registration (
     writer.Int (f.size);
     writer.Key ("kind");
     writer.Int (f.kind);
+    writer.Key ("default_hex");
+    writer.String (f.default_hex.c_str (),
+                   static_cast<rapidjson::SizeType> (f.default_hex.size ()));
     writer.EndObject ();
   }
   writer.EndArray ();
@@ -125,8 +173,9 @@ make_cached_registration (const component_registry::descriptor &descriptor)
   registration.is_das_component = descriptor.is_das_component;
   registration.das_struct_size = descriptor.das_struct_size;
   for (const auto &f : descriptor.das_fields) {
-    registration.das_fields.push_back (
-        { f.name, f.type_name, f.offset, f.size, static_cast<int> (f.kind) });
+    registration.das_fields.push_back ({ f.name, f.type_name, f.offset, f.size,
+                                         static_cast<int> (f.kind),
+                                         bytes_to_hex (f.default_value) });
   }
   return registration;
 }
@@ -139,6 +188,26 @@ make_cached_registration (const Descriptor &descriptor)
   registration.type_id = descriptor.type_id;
   registration.type_name = descriptor.type_name;
   registration.display_name = descriptor.display_name;
+  return registration;
+}
+
+// Daslang singletons need their value layout cached too: without it the
+// descriptor is discovery-only and `singl add` has nothing to construct.
+runtime_project_module::cached_registration
+make_cached_singleton_registration (
+    const singleton_registry::descriptor &descriptor)
+{
+  runtime_project_module::cached_registration registration{};
+  registration.type_id = descriptor.type_id;
+  registration.type_name = descriptor.type_name;
+  registration.display_name = descriptor.display_name;
+  registration.is_das_component = descriptor.is_das_singleton;
+  registration.das_struct_size = descriptor.das_struct_size;
+  for (const auto &f : descriptor.das_fields) {
+    registration.das_fields.push_back ({ f.name, f.type_name, f.offset, f.size,
+                                         static_cast<int> (f.kind),
+                                         bytes_to_hex (f.default_value) });
+  }
   return registration;
 }
 
@@ -181,7 +250,10 @@ read_cached_registration (const rapidjson::Value &value,
       }
       out.das_fields.push_back (
           { f["name"].GetString (), f["type_name"].GetString (),
-            f["offset"].GetInt (), f["size"].GetInt (), f["kind"].GetInt () });
+            f["offset"].GetInt (), f["size"].GetInt (), f["kind"].GetInt (),
+            (f.HasMember ("default_hex") && f["default_hex"].IsString ())
+                ? f["default_hex"].GetString ()
+                : std::string{} });
     }
   }
   return true;
@@ -381,7 +453,7 @@ runtime_project_module::write_registration_cache () const
        m_runtime_ctx->singleton_registry ().get_singleton_components (
            singleton_component_order::type_id)) {
     if (desc != nullptr && desc->runtime_registered) {
-      cache.singletons.push_back (make_cached_registration (*desc));
+      cache.singletons.push_back (make_cached_singleton_registration (*desc));
     }
   }
 
@@ -491,12 +563,9 @@ runtime_project_module::apply_registration_cache (
     std::vector<component_registry::descriptor::das_field> fields;
     for (const auto &f : entry.das_fields) {
       fields.push_back (
-          { f.name,
-            f.type_name,
-            f.offset,
-            f.size,
+          { f.name, f.type_name, f.offset, f.size,
             static_cast<wsl::das::das_engine::field_type_kind> (f.kind),
-            {} });
+            hex_to_bytes (f.default_hex) });
     }
     m_runtime_ctx->component_registry ()
         .register_cached_runtime_world_component (
@@ -510,25 +579,67 @@ runtime_project_module::apply_registration_cache (
         entry.type_name, static_cast<uint64_t> (entry.type_id),
         reg::ComponentKind::DAS_SCRIPT,
         static_cast<size_t> (entry.das_struct_size));
+    // `typeinfo typename` yields "player_control::PlayerControl const", which
+    // is the name finalize_load() registers.  Use the same spelling here; the
+    // previous "player_control::player_control const" only worked on the
+    // full-compile path, so cache-loaded projects could not resolve the type.
+    std::string pascal_name;
+    bool capitalize_next = true;
+    for (char ch : entry.type_name) {
+      if (ch == '_' || ch == '-') {
+        capitalize_next = true;
+      } else if (capitalize_next) {
+        pascal_name += static_cast<char> (
+            std::toupper (static_cast<unsigned char> (ch)));
+        capitalize_next = false;
+      } else {
+        pascal_name += ch;
+      }
+    }
     std::string qualified_name
-        = entry.type_name + "::" + entry.type_name + " const";
+        = entry.type_name + "::" + pascal_name + " const";
     m_runtime_ctx->component_registry ().register_component_type_info (
         qualified_name, static_cast<uint64_t> (entry.type_id),
         reg::ComponentKind::DAS_SCRIPT,
         static_cast<size_t> (entry.das_struct_size));
+    // Keep the old spelling as an alias so existing caches/scripts still
+    // resolve.
+    m_runtime_ctx->component_registry ().register_component_type_info (
+        entry.type_name + "::" + entry.type_name + " const",
+        static_cast<uint64_t> (entry.type_id), reg::ComponentKind::DAS_SCRIPT,
+        static_cast<size_t> (entry.das_struct_size));
   }
 
   for (const cached_registration &entry : cache.singletons) {
+    std::vector<singleton_registry::descriptor::das_field> fields;
+    for (const auto &f : entry.das_fields) {
+      fields.push_back (
+          { f.name, f.type_name, f.offset, f.size,
+            static_cast<wsl::das::das_engine::field_type_kind> (f.kind),
+            hex_to_bytes (f.default_hex) });
+    }
     m_runtime_ctx->singleton_registry ()
         .register_cached_runtime_singleton_component (
             static_cast<entt::id_type> (entry.type_id), entry.type_name,
-            entry.display_name);
+            entry.display_name, entry.das_struct_size, std::move (fields));
   }
 
   for (const cached_registration &entry : cache.systems) {
+#if WEASEL_HAS_DASLANG
+    // Must use the Daslang-aware overload.  The 3-argument one builds a
+    // `placeholder_system` for every user system, which (a) never runs any
+    // on_update, and (b) shares one type id across all instances, so
+    // scene::add_system_instance()'s duplicate check silently keeps only the
+    // FIRST user system of a scene.  das_engine::instantiate_class() compiles
+    // the .das on demand, so this still works straight from the cache.
+    m_runtime_ctx->system_factory_registry ().register_cached_runtime_system (
+        static_cast<entt::id_type> (entry.type_id), entry.type_name,
+        entry.display_name, entry.script_path, *get_das_engine ());
+#else
     m_runtime_ctx->system_factory_registry ().register_cached_runtime_system (
         static_cast<entt::id_type> (entry.type_id), entry.type_name,
         entry.display_name);
+#endif
   }
 }
 
@@ -544,12 +655,9 @@ runtime_project_module::load_das_registrations_from_cache (
     fields.reserve (cached.size ());
     for (const auto &f : cached) {
       fields.push_back (
-          { f.name,
-            f.type_name,
-            f.offset,
-            f.size,
+          { f.name, f.type_name, f.offset, f.size,
             static_cast<wsl::das::das_engine::field_type_kind> (f.kind),
-            {} });
+            hex_to_bytes (f.default_hex) });
     }
     return fields;
   };
@@ -597,6 +705,33 @@ runtime_project_module::load_das_registrations_from_cache (
   wsl::log::xmake ()->debug (
       "load_das_registrations_from_cache: Restored {} das registrations",
       m_das_registrations.size ());
+}
+
+// Register the project's component / singleton / system directories as daScript
+// extra roots so that bare `require` statements (e.g. `require mouse_rotate`
+// from a system file) resolve across directories.  Both the full-compile path
+// and the metadata-cache path need this: without it a cached system that
+// `require`s a project module fails to compile lazily.
+void
+runtime_project_module::register_project_fs_roots (const fs::path &project_root,
+                                                   const rsc::project &project)
+{
+  auto *das_engine = get_das_engine ();
+  if (!das_engine->initialize ()) {
+    wsl::log::xmake ()->error ("Failed to initialize daslang engine.");
+    return;
+  }
+
+  const auto comp_dir
+      = fs::weakly_canonical (project_root / project.components_path).string ();
+  const auto singl_dir
+      = fs::weakly_canonical (project_root / project.singletons_path).string ();
+  const auto sys_dir
+      = fs::weakly_canonical (project_root / project.systems_path).string ();
+
+  das_engine->addFsRoot ("components", comp_dir);
+  das_engine->addFsRoot ("singletons", singl_dir);
+  das_engine->addFsRoot ("systems", sys_dir);
 }
 
 bool
@@ -647,6 +782,7 @@ runtime_project_module::load_cached_metadata (const rsc::project &project)
 
   apply_registration_cache (cache);
   load_das_registrations_from_cache (cache);
+  register_project_fs_roots (project_root, project);
   m_loaded_project_root = project_root;
   m_source_hash = current_hash;
   m_load_state = load_state_t::metadata_cache;
@@ -692,6 +828,17 @@ runtime_project_module::invalidate (const rsc::project *project)
   m_loaded_project_root.clear ();
   m_last_error.clear ();
   m_last_status = "Runtime module state invalidated.";
+}
+
+void
+runtime_project_module::clear_cached_metadata ()
+{
+  if (m_load_state == load_state_t::metadata_cache
+      && m_runtime_ctx != nullptr) {
+    clear_runtime_registries (*m_runtime_ctx);
+  }
+  m_das_registrations.clear ();
+  m_load_state = load_state_t::unloaded;
 }
 
 void
@@ -746,12 +893,19 @@ runtime_project_module::finalize_load ()
       }
 
       break;
-    case das_registration::singleton:
+    case das_registration::singleton: {
+      std::vector<singleton_registry::descriptor::das_field> fields;
+      fields.reserve (reg.fields.size ());
+      for (const auto &f : reg.fields) {
+        fields.push_back (
+            { f.name, f.type_name, f.offset, f.size, f.kind, f.default_value });
+      }
       m_runtime_ctx->singleton_registry ()
           .register_cached_runtime_singleton_component (
               static_cast<entt::id_type> (reg.type_id), reg.type_name,
-              reg.display_name);
+              reg.display_name, reg.struct_size, std::move (fields));
       break;
+    }
     case das_registration::system:
 #if WEASEL_HAS_DASLANG
       m_runtime_ctx->system_factory_registry ().register_cached_runtime_system (
@@ -919,22 +1073,7 @@ runtime_project_module::compile_and_load (const rsc::project &project)
       return false;
     }
 
-    const auto comp_dir
-        = fs::weakly_canonical (project_root / project.components_path)
-              .string ();
-    const auto singl_dir
-        = fs::weakly_canonical (project_root / project.singletons_path)
-              .string ();
-    const auto sys_dir
-        = fs::weakly_canonical (project_root / project.systems_path).string ();
-
-    // Register source directories as daScript extra roots so that
-    // bare `require` statements (e.g. `require mouse_rotate`) resolve
-    // across directories — matching AOT behaviour where CMake copies
-    // all component files alongside each system file during compilation.
-    das_engine->addFsRoot ("components", comp_dir);
-    das_engine->addFsRoot ("singletons", singl_dir);
-    das_engine->addFsRoot ("systems", sys_dir);
+    register_project_fs_roots (project_root, project);
 
     for (const auto &das_file : sources.das_sources) {
       wsl::log::xmake ()->debug ("Executing daslang file: {}",
@@ -983,6 +1122,16 @@ runtime_project_module::compile_and_load (const rsc::project &project)
       if (si.fields.empty () && struct_name != stem) {
         si = das_engine->get_struct_info (das_file, stem);
       }
+
+      const auto comp_dir
+          = fs::weakly_canonical (project_root / project.components_path)
+                .string ();
+      const auto singl_dir
+          = fs::weakly_canonical (project_root / project.singletons_path)
+                .string ();
+      const auto sys_dir
+          = fs::weakly_canonical (project_root / project.systems_path)
+                .string ();
 
       if (canonical.compare (0, comp_dir.size (), comp_dir) == 0) {
         m_das_registrations.push_back (

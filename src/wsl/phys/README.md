@@ -83,6 +83,24 @@ auto position = world.body_position (body);
 world.destroy_body (body);
 ```
 
+## Debug drawing
+
+`phys::engine::draw_debug` appends collider wireframes as world-space line
+segments:
+
+```cpp
+std::vector<wsl::phys::debug_line> lines;
+physics.draw_debug (lines);   // appends; the caller owns the list
+```
+
+Box3D reports shapes through `b3World_Draw`, which only fires when the world
+definition installs a `createDebugShape` hook — the adapter installs one when
+the world is created. Hulls become edge wireframes, spheres and capsules are
+approximated with circles, and contact/joint geometry comes through the
+segment callback. The editor hands the result to
+`gfx::scene_renderer::draw_debug_lines` whenever the physics manager's
+**Show Debug** flag is set.
+
 ## Collision Layers
 
 Defined in `layers.hpp` as backend-neutral `object_layer` values. Map them

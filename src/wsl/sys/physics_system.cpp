@@ -282,39 +282,33 @@ void
 physics_system::on_render_build_draw_data (entt::registry &registry)
 {
   auto &ctx = registry.ctx ();
-  if (!ctx.contains<comp::singl::runtime_context *> ()) {
-    return;
-  }
-  auto &runtime = *ctx.get<comp::singl::runtime_context *> ();
-
   if (!ctx.contains<comp::singl::editor_context *> ()) {
     return;
   }
   auto &editor_ctx = *ctx.get<comp::singl::editor_context *> ();
 
-  auto *scene = runtime.scene_manager ().get_active ();
-  if (scene == nullptr) {
-    return;
-  }
-
-  comp::singl::editor_context::resolved_camera rc;
-  if (!editor_ctx.resolve_game_view_camera (registry, scene, rc)) {
-    return;
-  }
-
   wsl::debug::debug_renderer_interface *debug_renderer
       = editor_ctx.get_debug_renderer ();
-  debug_renderer->set_camera_pos (rc.world_pos ());
+  if (debug_renderer == nullptr) {
+    return;
+  }
+
+  // Drop last frame's batch first so toggling "Show Debug" off can never
+  // leave stale wireframes behind.
   debug_renderer->begin_frame ();
 
   comp::singl::physics_manager *physics
       = get_registry_physics_manager (registry);
-  if ((physics != nullptr) && physics->show_debug) {
-    phys::engine &engine = physics->ensure_engine ();
-    editor::draw_physics_debug (engine, *debug_renderer);
+  if ((physics == nullptr) || !physics->show_debug) {
+    return;
   }
 
-  debug_renderer->upload_buffers ();
+  // try_engine() rather than ensure_engine(): the dummy registry's
+  // physics_manager is rebuilt every frame, so creating an engine here would
+  // churn (see on_editor_update).
+  if (phys::engine *engine = physics->try_engine (); engine != nullptr) {
+    editor::draw_physics_debug (*engine, *debug_renderer);
+  }
 }
 
 void
@@ -341,7 +335,24 @@ physics_system::on_render_record_draw_cmd (entt::registry &registry)
     return;
   }
 
-  editor_ctx.get_debug_renderer ()->end_frame (rc.vp ());
+  // Subviewport passes replay these systems with a different camera, while
+  // the batch was collected for the game view camera resolved above. This
+  // matches the guard render_3d_system uses for its editor gizmos.
+  bool const is_subviewport_pass
+      = ctx.contains<entt::entity> () && ctx.get<entt::entity> () != entt::null;
+  if (is_subviewport_pass) {
+    return;
+  }
+
+  wsl::debug::debug_renderer_interface *debug_renderer
+      = editor_ctx.get_debug_renderer ();
+  wsl::gfx::scene_renderer *scene_renderer
+      = runtime.try_get_active_scene_renderer ();
+  if ((debug_renderer == nullptr) || (scene_renderer == nullptr)) {
+    return;
+  }
+
+  debug_renderer->end_frame (*scene_renderer, rc.vp ());
 }
 
 void

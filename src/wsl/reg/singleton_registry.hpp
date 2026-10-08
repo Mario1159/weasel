@@ -7,6 +7,16 @@
 #include "../serialize/component_adapters.hpp"
 
 #ifndef IN_MODULE_INTERFACE
+#include "../das/das_engine.hpp"
+#endif
+
+#ifndef IN_MODULE_INTERFACE
+#include <cstdint>
+#endif
+#ifndef IN_MODULE_INTERFACE
+#include <cstddef>
+#endif
+#ifndef IN_MODULE_INTERFACE
 #include <entt/entt.hpp>
 #endif
 
@@ -69,8 +79,89 @@ struct singleton_component_registration_options
 
 /** Concept for types that have a serialize method compatible with rfl. */
 template <typename T>
-concept has_serialize
-    = requires (T &v) { { v.serialize () } -> std::same_as<void>; };
+concept has_serialize = requires (T &v) {
+  { v.serialize () } -> std::same_as<void>;
+};
+
+/**
+ * Type-erased storage for Daslang singleton values.
+ *
+ * C++ singletons live in `registry.ctx()` as concrete types, which is what the
+ * descriptor callbacks in `singleton_registry` operate on. A Daslang singleton
+ * has no C++ type, so its bytes are kept here instead, keyed by type id and
+ * attached to the registry's context so it follows the scene like everything
+ * else.
+ */
+class das_singleton_storage
+{
+public:
+  /** One field initialiser to overlay on a freshly zeroed value. */
+  struct default_field
+  {
+    int offset = 0;
+    std::vector<uint8_t> value;
+  };
+
+  /** One type-erased value block, aligned for any scalar daslang field. */
+  struct block
+  {
+    std::vector<std::max_align_t> words;
+    std::size_t size = 0;
+
+    uint8_t *
+    data ()
+    {
+      return words.empty () ? nullptr
+                            : reinterpret_cast<uint8_t *> (words.data ());
+    }
+
+    const uint8_t *
+    data () const
+    {
+      return words.empty () ? nullptr
+                            : reinterpret_cast<const uint8_t *> (words.data ());
+    }
+  };
+
+  /** Whether a value exists for the given type id. */
+  bool contains (::entt::id_type type_id) const;
+
+  /**
+   * Creates a zero-filled value for the given type id.
+   * @return The new block, or `nullptr` when one already exists or the size is
+   * zero.
+   */
+  block *emplace_default (::entt::id_type type_id, std::size_t struct_size);
+
+  /**
+   * Creates a value for the given type id, overlaying the given field
+   * initialisers on the zeroed block.
+   */
+  block *emplace_with (::entt::id_type type_id, std::size_t struct_size,
+                       const std::vector<default_field> &defaults);
+
+  /** Returns the value for the given type id, or `nullptr`. */
+  block *data (::entt::id_type type_id);
+
+  /** Returns the value for the given type id, or `nullptr`. */
+  const block *data (::entt::id_type type_id) const;
+
+  /** Destroys the value for the given type id. */
+  bool remove (::entt::id_type type_id);
+
+  /** Destroys every value. */
+  void clear ();
+
+  /** Read-only access to every stored value. */
+  const std::unordered_map<::entt::id_type, block> &
+  entries () const
+  {
+    return m_blocks;
+  }
+
+private:
+  std::unordered_map<::entt::id_type, block> m_blocks;
+};
 
 /**
  * Central registry for singleton components (singletons) in the engine.
@@ -101,6 +192,26 @@ public:
     bool serialize_with_scene = false;
     /** Whether the singleton can be default-constructed. */
     bool can_add_default = false;
+    /** Whether this is a daslang singleton (no C++ backing type). */
+    bool is_das_singleton = false;
+    /** Size of the daslang value in bytes; 0 when unknown. */
+    int das_struct_size = 0;
+    /** Field layout of a daslang singleton value. */
+    struct das_field
+    {
+      std::string name;
+      std::string type_name;
+      int offset = 0;
+      int size = 0;
+      wsl::das::das_engine::field_type_kind kind
+          = wsl::das::das_engine::field_type_kind::unsupported;
+      /**
+       * Initialiser bytes from the daslang struct definition, so `singl add`
+       * produces the declared defaults rather than zeroes.
+       */
+      std::vector<uint8_t> default_value;
+    };
+    std::vector<das_field> das_fields;
     /** Function pointer to check if the singleton exists in a registry. */
     bool (*contains) (::entt::registry &) = nullptr;
     /** Function pointer to emplace a default instance of the singleton. */
@@ -136,13 +247,52 @@ public:
    * Registers metadata for a runtime singleton without loading its C++
    * type.
    *
-   * Cached descriptors are only suitable for discovery and name lookup. They do
-   * not provide construction, reflection, access, or serialization callbacks.
+   * For daslang singletons the value layout is supplied so the descriptor can
+   * carry working `contains` / `emplace_default` / `remove` / `get_ptr`
+   * callbacks backed by `das_singleton_storage`. Passing a zero
+   * `das_struct_size` registers a discovery-only descriptor, which is what
+   * happens for stale caches written before the layout was recorded.
    */
-  void
-  register_cached_runtime_singleton_component (::entt::id_type type_id,
-                                               std::string_view type_name,
-                                               std::string_view display_name);
+  void register_cached_runtime_singleton_component (
+      ::entt::id_type type_id, std::string_view type_name,
+      std::string_view display_name, int das_struct_size = 0,
+      std::vector<descriptor::das_field> das_fields = {});
+
+  // ── Daslang singletons ──
+  //
+  // A daslang singleton has no C++ type to key `registry.ctx()` on, so its
+  // bytes are kept in a `das_singleton_storage` attached to the registry's
+  // context. These are the accessors the CLI and the scene serializer use
+  // instead of the descriptor's function pointers.
+
+  /** Whether a daslang singleton value exists in the registry. */
+  bool das_singleton_contains (const ::entt::registry &registry,
+                               ::entt::id_type type_id) const;
+
+  /** Creates a zero-filled daslang singleton value. */
+  bool das_singleton_add (::entt::registry &registry,
+                          ::entt::id_type type_id) const;
+
+  /** Destroys a daslang singleton value. */
+  bool das_singleton_remove (::entt::registry &registry,
+                             ::entt::id_type type_id) const;
+
+  /** Returns a pointer to the daslang singleton value, or `nullptr`. */
+  uint8_t *das_singleton_data (::entt::registry &registry,
+                               ::entt::id_type type_id) const;
+
+  /** Serializes a daslang singleton value as lowercase hex, or empty. */
+  std::string das_singleton_hex (const ::entt::registry &registry,
+                                 ::entt::id_type type_id) const;
+
+  /**
+   * Restores a daslang singleton value from lowercase hex.
+   * @return `true` when the value was written; `false` when the descriptor is
+   * unknown, the layout is unknown, or the hex does not match the layout.
+   */
+  bool das_singleton_load_hex (::entt::registry &registry,
+                               ::entt::id_type type_id,
+                               std::string_view hex) const;
 
   /**
    * Registers a bound singleton component type stored as a raw pointer.

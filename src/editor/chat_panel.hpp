@@ -1,10 +1,10 @@
 #pragma once
 
 #include "wsl/comp/singl/runtime_context_fwd.hpp"
-#include <wsl/ai/acp/acp_agent_manager.hpp>
-#include <wsl/ai/acp/acp_client.hpp>
-#include <wsl/ai/acp/acp_session.hpp>
-#include <wsl/ai/acp/acp_types.hpp>
+#include <agentsdk/acp/acp_agent_manager.hpp>
+#include <agentsdk/acp/acp_client.hpp>
+#include <agentsdk/acp/acp_session.hpp>
+#include <agentsdk/acp/acp_types.hpp>
 
 #include <imgui.h>
 
@@ -43,18 +43,18 @@ private:
   void connect_async ();
   void prompt_async (const std::string &text);
 
-  void render_content_block (const wsl::ai::acp::content_block &block);
-  void render_tool_call (const wsl::ai::acp::tool_call_update &tc);
+  void render_content_block (const agentsdk::acp::content_block &block);
+  void render_tool_call (const agentsdk::acp::tool_call_update &tc);
   void render_permission_dialog ();
 
   void on_session_update (const std::string &method, const std::string &params);
-  void apply_tool_call_update (wsl::ai::acp::tool_call_update &&update);
-  wsl::ai::acp::agent_response on_agent_request (const std::string &method,
+  void apply_tool_call_update (agentsdk::acp::tool_call_update &&update);
+  agentsdk::acp::agent_response on_agent_request (const std::string &method,
                                                  const std::string &params);
 
-  wsl::ai::acp::acp_client m_client;
-  wsl::ai::acp::acp_session m_session;
-  wsl::ai::acp::acp_agent_manager m_agent_manager;
+  agentsdk::acp::acp_client m_client;
+  agentsdk::acp::acp_session m_session;
+  agentsdk::acp::acp_agent_manager m_agent_manager;
 
   // Not owned.
   wsl::comp::singl::runtime_context *m_runtime_ctx = nullptr;
@@ -63,7 +63,7 @@ private:
   bool m_connected = false;
   bool m_initializing = false;
   std::string m_selected_agent;
-  std::vector<wsl::ai::acp::agent_entry> m_available_agents;
+  std::vector<agentsdk::acp::agent_entry> m_available_agents;
 
   // Conversation
   struct display_message
@@ -78,7 +78,7 @@ private:
     std::string m_text;
     std::string m_message_id;
     bool m_streaming = false;
-    std::vector<wsl::ai::acp::tool_call_update> m_tool_calls;
+    std::vector<agentsdk::acp::tool_call_update> m_tool_calls;
   };
 
   // Background connect thread
@@ -99,12 +99,12 @@ private:
   std::vector<display_message> m_messages;
 
   // Plan
-  std::vector<wsl::ai::acp::plan_entry> m_plan;
+  std::vector<agentsdk::acp::plan_entry> m_plan;
   bool m_show_plan = false;
 
   // Permission request
-  std::optional<wsl::ai::acp::tool_call_update> m_pending_permission;
-  std::vector<wsl::ai::acp::permission_option> m_permission_options;
+  std::optional<agentsdk::acp::tool_call_update> m_pending_permission;
+  std::vector<agentsdk::acp::permission_option> m_permission_options;
 
   // Config options
   std::string m_selected_model;

@@ -181,11 +181,21 @@ system_factory_registry::get_systems (system_order order) const
 std::unique_ptr<sys::ecs_system>
 system_factory_registry::create (const std::string &name, rsc::scene &scene)
 {
-  if (std::unordered_map<std::string, system_descriptor>::iterator const it
+  if (std::unordered_map<std::string, system_descriptor>::iterator it
       = m_factories.find (name);
       it != m_factories.end ()) {
     return it->second.factory (scene);
   }
+
+  // The factory table is keyed by display name, but `find_system` also
+  // accepts the type name and the short name. Resolve through it so every name
+  // the lookup accepts can also be instantiated -- otherwise `sys add
+  // orb_anim_system` resolves a descriptor and then silently creates nothing.
+  if (const system_descriptor *desc = find_system (name);
+      desc != nullptr && desc->display_name != name) {
+    return create (desc->display_name, scene);
+  }
+
   return nullptr;
 }
 

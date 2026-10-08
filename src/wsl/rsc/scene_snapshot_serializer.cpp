@@ -51,87 +51,79 @@ namespace io
 namespace
 {
 
-/** Component-block format that carries an explicit document manifest. */
-constexpr uint32_t tagged_component_stream_version = 1;
+/** Version stamped on the scene format written by `save`. */
+constexpr uint32_t scene_document_format_version = 2;
 
-/**
- * Manifest document written immediately after the scene-data document.
- *
- * The manifest lives in its own document rather than in `scene_header`
- * because rfl treats plain struct fields as required: adding a field to
- * `scene_header` would make every previously saved scene fail to parse,
- * leaving the whole header (entity names, entities, systems) empty. A
- * separate document is simply absent from legacy files, which are then
- * recognized as untagged.
- */
-struct component_manifest
+/** Escapes \p text for use as a JSON string, quotes included. */
+std::string
+json_quote (std::string_view text)
 {
-  /** Discriminates the manifest from a component document. */
-  uint32_t version = tagged_component_stream_version;
-  /** Ordered world component type names present in the component block. */
-  std::vector<std::string> component_order;
-};
-
-/**
- * World components that existed when the untagged (v1) component-block
- * format was introduced.
- *
- * A v1 file contains exactly one document per component registered at the
- * time it was written, ordered by stable type id, and the documents carry no
- * type tag. Such a file can therefore only be replayed by consuming one
- * document per component *of that same set*: consuming a document for a
- * component added later shifts every following document and silently drops
- * the real data. Components introduced after v1 must never be added here --
- * new files record a manifest in `scene_header::component_order` instead.
- */
-constexpr std::array<std::string_view, 17> legacy_v1_world_components = {
-  "hierarchy",
-  "world_transform",
-  "transform",
-  "model_instance_3d",
-  "camera",
-  "camera_2d",
-  "point_light",
-  "spot_light",
-  "directional_light",
-  "rigid_body",
-  "area",
-  "character_body",
-  "audio",
-  "prefab_instance",
-  "sprite_2d",
-  "subviewport",
-  "transform_2d",
-};
-
-/**
- * Returns the trailing `short_name` of a fully qualified type name, with the
- * same trailing-artifact trimming that `comp::stable_type_id` applies, so the
- * comparison is stable across compilers.
- */
-std::string_view
-normalized_short_type_name (std::string_view type_name)
-{
-  std::size_t const separator = type_name.rfind ("::");
-  std::string_view name = separator == std::string_view::npos
-                              ? type_name
-                              : type_name.substr (separator + 2);
-  while (!name.empty ()
-         && (name.back () == ']' || name.back () == ' ' || name.back () == '\n'
-             || name.back () == '\r')) {
-    name.remove_suffix (1);
+  std::string out;
+  out.reserve (text.size () + 2);
+  out += '"';
+  for (const char c : text) {
+    switch (c) {
+    case '"':
+      out += "\\\"";
+      break;
+    case '\\':
+      out += "\\\\";
+      break;
+    case '\n':
+      out += "\\n";
+      break;
+    case '\r':
+      out += "\\r";
+      break;
+    case '\t':
+      out += "\\t";
+      break;
+    default:
+      if (static_cast<unsigned char> (c) < 0x20) {
+        static constexpr char digits[] = "0123456789abcdef";
+        out += "\\u00";
+        out += digits[(c >> 4) & 0x0f];
+        out += digits[c & 0x0f];
+      } else {
+        out += c;
+      }
+      break;
+    }
   }
-  return name;
+  out += '"';
+  return out;
 }
 
-/** Whether \p type_name belongs to the frozen v1 component set. */
-bool
-is_legacy_v1_component (std::string_view type_name)
+/**
+ * Serializes one component and returns its raw JSON text.
+ *
+ * Components without a serializer produce `null`, which is also how the loader
+ * spells "this build does not implement that component".
+ */
+std::string
+component_document (reg::component_registry &components,
+                    entt::registry &registry, entt::id_type type_id)
 {
-  std::string_view const name = normalized_short_type_name (type_name);
-  return std::find (legacy_v1_world_components.begin (),
-                    legacy_v1_world_components.end (), name)
-         != legacy_v1_world_components.end ();
+  serialize::json_writer component_writer;
+  if (components.save_world_component_json (component_writer, registry, type_id)
+      && !component_writer.json.empty ()) {
+    return std::move (component_writer.json);
+  }
+  return "null";
+}
+
+/** Appends `"key": <payload>` to an object body, comma-separated. */
+void
+append_member (std::string &object, bool &first, std::string_view key,
+               std::string_view payload)
+{
+  if (!first) {
+    object += ',';
+  }
+  first = false;
+  object += json_quote (key);
+  object += ':';
+  object += payload;
 }
 
 } // namespace
@@ -205,36 +197,38 @@ scene_snapshot_serializer::save (serialize::json_writer &writer) const
     data.entities.push_back (*it);
   }
 
-  // Collect the component list once: the manifest must describe exactly the
-  // documents that are written below, in the same order.
+  // Assemble a single JSON object. Keying each component by its type name means
+  // the file is valid JSON that any tool can read, and the loader no longer has
+  // to consume a positional document stream to stay aligned.
   const std::vector<const reg::component_registry::descriptor *>
       world_components
       = runtime_ctx->component_registry ().get_world_components (
           reg::world_component_order::type_id);
 
-  component_manifest manifest;
-  manifest.component_order.reserve (world_components.size ());
+  reg::component_registry &components = runtime_ctx->component_registry ();
+
+  std::string components_object;
+  bool first = true;
   for (const reg::component_registry::descriptor *desc : world_components) {
     if (desc == nullptr) {
       continue;
     }
-    manifest.component_order.push_back (desc->type_name);
-  }
-
-  writer.write (data);
-  writer.write (manifest);
-
-  for (const reg::component_registry::descriptor *desc : world_components) {
-    if (!desc) {
+    // Daslang components are type-erased: their payload is written as one
+    // block keyed by numeric type id, not one document per type.
+    if (desc->is_das_component) {
       continue;
     }
-    runtime_ctx->component_registry ().save_world_component_json (
-        writer, registry, desc->type_id);
+    append_member (components_object, first, desc->type_name,
+                   component_document (components, registry, desc->type_id));
   }
 
-  runtime_ctx->component_registry ().save_das_components_json (writer,
-                                                               registry);
+  serialize::json_writer das_writer;
+  components.save_das_components_json (das_writer, registry);
+  const std::string das_payload
+      = das_writer.json.empty () ? "[]" : das_writer.json;
 
+  std::string singletons_object;
+  bool first_singleton = true;
   for (const reg::singleton_registry::descriptor *desc :
        runtime_ctx->singleton_registry ().get_singleton_components (
            reg::singleton_component_order::type_id)) {
@@ -242,17 +236,55 @@ scene_snapshot_serializer::save (serialize::json_writer &writer) const
       continue;
     }
 
-    const bool has = desc && desc->contains ? desc->contains (registry) : false;
-    if (has && !data.header.is_prefab) {
-      runtime_ctx->singleton_registry ().save_singleton_json (writer, registry,
-                                                              desc->type_id);
+    reg::singleton_registry &singletons = runtime_ctx->singleton_registry ();
+    const bool has
+        = desc->is_das_singleton
+              ? singletons.das_singleton_contains (registry, desc->type_id)
+              : (desc->contains ? desc->contains (registry) : false);
+    if (!has || data.header.is_prefab) {
+      continue;
     }
+
+    if (desc->is_das_singleton) {
+      // Same `singletons` object, keyed by type name; the payload is a hex
+      // string because the value has no reflectable shape.
+      append_member (
+          singletons_object, first_singleton, desc->type_name,
+          "\"" + singletons.das_singleton_hex (registry, desc->type_id) + "\"");
+      continue;
+    }
+
+    serialize::json_writer singleton_writer;
+    singletons.save_singleton_json (singleton_writer, registry, desc->type_id);
+    append_member (singletons_object, first_singleton, desc->type_name,
+                   singleton_writer.json.empty () ? "null"
+                                                  : singleton_writer.json);
   }
+
+  std::string document;
+  document += '{';
+  // The top-level members need their own separator state: `first` above
+  // belongs to the per-component object, not to this one.
+  bool document_first = true;
+  append_member (document, document_first, "format_version",
+                 std::to_string (scene_document_format_version));
+  append_member (document, document_first, "header",
+                 wsl::serialize::json_write (data.header));
+  append_member (document, document_first, "entities",
+                 wsl::serialize::json_write (data.entities));
+  append_member (document, document_first, "components",
+                 '{' + components_object + '}');
+  append_member (document, document_first, "das_components", das_payload);
+  append_member (document, document_first, "singletons",
+                 '{' + singletons_object + '}');
+  document += '}';
+
+  writer.json = std::move (document);
 
   resource_manager::serialization_context::get () = nullptr;
 }
 
-void
+bool
 scene_snapshot_serializer::load (serialize::json_reader &reader)
 {
   resource_manager::serialization_context::get ()
@@ -268,8 +300,43 @@ scene_snapshot_serializer::load (serialize::json_reader &reader)
     std::vector<entt::entity> entities;
   };
 
+  const std::string document (reader.peek ());
+  const std::vector<json_document::member> members
+      = json_document::object_members (document);
+
+  // Reject the retired stream format outright. Its first document also carries
+  // "header" and "entities", so a partial parse would look like a successful
+  // load of an empty scene; bailing out is the honest outcome.
+  const json_document::member *format_member
+      = json_document::find (members, "format_version");
+  if (format_member == nullptr) {
+    wsl::log::rsc ()->error (
+        "Scene file is not in the current format: no top-level "
+        "\"format_version\" member. Re-save the scene with this engine "
+        "version.");
+    resource_manager::serialization_context::get () = nullptr;
+    return false;
+  }
+
+  uint32_t format_version = 0;
+  wsl::serialize::json_read (format_member->value, format_version);
+  if (format_version != scene_document_format_version) {
+    wsl::log::rsc ()->error (
+        "Unsupported scene format version {} (this engine writes {}).",
+        format_version, scene_document_format_version);
+    resource_manager::serialization_context::get () = nullptr;
+    return false;
+  }
+
   scene_data data;
-  reader.read (data);
+  if (const json_document::member *header_member
+      = json_document::find (members, "header")) {
+    wsl::serialize::json_read (header_member->value, data.header);
+  }
+  if (const json_document::member *entities_member
+      = json_document::find (members, "entities")) {
+    wsl::serialize::json_read (entities_member->value, data.entities);
+  }
 
   scene_header &header = data.header;
 
@@ -307,96 +374,85 @@ scene_snapshot_serializer::load (serialize::json_reader &reader)
 
   wsl::log::rsc ()->trace ("Loading components");
   {
+    // Each component is keyed by type name, so a component this build no longer
+    // registers is simply absent and the rest load unaffected.
     reg::component_registry &components = runtime_ctx->component_registry ();
 
-    // A tagged stream carries a manifest document right after the scene data.
-    // Legacy files have no such document, so the peeked text is probed first
-    // and the stream is only advanced when the manifest actually matched --
-    // `read` would consume the document even on a failed parse.
-    component_manifest manifest;
-    bool tagged = false;
-    {
-      std::string const probe (reader.peek ());
-      if (!probe.empty ()) {
-        component_manifest parsed;
-        std::string error;
-        if (wsl::serialize::json_read (probe, parsed, &error)
-            && parsed.version >= tagged_component_stream_version
-            && !parsed.component_order.empty ()) {
-          manifest = std::move (parsed);
-          reader.skip ();
-          tagged = true;
-        }
-      }
-    }
-
-    if (tagged) {
-      // The file lists its own components, so adding or removing a component
-      // in this build cannot shift the stream.
-      for (const std::string &name : manifest.component_order) {
+    const json_document::member *components_member
+        = json_document::find (members, "components");
+    if (components_member != nullptr) {
+      for (const json_document::member &member :
+           json_document::object_members (components_member->value)) {
         const reg::component_registry::descriptor *desc
-            = components.find_world_component (name);
-        if (desc == nullptr) {
-          // Component type is gone: consume its document so the remaining
-          // documents stay aligned.
-          if (!reader.skip ()) {
-            break;
-          }
+            = components.find_world_component (member.key);
+        if (desc == nullptr || desc->is_das_component) {
+          wsl::log::rsc ()->warn ("Unknown component in scene: {}", member.key);
+          continue;
+        }
+        if (member.value == "null") {
           continue;
         }
 
+        serialize::json_reader component_reader{ member.value };
         try {
-          components.load_world_component_json (reader, registry,
-                                                desc->type_id);
-        } catch (const std::exception &) {
-          // JSON: missing component data is expected for empty/new scenes.
-        }
-      }
-    } else {
-      // Legacy untagged stream: one document per v1 component, in the same
-      // type-id order the writer used. Components added after v1 must not
-      // consume a document here.
-      for (const reg::component_registry::descriptor *desc :
-           components.get_world_components (
-               reg::world_component_order::type_id)) {
-        if (desc == nullptr || !is_legacy_v1_component (desc->type_name)) {
-          continue;
-        }
-
-        try {
-          components.load_world_component_json (reader, registry,
+          components.load_world_component_json (component_reader, registry,
                                                 desc->type_id);
         } catch (const std::exception &) {
           // JSON: missing component data is expected for empty/new scenes.
         }
       }
     }
-  }
 
-  wsl::log::rsc ()->trace ("Loading das components");
-  try {
-    runtime_ctx->component_registry ().load_das_components_json (reader,
-                                                                 registry);
-  } catch (const std::exception &) {
-    // Missing das component data is expected
+    wsl::log::rsc ()->trace ("Loading das components");
+    if (const json_document::member *das_member
+        = json_document::find (members, "das_components")) {
+      serialize::json_reader das_reader{ das_member->value };
+      try {
+        components.load_das_components_json (das_reader, registry);
+      } catch (const std::exception &) {
+        // Missing das component data is expected
+      }
+    }
   }
-
-  wsl::log::rsc ()->trace ("Loading singletons");
   entt::registry &scene_registry = scene_ref.get_registry ();
-  for (const reg::singleton_registry::descriptor *desc :
-       runtime_ctx->singleton_registry ().get_singleton_components (
-           reg::singleton_component_order::type_id)) {
-    if (!desc || !desc->serialize_with_scene) {
-      continue;
-    }
 
-    try {
-      if (!header.is_prefab) {
-        runtime_ctx->singleton_registry ().load_singleton_json (
-            reader, scene_registry, desc->type_id);
+  // Singletons are keyed by type name for the same reason as components.
+  const json_document::member *singletons_member
+      = json_document::find (members, "singletons");
+  if (singletons_member != nullptr && !header.is_prefab) {
+    for (const json_document::member &member :
+         json_document::object_members (singletons_member->value)) {
+      const reg::singleton_registry::descriptor *desc
+          = runtime_ctx->singleton_registry ().find_singleton_component (
+              member.key);
+      if (desc == nullptr || !desc->serialize_with_scene
+          || member.value == "null") {
+        continue;
       }
-    } catch (const std::exception &) {
-      // JSON: missing singleton data is expected for empty/new scenes.
+
+      reg::singleton_registry &singletons = runtime_ctx->singleton_registry ();
+      if (desc->is_das_singleton) {
+        // Hex arrives as a JSON string; strip the quotes before decoding.
+        std::string_view hex = member.value;
+        if ((hex.size () >= 2) && (hex.front () == '"')
+            && (hex.back () == '"')) {
+          hex = hex.substr (1, hex.size () - 2);
+        }
+        if (!singletons.das_singleton_load_hex (scene_registry, desc->type_id,
+                                                hex)) {
+          wsl::log::rsc ()->warn ("Could not restore das singleton: {}",
+                                  member.key);
+        }
+        continue;
+      }
+
+      serialize::json_reader singleton_reader{ member.value };
+      try {
+        singletons.load_singleton_json (singleton_reader, scene_registry,
+                                        desc->type_id);
+      } catch (const std::exception &) {
+        // JSON: missing singleton data is expected for empty/new scenes.
+      }
     }
   }
 
@@ -434,13 +490,13 @@ scene_snapshot_serializer::load (serialize::json_reader &reader)
     wsl::log::rsc ()->warn (
         "scene_snapshot_serializer: loaded scene is missing its "
         "physics manager; skipping physics object recreation");
-    return;
+    return true;
   }
 
   if (runtime_ctx != nullptr && runtime_ctx->is_headless ()) {
     wsl::log::rsc ()->debug (
         "Headless mode, skipping physics object recreation");
-    return;
+    return true;
   }
 
   comp::singl::physics_manager &physics
@@ -530,6 +586,7 @@ scene_snapshot_serializer::load (serialize::json_reader &reader)
   scene_ref.init ();
 
   wsl::log::rsc ()->trace ("Scene load finished");
+  return true;
 }
 
 void
@@ -594,24 +651,16 @@ scene_snapshot_serializer::save_binary (serialize::binary_writer &writer) const
     data.entities.push_back (*it);
   }
 
-  const std::vector<const reg::component_registry::descriptor *>
-      world_components
-      = runtime_ctx->component_registry ().get_world_components (
-          reg::world_component_order::type_id);
-
-  component_manifest manifest;
-  manifest.component_order.reserve (world_components.size ());
-  for (const reg::component_registry::descriptor *desc : world_components) {
-    if (desc == nullptr) {
-      continue;
-    }
-    manifest.component_order.push_back (desc->type_name);
-  }
-
   writer.write (data);
-  writer.write (manifest);
 
-  for (const reg::component_registry::descriptor *desc : world_components) {
+  // The binary format keeps one msgpack document per component in registration
+  // order. It is only ever consumed in-process (save_to_binary_string ->
+  // load_from_binary_string), never from a file on disk, so unlike the JSON
+  // format there is no need to describe the layout or guard against a build
+  // that registers a different set of components.
+  for (const reg::component_registry::descriptor *desc :
+       runtime_ctx->component_registry ().get_world_components (
+           reg::world_component_order::type_id)) {
     if (!desc) {
       continue;
     }
@@ -639,7 +688,7 @@ scene_snapshot_serializer::save_binary (serialize::binary_writer &writer) const
   resource_manager::serialization_context::get () = nullptr;
 }
 
-void
+bool
 scene_snapshot_serializer::load_binary (serialize::binary_reader &reader)
 {
   resource_manager::serialization_context::get ()
@@ -656,7 +705,15 @@ scene_snapshot_serializer::load_binary (serialize::binary_reader &reader)
   };
 
   scene_data data;
-  reader.read (data);
+  if (!reader.read (data)) {
+    // Decoding used to be ignored here, so a payload in the wrong format
+    // (a JSON scene fed to this reader) became a nameless, entity-less scene
+    // that loaded "successfully". Report it instead.
+    wsl::log::rsc ()->error (
+        "Scene payload could not be decoded as a binary snapshot");
+    resource_manager::serialization_context::get () = nullptr;
+    return false;
+  }
 
   scene_header &header = data.header;
 
@@ -696,59 +753,20 @@ scene_snapshot_serializer::load_binary (serialize::binary_reader &reader)
   {
     reg::component_registry &components = runtime_ctx->component_registry ();
 
-    // Peek before consuming: a legacy stream has no manifest document, and
-    // `read` would consume the first component document even on failure.
-    component_manifest manifest;
-    bool tagged = false;
-    {
-      auto const [bytes, length] = reader.peek ();
-      if (bytes != nullptr && length > 0) {
-        serialize::binary_reader probe (bytes, length);
-        component_manifest parsed;
-        if (probe.read (parsed)
-            && parsed.version >= tagged_component_stream_version
-            && !parsed.component_order.empty ()) {
-          manifest = std::move (parsed);
-          reader.skip ();
-          tagged = true;
-        }
+    // Registration order, matching the writer above. The binary format is only
+    // ever consumed in-process, so both sides agree by construction.
+    for (const reg::component_registry::descriptor *desc :
+         components.get_world_components (
+             reg::world_component_order::type_id)) {
+      if (!desc) {
+        continue;
       }
-    }
 
-    if (tagged) {
-      for (const std::string &name : manifest.component_order) {
-        const reg::component_registry::descriptor *desc
-            = components.find_world_component (name);
-        if (desc == nullptr) {
-          if (!reader.skip ()) {
-            break;
-          }
-          continue;
-        }
-
-        try {
-          components.load_world_component_binary (reader, registry,
-                                                  desc->type_id);
-        } catch (const std::exception &) {
-          throw;
-        }
-      }
-    } else {
-      // Legacy untagged stream: only the frozen v1 component set has a
-      // document, in type-id order.
-      for (const reg::component_registry::descriptor *desc :
-           components.get_world_components (
-               reg::world_component_order::type_id)) {
-        if (desc == nullptr || !is_legacy_v1_component (desc->type_name)) {
-          continue;
-        }
-
-        try {
-          components.load_world_component_binary (reader, registry,
-                                                  desc->type_id);
-        } catch (const std::exception &) {
-          throw;
-        }
+      try {
+        components.load_world_component_binary (reader, registry,
+                                                desc->type_id);
+      } catch (const std::exception &) {
+        throw;
       }
     }
   }
@@ -814,13 +832,13 @@ scene_snapshot_serializer::load_binary (serialize::binary_reader &reader)
     wsl::log::rsc ()->warn (
         "scene_snapshot_serializer: loaded scene is missing its "
         "physics manager; skipping physics object recreation");
-    return;
+    return true;
   }
 
   if (runtime_ctx != nullptr && runtime_ctx->is_headless ()) {
     wsl::log::rsc ()->debug (
         "Headless mode, skipping physics object recreation");
-    return;
+    return true;
   }
 
   comp::singl::physics_manager &physics
@@ -910,6 +928,7 @@ scene_snapshot_serializer::load_binary (serialize::binary_reader &reader)
   scene_ref.init ();
 
   wsl::log::rsc ()->trace ("Scene load finished");
+  return true;
 }
 
 bool
@@ -940,8 +959,7 @@ scene_snapshot_serializer::load_binary (const std::string &path)
   std::vector<std::uint8_t> bytes (static_cast<size_t> (size));
   file.read (reinterpret_cast<char *> (bytes.data ()), size);
   serialize::binary_reader reader{ bytes };
-  load_binary (reader);
-  return true;
+  return load_binary (reader);
 }
 
 bool
@@ -971,8 +989,7 @@ scene_snapshot_serializer::load_json (const std::string &path)
   // for the whole load, so a temporary would dangle.
   const std::string content = ss.str ();
   serialize::json_reader reader{ content };
-  load (reader);
-  return true;
+  return load (reader);
 }
 
 bool
@@ -990,8 +1007,7 @@ scene_snapshot_serializer::load_from_binary_string (const std::string &in)
 {
   std::vector<std::uint8_t> bytes (in.begin (), in.end ());
   serialize::binary_reader reader{ bytes };
-  load_binary (reader);
-  return true;
+  return load_binary (reader);
 }
 
 } // namespace io

@@ -22,7 +22,7 @@ namespace
  *
  * Accepts an absolute path, a path relative to the project root, a path
  * relative to the project's scenes directory, a ``res://`` path, or a bare
- * scene name (with or without the ``.wscn.json`` suffix).
+ * scene name (with or without the ``.wscn`` suffix).
  *
  * :param proj: Project the scene belongs to.
  * :param scene_arg: Raw scene argument provided on the command line.
@@ -30,8 +30,7 @@ namespace
  *   when no candidate exists on disk.
  */
 std::optional<std::string>
-resolve_scene_path (const wsl::rsc::project &proj,
-                    const std::string &scene_arg)
+resolve_scene_path (const wsl::rsc::project &proj, const std::string &scene_arg)
 {
   namespace fs = std::filesystem;
   fs::path const root (proj.root_path);
@@ -45,8 +44,9 @@ resolve_scene_path (const wsl::rsc::project &proj,
   } else {
     candidates.push_back (root / scene_arg);
     candidates.push_back (scenes_dir / scene_arg);
-    candidates.push_back (root / (scene_arg + ".wscn.json"));
-    candidates.push_back (scenes_dir / (scene_arg + ".wscn.json"));
+    candidates.push_back (root / (scene_arg + wsl::rsc::scene_file::extension));
+    candidates.push_back (scenes_dir
+                          / (scene_arg + wsl::rsc::scene_file::extension));
   }
 
   for (const fs::path &candidate : candidates) {
@@ -89,10 +89,9 @@ editor_app::set_project_path (const std::string &path)
   // the REPL's `proj load` does.
   std::string manifest_path = path;
   if (std::filesystem::is_directory (path)) {
-    manifest_path
-        = (std::filesystem::path (path)
-           / wsl::rsc::project_loader::manifest_file)
-              .string ();
+    manifest_path = (std::filesystem::path (path)
+                     / wsl::rsc::project_loader::manifest_file)
+                        .string ();
   }
   return m_runtime_context->resource_manager ().load_project (manifest_path);
 }
@@ -139,8 +138,7 @@ editor_app::update_pending_scene ()
   if (state == wsl::rsc::scene_state::not_loaded) {
     // import_scene() already requested a load, so not_loaded here means the
     // load job failed.
-    wsl::log::editor ()->error ("Failed to load scene '{}'",
-                                *m_pending_scene);
+    wsl::log::editor ()->error ("Failed to load scene '{}'", *m_pending_scene);
     m_pending_scene.reset ();
     m_pending_scene_id.reset ();
     return;

@@ -58,6 +58,17 @@ struct sensor_event
 };
 
 /**
+ * One world-space debug line segment, backend-neutral like every other type
+ * in this boundary. `rgba` is 0xRRGGBB.
+ */
+struct debug_line
+{
+  vector3 a{};
+  vector3 b{};
+  std::uint32_t rgba = 0xFFFFFFFFU;
+};
+
+/**
  * Small Weasel-owned boundary for the Box3D C API.
  *
  * Box3D handles and headers intentionally do not appear in this interface.
@@ -91,6 +102,17 @@ public:
                            quaternion rotation);
   void add_force (body_handle body, vector3 force);
   void add_impulse (body_handle body, vector3 impulse);
+
+  /**
+   * Appends collider wireframes (and contact/joint geometry) to `out` via
+   * Box3D's `b3World_Draw` callbacks.
+   *
+   * Shapes are tessellated into line segments here because Box3D hands the
+   * raw shape to the callback instead of decomposing it. Box3D needs a
+   * `createDebugShape` hook in the world definition for shapes to be
+   * reported at all; the adapter installs one when the world is created.
+   */
+  void draw (std::vector<debug_line> &out);
 
 private:
   struct impl;

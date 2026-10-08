@@ -129,6 +129,11 @@ public:
    * :return: ``true`` if metadata was applied, otherwise ``false``.
    */
   bool load_cached_metadata (const rsc::project &project);
+  // Drop metadata-cache registrations so the next load takes the full-compile
+  // path. No-op once the module is fully loaded.
+  void clear_cached_metadata ();
+  void register_project_fs_roots (const std::filesystem::path &project_root,
+                                  const rsc::project &project);
 
   /**
    * Resets the in-memory load state and deletes the on-disk registration
@@ -241,6 +246,8 @@ public:
     int offset = 0;
     int size = 0;
     int kind = 0;
+    /** Initialiser bytes as lowercase hex; empty when not recorded. */
+    std::string default_hex;
   };
 
   struct cached_registration

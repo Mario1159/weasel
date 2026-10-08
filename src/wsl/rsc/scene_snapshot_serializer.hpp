@@ -94,9 +94,11 @@ public:
 
 private:
   void save (serialize::json_writer &writer) const;
-  void load (serialize::json_reader &reader);
+  /** Loads a scene document. Returns `false` when the file was rejected. */
+  bool load (serialize::json_reader &reader);
   void save_binary (serialize::binary_writer &writer) const;
-  void load_binary (serialize::binary_reader &reader);
+  /** Decodes a snapshot. Returns `false` when the payload is not one. */
+  bool load_binary (serialize::binary_reader &reader);
 };
 
 } // namespace io

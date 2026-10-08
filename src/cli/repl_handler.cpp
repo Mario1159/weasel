@@ -487,6 +487,225 @@ set_component_property (entt::meta_any &instance, entt::meta_data prop_data,
 
 // ── Value formatting for read-back ──
 
+// Read back a daslang component/singleton field from its raw bytes. Daslang
+// values have no C++ type to reflect over, so the value has to be decoded from
+// the stored block using the field kind recorded at registration. Templated
+// because the component and singleton registries declare the field struct
+// separately, but identically.
+template <typename DasField>
+static void
+format_das_field_value (std::ostringstream &output, const DasField &field,
+                        const uint8_t *field_ptr)
+{
+  if (field_ptr == nullptr) {
+    output << "<?>";
+    return;
+  }
+
+  switch (field.kind) {
+  case wsl::das::das_engine::field_type_kind::boolean: {
+    uint8_t v = 0;
+    std::memcpy (&v, field_ptr, std::min<int> (field.size, 1));
+    output << (v != 0 ? "true" : "false");
+    return;
+  }
+  case wsl::das::das_engine::field_type_kind::integer: {
+    if (field.size >= static_cast<int> (sizeof (int64_t))) {
+      int64_t v = 0;
+      std::memcpy (&v, field_ptr, sizeof (v));
+      output << v;
+      return;
+    }
+    if (field.size >= static_cast<int> (sizeof (int32_t))) {
+      int32_t v = 0;
+      std::memcpy (&v, field_ptr, sizeof (v));
+      output << v;
+      return;
+    }
+    if (field.size >= static_cast<int> (sizeof (int16_t))) {
+      int16_t v = 0;
+      std::memcpy (&v, field_ptr, sizeof (v));
+      output << v;
+      return;
+    }
+    int8_t v = 0;
+    std::memcpy (&v, field_ptr, 1);
+    output << static_cast<int> (v);
+    return;
+  }
+  case wsl::das::das_engine::field_type_kind::unsigned_integer: {
+    if (field.size >= static_cast<int> (sizeof (uint64_t))) {
+      uint64_t v = 0;
+      std::memcpy (&v, field_ptr, sizeof (v));
+      output << v;
+      return;
+    }
+    if (field.size >= static_cast<int> (sizeof (uint32_t))) {
+      uint32_t v = 0;
+      std::memcpy (&v, field_ptr, sizeof (v));
+      output << v;
+      return;
+    }
+    if (field.size >= static_cast<int> (sizeof (uint16_t))) {
+      uint16_t v = 0;
+      std::memcpy (&v, field_ptr, sizeof (v));
+      output << v;
+      return;
+    }
+    uint8_t v = 0;
+    std::memcpy (&v, field_ptr, 1);
+    output << static_cast<unsigned> (v);
+    return;
+  }
+  case wsl::das::das_engine::field_type_kind::floating: {
+    if (field.size >= static_cast<int> (sizeof (double))) {
+      double v = 0.0;
+      std::memcpy (&v, field_ptr, sizeof (v));
+      output << v;
+      return;
+    }
+    float v = 0.0F;
+    std::memcpy (&v, field_ptr, sizeof (v));
+    output << v;
+    return;
+  }
+  case wsl::das::das_engine::field_type_kind::string: {
+    // The in-memory layout of a daslang string (pointer plus length, or a
+    // header block) is not exposed through the field metadata, so do not guess
+    // at it -- decoding the wrong offset would print garbage.
+    output << "(string: " << field.type_name << ")";
+    return;
+  }
+  case wsl::das::das_engine::field_type_kind::unsupported:
+    break;
+  }
+
+  output << "(unsupported type: " << field.type_name << ")";
+}
+
+// Write a daslang component/singleton field from a CLI value string. The value
+// is parsed as JSON first so numbers, booleans and quoted strings all work;
+// anything else is a hard error rather than a silent no-op.
+
+// Whether `value` is representable in a signed field of `size` bytes.
+static bool
+value_fits_signed (int64_t value, int size)
+{
+  switch (size) {
+  case 1:
+    return value >= -128 && value <= 127;
+  case 2:
+    return value >= -32768 && value <= 32767;
+  case 4:
+    return value >= -2147483648LL && value <= 2147483647LL;
+  default:
+    return true;
+  }
+}
+
+// Whether `value` is representable in an unsigned field of `size` bytes.
+static bool
+value_fits_unsigned (uint64_t value, int size)
+{
+  switch (size) {
+  case 1:
+    return value <= 255ULL;
+  case 2:
+    return value <= 65535ULL;
+  case 4:
+    return value <= 4294967295ULL;
+  default:
+    return true;
+  }
+}
+
+template <typename DasField>
+static bool
+set_das_field_value (uint8_t *field_ptr, const DasField &field,
+                     const std::string &value_str, std::string &out_msg)
+{
+  if (field_ptr == nullptr) {
+    out_msg = "no storage";
+    return false;
+  }
+
+  nlohmann::json j;
+  try {
+    j = nlohmann::json::parse (value_str);
+  } catch (...) {
+    j = value_str;
+  }
+
+  switch (field.kind) {
+  case wsl::das::das_engine::field_type_kind::boolean: {
+    if (!j.is_boolean ()) {
+      out_msg = "expected true or false";
+      return false;
+    }
+    const uint8_t v = j.get<bool> () ? 1 : 0;
+    std::memcpy (field_ptr, &v, 1);
+    out_msg = j.get<bool> () ? "true" : "false";
+    return true;
+  }
+  case wsl::das::das_engine::field_type_kind::integer: {
+    if (!j.is_number_integer ()) {
+      out_msg = "expected an integer";
+      return false;
+    }
+    const int64_t v = j.get<int64_t> ();
+    // Reject rather than truncate: silently keeping the low bytes of an
+    // out-of-range value is how "set" ends up lying.
+    if (!value_fits_signed (v, field.size)) {
+      out_msg = "value does not fit the " + std::to_string (field.size)
+                + "-byte field";
+      return false;
+    }
+    std::memcpy (field_ptr, &v, std::min<std::size_t> (field.size, sizeof (v)));
+    out_msg = std::to_string (v);
+    return true;
+  }
+  case wsl::das::das_engine::field_type_kind::unsigned_integer: {
+    if (!j.is_number_unsigned ()) {
+      out_msg = "expected a non-negative integer";
+      return false;
+    }
+    const uint64_t v = j.get<uint64_t> ();
+    if (!value_fits_unsigned (v, field.size)) {
+      out_msg = "value does not fit the " + std::to_string (field.size)
+                + "-byte field";
+      return false;
+    }
+    std::memcpy (field_ptr, &v, std::min<std::size_t> (field.size, sizeof (v)));
+    out_msg = std::to_string (v);
+    return true;
+  }
+  case wsl::das::das_engine::field_type_kind::floating: {
+    if (!j.is_number ()) {
+      out_msg = "expected a number";
+      return false;
+    }
+    const double wide = j.get<double> ();
+    if (field.size >= static_cast<int> (sizeof (double))) {
+      std::memcpy (field_ptr, &wide, sizeof (wide));
+    } else {
+      const float narrow = static_cast<float> (wide);
+      std::memcpy (field_ptr, &narrow, sizeof (narrow));
+    }
+    out_msg = std::to_string (wide);
+    return true;
+  }
+  case wsl::das::das_engine::field_type_kind::string:
+    out_msg = "string fields cannot be set from the CLI (the daslang string "
+              "layout is not exposed)";
+    return false;
+  case wsl::das::das_engine::field_type_kind::unsupported:
+    break;
+  }
+
+  out_msg = "unsupported field type: " + field.type_name;
+  return false;
+}
+
 void
 format_meta_value (std::ostringstream &output, const entt::meta_any &field_inst,
                    const std::string &indent,
@@ -811,8 +1030,18 @@ command_executor::ensure_runtime (runtime_load_mode mode)
   if (!m_current_project)
     return true;
 
-  if (module.get_load_state () != load_state_t::unloaded)
-    return module.get_load_state () == load_state_t::loaded;
+  if (module.get_load_state () != load_state_t::unloaded) {
+    if (mode != runtime_load_mode::force_full) {
+      return module.get_load_state () == load_state_t::loaded;
+    }
+    // force_full asks for a real compile.  Bail out of the metadata-cache state
+    // so the slow path below actually runs; otherwise commands like
+    // `comp add` silently keep running with placeholder-only metadata.
+    if (module.get_load_state () == load_state_t::loaded) {
+      return true;
+    }
+    module.clear_cached_metadata ();
+  }
 
   // Only projects with runtime source directories can have a module.
   std::filesystem::path const root (m_current_project->root_path);
@@ -883,13 +1112,10 @@ command_executor::auto_save_scene (bool verbose)
   } else {
     std::filesystem::path scenes_dir (m_current_project->root_path);
     scenes_dir /= m_current_project->scenes_path;
-    std::string sname
-        = std::filesystem::path (scene->get_name ()).filename ().string ();
-    if (sname.ends_with (".wscn.json"))
-      sname.resize (sname.size () - 10);
-    else if (sname.ends_with (".json"))
-      sname.resize (sname.size () - 5);
-    save_path = (scenes_dir / (sname + ".wscn.json")).string ();
+    std::string sname = rsc::scene_file::strip_extension (
+        std::filesystem::path (scene->get_name ()).filename ().string ());
+    save_path
+        = (scenes_dir / rsc::scene_file::with_extension (sname)).string ();
   }
 
   std::error_code ec;
@@ -1125,7 +1351,7 @@ command_executor::cmd_proj (const std::vector<std::string> &tokens)
     }
     wsl::rsc::project proj;
     proj.name = tokens[3];
-    proj.root_path = std::filesystem::absolute (tokens[2]).string ();
+    proj.root_path = wsl::rsc::project_path::normalize (tokens[2]);
     proj.systems_path = "src/systems";
     proj.components_path = "src/components";
     proj.singletons_path = "src/singletons";
@@ -1339,14 +1565,15 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     if (!std::filesystem::exists (load_path)) {
       std::filesystem::path scenes_dir (m_current_project->root_path);
       scenes_dir /= m_current_project->scenes_path;
-      std::string candidate
-          = (scenes_dir / (load_path + ".wscn.json")).string ();
-      if (std::filesystem::exists (candidate)) {
-        load_path = candidate;
-      } else {
-        candidate = (scenes_dir / load_path).string ();
+      // Try the exact path, then the same name with the scene extension,
+      // then the bare name (which may already carry an extension).
+      for (const std::string &candidate :
+           { (scenes_dir / rsc::scene_file::with_extension (load_path))
+                 .string (),
+             (scenes_dir / load_path).string () }) {
         if (std::filesystem::exists (candidate)) {
           load_path = candidate;
+          break;
         }
       }
     }
@@ -1360,9 +1587,9 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
     // Ensure runtime component types are registered before loading
     ensure_runtime (runtime_load_mode::force_full);
 
-    // Derive scene name from the path basename (strip .wscn.json / .json)
-    std::string scene_name
-        = std::filesystem::path (load_path).stem ().stem ().string ();
+    // Derive the scene name from the path basename (strip the extension)
+    std::string scene_name = rsc::scene_file::strip_extension (
+        std::filesystem::path (load_path).filename ().string ());
 
     try {
       auto &scene = m_rtc.scene_manager ().create_scene (scene_name, true);
@@ -1411,48 +1638,36 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       //   1. The path the scene was loaded from (keeps edits in place).
       //   2. <root>/<scenes_path>/<default_scene_path> when the active scene
       //      name matches the default scene's stem.
-      //   3. <root>/<scenes_path>/<scene_name>.wscn.json as a last resort.
+      //   3. <root>/<scenes_path>/<scene_name>.wscn as a last resort.
       if (m_current_project && !m_active_scene_source_path.empty ()) {
         path = m_active_scene_source_path;
       } else if (m_current_project) {
         std::filesystem::path scenes_dir (m_current_project->root_path);
         scenes_dir /= m_current_project->scenes_path;
-        std::string sname
-            = std::filesystem::path (scene->get_name ()).filename ().string ();
-        if (sname.ends_with (".wscn.json"))
-          sname.resize (sname.size () - 10);
-        else if (sname.ends_with (".json"))
-          sname.resize (sname.size () - 5);
+        std::string sname = rsc::scene_file::strip_extension (
+            std::filesystem::path (scene->get_name ()).filename ().string ());
         bool matches_default = false;
         if (!m_current_project->default_scene_path.empty ()) {
-          std::string def_stem
-              = std::filesystem::path (m_current_project->default_scene_path)
-                    .filename ()
-                    .string ();
-          if (def_stem.ends_with (".wscn.json"))
-            def_stem.resize (def_stem.size () - 10);
-          else if (def_stem.ends_with (".json"))
-            def_stem.resize (def_stem.size () - 5);
-          matches_default = (def_stem == sname);
+          matches_default = (rsc::scene_file::strip_extension (
+                                 std::filesystem::path (
+                                     m_current_project->default_scene_path)
+                                     .filename ()
+                                     .string ())
+                             == sname);
         }
-        if (matches_default
-            && !m_current_project->default_scene_path.empty ()) {
+        if (matches_default) {
           path
               = (scenes_dir
                  / std::filesystem::path (m_current_project->default_scene_path)
                        .filename ())
                     .string ();
         } else {
-          path = (scenes_dir / (sname + ".wscn.json")).string ();
+          path = (scenes_dir / rsc::scene_file::with_extension (sname))
+                     .string ();
         }
       } else {
-        std::string sname
-            = std::filesystem::path (scene->get_name ()).filename ().string ();
-        if (sname.ends_with (".wscn.json"))
-          sname.resize (sname.size () - 10);
-        else if (sname.ends_with (".json"))
-          sname.resize (sname.size () - 5);
-        path = sname + ".wscn.json";
+        path = rsc::scene_file::with_extension (
+            std::filesystem::path (scene->get_name ()).filename ().string ());
       }
     }
     wsl::rsc::io::scene_snapshot_serializer serializer (&m_rtc, *scene);
@@ -1547,6 +1762,19 @@ command_executor::cmd_scene (const std::vector<std::string> &tokens)
       }
       if (count > 0) {
         m_output << "  - " << desc->display_name << ": " << count << "\n";
+      }
+    }
+    // Daslang components live outside entt storage, so the count above is
+    // always 0 for them.
+    for (const auto *desc : components) {
+      if (desc == nullptr || !desc->is_das_component) {
+        continue;
+      }
+      const auto *pool
+          = m_rtc.component_registry ().das_component_pool (reg, desc->type_id);
+      if (pool != nullptr && !pool->entries.empty ()) {
+        m_output << "  - " << desc->display_name << ": "
+                 << pool->entries.size () << "\n";
       }
     }
   }
@@ -1787,13 +2015,52 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
         }
       }
     }
+
+    // Daslang components are not in entt storage, so the loop above never sees
+    // them. Without this pass `comp add <das component>` looks like a no-op:
+    // the write succeeds but no listing mentions it.
+    auto &component_registry = m_rtc.component_registry ();
+    for (const auto *desc : component_registry.get_world_components ()) {
+      if (desc == nullptr || !desc->is_das_component) {
+        continue;
+      }
+      if (!component_registry.das_component_contains (scene->get_registry (),
+                                                      desc->type_id, e)) {
+        continue;
+      }
+      write_registered_entry (m_output, *desc);
+      const uint8_t *data = component_registry.das_component_data (
+          scene->get_registry (), desc->type_id, e);
+      if (desc->das_fields.empty ()) {
+        m_output << "    (no fields)\n";
+        continue;
+      }
+      for (const auto &field : desc->das_fields) {
+        m_output << "    " << field.name << " = ";
+        format_das_field_value (
+            m_output, field, data != nullptr ? data + field.offset : nullptr);
+        m_output << " (" << field.type_name << ")\n";
+      }
+    }
   } else if (action == "add") {
     if (tokens.size () < 4)
       return;
     ensure_runtime (runtime_load_mode::force_full);
+    auto &component_registry = m_rtc.component_registry ();
     const auto *descriptor
-        = m_rtc.component_registry ().find_world_component (tokens[3]);
-    if (descriptor && descriptor->emplace_default) {
+        = component_registry.find_world_component (tokens[3]);
+    if (descriptor && descriptor->is_das_component) {
+      // Daslang components live in a type-erased storage, so their descriptor
+      // callbacks are null; use the dedicated helpers.
+      if (component_registry.das_component_add (scene->get_registry (),
+                                                descriptor->type_id, e)) {
+        m_output << "Added " << tokens[3] << " to " << tokens[2] << "\n";
+        auto_save_scene ();
+      } else {
+        m_output << "Failed to add " << tokens[3] << " to " << tokens[2]
+                 << " (already has it or entity invalid)\n";
+      }
+    } else if (descriptor && descriptor->emplace_default) {
       if (descriptor->emplace_default (scene->get_registry (), e)) {
         m_output << "Added " << tokens[3] << " to " << tokens[2] << "\n";
         auto_save_scene ();
@@ -1808,9 +2075,19 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     if (tokens.size () < 4)
       return;
     ensure_runtime (runtime_load_mode::force_full);
+    auto &component_registry = m_rtc.component_registry ();
     const auto *descriptor
-        = m_rtc.component_registry ().find_world_component (tokens[3]);
-    if (descriptor && descriptor->remove) {
+        = component_registry.find_world_component (tokens[3]);
+    if (descriptor && descriptor->is_das_component) {
+      if (component_registry.das_component_remove (scene->get_registry (),
+                                                   descriptor->type_id, e)) {
+        m_output << "Removed " << tokens[3] << " from " << tokens[2] << "\n";
+        auto_save_scene ();
+      } else {
+        m_output << "Failed to remove " << tokens[3] << " from " << tokens[2]
+                 << "\n";
+      }
+    } else if (descriptor && descriptor->remove) {
       if (descriptor->remove (scene->get_registry (), e)) {
         m_output << "Removed " << tokens[3] << " from " << tokens[2] << "\n";
         auto_save_scene ();
@@ -1836,15 +2113,66 @@ command_executor::cmd_comp (const std::vector<std::string> &tokens)
     }
 
     entt::meta_type meta = entt::resolve (descriptor->type_id);
-    if (!meta) {
-      m_output << "No reflection metadata for " << tokens[3] << "\n";
-      return;
-    }
-
+    auto &component_registry = m_rtc.component_registry ();
     auto &registry = scene->get_registry ();
 
     if (!registry.valid (e)) {
       m_output << "Invalid entity: " << tokens[2] << "\n";
+      return;
+    }
+
+    // A daslang component has no entt reflection, so the property name is
+    // matched against its recorded field layout instead.
+    if (descriptor->is_das_component) {
+      if (!component_registry.das_component_contains (registry,
+                                                      descriptor->type_id, e)) {
+        m_output << "Entity " << tokens[2] << " does not have component "
+                 << tokens[3] << "\n";
+        return;
+      }
+      const std::string &field_name = tokens[4];
+      const std::vector<wsl::reg::component_registry::descriptor::das_field>
+          &das_fields = descriptor->das_fields;
+      const auto field = std::find_if (
+          das_fields.begin (), das_fields.end (),
+          [&field_name] (
+              const wsl::reg::component_registry::descriptor::das_field &f) {
+            return f.name == field_name;
+          });
+      if (field == das_fields.end ()) {
+        m_output << "Unknown field: " << field_name << "\n";
+        if (!das_fields.empty ()) {
+          m_output << "  Fields: ";
+          for (std::size_t i = 0; i < das_fields.size (); ++i) {
+            m_output << (i != 0 ? ", " : "") << das_fields[i].name;
+          }
+          m_output << "\n";
+        }
+        return;
+      }
+      uint8_t *das_ptr = component_registry.das_component_data (
+          registry, descriptor->type_id, e);
+      if (das_ptr == nullptr) {
+        m_output << "Could not locate component data for " << tokens[3]
+                 << " on entity " << tokens[2] << "\n";
+        return;
+      }
+
+      std::string set_msg;
+      if (!set_das_field_value (das_ptr + field->offset, *field, tokens[5],
+                                set_msg)) {
+        m_output << "Failed to set " << tokens[3] << "." << field->name << ": "
+                 << set_msg << "\n";
+        return;
+      }
+      m_output << "Set " << tokens[3] << "." << field->name << " = "
+               << tokens[5] << " (" << set_msg << ")\n";
+      auto_save_scene ();
+      return;
+    }
+
+    if (!meta) {
+      m_output << "No reflection metadata for " << tokens[3] << "\n";
       return;
     }
 
@@ -1991,7 +2319,7 @@ void
 command_executor::cmd_singl (const std::vector<std::string> &tokens)
 {
   if (tokens.size () < 2) {
-    m_output << "Usage: singl <ls|info|add|create|set> [args...]\n";
+    m_output << "Usage: singl <ls|info|add|rm|create|set> [args...]\n";
     return;
   }
   const std::string &action = tokens[1];
@@ -2001,6 +2329,7 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     ensure_runtime (runtime_load_mode::auto_mode);
     auto singletons = m_rtc.singleton_registry ().get_singleton_components ();
     auto *scene = get_active_scene ();
+    auto &singleton_registry = m_rtc.singleton_registry ();
     m_output << "Singleton Components (" << singletons.size () << "):\n";
     for (const auto *s : singletons) {
       if (!s)
@@ -2010,14 +2339,43 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
         m_output << " [" << s->type_name << "]";
       if (s->core)
         m_output << " [core]";
-      if (scene && s->contains && s->contains (scene->get_registry ()))
-        m_output << " [present]";
-      else if (scene)
-        m_output << " [absent]";
+
+      // A daslang singleton carries no `contains` callback, so testing the
+      // descriptor alone reported every user singleton as [absent] and made
+      // `singl create` followed by `singl add` look like a dead end.
+      const bool present
+          = (scene != nullptr)
+            && (s->is_das_singleton
+                    ? singleton_registry.das_singleton_contains (
+                          scene->get_registry (), s->type_id)
+                    : (s->contains ? s->contains (scene->get_registry ())
+                                   : false));
+      if (scene)
+        m_output << (present ? " [present]" : " [absent]");
       m_output << "\n";
 
-      if (scene && s->contains && s->get_ptr
-          && s->contains (scene->get_registry ())) {
+      if (!scene || !present) {
+        continue;
+      }
+
+      if (s->is_das_singleton) {
+        const uint8_t *das_ptr = singleton_registry.das_singleton_data (
+            scene->get_registry (), s->type_id);
+        if (s->das_fields.empty ()) {
+          m_output << "    (no fields)\n";
+          continue;
+        }
+        for (const auto &field : s->das_fields) {
+          m_output << "    " << field.name << " = ";
+          format_das_field_value (m_output, field,
+                                  das_ptr != nullptr ? das_ptr + field.offset
+                                                     : nullptr);
+          m_output << " (" << field.type_name << ")\n";
+        }
+        continue;
+      }
+
+      if (s->contains && s->get_ptr) {
         void *ptr = s->get_ptr (scene->get_registry ());
         if (ptr) {
           entt::meta_type meta = entt::resolve (s->type_id);
@@ -2047,6 +2405,17 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     if (!meta) {
       m_output << "No reflection metadata for " << descriptor->display_name
                << "\n";
+      if (descriptor->is_das_singleton) {
+        m_output << "Daslang singleton fields ("
+                 << descriptor->das_fields.size () << "):\n";
+        for (const auto &field : descriptor->das_fields) {
+          m_output << " - " << field.name << " (" << field.type_name
+                   << ") at offset " << field.offset << " size " << field.size
+                   << "\n";
+        }
+        m_output << "CLI: singl set " << descriptor->type_name
+                 << " <field> <value>\n";
+      }
       return;
     }
     format_component_info (m_output, meta, "");
@@ -2065,15 +2434,39 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       return;
     }
     ensure_runtime (runtime_load_mode::force_full);
-    const auto *desc
-        = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
+    auto &singleton_registry = m_rtc.singleton_registry ();
+    const auto *desc = singleton_registry.find_singleton_component (tokens[2]);
     if (!desc) {
       m_output << "Unknown singleton component: " << tokens[2] << "\n";
       return;
     }
+    if (desc->is_das_singleton) {
+      if (!desc->das_struct_size > 0) {
+        m_output << "Layout for " << desc->display_name
+                 << " is unknown; run 'script reload'.\n";
+        return;
+      }
+      if (singleton_registry.das_singleton_contains (scene->get_registry (),
+                                                     desc->type_id)) {
+        m_output << desc->display_name << " is already present.\n";
+        return;
+      }
+      if (singleton_registry.das_singleton_add (scene->get_registry (),
+                                                desc->type_id)) {
+        m_output << "Added singleton: " << desc->display_name << "\n";
+        auto_save_scene ();
+      } else {
+        m_output << "Failed to add singleton: " << desc->display_name << "\n";
+      }
+      return;
+    }
     if (!desc->emplace_default) {
+      // Not "bound": a runtime-registered daslang singleton without a cached
+      // layout simply has no constructor available.
       m_output << desc->display_name
-               << " is a bound singleton and cannot be added via CLI.\n";
+               << " cannot be added: it is a bound singleton"
+               << (desc->runtime_registered ? " or its layout is unknown" : "")
+               << ".\n";
       return;
     }
     if (desc->contains (scene->get_registry ())) {
@@ -2083,6 +2476,52 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
     desc->emplace_default (scene->get_registry ());
     m_output << "Added singleton: " << desc->display_name << "\n";
     auto_save_scene ();
+    return;
+  }
+
+  // ── singl rm <name> ──
+  if (action == "rm") {
+    if (tokens.size () < 3) {
+      m_output << "Usage: singl rm <name>\n";
+      return;
+    }
+    auto *scene = get_active_scene ();
+    if (!scene) {
+      m_output << "No active scene.\n";
+      return;
+    }
+    ensure_runtime (runtime_load_mode::force_full);
+    auto &singleton_registry = m_rtc.singleton_registry ();
+    const auto *desc = singleton_registry.find_singleton_component (tokens[2]);
+    if (!desc) {
+      m_output << "Unknown singleton component: " << tokens[2] << "\n";
+      return;
+    }
+    if (desc->is_das_singleton) {
+      if (singleton_registry.das_singleton_remove (scene->get_registry (),
+                                                   desc->type_id)) {
+        m_output << "Removed singleton: " << desc->display_name << "\n";
+        auto_save_scene ();
+      } else {
+        m_output << desc->display_name << " is not present.\n";
+      }
+      return;
+    }
+    if (desc->core) {
+      m_output << desc->display_name
+               << " is a core engine singleton and cannot be removed.\n";
+      return;
+    }
+    if (!desc->remove) {
+      m_output << desc->display_name << " cannot be removed via CLI.\n";
+      return;
+    }
+    if (desc->remove (scene->get_registry ())) {
+      m_output << "Removed singleton: " << desc->display_name << "\n";
+      auto_save_scene ();
+    } else {
+      m_output << desc->display_name << " is not present.\n";
+    }
     return;
   }
 
@@ -2161,10 +2600,58 @@ command_executor::cmd_singl (const std::vector<std::string> &tokens)
       return;
     }
     ensure_runtime (runtime_load_mode::force_full);
-    const auto *desc
-        = m_rtc.singleton_registry ().find_singleton_component (tokens[2]);
+    auto &singleton_registry = m_rtc.singleton_registry ();
+    const auto *desc = singleton_registry.find_singleton_component (tokens[2]);
     if (!desc) {
       m_output << "Unknown singleton component: " << tokens[2] << "\n";
+      return;
+    }
+    if (desc->is_das_singleton) {
+      // Daslang singletons have no entt reflection, so the property name is
+      // matched against the recorded field layout instead.
+      if (!singleton_registry.das_singleton_contains (scene->get_registry (),
+                                                      desc->type_id)) {
+        m_output << desc->display_name
+                 << " is not present in the active scene.\n";
+        return;
+      }
+      const std::string &field_name = tokens[3];
+      const std::vector<wsl::reg::singleton_registry::descriptor::das_field>
+          &das_fields = desc->das_fields;
+      const auto field = std::find_if (
+          das_fields.begin (), das_fields.end (),
+          [&field_name] (
+              const wsl::reg::singleton_registry::descriptor::das_field &f) {
+            return f.name == field_name;
+          });
+      if (field == das_fields.end ()) {
+        m_output << "Unknown field: " << field_name << "\n";
+        if (!das_fields.empty ()) {
+          m_output << "  Fields: ";
+          for (std::size_t i = 0; i < das_fields.size (); ++i) {
+            m_output << (i != 0 ? ", " : "") << das_fields[i].name;
+          }
+          m_output << "\n";
+        }
+        return;
+      }
+      uint8_t *das_ptr = singleton_registry.das_singleton_data (
+          scene->get_registry (), desc->type_id);
+      if (das_ptr == nullptr) {
+        m_output << "Failed to access singleton data.\n";
+        return;
+      }
+
+      std::string set_msg;
+      if (!set_das_field_value (das_ptr + field->offset, *field, tokens[4],
+                                set_msg)) {
+        m_output << "Failed to set " << desc->display_name << "." << field->name
+                 << ": " << set_msg << "\n";
+        return;
+      }
+      m_output << "Set " << desc->display_name << "." << field->name << " = "
+               << tokens[4] << " (" << set_msg << ")\n";
+      auto_save_scene ();
       return;
     }
     if (!desc->contains (scene->get_registry ())) {
@@ -2547,7 +3034,13 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
     }
 
     std::ostringstream das_text;
-    das_text << "options gen2\nrequire weasel_ecs\nrequire weasel_helpers\n\n"
+    // The `module` declaration is mandatory, not cosmetic: a runtime source
+    // without one ends up attached to daScript's shared global module, and
+    // destroying its Program at process exit corrupts the heap ("free():
+    // invalid size", "double free or corruption", "munmap_chunk(): invalid
+    // pointer", exit 134).  comp create / singl create already emit it.
+    das_text << "options gen2\nmodule " << file_stem << "\n"
+             << "require weasel_ecs\nrequire weasel_helpers\n\n"
              << "class System : EcsSystem {\n"
              << "    def override on_update(dt : float) : void {\n"
              << "    }\n"
@@ -2594,6 +3087,12 @@ command_executor::cmd_sys (const std::vector<std::string> &tokens)
         scene->add_system_instance (std::move (sys));
         m_output << "Added system '" << sys_name << "' to active scene.\n";
         auto_save_scene ();
+      } else {
+        // Never fail silently: an empty response here reads as success.
+        m_output << "Found system '" << sys_name
+                 << "' but could not instantiate it.\n"
+                 << "  Its script probably failed to compile -- run 'script "
+                    "reload' for the compiler error.\n";
       }
     }
   } else {
@@ -3232,24 +3731,18 @@ command_executor::cmd_prefab (const std::vector<std::string> &tokens)
       } else if (m_current_project) {
         std::filesystem::path scenes_dir (m_current_project->root_path);
         scenes_dir /= m_current_project->scenes_path;
-        std::string sname
-            = std::filesystem::path (scene->get_name ()).filename ().string ();
-        if (sname.ends_with (".prefab"))
+        std::string sname = rsc::scene_file::strip_extension (
+            std::filesystem::path (scene->get_name ()).filename ().string ());
+        if (sname.ends_with (".prefab")) {
           sname.resize (sname.size () - 7);
-        else if (sname.ends_with (".wscn.json"))
-          sname.resize (sname.size () - 10);
-        else if (sname.ends_with (".json"))
-          sname.resize (sname.size () - 5);
+        }
         path = (scenes_dir / (sname + ".prefab")).string ();
       } else {
-        std::string sname
-            = std::filesystem::path (scene->get_name ()).filename ().string ();
-        if (sname.ends_with (".prefab"))
+        std::string sname = rsc::scene_file::strip_extension (
+            std::filesystem::path (scene->get_name ()).filename ().string ());
+        if (sname.ends_with (".prefab")) {
           sname.resize (sname.size () - 7);
-        else if (sname.ends_with (".wscn.json"))
-          sname.resize (sname.size () - 10);
-        else if (sname.ends_with (".json"))
-          sname.resize (sname.size () - 5);
+        }
         path = sname + ".prefab";
       }
     }
@@ -3449,14 +3942,20 @@ command_executor::cmd_script (const std::vector<std::string> &tokens)
       m_output << "Error: Load a project first.\n";
       return;
     }
-    // Mirror the editor's "Reload Scripts" button: async compile + poll on
-    // this thread. One-shot callers block until the outcome is known.
+    // Compile synchronously on the calling thread.  The CLI blocks until the
+    // outcome is known anyway, and the engine's other CLI entry points
+    // (command_executor::ensure_runtime) already use the synchronous
+    // compile_and_load().  Going through compile_and_load_async() spun up a
+    // std::async worker thread which built its own thread-local daScript
+    // modules; Module_WeaselApi / Module_Ecs were therefore constructed twice
+    // in one process and the second construction clobbered the global module
+    // pointers, which produced glibc heap corruption ("double free or
+    // corruption (!prev)", "munmap_chunk(): invalid pointer", exit 134/139)
+    // during Module::shutdownInternal() at process exit.
     wsl::log::cli ()->info ("Reloading runtime scripts...");
     m_output << "Reloading runtime scripts...\n";
-    module.compile_and_load_async (*m_current_project);
-    while (module.is_reloading ())
-      std::this_thread::sleep_for (std::chrono::milliseconds (50));
-    module.poll_async_reload (); // harvest the finished future
+    module.compile_and_load (*m_current_project);
+    module.finalize_load ();
     if (!module.has_loaded_module ()) {
       m_output << "Reload FAILED:\n  " << module.last_error () << "\n"
                << "  Run 'script status' for details.\n";
@@ -3597,6 +4096,17 @@ command_executor::cmd_play (const std::vector<std::string> &tokens)
   // because they require a GPU/render-window context.
   entt::registry &registry = scene->get_registry ();
   auto &core = m_rtc.core_systems ();
+
+  // ecs_system::update() is a no-op while the system is inactive, and the
+  // headless runtime never enters "playing" state, so scene activation has to
+  // be forced here. Without this `play` reported N frames simulated while none
+  // of the attached systems (nor the core Transform/Physics systems) ever ran.
+  auto activate_system = [&registry] (sys::ecs_system *system) {
+    if (system != nullptr) {
+      system->set_active (true, &registry);
+    }
+  };
+
   const auto step = [&] () {
     if (core) {
       for (sys::ecs_system *sys : core->to_vec ()) {
@@ -3617,8 +4127,39 @@ command_executor::cmd_play (const std::vector<std::string> &tokens)
     }
   };
 
+  if (core) {
+    for (sys::ecs_system *sys : core->to_vec ()) {
+      if (sys == nullptr)
+        continue;
+      const std::string name = sys->get_name ();
+      if (name == "Transform" || name == "Physics") {
+        activate_system (sys);
+      }
+    }
+  }
+  for (auto &sys : scene->systems) {
+    activate_system (sys.get ());
+  }
+
   for (int f = 0; f < frames; ++f) {
     step ();
+  }
+
+  // Leave the runtime in the state we found it in.
+  for (auto &sys : scene->systems) {
+    if (sys) {
+      sys->set_active (false, &registry);
+    }
+  }
+  if (core) {
+    for (sys::ecs_system *sys : core->to_vec ()) {
+      if (sys == nullptr)
+        continue;
+      const std::string name = sys->get_name ();
+      if (name == "Transform" || name == "Physics") {
+        sys->set_active (false, &registry);
+      }
+    }
   }
 
   const double simulated = frames * dt;
@@ -3728,7 +4269,7 @@ command_executor::cmd_help ()
       << "Scene:\n"
       << "  scene new <name>           Create a new empty scene and set it "
          "active\n"
-      << "  scene load <path|name>     Load a .wscn.json scene (path or scene "
+      << "  scene load <path|name>     Load a .wscn scene (path or scene "
          "name)\n"
       << "  scene save [path]          Save active scene (default: project "
          "scenes dir)\n"

@@ -138,8 +138,10 @@ describe_fields (std::ostringstream &oss, const entt::meta_type &meta,
       display_name = mi->display_name;
       description = mi->description;
     }
-    if (display_name.empty ())
+    const bool named = !display_name.empty ();
+    if (!named) {
       display_name = "<unnamed>";
+    }
 
     // Derive the meta property name from the display name convention:
     // lowercase, spaces→underscores, strip trailing punctuation.
@@ -165,17 +167,40 @@ describe_fields (std::ostringstream &oss, const entt::meta_type &meta,
     }
     oss << "\n";
 
-    // Show CLI example for "comp set" property name usage
-    oss << indent << "    CLI: comp set <id> <type> " << prop_name
-        << " <value>\n";
+    // Show CLI example for "comp set" property name usage. Only meaningful
+    // when the field actually has a name -- "<unnamed>" is not a valid
+    // property argument.
+    if (named) {
+      oss << indent << "    CLI: comp set <id> <type> " << prop_name
+          << " <value>\n";
+    } else {
+      oss << indent
+          << "    No display name registered, so no usable comp set property "
+             "path.\n";
+    }
 
     // Enum type: list possible values
     if (field_type && field_type.is_enum ()) {
-      oss << indent
-          << "    Values (comp set matches against the bracketed label):\n";
-      for (auto &&[ev_id, ev_data] : field_type.data ()) {
-        (void)ev_id;
-        oss << indent << "      " << format_enum_value (ev_data) << "\n";
+      // An enum with no registered names is a known shape (bitmask enums that
+      // were never added to entt). Emitting the header with nothing under it
+      // reads as "there are no values", which is worse than saying so.
+      bool has_names = false;
+      for (auto &&[_, __] : field_type.data ()) {
+        (void)_;
+        (void)__;
+        has_names = true;
+        break;
+      }
+      if (has_names) {
+        oss << indent
+            << "    Values (comp set matches against the bracketed label):\n";
+        for (auto &&[ev_id, ev_data] : field_type.data ()) {
+          (void)ev_id;
+          oss << indent << "      " << format_enum_value (ev_data) << "\n";
+        }
+      } else {
+        oss << indent
+            << "    No named values registered; pass the raw integer.\n";
       }
       continue;
     }
