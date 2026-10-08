@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup xmake
-        uses: xmake-io/xmake-action@v1
+        uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
 
