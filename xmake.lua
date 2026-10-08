@@ -461,7 +461,13 @@ package_end()
 -- Core engine deps — versions mirror CMakeLists.txt where possible
 add_requires("entt 3.15.0")
 add_requires("glm")
-add_requires("spdlog v1.17.0", {configs = {shared = true}})
+-- NB: xmake-repo defaults spdlog to header_only=true (a no-op `shared`
+-- build that emits no library), but wsl compiles everything with
+-- SPDLOG_COMPILED_LIB, which needs real compiled symbols to link against.
+-- header_only=false builds libspdlog (static: no runtime .so to ship in
+-- CI artifacts); fmt_external=true avoids duplicate fmt symbols between
+-- spdlog's bundled fmt and our own `fmt` package (single fmt from libfmt).
+add_requires("spdlog v1.17.0", {configs = {header_only = false, fmt_external = true}})
 add_requires("fmt")
 add_requires("rapidjson 2025.02.05", {configs = {cmake = false}})
 add_requires("reflect-cpp v0.25.0", {configs = {yyjson = true, msgpack = true}})
