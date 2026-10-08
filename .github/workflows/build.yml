@@ -81,6 +81,14 @@ jobs:
       - name: Test
         run: xmake run -g tests
 
+      - name: Dump failed package logs
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== failed package logs ==="
+          find "${HOME}/.xmake" \( -path '*.failed/logs/*' -o -path '*.failed/*' \) \( -name '*.txt' -o -name '*.log' \) -exec sh -c 'echo "===== $1 ====="; tail -n 120 "$1"' _ {} \; 2>/dev/null || true
+          echo "=== end ==="
+
       - name: Collect artifacts (Linux / macOS)
         if: matrix.name != 'windows'
         shell: bash
