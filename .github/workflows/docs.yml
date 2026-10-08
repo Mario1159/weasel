@@ -24,11 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup xmake
-        uses: xmake-io/github-action-setup-xmake@v1
-        with:
-          xmake-version: latest
-
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
@@ -45,6 +40,11 @@ jobs:
             makepkg -si --noconfirm &&
             yay -S --noconfirm python-sphinx-hawkmoth
           "
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
 
       - name: Configure
         run: xmake f -y

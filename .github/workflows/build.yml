@@ -27,19 +27,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup xmake
-        uses: xmake-io/github-action-setup-xmake@v1
-        with:
-          xmake-version: latest
-
-      - name: Cache xmake packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.xmake
-          key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua') }}
-          restore-keys: |
-            ${{ runner.os }}-xmake-
-
       - name: Install dependencies (Linux)
         if: matrix.name == 'linux'
         run: |
@@ -67,6 +54,19 @@ jobs:
         run: |
           brew update
           brew install llvm python node cmake ninja pkg-config
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Cache xmake packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.xmake
+          key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua') }}
+          restore-keys: |
+            ${{ runner.os }}-xmake-
 
       - name: Configure
         run: xmake f -y --toolchain=clang
