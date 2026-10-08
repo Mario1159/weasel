@@ -987,6 +987,9 @@ target("compile_shaders")
 -- ---------------------------------------------------------------------------
 target("docs")
     set_kind("phony")
+    -- Docs require sphinx + hawkmoth (only installed in the docs CI job),
+    -- so never build them as part of a plain `xmake build`.
+    set_default(false)
     on_build(function (target)
         import("lib.detect.find_tool")
         local projectdir = os.projectdir()

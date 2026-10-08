@@ -52,7 +52,7 @@ jobs:
         run: xmake f -y
 
       - name: Build docs
-        run: xmake build --target docs
+        run: xmake build docs
 
       - name: Dump failed package logs
         if: failure()
