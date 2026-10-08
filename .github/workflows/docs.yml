@@ -59,7 +59,12 @@ jobs:
         shell: bash
         run: |
           echo "=== failed package logs ==="
-          find "${HOME}/.xmake" \( -path '*.failed/logs/*' -o -path '*.failed/*' \) \( -name '*.txt' -o -name '*.log' \) -exec sh -c 'echo "===== $1 ====="; tail -n 120 "$1"' _ {} \; 2>/dev/null || true
+          find "${HOME}/.xmake" \( -path '*.failed/logs/*' -o -path '*.failed/*' \) \( -name '*.txt' -o -name '*.log' \) -print 2>/dev/null | while IFS= read -r f; do
+            echo "===== $f (error lines) ====="
+            grep -i -E "error|failed|undefined|killed|out of memory|cannot|no such|not found" "$f" | head -n 40 || true
+            echo "----- $f (tail) -----"
+            tail -n 80 "$f"
+          done
           echo "=== end ==="
 
       - name: Upload artifact

@@ -279,9 +279,22 @@ package("daslang")
         io.replace(common, "-fno-rtti", "-frtti", {plain = true})
         assert(io.readfile(common):find("-frtti", 1, true),
                "daslang: failed to patch CMakeCommon.txt for RTTI")
+        -- daslang turns warnings into errors on every target
+        -- (DAS_APPLY_STRICT_WARNINGS adds -Werror). The GCC-only
+        -- -Werror=<group> downgrades below are rejected outright by
+        -- clang ("unknown warning option", fatal under -Werror), so
+        -- strip -Werror instead: compiler-agnostic and future-proof.
+        io.replace(common, "-Wnon-virtual-dtor;-Werror", "-Wnon-virtual-dtor", {plain = true})
+        assert(not io.readfile(common):find("-Wnon-virtual-dtor;-Werror", 1, true),
+               "daslang: failed to strip -Werror from CMakeCommon.txt")
         local configs = {}
         table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
-        table.insert(configs, "-DCMAKE_CXX_FLAGS=-Wno-error=deprecated-declarations -Wno-error=uninitialized -Wno-error=stringop-overflow -Wno-error=array-bounds")
+        -- NB: -Wstringop-overflow is GCC-only; passing it as -Werror= to
+        -- clang is itself a (fatal) unknown-warning error, so it is
+        -- deliberately omitted. The remaining groups exist on both GCC
+        -- and clang; they only matter if some other target re-adds
+        -- -Werror, since the macro-level -Werror is stripped above.
+        table.insert(configs, "-DCMAKE_CXX_FLAGS=-Wno-error=deprecated-declarations -Wno-error=uninitialized -Wno-error=array-bounds")
         table.insert(configs, "-DBUILD_TESTING=OFF")
         table.insert(configs, "-DDAS_UNIT_TEST_DISABLED=ON")
         table.insert(configs, "-DDAS_GLFW_DISABLED=ON")
