@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
+    env:
+      XMAKE_ROOT: y
 
     steps:
       - name: Checkout
