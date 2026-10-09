@@ -307,6 +307,9 @@ namespace wsl::das::das_signal
 void install ();
 void restore ();
 void ensure_sigstack ();
-// jmp_buf is platform-specific; caller owns the storage.
-extern thread_local sigjmp_buf *tls_jmp;
+// Must be jmp_buf (not sigjmp_buf) to match das::Context::throwBuf, which
+// callers assign from the same buffer. glibc types them identically, but
+// on macOS/BSD they are distinct, incompatibly-sized types. Caller owns
+// the storage.
+extern thread_local jmp_buf *tls_jmp;
 } // namespace wsl::das::das_signal

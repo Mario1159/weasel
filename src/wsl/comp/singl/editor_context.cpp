@@ -32,7 +32,14 @@
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 #include <string>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 
 #include "wsl/gfx/imgui_renderer_interface.hpp"
 #include <imgui.h>
@@ -58,12 +65,20 @@ editor_context::editor_context (wsl::comp::singl::runtime_context &runtime_ctx)
         std::filesystem::path (current_path) / "share/weasel/compiled_shaders");
 
     if (!has_dev_resources && !has_packaged_resources) {
+#ifdef _WIN32
+      char exe_buf[MAX_PATH];
+      const DWORD exe_len = GetModuleFileNameA (nullptr, exe_buf, MAX_PATH);
+      if (exe_len != 0 && exe_len < MAX_PATH) {
+        exe_buf[exe_len] = '\0';
+        std::filesystem::path const exe_path (exe_buf);
+#else
       char exe_buf[PATH_MAX];
       ssize_t const len
           = readlink ("/proc/self/exe", exe_buf, sizeof (exe_buf) - 1);
       if (len != -1) {
         exe_buf[len] = '\0';
         std::filesystem::path const exe_path (exe_buf);
+#endif
         std::filesystem::path const prefix
             = exe_path.parent_path ().parent_path ();
         if (std::filesystem::exists (prefix

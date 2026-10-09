@@ -420,7 +420,58 @@ package("imguizmo")
     end)
 package_end()
 
--- RmlUi (Mario1159/RmlUi) — custom fork with SDL3 GPU renderer backend
+-- rapidjson override: upstream xmake-repo pins the install check to
+-- c++11, which MSVC 14.44+ STL rejects (deduced `auto` returns need
+-- C++14; cl offers no C++11 mode at all). rapidjson itself is plain
+-- C++11-compatible code and works on Windows — only the recipe's check
+-- standard is wrong. Checking as c++17 is strictly stronger and valid
+-- on every toolchain. (Same project-shadows-repo mechanism as the
+-- imguizmo override above.)
+package("rapidjson")
+    set_kind("library", {headeronly = true})
+    set_homepage("https://github.com/Tencent/rapidjson")
+    set_description("RapidJSON is a JSON parser and generator for C++.")
+    set_license("MIT")
+    add_urls("https://github.com/Tencent/rapidjson/archive/refs/tags/$(version).zip",
+             "https://github.com/Tencent/rapidjson.git", {submodules = false})
+    add_versions("2025.02.05", "24b5e7a8b27f42fa16b96fc70aade9106cf7102f")
+    add_configs("cmake", {description = "Use cmake build system", default = true, type = "boolean"})
+    on_load(function (package)
+        if package:config("cmake") then
+            package:add("deps", "cmake")
+        end
+        if package:is_plat("windows") and package:is_arch("arm.*") then
+            package:add("defines", "RAPIDJSON_ENDIAN=RAPIDJSON_LITTLEENDIAN")
+        end
+    end)
+    on_install(function (package)
+        if package:config("cmake") then
+            local configs = {
+                "-DRAPIDJSON_BUILD_DOC=OFF",
+                "-DRAPIDJSON_BUILD_EXAMPLES=OFF",
+                "-DRAPIDJSON_BUILD_TESTS=OFF",
+            }
+            table.insert(configs, "-DCMAKE_BUILD_TYPE=" .. (package:is_debug() and "Debug" or "Release"))
+            import("package.tools.cmake").install(package, configs)
+        else
+            os.cp("include/*", package:installdir("include"))
+        end
+    end)
+    on_test(function (package)
+        assert(package:check_cxxsnippets({test = [[
+            void test()
+            {
+                const char* json = "{\"project\":\"rapidjson\",\"stars\":10}";
+                rapidjson::Document d;
+                d.Parse(json);
+
+                rapidjson::StringBuffer buffer;
+                rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+                d.Accept(writer);
+            }
+        ]]}, {configs = {languages = "c++17"}, includes = { "rapidjson/document.h", "rapidjson/stringbuffer.h", "rapidjson/writer.h"} }))
+    end)
+package_end()
 package("rmlui")
     set_kind("library")
     set_homepage("https://github.com/Mario1159/RmlUi")
@@ -706,8 +757,12 @@ target("wsl")
     add_packages("imviewguizmo", {optional = true})
     add_packages("imguicolortextedit", {optional = true})
 
-    -- link system libs
-    add_syslinks("dl", "pthread")
+    -- link system libs (AF_UNIX sockets need ws2_32 on Windows)
+    if is_plat("windows") then
+        add_syslinks("ws2_32")
+    else
+        add_syslinks("dl", "pthread")
+    end
 
     -- RmlUi backend sources — compile them as part of wsl
     -- They live in the rmlui package's Backends dir (cached source, not installdir)
@@ -1045,7 +1100,11 @@ target("weasel")
         add_includedirs("cmake/renderdoc")
     end
     add_cxxflags("-Wall", "-Wextra", "-Wpedantic", "-rdynamic")
-    add_syslinks("dl", "pthread")
+    if is_plat("windows") then
+        add_syslinks("ws2_32")
+    else
+        add_syslinks("dl", "pthread")
+    end
     add_deps("compile_shaders")
     -- install rules
     set_installdir("$(bindir)")
@@ -1090,6 +1149,9 @@ target("weasel-cli")
     add_packages("cli11", "reflect-cpp")
     add_includedirs("src")
     add_cxxflags("-Wall", "-Wextra", "-Wpedantic")
+    if is_plat("windows") then
+        add_syslinks("ws2_32")
+    end
     add_installfiles("$(builddir)/$(arch)/$(mode)/weasel-cli", {prefixdir = "bin"})
 
 -- ---------------------------------------------------------------------------
@@ -1114,6 +1176,9 @@ target("weasel-mcp-server")
     add_packages("cpp-mcp", {optional = true})
     add_includedirs("src")
     add_cxxflags("-Wall", "-Wextra", "-Wpedantic")
+    if is_plat("windows") then
+        add_syslinks("ws2_32")
+    end
     add_installfiles("$(builddir)/$(arch)/$(mode)/weasel-mcp-server", {prefixdir = "bin"})
 
 -- ---------------------------------------------------------------------------

@@ -22,10 +22,28 @@ command_protocol::hash_project_path (const std::string &path)
 }
 
 std::string
+command_protocol::socket_dir ()
+{
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  fs::path dir = fs::temp_directory_path (ec);
+  if (ec) {
+#ifdef _WIN32
+    dir = ".";
+#else
+    dir = "/tmp";
+#endif
+  }
+  return dir.string ();
+}
+
+std::string
 command_protocol::socket_path (const std::string &project_path)
 {
+  namespace fs = std::filesystem;
   std::string hash = hash_project_path (project_path);
-  return std::string (SOCKET_DIR) + "/" + SOCKET_PREFIX + hash + SOCKET_SUFFIX;
+  return (fs::path (socket_dir ()) / (SOCKET_PREFIX + hash + SOCKET_SUFFIX))
+      .string ();
 }
 
 std::vector<std::string>
@@ -38,13 +56,18 @@ command_protocol::discover_editor_sockets ()
 
   std::vector<std::string> sockets;
   std::error_code ec;
-  for (const auto &entry : fs::directory_iterator (SOCKET_DIR, ec)) {
+  const std::string dir = socket_dir ();
+  for (const auto &entry : fs::directory_iterator (dir, ec)) {
     if (ec) {
       break;
     }
+#ifndef _WIN32
+    // Windows AF_UNIX socket files do not report file_type::socket, so
+    // there we rely on the name pattern alone; connect() validates.
     if (!entry.is_socket (ec) || ec) {
       continue;
     }
+#endif
 
     const std::string name = entry.path ().filename ().string ();
     if (name.size () <= prefix_len + suffix_len) {
@@ -58,7 +81,7 @@ command_protocol::discover_editor_sockets ()
       continue;
     }
 
-    sockets.push_back ((fs::path (SOCKET_DIR) / name).string ());
+    sockets.push_back ((fs::path (dir) / name).string ());
   }
 
   std::sort (sockets.begin (), sockets.end ());

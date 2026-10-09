@@ -250,12 +250,15 @@ ensure_thread_das_environment (TextPrinter &tout,
 namespace wsl::das::das_signal
 {
 
-thread_local sigjmp_buf *tls_jmp = nullptr;
-thread_local struct sigaction tls_prev_segv{};
+thread_local jmp_buf *tls_jmp = nullptr;
 thread_local bool tls_installed = false;
+#ifndef _WIN32
+thread_local struct sigaction tls_prev_segv{};
 thread_local ::std::vector<char> tls_sigstack;
 thread_local bool tls_sigstack_ready = false;
+#endif
 
+#ifndef _WIN32
 void
 ensure_sigstack ()
 {
@@ -311,6 +314,25 @@ restore ()
   sigaction (SIGSEGV, &tls_prev_segv, nullptr);
   tls_installed = false;
 }
+#else
+// Windows has no POSIX signals or alternate stacks: recovery still works
+// through daslang's own throwBuf longjmp, only the SIGSEGV catcher is
+// unavailable (an unhandled access violation crashes as usual).
+void
+ensure_sigstack ()
+{
+}
+
+void
+install ()
+{
+}
+
+void
+restore ()
+{
+}
+#endif
 
 } // namespace wsl::das::das_signal
 
@@ -1613,7 +1635,7 @@ ensure_sigstack ()
 {
 }
 
-thread_local sigjmp_buf *tls_jmp = nullptr;
+thread_local jmp_buf *tls_jmp = nullptr;
 
 } // namespace wsl::das::das_signal
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wsl/net/socket_compat.hpp"
 #include <string>
 #include <optional>
 
@@ -42,17 +43,18 @@ public:
   }
 
 private:
-  int m_socket_fd = -1;
+  wsl::net::socket_handle m_socket_fd = wsl::net::invalid_socket;
   bool m_connected = false;
   std::string m_socket_path;
   std::string m_project_path;
 
-  int open_socket (const std::string &socket_path);
-  bool handshake (int fd, const std::string &normalized_project_path);
+  wsl::net::socket_handle open_socket (const std::string &socket_path);
+  bool handshake (wsl::net::socket_handle fd,
+                  const std::string &normalized_project_path);
 
-  std::string read_line (int fd);
+  std::string read_line (wsl::net::socket_handle fd);
   std::string read_response ();
-  bool write_line (int fd, const std::string &line);
+  bool write_line (wsl::net::socket_handle fd, const std::string &line);
 };
 
 } // namespace wsl::cli

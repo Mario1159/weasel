@@ -43,7 +43,7 @@ struct model_instance_3d;
 
 namespace gfx
 {
-class model_3d;
+struct model_3d;
 }
 
 namespace sys

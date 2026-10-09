@@ -2,12 +2,12 @@
 #include "editor_app.hpp"
 #include "wsl/log/log.hpp"
 #include "wsl/net/command_protocol.hpp"
-#include <sys/socket.h>
-#include <sys/un.h>
+#include "wsl/net/socket_compat.hpp"
 #include <tracy/Tracy.hpp>
-#include <unistd.h>
 #include <cstring>
+#include <filesystem>
 #include <sstream>
+#include <system_error>
 #include <thread>
 
 namespace editor
@@ -26,28 +26,13 @@ public:
     m_socket_path = wsl::net::command_protocol::socket_path (project_path);
 
     // Remove existing socket file if present
-    unlink (m_socket_path.c_str ());
+    std::error_code ec;
+    std::filesystem::remove (m_socket_path, ec);
 
-    m_server_fd = socket (AF_UNIX, SOCK_STREAM, 0);
-    if (m_server_fd < 0) {
-      wsl::log::net ()->error ("Failed to create editor socket: {}",
-                               strerror (errno));
-      return false;
-    }
-
-    sockaddr_un addr{};
-    addr.sun_family = AF_UNIX;
-    strncpy (addr.sun_path, m_socket_path.c_str (), sizeof (addr.sun_path) - 1);
-
-    if (bind (m_server_fd, (struct sockaddr *)&addr, sizeof (addr)) < 0) {
-      wsl::log::net ()->error ("Failed to bind socket {}: {}", m_socket_path,
-                               strerror (errno));
-      cleanup ();
-      return false;
-    }
-
-    if (listen (m_server_fd, 5) < 0) {
-      wsl::log::net ()->error ("Failed to listen: {}", strerror (errno));
+    m_server_fd = wsl::net::socket_open_server (m_socket_path);
+    if (m_server_fd == wsl::net::invalid_socket) {
+      wsl::log::net ()->error ("Failed to create editor socket {}: {}",
+                               m_socket_path, wsl::net::socket_error_string ());
       cleanup ();
       return false;
     }
@@ -65,36 +50,27 @@ public:
   bool
   is_running () const
   {
-    return m_server_fd >= 0;
+    return m_server_fd != wsl::net::invalid_socket;
   }
 
   void
   poll (editor_app *editor_app)
   {
-    if (m_server_fd < 0) {
+    if (m_server_fd == wsl::net::invalid_socket) {
       return;
     }
 
     // Non-blocking accept
-    fd_set fds;
-    FD_ZERO (&fds);
-    FD_SET (m_server_fd, &fds);
-
-    timeval timeout{};
-    timeout.tv_usec = 100; // 100 microsecond timeout for non-blocking
-
-    if (select (m_server_fd + 1, &fds, nullptr, nullptr, &timeout) > 0) {
-      int client_fd = accept (m_server_fd, nullptr, nullptr);
-      if (client_fd >= 0) {
-        std::thread (&impl::handle_client, this, client_fd, editor_app)
-            .detach ();
-      }
+    wsl::net::socket_handle client_fd
+        = wsl::net::socket_try_accept (m_server_fd);
+    if (client_fd != wsl::net::invalid_socket) {
+      std::thread (&impl::handle_client, this, client_fd, editor_app).detach ();
     }
   }
 
 private:
   void
-  handle_client (int client_fd, editor_app *editor_app)
+  handle_client (wsl::net::socket_handle client_fd, editor_app *editor_app)
   {
     // Label this thread for Tracy. A new detached std::thread is
     // spawned per accepted client connection, so without a name
@@ -116,7 +92,7 @@ private:
             client_fd,
             std::string (wsl::net::command_protocol::HANDSHAKE_NO_PROJECT)
                 + "\n");
-        close (client_fd);
+        wsl::net::close_socket (client_fd);
         return;
       }
 
@@ -135,7 +111,7 @@ private:
       write_all (client_fd, response + "\n");
       wsl::log::net ()->warn ("Project mismatch - client: {}, server: {}",
                               client_project, m_project_path);
-      close (client_fd);
+      wsl::net::close_socket (client_fd);
       return;
     }
 
@@ -165,15 +141,15 @@ private:
       write_all (client_fd, "\n");
     }
 
-    close (client_fd);
+    wsl::net::close_socket (client_fd);
   }
 
   std::string
-  read_line (int fd)
+  read_line (wsl::net::socket_handle fd)
   {
     std::string result;
     char buffer[1];
-    while (read (fd, buffer, 1) > 0) {
+    while (wsl::net::socket_recv (fd, buffer, 1) > 0) {
       if (buffer[0] == '\n')
         break;
       result += buffer[0];
@@ -182,11 +158,12 @@ private:
   }
 
   bool
-  write_all (int fd, const std::string &data)
+  write_all (wsl::net::socket_handle fd, const std::string &data)
   {
     size_t total = 0;
     while (total < data.size ()) {
-      ssize_t written = write (fd, data.c_str () + total, data.size () - total);
+      long written = wsl::net::socket_send (fd, data.c_str () + total,
+                                            data.size () - total);
       if (written < 0)
         return false;
       total += written;
@@ -197,17 +174,18 @@ private:
   void
   cleanup ()
   {
-    if (m_server_fd >= 0) {
-      close (m_server_fd);
-      m_server_fd = -1;
+    if (m_server_fd != wsl::net::invalid_socket) {
+      wsl::net::close_socket (m_server_fd);
+      m_server_fd = wsl::net::invalid_socket;
     }
     if (!m_socket_path.empty ()) {
-      unlink (m_socket_path.c_str ());
+      std::error_code ec;
+      std::filesystem::remove (m_socket_path, ec);
       m_socket_path.clear ();
     }
   }
 
-  int m_server_fd = -1;
+  wsl::net::socket_handle m_server_fd = wsl::net::invalid_socket;
   std::string m_project_path;
   std::string m_socket_path;
 };

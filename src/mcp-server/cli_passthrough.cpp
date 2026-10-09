@@ -5,10 +5,17 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#ifndef _WIN32
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#else
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 #include <chrono>
 #include <filesystem>
@@ -21,6 +28,7 @@ namespace wsl::mcp_server
 namespace
 {
 
+#ifndef _WIN32
 // Single non-blocking-friendly read; empty string signals EOF/EAGAIN end.
 std::string
 read_chunk (int fd)
@@ -31,6 +39,7 @@ read_chunk (int fd)
     return {};
   return std::string (buffer, static_cast<std::size_t> (n));
 }
+#endif
 
 // Shell-style tokenizer: whitespace splits, quotes group, backslash escapes.
 std::vector<std::string>
@@ -75,6 +84,22 @@ tokenize_command (const std::string &line)
   return tokens;
 }
 
+// Wrap a value in double quotes when it contains whitespace so the downstream
+// command tokenizer (and Windows CreateProcess parsing) keeps it as a single
+// argument. Empty strings are left empty (the caller decides whether to emit
+// the token at all).
+std::string
+quote_if_needed (const std::string &value)
+{
+  if (value.empty ())
+    return value;
+  for (char c : value) {
+    if (std::isspace (static_cast<unsigned char> (c)))
+      return "\"" + value + "\"";
+  }
+  return value;
+}
+
 } // namespace
 
 std::string
@@ -86,6 +111,19 @@ resolve_weasel_cli ()
   }
 
   std::error_code ec;
+#ifdef _WIN32
+  // Sibling weasel-cli.exe next to this binary.
+  char self_buf[MAX_PATH];
+  const DWORD self_len = GetModuleFileNameA (nullptr, self_buf, MAX_PATH);
+  if (self_len != 0 && self_len < MAX_PATH) {
+    const std::filesystem::path candidate
+        = std::filesystem::path (std::string (self_buf, self_len))
+              .parent_path ()
+          / "weasel-cli.exe";
+    if (std::filesystem::exists (candidate, ec))
+      return candidate.string ();
+  }
+#else
   std::filesystem::path self
       = std::filesystem::read_symlink ("/proc/self/exe", ec);
   if (!ec) {
@@ -93,9 +131,139 @@ resolve_weasel_cli ()
     if (std::filesystem::exists (candidate, ec))
       return candidate.string ();
   }
+#endif
 
   return "weasel-cli";
 }
+
+#ifdef _WIN32
+// File-local runners (defined below): execute_cli_command builds the argv,
+// then dispatches to the platform implementation.
+static mcp::json run_windows (std::vector<std::string> full_argv,
+                              int timeout_seconds);
+
+// Drain whatever the child has already written without blocking.
+static void
+drain_pipe_available (HANDLE pipe, std::string &out)
+{
+  DWORD available = 0;
+  while (PeekNamedPipe (pipe, nullptr, 0, nullptr, &available, nullptr)
+         && available != 0) {
+    char buffer[4096];
+    DWORD n = 0;
+    if (!ReadFile (pipe, buffer, sizeof (buffer), &n, nullptr) || n == 0) {
+      break;
+    }
+    out.append (buffer, n);
+  }
+}
+
+// Read until EOF (child exited and closed its ends).
+static void
+drain_pipe_eof (HANDLE pipe, std::string &out)
+{
+  char buffer[4096];
+  for (;;) {
+    DWORD n = 0;
+    if (!ReadFile (pipe, buffer, sizeof (buffer), &n, nullptr) || n == 0) {
+      break;
+    }
+    out.append (buffer, n);
+  }
+}
+
+static mcp::json
+run_windows (std::vector<std::string> full_argv, int timeout_seconds)
+{
+  // CreateProcess takes a single mutable command line.
+  std::string cmdline;
+  for (const std::string &arg : full_argv) {
+    if (!cmdline.empty ()) {
+      cmdline += ' ';
+    }
+    cmdline += quote_if_needed (arg);
+  }
+
+  SECURITY_ATTRIBUTES sa{};
+  sa.nLength = sizeof (sa);
+  sa.bInheritHandle = TRUE;
+  HANDLE out_read = nullptr, out_write = nullptr;
+  HANDLE err_read = nullptr, err_write = nullptr;
+  if (!CreatePipe (&out_read, &out_write, &sa, 0)
+      || !CreatePipe (&err_read, &err_write, &sa, 0)) {
+    throw mcp::mcp_exception (mcp::error_code::internal_error,
+                              "CreatePipe() failed");
+  }
+  SetHandleInformation (out_read, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation (err_read, HANDLE_FLAG_INHERIT, 0);
+
+  STARTUPINFOA si{};
+  si.cb = sizeof (si);
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdOutput = out_write;
+  si.hStdError = err_write;
+  si.hStdInput = GetStdHandle (STD_INPUT_HANDLE);
+  PROCESS_INFORMATION pi{};
+  if (!CreateProcessA (nullptr, cmdline.data (), nullptr, nullptr, TRUE,
+                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+    CloseHandle (out_read);
+    CloseHandle (out_write);
+    CloseHandle (err_read);
+    CloseHandle (err_write);
+    throw mcp::mcp_exception (mcp::error_code::internal_error,
+                              "CreateProcess() failed");
+  }
+  CloseHandle (out_write);
+  CloseHandle (err_write);
+
+  const auto deadline = std::chrono::steady_clock::now ()
+                        + std::chrono::seconds (timeout_seconds);
+  bool timed_out = false;
+  std::string stdout_data;
+  std::string stderr_data;
+  bool exited = false;
+  while (!exited) {
+    if (std::chrono::steady_clock::now () > deadline) {
+      timed_out = true;
+      TerminateProcess (pi.hProcess, 1);
+      break;
+    }
+    const DWORD w = WaitForSingleObject (pi.hProcess, 200);
+    drain_pipe_available (out_read, stdout_data);
+    drain_pipe_available (err_read, stderr_data);
+    if (w == WAIT_OBJECT_0) {
+      exited = true;
+    }
+  }
+  if (exited) {
+    // Process is gone and our write ends are closed, so reads hit EOF.
+    WaitForSingleObject (pi.hProcess, INFINITE);
+    drain_pipe_eof (out_read, stdout_data);
+    drain_pipe_eof (err_read, stderr_data);
+  } else {
+    // Timed out and killed: collect whatever was already written.
+    drain_pipe_available (out_read, stdout_data);
+    drain_pipe_available (err_read, stderr_data);
+  }
+
+  DWORD exit_code = 1;
+  GetExitCodeProcess (pi.hProcess, &exit_code);
+  CloseHandle (pi.hProcess);
+  CloseHandle (pi.hThread);
+  CloseHandle (out_read);
+  CloseHandle (err_read);
+
+  mcp::json result{
+    { "command", full_argv },   { "exit_code", static_cast<int> (exit_code) },
+    { "stdout", stdout_data },  { "stderr", stderr_data },
+    { "timed_out", timed_out },
+  };
+  return result;
+}
+#else
+static mcp::json run_posix (std::vector<std::string> full_argv,
+                            int timeout_seconds);
+#endif
 
 mcp::json
 execute_cli_command (const std::string &command, bool attach,
@@ -123,6 +291,17 @@ execute_cli_command (const std::string &command, bool attach,
   for (const std::string &arg : argv)
     full_argv.push_back (arg);
 
+#ifdef _WIN32
+  return run_windows (full_argv, timeout_seconds);
+#else
+  return run_posix (full_argv, timeout_seconds);
+#endif
+}
+
+#ifndef _WIN32
+static mcp::json
+run_posix (std::vector<std::string> full_argv, int timeout_seconds)
+{
   // Build the C argv (first entry is the program path).
   std::vector<char *> c_argv;
   c_argv.reserve (full_argv.size () + 1);
@@ -215,6 +394,7 @@ execute_cli_command (const std::string &command, bool attach,
   };
   return result;
 }
+#endif
 
 mcp::json
 handle_script_reload (const mcp::json & /*params*/)
@@ -260,21 +440,6 @@ handle_run_cli_command (const mcp::json &params)
 
 namespace
 {
-
-// Wrap a value in double quotes when it contains whitespace so the downstream
-// command tokenizer keeps it as a single argument. Empty strings are left
-// empty (the caller decides whether to emit the token at all).
-std::string
-quote_if_needed (const std::string &value)
-{
-  if (value.empty ())
-    return value;
-  for (char c : value) {
-    if (std::isspace (static_cast<unsigned char> (c)))
-      return "\"" + value + "\"";
-  }
-  return value;
-}
 
 // Shared gate for the structured mutation tools: require confirm=true.
 void

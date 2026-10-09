@@ -14,11 +14,11 @@ jobs:
           - os: ubuntu-latest
             name: linux
             container: archlinux:latest
-          # Pinned to windows-2022: windows-latest now ships VS2026 (MSVC
-          # 14.51), whose headers unconditionally require C++14, breaking
-          # the pinned xmake-repo recipes' install checks (rapidjson pins
-          # c++11, fmt pins c++14) and their cmake configures. Revisit
-          # once the recipes support the VS2026 toolchain.
+          # windows-2022 (not -latest): windows-latest now ships VS2026
+          # (MSVC 14.51), which the pinned xmake-repo recipes predate.
+          # Engine sources are ported (Winsock AF_UNIX, CreateProcess,
+          # GetModuleFileNameA); rapidjson's c++11 install check is
+          # overridden locally in xmake.lua.
           - os: windows-2022
             name: windows
           - os: macos-latest
