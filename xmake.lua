@@ -50,6 +50,18 @@ package("agentsdk")
             target("agentsdk")
                 set_kind("static")
                 add_files("src/agentsdk/**.cpp")
+                -- Windows: the server-side transports have no support
+                -- upstream (BSD sockets in http_listener, stdin select in
+                -- mcp_server). weasel only links the ACP/MCP client side
+                -- (stdio transport), which is ported; nothing references
+                -- these objects, so they are dropped from the build.
+                if is_plat("windows") then
+                    remove_files("src/agentsdk/a2a/http/http_listener.cpp",
+                                 "src/agentsdk/a2a/http/http_server.cpp",
+                                 "src/agentsdk/a2a/http/json_rpc_server.cpp",
+                                 "src/agentsdk/a2a/server.cpp",
+                                 "src/agentsdk/mcp/mcp_server.cpp")
+                end
                 add_includedirs("src", {public = true})
                 -- simdjson and curl types appear in the public headers
                 -- (a2a/json_util.hpp, a2a/http/http_client.hpp).
