@@ -519,7 +519,12 @@ add_requires("glm")
 -- CI artifacts); fmt_external=true avoids duplicate fmt symbols between
 -- spdlog's bundled fmt and our own `fmt` package (single fmt from libfmt).
 add_requires("spdlog v1.17.0", {configs = {header_only = false, fmt_external = true}})
-add_requires("fmt")
+-- NB: header_only=false is spelled out (not just defaulted) so this
+-- instance merges with spdlog's fmt dep, which requests the same config
+-- explicitly. Two same-version instances (fmt + fmt#1) share one source
+-- tree and race each other on Windows (concurrent extract vs. install
+-- -> transiently missing headers like ostream.h at install time).
+add_requires("fmt", {configs = {header_only = false}})
 add_requires("rapidjson 2025.02.05", {configs = {cmake = false}})
 add_requires("reflect-cpp v0.25.0", {configs = {yyjson = true, msgpack = true}})
 add_requires("box3d v0.1.0", {configs = {simd = false, double_precision = false}})
