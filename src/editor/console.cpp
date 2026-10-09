@@ -13,12 +13,10 @@ namespace editor
 {
 
 console::console (wsl::comp::singl::runtime_context *runtime_ctx,
-                 wsl::comp::singl::editor_context *editor_ctx)
+                  wsl::comp::singl::editor_context *editor_ctx)
     : m_runtime_ctx (runtime_ctx), m_editor_ctx (editor_ctx),
       m_text_select (
-          [this] (std::size_t idx) -> std::string_view {
-            return m_lines[idx];
-          },
+          [this] (std::size_t idx) -> std::string_view { return m_lines[idx]; },
           [this] () -> std::size_t { return m_lines.size (); })
 {
 }
@@ -41,7 +39,7 @@ void
 console::execute_command (const std::string &command)
 {
   add_line ("> " + command);
-  
+
   // History management
   m_history.push_back (command);
   m_history_pos = -1;
@@ -55,7 +53,8 @@ console::execute_command (const std::string &command)
       std::string line;
       while (std::getline (iss, line)) {
         // Strip possible trailing \r
-        if (!line.empty () && line.back () == '\r') line.pop_back ();
+        if (!line.empty () && line.back () == '\r')
+          line.pop_back ();
         add_line (line);
       }
     }
@@ -65,23 +64,37 @@ console::execute_command (const std::string &command)
   // Fallback: spawn weasel-cli binary
   // Note: --project is no longer passed here because it now requires
   // --interactive, and the console fallback runs one-shot commands.
+#ifdef _WIN32
+  // cmd.exe resolves weasel-cli.exe via PATH/PATHEXT; a "./" prefix would
+  // defeat extension probing.
+  std::string full_cmd = "weasel-cli " + command + " 2>&1";
+
+  FILE *pipe = _popen (full_cmd.c_str (), "r");
+#else
   std::string full_cmd = "./weasel-cli " + command + " 2>&1";
-  
-  FILE* pipe = popen(full_cmd.c_str(), "r");
+
+  FILE *pipe = popen (full_cmd.c_str (), "r");
+#endif
   if (!pipe) {
-    add_line("Error: Failed to execute weasel-cli");
+    add_line ("Error: Failed to execute weasel-cli");
     return;
   }
 
   char buffer[128];
-  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-    std::string line(buffer);
-    if (!line.empty() && line.back() == '\n') line.pop_back();
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    add_line(line);
+  while (fgets (buffer, sizeof (buffer), pipe) != nullptr) {
+    std::string line (buffer);
+    if (!line.empty () && line.back () == '\n')
+      line.pop_back ();
+    if (!line.empty () && line.back () == '\r')
+      line.pop_back ();
+    add_line (line);
   }
 
-  pclose(pipe);
+#ifdef _WIN32
+  _pclose (pipe);
+#else
+  pclose (pipe);
+#endif
 }
 
 int
@@ -130,11 +143,11 @@ console::draw (const char *title, bool *open)
   // Reserve enough left-over height for 1 separator + 1 input text
   const float footer_height_to_reserve
       = ImGui::GetStyle ().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing ();
-  
-  ImGui::BeginChild ("scrolling_region", ImVec2 (0, -footer_height_to_reserve), 
-                    false, ImGuiWindowFlags_HorizontalScrollbar);
 
-  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts().mono);
+  ImGui::BeginChild ("scrolling_region", ImVec2 (0, -footer_height_to_reserve),
+                     false, ImGuiWindowFlags_HorizontalScrollbar);
+
+  ImGui::PushFont (m_editor_ctx->get_imgui_renderer ()->get_fonts ().mono);
 
   for (const auto &line : m_lines) {
     ImGui::TextUnformatted (line.c_str ());
@@ -154,10 +167,15 @@ console::draw (const char *title, bool *open)
 
   // Command-line input
   bool reclaim_focus = false;
-  ImGuiInputTextFlags input_text_flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackHistory;
-  
+  ImGuiInputTextFlags input_text_flags
+      = ImGuiInputTextFlags_EnterReturnsTrue
+        | ImGuiInputTextFlags_CallbackCompletion
+        | ImGuiInputTextFlags_CallbackHistory;
+
   ImGui::PushItemWidth (-1);
-  if (ImGui::InputText ("##Input", m_input_buffer, IM_ARRAYSIZE (m_input_buffer), input_text_flags, &input_callback, (void*)this)) {
+  if (ImGui::InputText ("##Input", m_input_buffer,
+                        IM_ARRAYSIZE (m_input_buffer), input_text_flags,
+                        &input_callback, (void *)this)) {
     std::string cmd (m_input_buffer);
     if (!cmd.empty ()) {
       execute_command (cmd);
