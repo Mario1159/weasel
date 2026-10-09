@@ -1,12 +1,23 @@
 #include "wsl/net/socket_compat.hpp"
 
 #ifdef _WIN32
+// See editor_context.cpp: WIN32_LEAN_AND_MEAN + NOMINMAX, near/far undefined.
+// (winsock2.h pulls in windows.h internally.)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
 #endif
 #include <winsock2.h>
 #include <afunix.h>
 #include <windows.h>
+#ifdef near
+#undef near
+#endif
+#ifdef far
+#undef far
+#endif
 #else
 #include <cerrno>
 #include <cstring>

@@ -12,6 +12,11 @@ set_policy("build.optimization.lto", false)
 
 add_rules("mode.debug", "mode.release")
 
+-- WEASEL_SOURCE_DIR-style defines embed the path in C string literals, where
+-- a native Windows backslash path corrupts them (unknown escapes like \w,
+-- real ones like \a). Normalize once; use projectdir_fwd in every define.
+local projectdir_fwd = (os.projectdir ():gsub ("\\", "/"))
+
 -- ---------------------------------------------------------------------------
 -- Options (mirror CMake options)
 -- ---------------------------------------------------------------------------
@@ -847,8 +852,8 @@ target("wsl")
         add_defines("WEASEL_ENABLE_RENDERDOC")
         add_includedirs("cmake/renderdoc")
     end
-    add_defines("WEASEL_SOURCE_DIR=\"$(projectdir)\"")
-    add_defines("WEASEL_BUILD_DIR=\"$(projectdir)/build\"")
+    add_defines("WEASEL_SOURCE_DIR=\"" .. projectdir_fwd .. "\"")
+    add_defines("WEASEL_BUILD_DIR=\"" .. projectdir_fwd .. "/build\"")
     -- compiler exe path for DAS AOT cache (like CMake's WEASEL_CXX_COMPILER)
     add_defines("WEASEL_CXX_COMPILER=\"clang++\"")
 
@@ -1240,7 +1245,7 @@ target("weasel")
     if has_config("with_slang") then add_packages("slang") end
     add_defines("CPP_RTTI_ENABLED", "WEASEL_BUILD_EDITOR", "IMGUI_DEFINE_MATH_OPERATORS")
     if is_config("weasel_enable_multiplayer", true) then add_defines("WEASEL_ENABLE_MULTIPLAYER") end
-    add_defines("WEASEL_SOURCE_DIR=\"$(projectdir)\"", "WEASEL_BUILD_DIR=\"$(projectdir)/build\"", "TRACY_ENABLE")
+    add_defines("WEASEL_SOURCE_DIR=\"" .. projectdir_fwd .. "\"", "WEASEL_BUILD_DIR=\"" .. projectdir_fwd .. "/build\"", "TRACY_ENABLE")
     if has_config("weasel_enable_renderdoc") then
         add_defines("WEASEL_ENABLE_RENDERDOC")
         add_includedirs("cmake/renderdoc")
@@ -1346,7 +1351,7 @@ target("weasel_mcp_server_tests")
     add_deps("mcp_server_lib")
     add_packages("doctest", "cpp-mcp")
     add_includedirs("src")
-    add_defines("WSL_SOURCE_DIR=\"$(projectdir)\"")
+    add_defines("WSL_SOURCE_DIR=\"" .. projectdir_fwd .. "\"")
     add_tests("weasel_mcp_server_tests")
 
 target("weasel_core_tests")
@@ -1356,7 +1361,7 @@ target("weasel_core_tests")
     add_deps("wsl")
     add_packages("doctest", "simdjson")
     add_includedirs("src")
-    add_defines("WEASEL_SOURCE_DIR=\"$(projectdir)\"")
+    add_defines("WEASEL_SOURCE_DIR=\"" .. projectdir_fwd .. "\"")
     add_tests("weasel_core_tests")
 
 target("weasel_das_tests")

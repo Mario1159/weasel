@@ -33,10 +33,23 @@
 #include <glm/trigonometric.hpp>
 #include <string>
 #ifdef _WIN32
+// WIN32_LEAN_AND_MEAN keeps windows.h small; NOMINMAX keeps its min/max
+// macros from breaking std::min/std::max. near/far are 16-bit relics
+// defined unconditionally by minwindef.h that break member access like
+// camera.near(), so they are undefined TU-wide here.
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
+#ifdef near
+#undef near
+#endif
+#ifdef far
+#undef far
+#endif
 #else
 #include <unistd.h>
 #endif
