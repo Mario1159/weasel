@@ -472,6 +472,46 @@ package("rapidjson")
         ]]}, {configs = {languages = "c++17"}, includes = { "rapidjson/document.h", "rapidjson/stringbuffer.h", "rapidjson/writer.h"} }))
     end)
 package_end()
+
+-- cli11 override: same story as rapidjson — upstream xmake-repo pins the
+-- install check to cxx11, which MSVC 14.44+ STL rejects (CLI.hpp pulls in
+-- <codecvt>/<locale>, which use C++14-only constructs). CLI11 itself is
+-- C++11-and-beyond code that works on Windows; only the check standard
+-- is wrong. c++17 is valid on every toolchain here.
+package("cli11")
+    set_kind("library", {headeronly = true})
+    set_homepage("https://github.com/CLIUtils/CLI11")
+    set_description("CLI11 is a command line parser for C++11 and beyond that provides a rich feature set with a simple and intuitive interface.")
+    set_license("BSD")
+    add_urls("https://github.com/CLIUtils/CLI11/archive/refs/tags/$(version).tar.gz",
+             "https://github.com/CLIUtils/CLI11.git")
+    add_versions("v2.6.2", "c6ea6b2e5608b3ea8617999bd5f47420c71b2ebdb8dc4767c1034d1da5785711")
+    add_configs("cmake", {description = "Use cmake build system", default = true, type = "boolean"})
+    if is_plat("windows", "mingw") then
+        add_syslinks("shell32")
+    end
+    on_load(function (package)
+        if package:config("cmake") then
+            package:add("deps", "cmake")
+        end
+    end)
+    on_install(function (package)
+        if package:config("cmake") then
+            import("package.tools.cmake").install(package, {
+                "-DBUILD_TESTING=OFF",
+                "-DCLI11_BUILD_EXAMPLES=OFF",
+                "-DCLI11_INSTALL=ON",
+            })
+        else
+            os.cp("include", package:installdir())
+        end
+    end)
+    on_test(function (package)
+        assert(package:check_cxxsnippets({test = [[
+            CLI::App app{"Test", "test"};
+        ]]}, {configs = {languages = "c++17"}, includes = "CLI/CLI.hpp"}))
+    end)
+package_end()
 package("rmlui")
     set_kind("library")
     set_homepage("https://github.com/Mario1159/RmlUi")
