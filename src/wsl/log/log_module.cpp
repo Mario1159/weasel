@@ -2,6 +2,10 @@ module;
 #include <memory>
 #include <spdlog/common.h>
 #include <spdlog/logger.h>
+// NOTE: stdout_color_sinks.h only provides the wincolor sink on Windows
+// (whose set_color takes console attributes, not ANSI codes), so include
+// the portable ansicolor sink directly for one code path everywhere.
+#include <spdlog/sinks/ansicolor_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #include <vector>
