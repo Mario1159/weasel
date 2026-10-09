@@ -23,7 +23,11 @@ static std::shared_ptr<spdlog::logger> s_xmake_logger;
 static std::shared_ptr<spdlog::logger>
 make_logger (const char *name, const char *info_color)
 {
-  auto stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt> ();
+  // stdout_color_sink_mt is an alias: ansicolor on POSIX but wincolor on
+  // Windows, whose set_color takes console attributes instead of ANSI
+  // codes. Use the ansicolor sink explicitly for one portable code path.
+  auto stdout_sink
+      = std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt> ();
   stdout_sink->set_pattern ("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
   stdout_sink->set_color (spdlog::level::info, info_color);
 
