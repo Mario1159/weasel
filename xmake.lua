@@ -348,7 +348,12 @@ package("ozz-animation")
         -- The default postfix would rename release archives to
         -- libozz_*_r.a, which breaks add_links("ozz_*").
         table.insert(configs, "-Dozz_build_postfix=OFF")
-        import("package.tools.cmake").install(package, configs)
+        -- ozz builds with -Werror, and MSVC's UCRT marks fopen etc.
+        -- deprecated, which is fatal under clang-windows. The macro is a
+        -- no-op elsewhere. (opt.cxflags appends flags through xmake's
+        -- cmake helper instead of clobbering CMAKE_CXX_FLAGS.)
+        import("package.tools.cmake").install(package, configs,
+                                              {cxflags = {"-D_CRT_SECURE_NO_WARNINGS"}})
     end)
     on_test(function (package)
         assert(package:check_cxxsnippets({test = [[
