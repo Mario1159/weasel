@@ -96,7 +96,11 @@ int
 run_capture (const std::string &command, std::string &diagnostics)
 {
   std::string full = command + " 2>&1";
+#ifdef _WIN32
+  FILE *pipe = _popen (full.c_str (), "r");
+#else
   FILE *pipe = popen (full.c_str (), "r");
+#endif
   if (!pipe) {
     diagnostics = "failed to launch slangc";
     return -1;
@@ -105,7 +109,12 @@ run_capture (const std::string &command, std::string &diagnostics)
   while (fgets (buf, sizeof (buf), pipe)) {
     diagnostics += buf;
   }
-  int status = pclose (pipe);
+  int status =
+#ifdef _WIN32
+      _pclose (pipe);
+#else
+      pclose (pipe);
+#endif
   if (status == -1)
     return -1;
 #if defined(_WIN32)
@@ -318,7 +327,12 @@ shader_compiler::compile_stage (const char *source, size_t /*source_len*/,
     tmp_dir = std::filesystem::path ("/tmp");
 
   std::string tag = (stage == SDL_GPU_SHADERSTAGE_VERTEX) ? "vert" : "frag";
-  std::string stem = "weasel_rt_" + tag + "_" + std::to_string (getpid ());
+  std::string stem = "weasel_rt_" + tag + "_"
+#ifdef _WIN32
+                     + std::to_string (_getpid ());
+#else
+                     + std::to_string (getpid ());
+#endif
   std::filesystem::path src_path = tmp_dir / (stem + ".slang");
   std::filesystem::path spv_path = tmp_dir / (stem + ".spv");
   std::filesystem::path json_path = tmp_dir / (stem + ".json");
