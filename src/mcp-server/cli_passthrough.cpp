@@ -11,7 +11,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #else
-// See editor_context.cpp: WIN32_LEAN_AND_MEAN + NOMINMAX, near/far undefined.
+// WIN32_LEAN_AND_MEAN + NOMINMAX (see editor_context.cpp). near/far stay
+// defined here: this TU uses neither FD_* macros nor .near()/.far() members.
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -19,12 +20,6 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#ifdef near
-#undef near
-#endif
-#ifdef far
-#undef far
-#endif
 #endif
 
 #include <chrono>

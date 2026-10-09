@@ -1,7 +1,9 @@
 #include "wsl/net/socket_compat.hpp"
 
 #ifdef _WIN32
-// See editor_context.cpp: WIN32_LEAN_AND_MEAN + NOMINMAX, near/far undefined.
+// WIN32_LEAN_AND_MEAN + NOMINMAX (see editor_context.cpp). Unlike that TU,
+// near/far must STAY defined here: FD_ZERO/FD_SET expand through FAR, and
+// undefining it breaks them. This TU has no .near()/.far() member uses.
 // (winsock2.h pulls in windows.h internally.)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -12,12 +14,6 @@
 #include <winsock2.h>
 #include <afunix.h>
 #include <windows.h>
-#ifdef near
-#undef near
-#endif
-#ifdef far
-#undef far
-#endif
 #else
 #include <cerrno>
 #include <cstring>
