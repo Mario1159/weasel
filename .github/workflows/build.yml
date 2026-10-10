@@ -125,7 +125,7 @@ jobs:
         run: |
           mkdir -p artifacts/bin artifacts/lib artifacts/share/weasel
           cp build/*/*/release/weasel.exe build/*/*/release/weasel-cli.exe build/*/*/release/weasel-mcp-server.exe artifacts/bin/
-          cp build/*/*/release/libwsl.a artifacts/lib/
+          cp build/*/*/release/wsl.lib artifacts/lib/
           cp -r build/otf build/icons artifacts/share/weasel/ 2>/dev/null || true
           cp -r build/compiled_shaders artifacts/share/weasel/ 2>/dev/null || true
 
