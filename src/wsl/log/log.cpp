@@ -1,12 +1,9 @@
 #include "log.hpp"
 #include "tracy_sink.hpp"
 #include <memory>
+#include <cstdint>
 #include <spdlog/common.h>
 #include <spdlog/logger.h>
-// NOTE: stdout_color_sinks.h only provides the wincolor sink on Windows
-// (whose set_color takes console attributes, not ANSI codes), so include
-// the portable ansicolor sink directly for one code path everywhere.
-#include <spdlog/sinks/ansicolor_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #include <vector>
@@ -24,15 +21,60 @@ static std::shared_ptr<spdlog::logger> s_phys_logger;
 static std::shared_ptr<spdlog::logger> s_net_logger;
 static std::shared_ptr<spdlog::logger> s_xmake_logger;
 
+#ifdef _WIN32
+namespace
+{
+// Map "\033[3Xm" to Win32 console attributes (FOREGROUND_BLUE 0x1 |
+// FOREGROUND_GREEN 0x2 | FOREGROUND_RED 0x4). Numeric constants avoid
+// <windows.h> here.
+std::uint16_t
+wincolor_for_ansi (const char *code)
+{
+  unsigned attr = 7; // white
+  if (code[0] == '\033' && code[1] == '[' && code[3] == 'm') {
+    switch (code[2]) {
+    case '1':
+      attr = 4;
+      break; // red
+    case '2':
+      attr = 2;
+      break; // green
+    case '3':
+      attr = 6;
+      break; // yellow
+    case '4':
+      attr = 1;
+      break; // blue
+    case '5':
+      attr = 5;
+      break; // magenta
+    case '6':
+      attr = 3;
+      break; // cyan
+    case '7':
+      attr = 7;
+      break; // white
+    default:
+      break;
+    }
+  }
+  return static_cast<std::uint16_t> (attr);
+}
+} // namespace
+#endif
+
 static std::shared_ptr<spdlog::logger>
 make_logger (const char *name, const char *info_color)
 {
-  // stdout_color_sink_mt is an alias: ansicolor on POSIX but wincolor on
-  // Windows, whose set_color takes console attributes instead of ANSI
-  // codes. Use the ansicolor sink explicitly for one portable code path.
-  auto stdout_sink
-      = std::make_shared<spdlog::sinks::ansicolor_stdout_sink_mt> ();
+  // stdout_color_sink_mt is ansicolor on POSIX but wincolor on Windows.
+  auto stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt> ();
   stdout_sink->set_pattern ("[%Y-%m-%d %H:%M:%S.%e] [%n] [%^%l%$] %v");
+#ifdef _WIN32
+  // wincolor set_color takes console attributes, not ANSI codes.
+  stdout_sink->set_color (spdlog::level::info, wincolor_for_ansi (info_color));
+#else
+  stdout_sink->set_color (spdlog::level::info, info_color);
+#endif
   stdout_sink->set_color (spdlog::level::info, info_color);
 
   // Each logger also writes into Tracy (Tracy messages column).

@@ -51,10 +51,17 @@ package("agentsdk")
         io.writefile("xmake.lua", [[
             add_rules("mode.debug", "mode.release")
             set_languages("c++20")
-            add_requires("spdlog", "libcurl", "simdjson", "libsdl3")
+            add_requires("spdlog", {configs = {header_only = false}}, "libcurl", "simdjson", "libsdl3")
             target("agentsdk")
                 set_kind("static")
                 add_files("src/agentsdk/**.cpp")
+                -- Compiled spdlog (not header-only): otherwise every object
+                -- embeds spdlog/fmt code that collides with the outer
+                -- compiled libspdlog/libfmt at link time (MSVC LNK2005;
+                -- ELF tolerates it, which is why Linux never noticed).
+                -- No fmt_external: the bundled fmt headers suffice, and
+                -- skipping a second fmt build avoids a source-tree race.
+                add_defines("SPDLOG_COMPILED_LIB")
                 -- Windows: the server-side transports have no support
                 -- upstream (BSD sockets in http_listener, stdin select in
                 -- mcp_server). weasel only links the ACP/MCP client side
@@ -89,6 +96,7 @@ package("agentsdk")
     on_load(function (package)
         package:add("includedirs", "include")
         package:add("defines", "SPDLOG_COMPILED_LIB")
+        package:add("deps", "libcurl")
     end)
 package_end()
 
@@ -692,6 +700,10 @@ add_requires("cli11 v2.6.2")
 add_requires("nlohmann_json v3.12.0")
 add_requires("libarchive")
 add_requires("ozz-animation")
+-- libcurl: agentsdk's discovery TU links it, but our agentsdk package
+-- never exported it, so MSVC finds no provider (Linux happened to work).
+-- Required here so every consumer links exactly one instance.
+add_requires("libcurl")
 -- A2A/ACP agent SDK — supplies <agentsdk/...> headers and exports
 -- libcurl transitively (only the SDK's HTTP transport uses it now).
 add_requires("agentsdk")
@@ -797,8 +809,12 @@ target("wsl")
         add_files("src/wsl/**.cpp")
         -- Remove all *_module.cpp from legacy build (except runtime_project_module which is NOT a module unit)
         -- and das/wsl_api_module.cpp — a regular TU that merely has "_module" in its name.
+        -- NB: compare basenames, not substrings: os.files returns native
+        -- paths, so a "das/wsl_api_module" substring never matches on
+        -- Windows (backslashes) and the file was silently dropped there.
         for _, f in ipairs(os.files(path.join(os.projectdir(), "src/wsl/**_module.cpp"))) do
-            if not f:find("runtime_project_module") and not f:find("das/wsl_api_module") then
+            local name = path.filename(f)
+            if name ~= "runtime_project_module.cpp" and name ~= "wsl_api_module.cpp" then
                 remove_files(f)
             end
         end
@@ -843,7 +859,7 @@ target("wsl")
     -- but we add backend sources directly:
     -- they will be added via after_load hook that locates rmlui package installdir
 
-    add_defines("CPP_RTTI_ENABLED", "RMLUI_SDL_VERSION_MAJOR=3", "RMLUI_STATIC_LIB", "RMLUI_NUM_MSAA_SAMPLES=4", "SPDLOG_COMPILED_LIB", "TRACY_ENABLE", "TRACY_ON_DEMAND", "TRACY_HAS_CALLGRIND=0", "TRACY_IMPORTS", {public = true})
+    add_defines("CPP_RTTI_ENABLED", "RMLUI_SDL_VERSION_MAJOR=3", "RMLUI_STATIC_LIB", "RMLUI_NUM_MSAA_SAMPLES=4", "SPDLOG_COMPILED_LIB", "TRACY_ENABLE", "TRACY_ON_DEMAND", "TRACY_HAS_CALLGRIND=0", {public = true})
     add_defines("WSL_HAS_BOX3D=1")
     add_defines("WSL_PHYSICS_BACKEND_BOX3D=1", {public = true})
     add_packages("box3d")
