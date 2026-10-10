@@ -75,7 +75,6 @@ make_logger (const char *name, const char *info_color)
 #else
   stdout_sink->set_color (spdlog::level::info, info_color);
 #endif
-  stdout_sink->set_color (spdlog::level::info, info_color);
 
   // Each logger also writes into Tracy (Tracy messages column).
   // Tracy is enabled at compile time via the TRACY_ENABLE define

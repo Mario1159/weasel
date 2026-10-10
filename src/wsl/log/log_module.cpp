@@ -76,7 +76,6 @@ make_logger (const char *name, const char *info_color)
 #else
   stdout_sink->set_color (spdlog::level::info, info_color);
 #endif
-  stdout_sink->set_color (spdlog::level::info, info_color);
 
   auto tracy_sink_ptr = std::make_shared<wsl::log::tracy_sink> ();
 
