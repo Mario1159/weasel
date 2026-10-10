@@ -51,7 +51,7 @@ package("agentsdk")
         io.writefile("xmake.lua", [[
             add_rules("mode.debug", "mode.release")
             set_languages("c++20")
-            add_requires("spdlog", "libcurl", "simdjson")
+            add_requires("spdlog", "libcurl", "simdjson", "libsdl3")
             target("agentsdk")
                 set_kind("static")
                 add_files("src/agentsdk/**.cpp")
@@ -71,6 +71,9 @@ package("agentsdk")
                 -- simdjson and curl types appear in the public headers
                 -- (a2a/json_util.hpp, a2a/http/http_client.hpp).
                 add_packages("spdlog", "libcurl", "simdjson", {public = true})
+                -- libsdl3 stays private: the public headers only name SDL
+                -- types behind void* (stdio transport handles).
+                add_packages("libsdl3")
                 if is_plat("linux") then
                     add_syslinks("pthread")
                 elseif is_plat("windows") then

@@ -34,7 +34,18 @@ module;
 #include <glm/gtc/matrix_transform.hpp>
 #include <RmlUi/Core.h>
 #include <RmlUi_Platform_SDL.h>
+// See ui_manager.hpp: RmlUi_Renderer_SDL_GPU.h uses `interface` as a
+// parameter name, colliding with the COM macro from windows.h.
+#ifdef interface
+#pragma push_macro ("interface")
+#undef interface
+#define WSL_POP_RMLUI_INTERFACE
+#endif
 #include <RmlUi_Renderer_SDL_GPU.h>
+#ifdef WSL_POP_RMLUI_INTERFACE
+#pragma pop_macro ("interface")
+#undef WSL_POP_RMLUI_INTERFACE
+#endif
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_events.h>

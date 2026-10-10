@@ -10,8 +10,21 @@
 #ifndef IN_MODULE_INTERFACE
 #include <RmlUi_Platform_SDL.h>
 #endif
+// RmlUi_Renderer_SDL_GPU.h uses `interface` as a parameter name, which
+// collides with the COM macro from windows.h (combaseapi.h) whenever a
+// Windows header precedes this include. Guard it order-independently;
+// restored immediately after so COM consumers are unaffected.
+#ifdef interface
+#pragma push_macro("interface")
+#undef interface
+#define WSL_POP_RMLUI_INTERFACE
+#endif
 #ifndef IN_MODULE_INTERFACE
 #include <RmlUi_Renderer_SDL_GPU.h>
+#endif
+#ifdef WSL_POP_RMLUI_INTERFACE
+#pragma pop_macro("interface")
+#undef WSL_POP_RMLUI_INTERFACE
 #endif
 
 #ifndef IN_MODULE_INTERFACE

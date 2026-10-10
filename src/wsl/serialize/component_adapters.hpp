@@ -52,6 +52,21 @@
 #include "../gfx/shader_graph_codegen.hpp"
 #include "../rsc/resource_ids.hpp"
 
+// windows.h (pulled in by SDL/RmlUi/Windows SDK headers) defines near/far
+// as empty macros, breaking the CameraHelper fields and accessors below
+// whenever such a header precedes this one. Save and clear them for this
+// header only (no socket/FD_* code lives here, so nothing needs them).
+#ifdef near
+#pragma push_macro("near")
+#undef near
+#define WSL_ADAPTERS_POP_NEAR
+#endif
+#ifdef far
+#pragma push_macro("far")
+#undef far
+#define WSL_ADAPTERS_POP_FAR
+#endif
+
 namespace wsl::serialize
 {
 
@@ -1053,3 +1068,12 @@ WSL_RFL_FULL_PARSER (wsl::gfx::graph_node, GraphNodeHelper)
 WSL_RFL_FULL_PARSER (wsl::gfx::shader_graph, ShaderGraphHelper)
 
 } // namespace rfl::parsing
+
+#ifdef WSL_ADAPTERS_POP_FAR
+#pragma pop_macro("far")
+#undef WSL_ADAPTERS_POP_FAR
+#endif
+#ifdef WSL_ADAPTERS_POP_NEAR
+#pragma pop_macro("near")
+#undef WSL_ADAPTERS_POP_NEAR
+#endif

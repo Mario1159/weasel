@@ -104,7 +104,18 @@ module;
 #include <RmlUi/Core.h>
 #include <RmlUi/Config/Config.h>
 #include <RmlUi_Platform_SDL.h>
+// See ui_manager.hpp: RmlUi_Renderer_SDL_GPU.h uses `interface` as a
+// parameter name, colliding with the COM macro from windows.h.
+#ifdef interface
+#pragma push_macro ("interface")
+#undef interface
+#define WSL_POP_RMLUI_INTERFACE
+#endif
 #include <RmlUi_Renderer_SDL_GPU.h>
+#ifdef WSL_POP_RMLUI_INTERFACE
+#pragma pop_macro ("interface")
+#undef WSL_POP_RMLUI_INTERFACE
+#endif
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <glm/glm.hpp>

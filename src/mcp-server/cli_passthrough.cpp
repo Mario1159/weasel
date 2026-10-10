@@ -5,14 +5,14 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
-#ifndef _WIN32
-#include <fcntl.h>
-#include <poll.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#else
-// WIN32_LEAN_AND_MEAN + NOMINMAX (see editor_context.cpp). near/far stay
-// defined here: this TU uses neither FD_* macros nor .near()/.far() members.
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_iostream.h>
+#include <SDL3/SDL_process.h>
+#include <SDL3/SDL_properties.h>
+#include <SDL3/SDL_timer.h>
+#ifdef _WIN32
+// Kept for GetModuleFileNameA in resolve_weasel_cli; process and pipe
+// handling below is SDL-only on every platform.
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -32,19 +32,6 @@ namespace wsl::mcp_server
 
 namespace
 {
-
-#ifndef _WIN32
-// Single non-blocking-friendly read; empty string signals EOF/EAGAIN end.
-std::string
-read_chunk (int fd)
-{
-  char buffer[4096];
-  const ssize_t n = ::read (fd, buffer, sizeof (buffer));
-  if (n <= 0)
-    return {};
-  return std::string (buffer, static_cast<std::size_t> (n));
-}
-#endif
 
 // Shell-style tokenizer: whitespace splits, quotes group, backslash escapes.
 std::vector<std::string>
@@ -90,9 +77,8 @@ tokenize_command (const std::string &line)
 }
 
 // Wrap a value in double quotes when it contains whitespace so the downstream
-// command tokenizer (and Windows CreateProcess parsing) keeps it as a single
-// argument. Empty strings are left empty (the caller decides whether to emit
-// the token at all).
+// command tokenizer keeps it as a single argument. Empty strings are left
+// empty (the caller decides whether to emit the token at all).
 std::string
 quote_if_needed (const std::string &value)
 {
@@ -141,134 +127,105 @@ resolve_weasel_cli ()
   return "weasel-cli";
 }
 
-#ifdef _WIN32
-// File-local runners (defined below): execute_cli_command builds the argv,
-// then dispatches to the platform implementation.
-static mcp::json run_windows (std::vector<std::string> full_argv,
-                              int timeout_seconds);
-
-// Drain whatever the child has already written without blocking.
-static void
-drain_pipe_available (HANDLE pipe, std::string &out)
-{
-  DWORD available = 0;
-  while (PeekNamedPipe (pipe, nullptr, 0, nullptr, &available, nullptr)
-         && available != 0) {
-    char buffer[4096];
-    DWORD n = 0;
-    if (!ReadFile (pipe, buffer, sizeof (buffer), &n, nullptr) || n == 0) {
-      break;
-    }
-    out.append (buffer, n);
-  }
-}
-
-// Read until EOF (child exited and closed its ends).
-static void
-drain_pipe_eof (HANDLE pipe, std::string &out)
-{
-  char buffer[4096];
-  for (;;) {
-    DWORD n = 0;
-    if (!ReadFile (pipe, buffer, sizeof (buffer), &n, nullptr) || n == 0) {
-      break;
-    }
-    out.append (buffer, n);
-  }
-}
-
+// Run weasel-cli and capture its output. Single implementation for every
+// platform on top of SDL processes: stdout/stderr travel on separate pipes
+// (preserved independently in the result, as with fork), stdin is inherited,
+// and the deadline loop mirrors the old poll() version.
 static mcp::json
-run_windows (std::vector<std::string> full_argv, int timeout_seconds)
+run_sdl (const std::vector<std::string> &full_argv, int timeout_seconds)
 {
-  // CreateProcess takes a single mutable command line.
-  std::string cmdline;
+  // argv for SDL (null-terminated array of pointers into full_argv, which
+  // outlives the call; SDL copies what it needs during creation).
+  std::vector<const char *> argv;
+  argv.reserve (full_argv.size () + 1);
   for (const std::string &arg : full_argv) {
-    if (!cmdline.empty ()) {
-      cmdline += ' ';
-    }
-    cmdline += quote_if_needed (arg);
+    argv.push_back (arg.c_str ());
   }
+  argv.push_back (nullptr);
 
-  SECURITY_ATTRIBUTES sa{};
-  sa.nLength = sizeof (sa);
-  sa.bInheritHandle = TRUE;
-  HANDLE out_read = nullptr, out_write = nullptr;
-  HANDLE err_read = nullptr, err_write = nullptr;
-  if (!CreatePipe (&out_read, &out_write, &sa, 0)
-      || !CreatePipe (&err_read, &err_write, &sa, 0)) {
+  SDL_PropertiesID props = SDL_CreateProperties ();
+  SDL_SetPointerProperty (props, SDL_PROP_PROCESS_CREATE_ARGS_POINTER,
+                          argv.data ());
+  SDL_SetNumberProperty (props, SDL_PROP_PROCESS_CREATE_STDIN_NUMBER,
+                         SDL_PROCESS_STDIO_INHERITED);
+  SDL_SetNumberProperty (props, SDL_PROP_PROCESS_CREATE_STDOUT_NUMBER,
+                         SDL_PROCESS_STDIO_APP);
+  SDL_SetNumberProperty (props, SDL_PROP_PROCESS_CREATE_STDERR_NUMBER,
+                         SDL_PROCESS_STDIO_APP);
+  SDL_Process *proc = SDL_CreateProcessWithProperties (props);
+  SDL_DestroyProperties (props);
+  if (!proc) {
     throw mcp::mcp_exception (mcp::error_code::internal_error,
-                              "CreatePipe() failed");
+                              std::string ("SDL_CreateProcess failed: ")
+                                  + SDL_GetError ());
   }
-  SetHandleInformation (out_read, HANDLE_FLAG_INHERIT, 0);
-  SetHandleInformation (err_read, HANDLE_FLAG_INHERIT, 0);
-
-  STARTUPINFOA si{};
-  si.cb = sizeof (si);
-  si.dwFlags = STARTF_USESTDHANDLES;
-  si.hStdOutput = out_write;
-  si.hStdError = err_write;
-  si.hStdInput = GetStdHandle (STD_INPUT_HANDLE);
-  PROCESS_INFORMATION pi{};
-  if (!CreateProcessA (nullptr, cmdline.data (), nullptr, nullptr, TRUE,
-                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-    CloseHandle (out_read);
-    CloseHandle (out_write);
-    CloseHandle (err_read);
-    CloseHandle (err_write);
+  SDL_PropertiesID pprops = SDL_GetProcessProperties (proc);
+  SDL_IOStream *out = (SDL_IOStream *)SDL_GetPointerProperty (
+      pprops, SDL_PROP_PROCESS_STDOUT_POINTER, nullptr);
+  SDL_IOStream *err = (SDL_IOStream *)SDL_GetPointerProperty (
+      pprops, SDL_PROP_PROCESS_STDERR_POINTER, nullptr);
+  if (!out || !err) {
+    SDL_DestroyProcess (proc);
     throw mcp::mcp_exception (mcp::error_code::internal_error,
-                              "CreateProcess() failed");
+                              "SDL process missing stdio streams");
   }
-  CloseHandle (out_write);
-  CloseHandle (err_write);
 
   const auto deadline = std::chrono::steady_clock::now ()
                         + std::chrono::seconds (timeout_seconds);
   bool timed_out = false;
+  bool out_open = true, err_open = true;
   std::string stdout_data;
   std::string stderr_data;
-  bool exited = false;
-  while (!exited) {
+
+  // Pump one stream; returns true on progress. Mirrors the old per-fd
+  // handling: data appends, EOF/error closes that side, NOT_READY waits.
+  auto pump = [&] (SDL_IOStream *s, std::string &into, bool &open) -> bool {
+    if (!open) {
+      return false;
+    }
+    char buffer[4096];
+    const size_t n = SDL_ReadIO (s, buffer, sizeof (buffer));
+    if (n > 0) {
+      into.append (buffer, n);
+      return true;
+    }
+    const SDL_IOStatus st = SDL_GetIOStatus (s);
+    if (st == SDL_IO_STATUS_EOF || st == SDL_IO_STATUS_ERROR) {
+      open = false;
+    }
+    return false;
+  };
+
+  while (out_open || err_open) {
     if (std::chrono::steady_clock::now () > deadline) {
       timed_out = true;
-      TerminateProcess (pi.hProcess, 1);
+      SDL_KillProcess (proc, true);
       break;
     }
-    const DWORD w = WaitForSingleObject (pi.hProcess, 200);
-    drain_pipe_available (out_read, stdout_data);
-    drain_pipe_available (err_read, stderr_data);
-    if (w == WAIT_OBJECT_0) {
-      exited = true;
+    bool progress = pump (out, stdout_data, out_open);
+    progress = pump (err, stderr_data, err_open) || progress;
+    if (!progress) {
+      SDL_Delay (1);
     }
   }
-  if (exited) {
-    // Process is gone and our write ends are closed, so reads hit EOF.
-    WaitForSingleObject (pi.hProcess, INFINITE);
-    drain_pipe_eof (out_read, stdout_data);
-    drain_pipe_eof (err_read, stderr_data);
-  } else {
-    // Timed out and killed: collect whatever was already written.
-    drain_pipe_available (out_read, stdout_data);
-    drain_pipe_available (err_read, stderr_data);
-  }
 
-  DWORD exit_code = 1;
-  GetExitCodeProcess (pi.hProcess, &exit_code);
-  CloseHandle (pi.hProcess);
-  CloseHandle (pi.hThread);
-  CloseHandle (out_read);
-  CloseHandle (err_read);
+  int exit_code = -1;
+  SDL_WaitProcess (proc, true, &exit_code);
+  // SDL reports fatal signals negated; match the old 128+signal mapping.
+  if (exit_code < 0) {
+    exit_code = 128 - exit_code;
+  }
+  SDL_CloseIO (out);
+  SDL_CloseIO (err);
+  SDL_DestroyProcess (proc);
 
   mcp::json result{
-    { "command", full_argv },   { "exit_code", static_cast<int> (exit_code) },
+    { "command", full_argv },   { "exit_code", exit_code },
     { "stdout", stdout_data },  { "stderr", stderr_data },
     { "timed_out", timed_out },
   };
   return result;
 }
-#else
-static mcp::json run_posix (std::vector<std::string> full_argv,
-                            int timeout_seconds);
-#endif
 
 mcp::json
 execute_cli_command (const std::string &command, bool attach,
@@ -296,110 +253,8 @@ execute_cli_command (const std::string &command, bool attach,
   for (const std::string &arg : argv)
     full_argv.push_back (arg);
 
-#ifdef _WIN32
-  return run_windows (full_argv, timeout_seconds);
-#else
-  return run_posix (full_argv, timeout_seconds);
-#endif
+  return run_sdl (full_argv, timeout_seconds);
 }
-
-#ifndef _WIN32
-static mcp::json
-run_posix (std::vector<std::string> full_argv, int timeout_seconds)
-{
-  // Build the C argv (first entry is the program path).
-  std::vector<char *> c_argv;
-  c_argv.reserve (full_argv.size () + 1);
-  for (std::string &arg : full_argv)
-    c_argv.push_back (arg.data ());
-  c_argv.push_back (nullptr);
-
-  int stdout_pipe[2];
-  int stderr_pipe[2];
-  if (::pipe (stdout_pipe) != 0 || ::pipe (stderr_pipe) != 0) {
-    throw mcp::mcp_exception (mcp::error_code::internal_error, "pipe() failed");
-  }
-
-  const pid_t pid = ::fork ();
-  if (pid < 0) {
-    ::close (stdout_pipe[0]);
-    ::close (stdout_pipe[1]);
-    ::close (stderr_pipe[0]);
-    ::close (stderr_pipe[1]);
-    throw mcp::mcp_exception (mcp::error_code::internal_error, "fork() failed");
-  }
-
-  if (pid == 0) {
-    ::dup2 (stdout_pipe[1], STDOUT_FILENO);
-    ::dup2 (stderr_pipe[1], STDERR_FILENO);
-    ::close (stdout_pipe[0]);
-    ::close (stdout_pipe[1]);
-    ::close (stderr_pipe[0]);
-    ::close (stderr_pipe[1]);
-    ::signal (SIGINT, SIG_DFL);
-    ::execv (full_argv[0].c_str (), c_argv.data ());
-    _exit (127);
-  }
-
-  ::close (stdout_pipe[1]);
-  ::close (stderr_pipe[1]);
-
-  // Poll both pipes until EOF on both or the deadline expires.
-  const auto deadline = std::chrono::steady_clock::now ()
-                        + std::chrono::seconds (timeout_seconds);
-  bool timed_out = false;
-  int open_fds = 2;
-  std::string stdout_data;
-  std::string stderr_data;
-
-  while (open_fds > 0) {
-    if (std::chrono::steady_clock::now () > deadline) {
-      timed_out = true;
-      ::kill (pid, SIGKILL);
-      break;
-    }
-
-    struct pollfd fds[2]
-        = { { stdout_pipe[0], POLLIN, 0 }, { stderr_pipe[0], POLLIN, 0 } };
-    const int ready = ::poll (fds, 2, 200);
-    if (ready > 0) {
-      if ((fds[0].revents & (POLLIN | POLLHUP)) != 0) {
-        std::string chunk = read_chunk (stdout_pipe[0]);
-        if (chunk.empty ())
-          --open_fds;
-        else
-          stdout_data += chunk;
-      }
-      if ((fds[1].revents & (POLLIN | POLLHUP)) != 0) {
-        std::string chunk = read_chunk (stderr_pipe[0]);
-        if (chunk.empty ())
-          --open_fds;
-        else
-          stderr_data += chunk;
-      }
-    }
-  }
-
-  ::close (stdout_pipe[0]);
-  ::close (stderr_pipe[0]);
-
-  int status = 0;
-  ::waitpid (pid, &status, 0);
-
-  int exit_code = -1;
-  if (WIFEXITED (status))
-    exit_code = WEXITSTATUS (status);
-  else if (WIFSIGNALED (status))
-    exit_code = 128 + WTERMSIG (status);
-
-  mcp::json result{
-    { "command", full_argv },   { "exit_code", exit_code },
-    { "stdout", stdout_data },  { "stderr", stderr_data },
-    { "timed_out", timed_out },
-  };
-  return result;
-}
-#endif
 
 mcp::json
 handle_script_reload (const mcp::json & /*params*/)

@@ -24,6 +24,22 @@ namespace wsl
 namespace comp
 {
 
+// windows.h (pulled in by SDL/RmlUi/Windows SDK headers) defines near/far
+// as empty macros, which break these member declarations whenever such a
+// header precedes this one. Save and clear them for this header only;
+// Winsock's FD_* macros (which expand through FAR) are unaffected because
+// no socket code lives here.
+#ifdef near
+#pragma push_macro("near")
+#undef near
+#define WSL_CAMERA_POP_NEAR
+#endif
+#ifdef far
+#pragma push_macro("far")
+#undef far
+#define WSL_CAMERA_POP_FAR
+#endif
+
 struct camera : world_component
 {
 private:
@@ -120,6 +136,15 @@ public:
 
   static void register_meta ();
 };
+
+#ifdef WSL_CAMERA_POP_FAR
+#pragma pop_macro("far")
+#undef WSL_CAMERA_POP_FAR
+#endif
+#ifdef WSL_CAMERA_POP_NEAR
+#pragma pop_macro("near")
+#undef WSL_CAMERA_POP_NEAR
+#endif
 
 } // namespace comp
 
