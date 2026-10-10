@@ -136,7 +136,11 @@ std::string
 xmake_file_api::exec (const std::string &command)
 {
   std::string output;
+#ifdef _WIN32
+  FILE *pipe = _popen (command.c_str (), "r");
+#else
   FILE *pipe = popen (command.c_str (), "r");
+#endif
   if (!pipe) {
     wsl::log::xmake ()->error ("xmake_file_api: failed to run: {}", command);
     return {};
@@ -147,7 +151,12 @@ xmake_file_api::exec (const std::string &command)
     output += buffer.data ();
   }
 
-  int const status = pclose (pipe);
+  int const status =
+#ifdef _WIN32
+      _pclose (pipe);
+#else
+      pclose (pipe);
+#endif
   if (status != 0) {
     wsl::log::xmake ()->error ("xmake_file_api: command failed ({}): {}",
                                status, command);

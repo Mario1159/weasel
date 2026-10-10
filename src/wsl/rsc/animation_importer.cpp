@@ -241,7 +241,11 @@ animation_importer::import (const std::string &gltf_path)
   // Capture output: the pipe buffer would deadlock gltf2ozz if nobody
   // drained it, and re-logging it keeps failures diagnosable.
   std::string output;
+#ifdef _WIN32
+  FILE *pipe = _popen (command.c_str (), "r");
+#else
   FILE *pipe = popen (command.c_str (), "r");
+#endif
   if (pipe == nullptr) {
     fs::remove (config_path, ec);
     result.error = "Failed to spawn gltf2ozz";
@@ -252,7 +256,11 @@ animation_importer::import (const std::string &gltf_path)
     output += buffer;
   }
   // 0 means success for both POSIX wait status and cmd.exe exit codes.
+#ifdef _WIN32
+  const int status = _pclose (pipe);
+#else
   const int status = pclose (pipe);
+#endif
   fs::remove (config_path, ec);
 
   if (status != 0) {
